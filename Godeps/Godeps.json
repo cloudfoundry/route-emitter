@@ -1,0 +1,63 @@
+{
+	"ImportPath": "github.com/cloudfoundry-incubator/route-emitter",
+	"GoVersion": "go1.2.1",
+	"Packages": [
+		"./..."
+	],
+	"Deps": [
+		{
+			"ImportPath": "github.com/cloudfoundry-incubator/runtime-schema/bbs",
+			"Rev": "757c5aac2a83206a1c7326aa2c59d43f892369f7"
+		},
+		{
+			"ImportPath": "github.com/cloudfoundry-incubator/runtime-schema/models",
+			"Rev": "757c5aac2a83206a1c7326aa2c59d43f892369f7"
+		},
+		{
+			"ImportPath": "github.com/cloudfoundry/gibson",
+			"Rev": "3c87f29d0cc8bb8be6e4b1df4d6e990119a6185f"
+		},
+		{
+			"ImportPath": "github.com/cloudfoundry/gosteno",
+			"Comment": "scotty_09012012-40-g5eb8c6e",
+			"Rev": "5eb8c6e554f0dfc39d6468813b8ac19ec28fe74f"
+		},
+		{
+			"ImportPath": "github.com/cloudfoundry/gunk/natsrunner",
+			"Rev": "21adc866d245fff747352415cc036b5ec3c3d4f5"
+		},
+		{
+			"ImportPath": "github.com/cloudfoundry/gunk/timeprovider",
+			"Rev": "21adc866d245fff747352415cc036b5ec3c3d4f5"
+		},
+		{
+			"ImportPath": "github.com/cloudfoundry/storeadapter",
+			"Rev": "4ab2c502399a8be4998fb8d76a2cc16654d135ee"
+		},
+		{
+			"ImportPath": "github.com/cloudfoundry/yagnats",
+			"Rev": "196990d547253e2c2d14e188464ccd69b526e35d"
+		},
+		{
+			"ImportPath": "github.com/coreos/go-etcd/etcd",
+			"Comment": "v0.2.0-rc1-106-g26f4504",
+			"Rev": "26f4504e71d6abefd467eb44a02ff15b933b6eb6"
+		},
+		{
+			"ImportPath": "github.com/nu7hatch/gouuid",
+			"Rev": "179d4d0c4d8d407a32af483c2354df1d2c91e6c3"
+		},
+		{
+			"ImportPath": "github.com/onsi/ginkgo",
+			"Rev": "51ddbbc2ace9f9ad4cf06ba63442ea2ef2019837"
+		},
+		{
+			"ImportPath": "github.com/onsi/gomega",
+			"Rev": "f5533d435ebfcf4fa0463202dc0e966b983618b8"
+		},
+		{
+			"ImportPath": "github.com/tedsuo/ifrit",
+			"Rev": "9c6d85dc424e2e3712a8e81c1664e7aeac6a74ec"
+		}
+	]
+}
