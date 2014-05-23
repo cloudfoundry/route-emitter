@@ -111,7 +111,7 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 				break InnerLoop
 
 			case <-signals:
-				watcher.logger.Info("route-emitter.stopping-watch")
+				watcher.logger.Info("route-emitter.watcher.stopping")
 				return nil
 			}
 		}

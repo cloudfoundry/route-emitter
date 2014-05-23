@@ -47,7 +47,6 @@ func (syncer *Syncer) Run(signals <-chan os.Signal, ready chan<- struct{}) error
 			syncer.logger.Warnd(map[string]interface{}{
 				"error": err.Error(),
 			}, "syncer.get-actual.failed")
-			continue
 		}
 
 		allDesired, err := syncer.bbs.GetAllDesiredLRPs()
@@ -55,7 +54,6 @@ func (syncer *Syncer) Run(signals <-chan os.Signal, ready chan<- struct{}) error
 			syncer.logger.Warnd(map[string]interface{}{
 				"error": err.Error(),
 			}, "syncer.get-desired.failed")
-			continue
 		}
 
 		for _, actual := range allRunningActual {
@@ -69,6 +67,9 @@ func (syncer *Syncer) Run(signals <-chan os.Signal, ready chan<- struct{}) error
 		select {
 		case heartbeatInterval = <-syncer.heartbeatInterval:
 		case <-time.After(heartbeatInterval):
+		case <-signals:
+			syncer.logger.Info("route-emitter.syncer.stopping")
+			return nil
 		}
 	}
 

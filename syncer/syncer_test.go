@@ -77,6 +77,7 @@ var _ = Describe("Syncer", func() {
 
 		AfterEach(func() {
 			process.Signal(os.Interrupt)
+			Eventually(process.Wait()).Should(Receive(BeNil()))
 		})
 
 		Context("when router.start is received", func() {
@@ -221,7 +222,7 @@ var _ = Describe("Syncer", func() {
 				It("keeps on truckin'", func() {
 					Eventually(func() interface{} {
 						return natsClient.PublishedMessages("router.register")
-					}).Should(HaveLen(1))
+					}, 2).Should(HaveLen(1))
 
 					Ω(natsClient.PublishedMessages("router.register")[0].Payload).Should(MatchJSON(`
 						{
@@ -249,7 +250,7 @@ var _ = Describe("Syncer", func() {
 				It("keeps on truckin'", func() {
 					Eventually(func() interface{} {
 						return natsClient.PublishedMessages("router.register")
-					}).Should(HaveLen(1))
+					}, 2).Should(HaveLen(1))
 
 					Ω(natsClient.PublishedMessages("router.register")[0].Payload).Should(MatchJSON(`
 						{
