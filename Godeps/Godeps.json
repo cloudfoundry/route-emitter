@@ -7,11 +7,11 @@
 	"Deps": [
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/runtime-schema/bbs",
-			"Rev": "7bfb9ab8320cd12e7c8c6ef11b82ef65a1da237f"
+			"Rev": "89f8d3b9af9e15729c19bd05137a0691c8fca5a8"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/runtime-schema/models",
-			"Rev": "7bfb9ab8320cd12e7c8c6ef11b82ef65a1da237f"
+			"Rev": "89f8d3b9af9e15729c19bd05137a0691c8fca5a8"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/gibson",
@@ -24,11 +24,11 @@
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/gunk/natsrunner",
-			"Rev": "21adc866d245fff747352415cc036b5ec3c3d4f5"
+			"Rev": "7961fb4a446e96ef5a35fee37aa4b4945dca6745"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/gunk/timeprovider",
-			"Rev": "21adc866d245fff747352415cc036b5ec3c3d4f5"
+			"Rev": "7961fb4a446e96ef5a35fee37aa4b4945dca6745"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/storeadapter",
@@ -57,7 +57,7 @@
 		},
 		{
 			"ImportPath": "github.com/tedsuo/ifrit",
-			"Rev": "9c6d85dc424e2e3712a8e81c1664e7aeac6a74ec"
+			"Rev": "28e5a1d991b72ee764526ec08f53e757ed214784"
 		}
 	]
 }

@@ -42,7 +42,7 @@ func (syncer *Syncer) Run(signals <-chan os.Signal, ready chan<- struct{}) error
 	heartbeatInterval := <-syncer.heartbeatInterval
 
 	for {
-		allActual, err := syncer.bbs.GetAllActualLongRunningProcesses()
+		allRunningActual, err := syncer.bbs.GetRunningActualLRPs()
 		if err != nil {
 			syncer.logger.Warnd(map[string]interface{}{
 				"error": err.Error(),
@@ -50,7 +50,7 @@ func (syncer *Syncer) Run(signals <-chan os.Signal, ready chan<- struct{}) error
 			continue
 		}
 
-		allDesired, err := syncer.bbs.GetAllDesiredLongRunningProcesses()
+		allDesired, err := syncer.bbs.GetAllDesiredLRPs()
 		if err != nil {
 			syncer.logger.Warnd(map[string]interface{}{
 				"error": err.Error(),
@@ -58,7 +58,7 @@ func (syncer *Syncer) Run(signals <-chan os.Signal, ready chan<- struct{}) error
 			continue
 		}
 
-		for _, actual := range allActual {
+		for _, actual := range allRunningActual {
 			for _, desired := range allDesired {
 				if desired.ProcessGuid == actual.ProcessGuid {
 					syncer.register(desired, actual)

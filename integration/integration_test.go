@@ -9,6 +9,7 @@ import (
 	"github.com/cloudfoundry/yagnats"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega/gexec"
 )
 
 var _ = Describe("Integration", func() {
@@ -52,6 +53,10 @@ var _ = Describe("Integration", func() {
 		})
 	})
 
+	AfterEach(func() {
+		Ω(runner.Session).ShouldNot(gexec.Exit(), "Runner should not have exploded!")
+	})
+
 	Context("when the emitter is running", func() {
 		BeforeEach(func() {
 			runner.Start()
@@ -59,7 +64,7 @@ var _ = Describe("Integration", func() {
 
 		Context("and routes are desired", func() {
 			BeforeEach(func() {
-				err := bbs.DesireLongRunningProcess(models.DesiredLRP{
+				err := bbs.DesireLRP(models.DesiredLRP{
 					ProcessGuid: "guid1",
 					Routes:      []string{"route-1", "route-2"},
 					Instances:   5,
@@ -72,7 +77,7 @@ var _ = Describe("Integration", func() {
 
 			Context("and an endpoint comes up", func() {
 				BeforeEach(func() {
-					err := bbs.ReportActualLongRunningProcessAsRunning(models.LRP{
+					err := bbs.ReportActualLRPAsRunning(models.LRP{
 						ProcessGuid:  "guid1",
 						Index:        0,
 						InstanceGuid: "iguid1",
@@ -95,9 +100,35 @@ var _ = Describe("Integration", func() {
 			})
 		})
 
+		Context("and an instance starts running", func() {
+			BeforeEach(func() {
+				err := bbs.DesireLRP(models.DesiredLRP{
+					ProcessGuid: "guid1",
+					Routes:      []string{"route-1", "route-2"},
+					Instances:   5,
+					Stack:       "some-stack",
+					MemoryMB:    1024,
+					DiskMB:      512,
+				})
+				Ω(err).ShouldNot(HaveOccurred())
+
+				err = bbs.ReportActualLRPAsStarting(models.LRP{
+					ProcessGuid:  "guid1",
+					Index:        0,
+					InstanceGuid: "iguid1",
+				})
+				Ω(err).ShouldNot(HaveOccurred())
+
+			})
+
+			It("does not emit routes", func() {
+				Consistently(registeredRoutes).ShouldNot(Receive())
+			})
+		})
+
 		Context("and an endpoint comes up", func() {
 			BeforeEach(func() {
-				err := bbs.ReportActualLongRunningProcessAsRunning(models.LRP{
+				err := bbs.ReportActualLRPAsRunning(models.LRP{
 					ProcessGuid:  "guid1",
 					Index:        0,
 					InstanceGuid: "iguid1",
@@ -113,7 +144,7 @@ var _ = Describe("Integration", func() {
 			Context("and a route is desired", func() {
 				BeforeEach(func() {
 					time.Sleep(100 * time.Millisecond)
-					err := bbs.DesireLongRunningProcess(models.DesiredLRP{
+					err := bbs.DesireLRP(models.DesiredLRP{
 						ProcessGuid: "guid1",
 						Routes:      []string{"route-1", "route-2"},
 						Instances:   5,
@@ -150,7 +181,7 @@ var _ = Describe("Integration", func() {
 
 	Context("when the bbs has routes to emit in /desired and /actual", func() {
 		BeforeEach(func() {
-			err := bbs.DesireLongRunningProcess(models.DesiredLRP{
+			err := bbs.DesireLRP(models.DesiredLRP{
 				ProcessGuid: "guid1",
 				Routes:      []string{"route-1", "route-2"},
 				Instances:   5,
@@ -160,7 +191,7 @@ var _ = Describe("Integration", func() {
 			})
 			Ω(err).ShouldNot(HaveOccurred())
 
-			err = bbs.ReportActualLongRunningProcessAsRunning(models.LRP{
+			err = bbs.ReportActualLRPAsRunning(models.LRP{
 				ProcessGuid:  "guid1",
 				Index:        0,
 				InstanceGuid: "iguid1",
@@ -188,7 +219,7 @@ var _ = Describe("Integration", func() {
 
 			Context("and a route is added", func() {
 				BeforeEach(func() {
-					err := bbs.DesireLongRunningProcess(models.DesiredLRP{
+					err := bbs.DesireLRP(models.DesiredLRP{
 						ProcessGuid: "guid1",
 						Routes:      []string{"route-1", "route-2", "route-3"},
 						Instances:   5,
@@ -210,7 +241,7 @@ var _ = Describe("Integration", func() {
 
 			Context("and a route is removed", func() {
 				BeforeEach(func() {
-					err := bbs.DesireLongRunningProcess(models.DesiredLRP{
+					err := bbs.DesireLRP(models.DesiredLRP{
 						ProcessGuid: "guid1",
 						Routes:      []string{"route-2"},
 						Instances:   5,

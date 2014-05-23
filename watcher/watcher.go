@@ -2,6 +2,7 @@ package watcher
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"os"
 
@@ -29,7 +30,7 @@ func NewWatcher(bbs bbs.LRPRouterBBS, natsClient yagnats.NATSClient, logger *gos
 
 func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
 	desiredLRPChanges, _, desiredErrors := watcher.bbs.WatchForDesiredLRPChanges()
-	actualLRPs, _, actualErrors := watcher.bbs.WatchForActualLongRunningProcesses()
+	actualLRPChanges, _, actualErrors := watcher.bbs.WatchForActualLRPChanges()
 
 	close(ready)
 
@@ -42,7 +43,7 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 					break InnerLoop
 				}
 
-				actuals, err := watcher.bbs.GetActualLRPs(desiredChange.After.ProcessGuid)
+				actuals, err := watcher.bbs.GetRunningActualLRPsByProcessGuid(desiredChange.After.ProcessGuid)
 				if err != nil {
 					if err == storeadapter.ErrorKeyNotFound {
 						break
@@ -75,12 +76,21 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 
 				// TODO: check for removed routes (prev vs. current node value)
 
-			case actual, ok := <-actualLRPs:
+			case actualChange, ok := <-actualLRPChanges:
 				if !ok {
 					break InnerLoop
 				}
 
-				desired, err := watcher.bbs.GetDesiredLRP(actual.ProcessGuid)
+				if actualChange.After == nil {
+					continue
+				}
+				actual := *actualChange.After
+				fmt.Println("GOT", actual)
+				if actual.State != models.LRPStateRunning {
+					continue
+				}
+
+				desired, err := watcher.bbs.GetDesiredLRPByProcessGuid(actual.ProcessGuid)
 				if err != nil {
 					if err == storeadapter.ErrorKeyNotFound {
 						break
@@ -107,7 +117,7 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 					"error": err.Error(),
 				}, "route-emitter.actual-watch-failed")
 
-				actualLRPs, _, actualErrors = watcher.bbs.WatchForActualLongRunningProcesses()
+				actualLRPChanges, _, actualErrors = watcher.bbs.WatchForActualLRPChanges()
 
 				break InnerLoop
 

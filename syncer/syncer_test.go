@@ -208,7 +208,7 @@ var _ = Describe("Syncer", func() {
 			Context("when getting all actual LRPs fails", func() {
 				BeforeEach(func() {
 					firstTime := true
-					bbs.WhenGettingAllActualLongRunningProcesses = func() ([]models.LRP, error) {
+					bbs.WhenGettingRunningActualLRPs = func() ([]models.LRP, error) {
 						if firstTime {
 							firstTime = false
 							return []models.LRP{}, errors.New("NO")
@@ -236,7 +236,7 @@ var _ = Describe("Syncer", func() {
 			Context("when getting all desired LRPs fails", func() {
 				BeforeEach(func() {
 					firstTime := true
-					bbs.WhenGettingAllDesiredLongRunningProcesses = func() ([]models.DesiredLRP, error) {
+					bbs.WhenGettingAllDesiredLRPs = func() ([]models.DesiredLRP, error) {
 						if firstTime {
 							firstTime = false
 							return []models.DesiredLRP{}, errors.New("NO")
