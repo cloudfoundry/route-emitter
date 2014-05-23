@@ -13,7 +13,7 @@ import (
 	"github.com/cloudfoundry/storeadapter/etcdstoreadapter"
 	"github.com/cloudfoundry/storeadapter/workerpool"
 	"github.com/cloudfoundry/yagnats"
-	"github.com/tedsuo/ifrit"
+	"github.com/tedsuo/ifrit/group"
 )
 
 var etcdCluster = flag.String(
@@ -56,7 +56,7 @@ func main() {
 	watcher := watcher.NewWatcher(bbs, natsClient, logger)
 	syncer := syncer.NewSyncer(bbs, natsClient, logger)
 
-	process := ifrit.Envoke(ifrit.RunGroup{
+	process := group.EnvokeGroup(group.RunGroup{
 		"watcher": watcher,
 		"syncer":  syncer,
 	})
