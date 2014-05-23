@@ -3,6 +3,7 @@ package syncer_test
 import (
 	"errors"
 	"os"
+	"time"
 	. "github.com/cloudfoundry-incubator/route-emitter/syncer"
 	"github.com/cloudfoundry-incubator/runtime-schema/bbs/fake_bbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
@@ -21,6 +22,8 @@ var _ = Describe("Syncer", func() {
 		natsClient *fakeyagnats.FakeYagnats
 		syncer     *Syncer
 		process    ifrit.Process
+
+		routerStartMessages chan<- *yagnats.Message
 	)
 
 	BeforeEach(func() {
@@ -28,6 +31,19 @@ var _ = Describe("Syncer", func() {
 		natsClient = fakeyagnats.New()
 		logger := gosteno.NewLogger("syncer")
 		syncer = NewSyncer(bbs, natsClient, logger)
+
+		startMessages := make(chan *yagnats.Message)
+		routerStartMessages = startMessages
+
+		natsClient.WhenSubscribing("router.start", func(callback yagnats.Callback) error {
+			go func() {
+				for msg := range startMessages {
+					callback(msg)
+				}
+			}()
+
+			return nil
+		})
 	})
 
 	Describe("when the syncer is started up", func() {
@@ -63,13 +79,49 @@ var _ = Describe("Syncer", func() {
 			process.Signal(os.Interrupt)
 		})
 
+		Context("when router.start is received", func() {
+			JustBeforeEach(func() {
+				routerStartMessages <- &yagnats.Message{
+					Payload: []byte(`{"minimumRegisterIntervalInSeconds":1}`),
+				}
+			})
+
+			It("immediately registers all routes for all LRPs", func() {
+				Eventually(func() interface{} {
+					return natsClient.PublishedMessages("router.register")
+				}).Should(HaveLen(1))
+
+				Ω(natsClient.PublishedMessages("router.register")[0].Payload).Should(MatchJSON(`
+					{
+						"uris":["route-1","route-2"],
+						"host":"1.2.3.4",
+						"port":1234
+					}
+				`))
+			})
+
+			It("emits the routes again after the specified interval", func() {
+				Eventually(func() interface{} {
+					return natsClient.PublishedMessages("router.register")
+				}).Should(HaveLen(1))
+				t1 := time.Now()
+
+				Eventually(func() interface{} {
+					return natsClient.PublishedMessages("router.register")
+				}, 2).Should(HaveLen(2))
+				t2 := time.Now()
+
+				Ω(t2.Sub(t1)).Should(BeNumerically("~", 1*time.Second, 200*time.Millisecond))
+			})
+		})
+
 		Context("after greeting with the router", func() {
 			BeforeEach(func() {
 				natsClient.WhenPublishing("router.greet", func(msg *yagnats.Message) error {
 					replySubs := natsClient.Subscriptions(msg.ReplyTo)
 					Ω(replySubs).Should(HaveLen(1))
 
-					replySubs[0].Callback(&yagnats.Message{
+					go replySubs[0].Callback(&yagnats.Message{
 						Payload: []byte(`{"minimumRegisterIntervalInSeconds":1}`),
 					})
 
@@ -89,6 +141,68 @@ var _ = Describe("Syncer", func() {
 						"port":1234
 					}
 				`))
+			})
+
+			Context("when router.start is received", func() {
+				var heartbeatPayload string
+
+				BeforeEach(func() {
+					heartbeatPayload = `{"minimumRegisterIntervalInSeconds":2}`
+				})
+
+				JustBeforeEach(func() {
+					routerStartMessages <- &yagnats.Message{
+						Payload: []byte(heartbeatPayload),
+					}
+				})
+
+				It("immediately registers all routes for all LRPs", func() {
+					Eventually(func() interface{} {
+						return natsClient.PublishedMessages("router.register")
+					}).Should(HaveLen(2))
+
+					Ω(natsClient.PublishedMessages("router.register")[0].Payload).Should(MatchJSON(`
+						{
+							"uris": ["route-1","route-2"],
+							"host": "1.2.3.4",
+							"port": 1234
+						}
+					`))
+				})
+
+				It("emits the routes again after the specified interval", func() {
+					Eventually(func() interface{} {
+						return natsClient.PublishedMessages("router.register")
+					}).Should(HaveLen(2))
+					t1 := time.Now()
+
+					Eventually(func() interface{} {
+						return natsClient.PublishedMessages("router.register")
+					}, 3).Should(HaveLen(3))
+					t2 := time.Now()
+
+					Ω(t2.Sub(t1)).Should(BeNumerically("~", 2*time.Second, 200*time.Millisecond))
+				})
+
+				Context("and the payload is invalid", func() {
+					BeforeEach(func() {
+						heartbeatPayload = "ß"
+					})
+
+					It("does not update the interval", func() {
+						Eventually(func() interface{} {
+							return natsClient.PublishedMessages("router.register")
+						}).Should(HaveLen(1))
+						t1 := time.Now()
+
+						Eventually(func() interface{} {
+							return natsClient.PublishedMessages("router.register")
+						}, 2).Should(HaveLen(2))
+						t2 := time.Now()
+
+						Ω(t2.Sub(t1)).Should(BeNumerically("~", 1*time.Second, 200*time.Millisecond))
+					})
+				})
 			})
 
 			Context("when getting all actual LRPs fails", func() {

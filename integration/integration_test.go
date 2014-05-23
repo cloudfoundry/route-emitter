@@ -186,14 +186,6 @@ var _ = Describe("Integration", func() {
 				})))
 			})
 
-			PContext("and an endpoint goes away", func() {
-				BeforeEach(func() {
-				})
-
-				PIt("immediately emits router.unregister", func() {
-				})
-			})
-
 			Context("and a route is added", func() {
 				BeforeEach(func() {
 					err := bbs.DesireLongRunningProcess(models.DesiredLRP{

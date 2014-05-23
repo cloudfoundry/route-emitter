@@ -17,6 +17,8 @@ type Syncer struct {
 	bbs        bbs.LRPRouterBBS
 	natsClient yagnats.NATSClient
 	logger     *gosteno.Logger
+
+	heartbeatInterval chan time.Duration
 }
 
 func NewSyncer(bbs bbs.LRPRouterBBS, natsClient yagnats.NATSClient, logger *gosteno.Logger) *Syncer {
@@ -24,16 +26,20 @@ func NewSyncer(bbs bbs.LRPRouterBBS, natsClient yagnats.NATSClient, logger *gost
 		bbs:        bbs,
 		natsClient: natsClient,
 		logger:     logger,
+
+		heartbeatInterval: make(chan time.Duration),
 	}
 }
 
 func (syncer *Syncer) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
-	close(ready)
-
-	routerHeartbeatInterval, err := syncer.getRouterHeartbeatInterval()
+	err := syncer.greetWithRouter()
 	if err != nil {
 		panic(err)
 	}
+
+	close(ready)
+
+	heartbeatInterval := <-syncer.heartbeatInterval
 
 	for {
 		allActual, err := syncer.bbs.GetAllActualLongRunningProcesses()
@@ -60,7 +66,10 @@ func (syncer *Syncer) Run(signals <-chan os.Signal, ready chan<- struct{}) error
 			}
 		}
 
-		time.Sleep(routerHeartbeatInterval)
+		select {
+		case heartbeatInterval = <-syncer.heartbeatInterval:
+		case <-time.After(heartbeatInterval):
+		}
 	}
 
 	return nil
@@ -81,28 +90,45 @@ func (syncer *Syncer) register(desired models.DesiredLRP, actual models.LRP) err
 	return syncer.natsClient.Publish("router.register", payload)
 }
 
-func (syncer *Syncer) getRouterHeartbeatInterval() (time.Duration, error) {
+func (syncer *Syncer) greetWithRouter() error {
 	replyUuid, err := uuid.NewV4()
 	if err != nil {
-		return 0, err
+		return err
 	}
 
-	routerHeartbeatInterval := make(chan time.Duration, 1)
 	var subscription int64
 	subscription, err = syncer.natsClient.Subscribe(replyUuid.String(), func(msg *yagnats.Message) {
-		response := gibson.RouterGreetingMessage{}
-		json.Unmarshal(msg.Payload, &response)
-		routerHeartbeatInterval <- time.Duration(response.MinimumRegisterInterval) * time.Second
+		syncer.gotRouterHeartbeatInterval(msg)
 		syncer.natsClient.Unsubscribe(subscription)
 	})
 	if err != nil {
-		return 0, err
+		return err
+	}
+
+	_, err = syncer.natsClient.Subscribe("router.start", syncer.gotRouterHeartbeatInterval)
+	if err != nil {
+		return err
 	}
 
 	err = syncer.natsClient.PublishWithReplyTo("router.greet", replyUuid.String(), []byte{})
 	if err != nil {
-		return 0, err
+		return err
 	}
 
-	return <-routerHeartbeatInterval, nil
+	return nil
+}
+
+func (syncer *Syncer) gotRouterHeartbeatInterval(msg *yagnats.Message) {
+	var response gibson.RouterGreetingMessage
+
+	err := json.Unmarshal(msg.Payload, &response)
+	if err != nil {
+		syncer.logger.Warnd(map[string]interface{}{
+			"error":   err.Error(),
+			"payload": msg.Payload,
+		}, "syncer.invalid-router-start.received")
+		return
+	}
+
+	syncer.heartbeatInterval <- time.Duration(response.MinimumRegisterInterval) * time.Second
 }
