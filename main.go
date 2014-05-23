@@ -13,7 +13,9 @@ import (
 	"github.com/cloudfoundry/storeadapter/etcdstoreadapter"
 	"github.com/cloudfoundry/storeadapter/workerpool"
 	"github.com/cloudfoundry/yagnats"
+	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/ifrit/grouper"
+	"github.com/tedsuo/ifrit/sigmon"
 )
 
 var etcdCluster = flag.String(
@@ -63,7 +65,17 @@ func main() {
 
 	logger.Infof("route-emitter.started")
 
-	<-process.Wait()
+	monitor := ifrit.Envoke(sigmon.New(process))
+
+	err := <-monitor.Wait()
+	if err != nil {
+		logger.Errord(map[string]interface{}{
+			"error": err.Error(),
+		}, "route-emitter.exited")
+		os.Exit(1)
+	}
+
+	logger.Info("route-emitter.exited")
 }
 
 func initializeLogger() *steno.Logger {

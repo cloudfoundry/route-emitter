@@ -177,6 +177,16 @@ var _ = Describe("Integration", func() {
 				})
 			})
 		})
+
+		Context("and etcd goes away", func() {
+			BeforeEach(func() {
+				etcdRunner.Stop()
+			})
+
+			It("does not explode", func() {
+				Consistently(runner.Session, 5).ShouldNot(gexec.Exit())
+			})
+		})
 	})
 
 	Context("when the bbs has routes to emit in /desired and /actual", func() {

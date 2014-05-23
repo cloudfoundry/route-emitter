@@ -34,7 +34,7 @@ func NewSyncer(bbs bbs.LRPRouterBBS, natsClient yagnats.NATSClient, logger *gost
 func (syncer *Syncer) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
 	err := syncer.greetWithRouter()
 	if err != nil {
-		panic(err)
+		return err
 	}
 
 	close(ready)

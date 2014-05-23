@@ -2,8 +2,6 @@ package watcher
 
 import (
 	"encoding/json"
-	"fmt"
-	"log"
 	"os"
 
 	"github.com/cloudfoundry-incubator/runtime-schema/bbs"
@@ -48,7 +46,8 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 					if err == storeadapter.ErrorKeyNotFound {
 						break
 					}
-					panic("TESTME - " + err.Error())
+
+					continue
 				}
 
 				var oldRoutes, newRoutes []string
@@ -63,18 +62,9 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 				removed := subtract(oldRoutes, newRoutes)
 
 				for _, actual := range actuals {
-					err = watcher.register(added, actual)
-					if err != nil {
-						panic("TESTME:" + err.Error())
-					}
-
-					err = watcher.unregister(removed, actual)
-					if err != nil {
-						panic("TESTME:" + err.Error())
-					}
+					watcher.register(added, actual)
+					watcher.unregister(removed, actual)
 				}
-
-				// TODO: check for removed routes (prev vs. current node value)
 
 			case actualChange, ok := <-actualLRPChanges:
 				if !ok {
@@ -84,8 +74,9 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 				if actualChange.After == nil {
 					continue
 				}
+
 				actual := *actualChange.After
-				fmt.Println("GOT", actual)
+
 				if actual.State != models.LRPStateRunning {
 					continue
 				}
@@ -95,13 +86,11 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 					if err == storeadapter.ErrorKeyNotFound {
 						break
 					}
-					panic("TESTME - " + err.Error())
+
+					continue
 				}
 
-				err = watcher.register(desired.Routes, actual)
-				if err != nil {
-					panic("TESTME:" + err.Error())
-				}
+				watcher.register(desired.Routes, actual)
 
 			case err := <-desiredErrors:
 				watcher.logger.Errord(map[string]interface{}{
@@ -121,13 +110,9 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 
 				break InnerLoop
 
-			case sig := <-signals:
-				log.Println("CAUGHT SIGNAL", sig)
-				//if watcher.shouldStop(sig) {
-				//watcher.logger.Info("route-emitter.stopping-watch")
-				//close(stopChan)
-				//return nil
-				//}
+			case <-signals:
+				watcher.logger.Info("route-emitter.stopping-watch")
+				return nil
 			}
 		}
 	}
@@ -153,15 +138,15 @@ func subtract(subtractee, subtractend []string) []string {
 	return result
 }
 
-func (watcher *Watcher) register(routes []string, actual models.LRP) error {
-	return watcher.updateRoutes("router.register", routes, actual)
+func (watcher *Watcher) register(routes []string, actual models.LRP) {
+	watcher.updateRoutes("router.register", routes, actual)
 }
 
-func (watcher *Watcher) unregister(routes []string, actual models.LRP) error {
-	return watcher.updateRoutes("router.unregister", routes, actual)
+func (watcher *Watcher) unregister(routes []string, actual models.LRP) {
+	watcher.updateRoutes("router.unregister", routes, actual)
 }
 
-func (watcher *Watcher) updateRoutes(subject string, routes []string, actual models.LRP) error {
+func (watcher *Watcher) updateRoutes(subject string, routes []string, actual models.LRP) {
 	message := gibson.RegistryMessage{
 		URIs: routes,
 		Host: actual.Host,
@@ -173,5 +158,11 @@ func (watcher *Watcher) updateRoutes(subject string, routes []string, actual mod
 		panic(err)
 	}
 
-	return watcher.natsClient.Publish(subject, payload)
+	err = watcher.natsClient.Publish(subject, payload)
+	if err != nil {
+		watcher.logger.Warnd(map[string]interface{}{
+			"error":   err,
+			"subject": subject,
+		}, "watcher.route-update.failed")
+	}
 }
