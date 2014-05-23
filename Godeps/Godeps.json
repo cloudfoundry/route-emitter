@@ -7,11 +7,11 @@
 	"Deps": [
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/runtime-schema/bbs",
-			"Rev": "757c5aac2a83206a1c7326aa2c59d43f892369f7"
+			"Rev": "7bfb9ab8320cd12e7c8c6ef11b82ef65a1da237f"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/runtime-schema/models",
-			"Rev": "757c5aac2a83206a1c7326aa2c59d43f892369f7"
+			"Rev": "7bfb9ab8320cd12e7c8c6ef11b82ef65a1da237f"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/gibson",

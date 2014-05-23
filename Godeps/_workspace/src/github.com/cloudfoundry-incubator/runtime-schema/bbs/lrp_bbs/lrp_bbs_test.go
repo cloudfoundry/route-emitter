@@ -4,6 +4,7 @@ import (
 	. "github.com/cloudfoundry-incubator/runtime-schema/bbs/lrp_bbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/bbs/shared"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
+	"github.com/cloudfoundry/storeadapter"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -35,7 +36,6 @@ var _ = Describe("LRP", func() {
 
 			node, err := etcdClient.Get("/v1/desired/some-process-guid")
 			Ω(err).ShouldNot(HaveOccurred())
-
 			Ω(node.Value).Should(Equal(lrp.ToJSON()))
 		})
 
@@ -46,7 +46,7 @@ var _ = Describe("LRP", func() {
 		})
 	})
 
-	Describe("ReportLongRunningProcessAsRunning", func() {
+	Describe("Adding and removing actual LRPs", func() {
 		var lrp models.LRP
 
 		BeforeEach(func() {
@@ -63,19 +63,63 @@ var _ = Describe("LRP", func() {
 			}
 		})
 
-		It("creates /v1/actual/<process-guid>/<index>/<instance-guid>", func() {
-			err := bbs.ReportLongRunningProcessAsRunning(lrp)
-			Ω(err).ShouldNot(HaveOccurred())
+		Describe("ReportActualLongRunningProcessAsStarting", func() {
+			It("creates /v1/actual/<process-guid>/<index>/<instance-guid>", func() {
+				err := bbs.ReportActualLongRunningProcessAsStarting(lrp)
+				Ω(err).ShouldNot(HaveOccurred())
 
-			node, err := etcdClient.Get("/v1/actual/some-process-guid/1/some-instance-guid")
-			Ω(err).ShouldNot(HaveOccurred())
+				node, err := etcdClient.Get("/v1/actual/some-process-guid/1/some-instance-guid")
+				Ω(err).ShouldNot(HaveOccurred())
 
-			Ω(node.Value).Should(Equal(lrp.ToJSON()))
+				expectedLRP := lrp
+				expectedLRP.State = models.LRPStateStarting
+				Ω(node.Value).Should(MatchJSON(expectedLRP.ToJSON()))
+			})
+
+			Context("when the store is out of commission", func() {
+				itRetriesUntilStoreComesBack(func() error {
+					return bbs.ReportActualLongRunningProcessAsStarting(lrp)
+				})
+			})
 		})
 
-		Context("when the store is out of commission", func() {
-			itRetriesUntilStoreComesBack(func() error {
-				return bbs.ReportLongRunningProcessAsRunning(lrp)
+		Describe("ReportActualLongRunningProcessAsRunning", func() {
+			It("creates /v1/actual/<process-guid>/<index>/<instance-guid>", func() {
+				err := bbs.ReportActualLongRunningProcessAsRunning(lrp)
+				Ω(err).ShouldNot(HaveOccurred())
+
+				node, err := etcdClient.Get("/v1/actual/some-process-guid/1/some-instance-guid")
+				Ω(err).ShouldNot(HaveOccurred())
+
+				expectedLRP := lrp
+				expectedLRP.State = models.LRPStateRunning
+				Ω(node.Value).Should(MatchJSON(expectedLRP.ToJSON()))
+			})
+
+			Context("when the store is out of commission", func() {
+				itRetriesUntilStoreComesBack(func() error {
+					return bbs.ReportActualLongRunningProcessAsRunning(lrp)
+				})
+			})
+		})
+
+		Describe("RemoveActualLongRunningProcess", func() {
+			BeforeEach(func() {
+				bbs.ReportActualLongRunningProcessAsStarting(lrp)
+			})
+
+			It("should remove the LRP", func() {
+				err := bbs.RemoveActualLongRunningProcess(lrp)
+				Ω(err).ShouldNot(HaveOccurred())
+
+				_, err = etcdClient.Get("/v1/actual/some-process-guid/1/some-instance-guid")
+				Ω(err).Should(MatchError(storeadapter.ErrorKeyNotFound))
+			})
+
+			Context("when the store is out of commission", func() {
+				itRetriesUntilStoreComesBack(func() error {
+					return bbs.RemoveActualLongRunningProcess(lrp)
+				})
 			})
 		})
 	})
@@ -170,7 +214,7 @@ var _ = Describe("LRP", func() {
 			stopped bool
 		)
 
-		lrp := models.LRP{ProcessGuid: "some-process-guid"}
+		lrp := models.LRP{ProcessGuid: "some-process-guid", State: models.LRPStateRunning}
 
 		BeforeEach(func() {
 			events, stop, errors = bbs.WatchForActualLongRunningProcesses()
@@ -183,19 +227,19 @@ var _ = Describe("LRP", func() {
 		})
 
 		It("sends an event down the pipe for creates", func() {
-			err := bbs.ReportLongRunningProcessAsRunning(lrp)
+			err := bbs.ReportActualLongRunningProcessAsRunning(lrp)
 			Ω(err).ShouldNot(HaveOccurred())
 
 			Eventually(events).Should(Receive(Equal(lrp)))
 		})
 
 		It("sends an event down the pipe for updates", func() {
-			err := bbs.ReportLongRunningProcessAsRunning(lrp)
+			err := bbs.ReportActualLongRunningProcessAsRunning(lrp)
 			Ω(err).ShouldNot(HaveOccurred())
 
 			Eventually(events).Should(Receive(Equal(lrp)))
 
-			err = bbs.ReportLongRunningProcessAsRunning(lrp)
+			err = bbs.ReportActualLongRunningProcessAsRunning(lrp)
 			Ω(err).ShouldNot(HaveOccurred())
 
 			Eventually(events).Should(Receive(Equal(lrp)))
@@ -205,7 +249,7 @@ var _ = Describe("LRP", func() {
 			stop <- true
 			stopped = true
 
-			err := bbs.ReportLongRunningProcessAsRunning(lrp)
+			err := bbs.ReportActualLongRunningProcessAsRunning(lrp)
 			Ω(err).ShouldNot(HaveOccurred())
 
 			Ω(events).Should(BeClosed())
@@ -238,18 +282,18 @@ var _ = Describe("LRP", func() {
 	})
 
 	Describe("GetAllActualLongRunningProcesses", func() {
-		lrp1 := models.LRP{ProcessGuid: "guid1", Index: 1, InstanceGuid: "some-instance-guid"}
-		lrp2 := models.LRP{ProcessGuid: "guid2", Index: 2, InstanceGuid: "some-instance-guid"}
-		lrp3 := models.LRP{ProcessGuid: "guid3", Index: 2, InstanceGuid: "some-instance-guid"}
+		lrp1 := models.LRP{ProcessGuid: "guid1", Index: 1, InstanceGuid: "some-instance-guid", State: models.LRPStateRunning}
+		lrp2 := models.LRP{ProcessGuid: "guid2", Index: 2, InstanceGuid: "some-instance-guid", State: models.LRPStateRunning}
+		lrp3 := models.LRP{ProcessGuid: "guid3", Index: 2, InstanceGuid: "some-instance-guid", State: models.LRPStateRunning}
 
 		BeforeEach(func() {
-			err := bbs.ReportLongRunningProcessAsRunning(lrp1)
+			err := bbs.ReportActualLongRunningProcessAsRunning(lrp1)
 			Ω(err).ShouldNot(HaveOccurred())
 
-			err = bbs.ReportLongRunningProcessAsRunning(lrp2)
+			err = bbs.ReportActualLongRunningProcessAsRunning(lrp2)
 			Ω(err).ShouldNot(HaveOccurred())
 
-			err = bbs.ReportLongRunningProcessAsRunning(lrp3)
+			err = bbs.ReportActualLongRunningProcessAsRunning(lrp3)
 			Ω(err).ShouldNot(HaveOccurred())
 		})
 

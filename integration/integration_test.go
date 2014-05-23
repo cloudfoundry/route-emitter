@@ -72,7 +72,7 @@ var _ = Describe("Integration", func() {
 
 			Context("and an endpoint comes up", func() {
 				BeforeEach(func() {
-					err := bbs.ReportLongRunningProcessAsRunning(models.LRP{
+					err := bbs.ReportActualLongRunningProcessAsRunning(models.LRP{
 						ProcessGuid:  "guid1",
 						Index:        0,
 						InstanceGuid: "iguid1",
@@ -97,7 +97,7 @@ var _ = Describe("Integration", func() {
 
 		Context("and an endpoint comes up", func() {
 			BeforeEach(func() {
-				err := bbs.ReportLongRunningProcessAsRunning(models.LRP{
+				err := bbs.ReportActualLongRunningProcessAsRunning(models.LRP{
 					ProcessGuid:  "guid1",
 					Index:        0,
 					InstanceGuid: "iguid1",
@@ -160,7 +160,7 @@ var _ = Describe("Integration", func() {
 			})
 			Ω(err).ShouldNot(HaveOccurred())
 
-			err = bbs.ReportLongRunningProcessAsRunning(models.LRP{
+			err = bbs.ReportActualLongRunningProcessAsRunning(models.LRP{
 				ProcessGuid:  "guid1",
 				Index:        0,
 				InstanceGuid: "iguid1",

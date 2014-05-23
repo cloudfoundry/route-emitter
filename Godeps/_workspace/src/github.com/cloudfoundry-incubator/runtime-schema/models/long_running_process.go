@@ -61,6 +61,14 @@ func (self LRPStartAuction) ToJSON() []byte {
 
 ///
 
+type LRPState int
+
+const (
+	LRPStateInvalid LRPState = iota
+	LRPStateStarting
+	LRPStateRunning
+)
+
 type LRP struct {
 	ProcessGuid  string `json:"process_guid"`
 	InstanceGuid string `json:"instance_guid"`
@@ -69,6 +77,8 @@ type LRP struct {
 
 	Host  string        `json:"host"`
 	Ports []PortMapping `json:"ports"`
+
+	State LRPState `json:"state"`
 }
 
 func NewLRPFromJSON(payload []byte) (LRP, error) {
