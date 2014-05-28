@@ -127,5 +127,5 @@ func initializeBbs(logger *steno.Logger) Bbs.LRPRouterBBS {
 		logger.Fatalf("Error connecting to etcd: %s\n", err)
 	}
 
-	return Bbs.NewLRPRouterBBS(etcdAdapter, timeprovider.NewTimeProvider())
+	return Bbs.NewLRPRouterBBS(etcdAdapter, timeprovider.NewTimeProvider(), logger)
 }
