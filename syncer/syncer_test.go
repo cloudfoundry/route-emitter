@@ -48,7 +48,7 @@ var _ = Describe("Syncer", func() {
 
 	Describe("when the syncer is started up", func() {
 		BeforeEach(func() {
-			bbs.AllActualLRPs = []models.LRP{
+			bbs.AllActualLRPs = []models.ActualLRP{
 				{
 					ProcessGuid:  "process-guid-1",
 					Index:        0,
@@ -209,10 +209,10 @@ var _ = Describe("Syncer", func() {
 			Context("when getting all actual LRPs fails", func() {
 				BeforeEach(func() {
 					firstTime := true
-					bbs.WhenGettingRunningActualLRPs = func() ([]models.LRP, error) {
+					bbs.WhenGettingRunningActualLRPs = func() ([]models.ActualLRP, error) {
 						if firstTime {
 							firstTime = false
-							return []models.LRP{}, errors.New("NO")
+							return []models.ActualLRP{}, errors.New("NO")
 						} else {
 							return bbs.AllActualLRPs, nil
 						}

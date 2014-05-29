@@ -76,7 +76,7 @@ func (syncer *Syncer) Run(signals <-chan os.Signal, ready chan<- struct{}) error
 	return nil
 }
 
-func (syncer *Syncer) register(desired models.DesiredLRP, actual models.LRP) error {
+func (syncer *Syncer) register(desired models.DesiredLRP, actual models.ActualLRP) error {
 	message := gibson.RegistryMessage{
 		URIs: desired.Routes,
 		Host: actual.Host,

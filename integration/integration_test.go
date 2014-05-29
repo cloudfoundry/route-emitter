@@ -77,7 +77,7 @@ var _ = Describe("Integration", func() {
 
 			Context("and an endpoint comes up", func() {
 				BeforeEach(func() {
-					err := bbs.ReportActualLRPAsRunning(models.LRP{
+					err := bbs.ReportActualLRPAsRunning(models.ActualLRP{
 						ProcessGuid:  "guid1",
 						Index:        0,
 						InstanceGuid: "iguid1",
@@ -112,7 +112,7 @@ var _ = Describe("Integration", func() {
 				})
 				Ω(err).ShouldNot(HaveOccurred())
 
-				err = bbs.ReportActualLRPAsStarting(models.LRP{
+				err = bbs.ReportActualLRPAsStarting(models.ActualLRP{
 					ProcessGuid:  "guid1",
 					Index:        0,
 					InstanceGuid: "iguid1",
@@ -128,7 +128,7 @@ var _ = Describe("Integration", func() {
 
 		Context("and an endpoint comes up", func() {
 			BeforeEach(func() {
-				err := bbs.ReportActualLRPAsRunning(models.LRP{
+				err := bbs.ReportActualLRPAsRunning(models.ActualLRP{
 					ProcessGuid:  "guid1",
 					Index:        0,
 					InstanceGuid: "iguid1",
@@ -201,7 +201,7 @@ var _ = Describe("Integration", func() {
 			})
 			Ω(err).ShouldNot(HaveOccurred())
 
-			err = bbs.ReportActualLRPAsRunning(models.LRP{
+			err = bbs.ReportActualLRPAsRunning(models.ActualLRP{
 				ProcessGuid:  "guid1",
 				Index:        0,
 				InstanceGuid: "iguid1",

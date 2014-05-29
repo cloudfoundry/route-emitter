@@ -63,7 +63,7 @@ var _ = Describe("Watcher", func() {
 
 					called := false
 
-					bbs.WhenGettingActualLRPsByProcessGuid = func(guid string) ([]models.LRP, error) {
+					bbs.WhenGettingActualLRPsByProcessGuid = func(guid string) ([]models.ActualLRP, error) {
 						if called {
 							calledAgain <- true
 							return nil, nil
@@ -85,9 +85,9 @@ var _ = Describe("Watcher", func() {
 		Context("when a desired LRP change comes in", func() {
 			actualChange := models.ActualLRPChange{
 				Before: nil,
-				After: &models.LRP{
+				After: &models.ActualLRP{
 					Host:  "1.2.3.4",
-					State: models.LRPStateRunning,
+					State: models.ActualLRPStateRunning,
 					Ports: []models.PortMapping{
 						{ContainerPort: 8080, HostPort: 1234},
 					},

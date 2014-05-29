@@ -77,7 +77,7 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 
 				actual := *actualChange.After
 
-				if actual.State != models.LRPStateRunning {
+				if actual.State != models.ActualLRPStateRunning {
 					continue
 				}
 
@@ -138,15 +138,15 @@ func subtract(subtractee, subtractend []string) []string {
 	return result
 }
 
-func (watcher *Watcher) register(routes []string, actual models.LRP) {
+func (watcher *Watcher) register(routes []string, actual models.ActualLRP) {
 	watcher.updateRoutes("router.register", routes, actual)
 }
 
-func (watcher *Watcher) unregister(routes []string, actual models.LRP) {
+func (watcher *Watcher) unregister(routes []string, actual models.ActualLRP) {
 	watcher.updateRoutes("router.unregister", routes, actual)
 }
 
-func (watcher *Watcher) updateRoutes(subject string, routes []string, actual models.LRP) {
+func (watcher *Watcher) updateRoutes(subject string, routes []string, actual models.ActualLRP) {
 	message := gibson.RegistryMessage{
 		URIs: routes,
 		Host: actual.Host,
