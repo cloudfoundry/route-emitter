@@ -1,20 +1,50 @@
 package routing_table
 
-import "github.com/cloudfoundry-incubator/runtime-schema/models"
+type Container struct {
+	Host string
+	Port int
+}
 
 type RoutingTableEntry struct {
 	Routes     map[string]struct{}
 	Containers map[Container]struct{}
 }
 
-func (entry RoutingTableEntry) HasContainer(container Container) bool {
+func (entry RoutingTableEntry) hasContainer(container Container) bool {
 	_, ok := entry.Containers[container]
 	return ok
 }
 
-func (entry RoutingTableEntry) HasRoute(route string) bool {
+func (entry RoutingTableEntry) hasRoute(route string) bool {
 	_, ok := entry.Routes[route]
 	return ok
+}
+
+func (entry RoutingTableEntry) copy() RoutingTableEntry {
+	clone := RoutingTableEntry{
+		Routes:     map[string]struct{}{},
+		Containers: map[Container]struct{}{},
+	}
+
+	for k, v := range entry.Routes {
+		clone.Routes[k] = v
+	}
+
+	for k, v := range entry.Containers {
+		clone.Containers[k] = v
+	}
+
+	return clone
+}
+
+func (entry RoutingTableEntry) allRoutes() []string {
+	routes := make([]string, len(entry.Routes))
+	i := 0
+	for route := range entry.Routes {
+		routes[i] = route
+		i++
+	}
+	return routes
 }
 
 func routesAsMap(routes []string) map[string]struct{} {
@@ -31,51 +61,4 @@ func containersAsMap(containers []Container) map[Container]struct{} {
 		containersMap[container] = struct{}{}
 	}
 	return containersMap
-}
-
-func (entry RoutingTableEntry) AllRoutes() []string {
-	routes := make([]string, len(entry.Routes))
-	i := 0
-	for route := range entry.Routes {
-		routes[i] = route
-		i++
-	}
-	return routes
-}
-
-type Container struct {
-	Host string
-	Port int
-}
-
-func (c Container) equals(o Container) bool {
-	return c.Host == o.Host && c.Port == o.Port
-}
-
-type RoutesByProcessGuid map[string][]string
-type ContainersByProcessGuid map[string][]Container
-
-func RoutesByProcessGuidFromDesireds(desireds []models.DesiredLRP) RoutesByProcessGuid {
-	routes := RoutesByProcessGuid{}
-	for _, desired := range desireds {
-		routes[desired.ProcessGuid] = desired.Routes
-	}
-
-	return routes
-}
-
-func ContainersByProcessGuidFromActuals(actuals []models.ActualLRP) ContainersByProcessGuid {
-	containers := ContainersByProcessGuid{}
-	for _, actual := range actuals {
-		if len(actual.Ports) == 0 {
-			continue
-		}
-
-		containers[actual.ProcessGuid] = append(containers[actual.ProcessGuid], Container{
-			Host: actual.Host,
-			Port: int(actual.Ports[0].HostPort),
-		})
-	}
-
-	return containers
 }

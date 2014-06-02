@@ -1,127 +1,173 @@
 package watcher_test
 
 import (
-	"errors"
 	"os"
 
 	"github.com/cloudfoundry-incubator/runtime-schema/bbs/fake_bbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
+	"github.com/cloudfoundry/gibson"
 	"github.com/cloudfoundry/gosteno"
-	"github.com/cloudfoundry/yagnats/fakeyagnats"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/tedsuo/ifrit"
 
+	"github.com/cloudfoundry-incubator/route-emitter/nats_emitter/fake_nats_emitter"
+	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
+	"github.com/cloudfoundry-incubator/route-emitter/routing_table/fake_routing_table"
 	. "github.com/cloudfoundry-incubator/route-emitter/watcher"
 )
 
 var _ = Describe("Watcher", func() {
 	var (
-		bbs        *fake_bbs.FakeLRPRouterBBS
-		natsClient *fakeyagnats.FakeYagnats
-		watcher    *Watcher
-		process    ifrit.Process
+		bbs                 *fake_bbs.FakeLRPRouterBBS
+		table               *fake_routing_table.FakeRoutingTable
+		emitter             *fake_nats_emitter.FakeNATSEmitter
+		watcher             *Watcher
+		process             ifrit.Process
+		dummyMessagesToEmit routing_table.MessagesToEmit
 	)
 
 	BeforeEach(func() {
 		bbs = fake_bbs.NewFakeLRPRouterBBS()
-		natsClient = fakeyagnats.New()
+		table = fake_routing_table.New()
+		emitter = fake_nats_emitter.New()
 		logger := gosteno.NewLogger("watcher")
 
-		watcher = NewWatcher(bbs, natsClient, logger)
+		dummyContainer := routing_table.Container{Host: "1.1.1.1", Port: 11}
+		dummyMessage := routing_table.RegistryMessageFor(dummyContainer, "foo.com", "bar.com")
+		dummyMessagesToEmit = routing_table.MessagesToEmit{
+			RegistrationMessages: []gibson.RegistryMessage{dummyMessage},
+		}
+
+		watcher = NewWatcher(bbs, table, emitter, logger)
+		process = ifrit.Envoke(watcher)
 	})
 
-	Describe("when the watcher is started up", func() {
-		JustBeforeEach(func() {
-			process = ifrit.Envoke(watcher)
-		})
+	AfterEach(func(done Done) {
+		process.Signal(os.Interrupt)
+		<-process.Wait()
+		close(done)
+	})
 
-		AfterEach(func() {
-			process.Signal(os.Interrupt)
-			Eventually(process.Wait()).Should(Receive(BeNil()))
-		})
+	Describe("when a desired LRP change arrives", func() {
+		Context("when the change is a create/update (includes an after)", func() {
+			BeforeEach(func() {
+				desiredChange := models.DesiredLRPChange{
+					Before: nil,
+					After: &models.DesiredLRP{
+						ProcessGuid: "pg",
+						Routes:      []string{"route-1", "route-2"},
+					},
+				}
 
-		Context("when a desired LRP change comes in", func() {
-			desiredChange := models.DesiredLRPChange{
-				Before: &models.DesiredLRP{
-					Routes: []string{"route-1"},
-				},
-				After: &models.DesiredLRP{
-					Routes: []string{"route-2"},
-				},
-			}
+				table.SetRoutesReturns(dummyMessagesToEmit)
 
-			JustBeforeEach(func() {
 				bbs.DesiredLRPChangeChan <- desiredChange
 			})
 
-			Context("and getting the actual LRPs fails", func() {
-				var calledAgain chan bool
+			It("should set the routes on the table", func() {
+				Eventually(table.SetRoutesCallCount).Should(Equal(1))
+				processGuid, routes := table.SetRoutesArgsForCall(0)
+				Ω(processGuid).Should(Equal("pg"))
+				Ω(routes).Should(Equal([]string{"route-1", "route-2"}))
+			})
 
-				BeforeEach(func() {
-					calledAgain = make(chan bool)
-
-					called := false
-
-					bbs.WhenGettingActualLRPsByProcessGuid = func(guid string) ([]models.ActualLRP, error) {
-						if called {
-							calledAgain <- true
-							return nil, nil
-						} else {
-							called = true
-							return nil, errors.New("nope!")
-						}
-					}
-				})
-
-				It("keeps calm and carries on", func() {
-					bbs.DesiredLRPChangeChan <- desiredChange
-
-					Eventually(calledAgain).Should(Receive())
-				})
+			It("should emit whatever the table tells it to emit", func() {
+				Eventually(emitter.EmitCallCount).Should(Equal(1))
+				Ω(emitter.EmitArgsForCall(0)).Should(Equal(dummyMessagesToEmit))
 			})
 		})
 
-		Context("when a desired LRP change comes in", func() {
-			actualChange := models.ActualLRPChange{
-				Before: nil,
-				After: &models.ActualLRP{
-					Host:  "1.2.3.4",
-					State: models.ActualLRPStateRunning,
-					Ports: []models.PortMapping{
-						{ContainerPort: 8080, HostPort: 1234},
+		Context("when the change is a delete (no after)", func() {
+			BeforeEach(func() {
+				desiredChange := models.DesiredLRPChange{
+					Before: &models.DesiredLRP{
+						ProcessGuid: "pg",
+						Routes:      []string{"route-1"},
 					},
-				},
-			}
+					After: nil,
+				}
 
-			JustBeforeEach(func() {
+				table.RemoveRoutesReturns(dummyMessagesToEmit)
+
+				bbs.DesiredLRPChangeChan <- desiredChange
+			})
+
+			It("should remove the routes from the table", func() {
+				Eventually(table.RemoveRoutesCallCount).Should(Equal(1))
+				processGuid := table.RemoveRoutesArgsForCall(0)
+				Ω(processGuid).Should(Equal("pg"))
+			})
+
+			It("should emit whatever the table tells it to emit", func() {
+				Eventually(emitter.EmitCallCount).Should(Equal(1))
+				Ω(emitter.EmitArgsForCall(0)).Should(Equal(dummyMessagesToEmit))
+			})
+		})
+	})
+
+	Describe("when an actual LRP change arrives", func() {
+		Context("when the change is a create/update (includes an after)", func() {
+			BeforeEach(func() {
+				actualChange := models.ActualLRPChange{
+					Before: nil,
+					After: &models.ActualLRP{
+						ProcessGuid: "pg",
+						Host:        "1.1.1.1",
+						State:       models.ActualLRPStateRunning,
+						Ports: []models.PortMapping{
+							{ContainerPort: 8080, HostPort: 11},
+						},
+					},
+				}
+
+				table.AddOrUpdateContainerReturns(dummyMessagesToEmit)
+
 				bbs.ActualLRPChangeChan <- actualChange
 			})
 
-			Context("and getting the actual LRPs fails", func() {
-				var calledAgain chan bool
+			It("should add/update the container on the table", func() {
+				Eventually(table.AddOrUpdateContainerCallCount).Should(Equal(1))
+				processGuid, container := table.AddOrUpdateContainerArgsForCall(0)
+				Ω(processGuid).Should(Equal("pg"))
+				Ω(container).Should(Equal(routing_table.Container{Host: "1.1.1.1", Port: 11}))
+			})
 
-				BeforeEach(func() {
-					calledAgain = make(chan bool)
+			It("should emit whatever the table tells it to emit", func() {
+				Eventually(emitter.EmitCallCount).Should(Equal(1))
+				Ω(emitter.EmitArgsForCall(0)).Should(Equal(dummyMessagesToEmit))
+			})
+		})
 
-					called := false
+		Context("when the change is a delete (no after)", func() {
+			BeforeEach(func() {
+				actualChange := models.ActualLRPChange{
+					Before: &models.ActualLRP{
+						ProcessGuid: "pg",
+						Host:        "1.1.1.1",
+						State:       models.ActualLRPStateRunning,
+						Ports: []models.PortMapping{
+							{ContainerPort: 8080, HostPort: 11},
+						},
+					},
+					After: nil,
+				}
 
-					bbs.WhenGettingDesiredLRPByProcessGuid = func(guid string) (models.DesiredLRP, error) {
-						if called {
-							calledAgain <- true
-							return models.DesiredLRP{}, nil
-						} else {
-							called = true
-							return models.DesiredLRP{}, errors.New("nope!")
-						}
-					}
-				})
+				table.RemoveContainerReturns(dummyMessagesToEmit)
 
-				It("keeps calm and carries on", func() {
-					bbs.ActualLRPChangeChan <- actualChange
+				bbs.ActualLRPChangeChan <- actualChange
+			})
 
-					Eventually(calledAgain).Should(Receive())
-				})
+			It("should remove the container from the table", func() {
+				Eventually(table.RemoveContainerCallCount).Should(Equal(1))
+				processGuid, container := table.RemoveContainerArgsForCall(0)
+				Ω(processGuid).Should(Equal("pg"))
+				Ω(container).Should(Equal(routing_table.Container{Host: "1.1.1.1", Port: 11}))
+			})
+
+			It("should emit whatever the table tells it to emit", func() {
+				Eventually(emitter.EmitCallCount).Should(Equal(1))
+				Ω(emitter.EmitArgsForCall(0)).Should(Equal(dummyMessagesToEmit))
 			})
 		})
 	})

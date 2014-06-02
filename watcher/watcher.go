@@ -1,28 +1,27 @@
 package watcher
 
 import (
-	"encoding/json"
 	"os"
 
+	"github.com/cloudfoundry-incubator/route-emitter/nats_emitter"
+	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
 	"github.com/cloudfoundry-incubator/runtime-schema/bbs"
-	"github.com/cloudfoundry-incubator/runtime-schema/models"
-	"github.com/cloudfoundry/gibson"
 	"github.com/cloudfoundry/gosteno"
-	"github.com/cloudfoundry/storeadapter"
-	"github.com/cloudfoundry/yagnats"
 )
 
 type Watcher struct {
-	bbs        bbs.LRPRouterBBS
-	natsClient yagnats.NATSClient
-	logger     *gosteno.Logger
+	bbs     bbs.LRPRouterBBS
+	table   routing_table.RoutingTableInterface
+	emitter nats_emitter.NATSEmitterInterface
+	logger  *gosteno.Logger
 }
 
-func NewWatcher(bbs bbs.LRPRouterBBS, natsClient yagnats.NATSClient, logger *gosteno.Logger) *Watcher {
+func NewWatcher(bbs bbs.LRPRouterBBS, table routing_table.RoutingTableInterface, emitter nats_emitter.NATSEmitterInterface, logger *gosteno.Logger) *Watcher {
 	return &Watcher{
-		bbs:        bbs,
-		natsClient: natsClient,
-		logger:     logger,
+		bbs:     bbs,
+		table:   table,
+		emitter: emitter,
+		logger:  logger,
 	}
 }
 
@@ -41,61 +40,53 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 					break InnerLoop
 				}
 
-				actuals, err := watcher.bbs.GetRunningActualLRPsByProcessGuid(desiredChange.After.ProcessGuid)
-				if err != nil {
-					if err == storeadapter.ErrorKeyNotFound {
-						break
+				watcher.logger.Infod(map[string]interface{}{
+					"desired-change": desiredChange,
+				}, "route-emitter.watcher.detected-desired-change")
+
+				var messagesToEmit routing_table.MessagesToEmit
+				if desiredChange.After == nil {
+					if desiredChange.Before != nil {
+						messagesToEmit = watcher.table.RemoveRoutes(desiredChange.Before.ProcessGuid)
 					}
-
-					continue
+				} else {
+					messagesToEmit = watcher.table.SetRoutes(desiredChange.After.ProcessGuid, desiredChange.After.Routes...)
 				}
 
-				var oldRoutes, newRoutes []string
-				if desiredChange.Before != nil {
-					oldRoutes = desiredChange.Before.Routes
-				}
-				if desiredChange.After != nil {
-					newRoutes = desiredChange.After.Routes
-				}
-
-				added := subtract(newRoutes, oldRoutes)
-				removed := subtract(oldRoutes, newRoutes)
-
-				for _, actual := range actuals {
-					watcher.register(added, actual)
-					watcher.unregister(removed, actual)
-				}
+				watcher.emitter.Emit(messagesToEmit)
 
 			case actualChange, ok := <-actualLRPChanges:
 				if !ok {
 					break InnerLoop
 				}
 
+				watcher.logger.Infod(map[string]interface{}{
+					"actual-change": actualChange,
+				}, "route-emitter.watcher.detected-actual-change")
+
+				var messagesToEmit routing_table.MessagesToEmit
 				if actualChange.After == nil {
-					continue
-				}
-
-				actual := *actualChange.After
-
-				if actual.State != models.ActualLRPStateRunning {
-					continue
-				}
-
-				desired, err := watcher.bbs.GetDesiredLRPByProcessGuid(actual.ProcessGuid)
-				if err != nil {
-					if err == storeadapter.ErrorKeyNotFound {
-						break
+					if actualChange.Before != nil {
+						container, err := routing_table.ContainerFromActual(*actualChange.Before)
+						if err != nil {
+							continue
+						}
+						messagesToEmit = watcher.table.RemoveContainer(actualChange.Before.ProcessGuid, container)
 					}
-
-					continue
+				} else {
+					container, err := routing_table.ContainerFromActual(*actualChange.After)
+					if err != nil {
+						continue
+					}
+					messagesToEmit = watcher.table.AddOrUpdateContainer(actualChange.After.ProcessGuid, container)
 				}
 
-				watcher.register(desired.Routes, actual)
+				watcher.emitter.Emit(messagesToEmit)
 
 			case err := <-desiredErrors:
 				watcher.logger.Errord(map[string]interface{}{
 					"error": err.Error(),
-				}, "route-emitter.desired-watch-failed")
+				}, "route-emitter.watcher.desired-watch-failed")
 
 				desiredLRPChanges, _, desiredErrors = watcher.bbs.WatchForDesiredLRPChanges()
 
@@ -104,7 +95,7 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 			case err := <-actualErrors:
 				watcher.logger.Errord(map[string]interface{}{
 					"error": err.Error(),
-				}, "route-emitter.actual-watch-failed")
+				}, "route-emitter.watcher.actual-watch-failed")
 
 				actualLRPChanges, _, actualErrors = watcher.bbs.WatchForActualLRPChanges()
 
@@ -118,51 +109,4 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 	}
 
 	return nil
-}
-
-func subtract(subtractee, subtractend []string) []string {
-	result := []string{}
-	for _, x := range subtractee {
-		removeIt := false
-		for _, y := range subtractend {
-			if x == y {
-				removeIt = true
-				break
-			}
-		}
-
-		if !removeIt {
-			result = append(result, x)
-		}
-	}
-	return result
-}
-
-func (watcher *Watcher) register(routes []string, actual models.ActualLRP) {
-	watcher.updateRoutes("router.register", routes, actual)
-}
-
-func (watcher *Watcher) unregister(routes []string, actual models.ActualLRP) {
-	watcher.updateRoutes("router.unregister", routes, actual)
-}
-
-func (watcher *Watcher) updateRoutes(subject string, routes []string, actual models.ActualLRP) {
-	message := gibson.RegistryMessage{
-		URIs: routes,
-		Host: actual.Host,
-		Port: int(actual.Ports[0].HostPort),
-	}
-
-	payload, err := json.Marshal(message)
-	if err != nil {
-		panic(err)
-	}
-
-	err = watcher.natsClient.Publish(subject, payload)
-	if err != nil {
-		watcher.logger.Warnd(map[string]interface{}{
-			"error":   err,
-			"subject": subject,
-		}, "watcher.route-update.failed")
-	}
 }

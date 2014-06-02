@@ -413,4 +413,257 @@ var _ = Describe("RoutingTable", func() {
 			})
 		})
 	})
+
+	Describe("Processing deltas", func() {
+		Context("when the table is empty", func() {
+			Context("When setting routes", func() {
+				It("should not emit anything", func() {
+					messagesToEmit = table.SetRoutes(pg, route1, route2)
+					Ω(messagesToEmit).Should(BeZero())
+				})
+			})
+
+			Context("when removing routes", func() {
+				It("should not emit anything", func() {
+					messagesToEmit = table.RemoveRoutes(pg)
+					Ω(messagesToEmit).Should(BeZero())
+				})
+			})
+
+			Context("when adding/updating containers", func() {
+				It("should not emit anything", func() {
+					messagesToEmit = table.AddOrUpdateContainer(pg, container1)
+					Ω(messagesToEmit).Should(BeZero())
+				})
+			})
+
+			Context("when removing containers", func() {
+				It("should not emit anything", func() {
+					messagesToEmit = table.RemoveContainer(pg, container1)
+					Ω(messagesToEmit).Should(BeZero())
+				})
+			})
+		})
+
+		Context("when there are both containers and routes in the table", func() {
+			BeforeEach(func() {
+				table.SetRoutes(pg, route1, route2)
+				table.AddOrUpdateContainer(pg, container1)
+				table.AddOrUpdateContainer(pg, container2)
+			})
+
+			Context("When setting routes", func() {
+				Context("when the routes do not change", func() {
+					It("should emit registrations", func() {
+						messagesToEmit = table.SetRoutes(pg, route1, route2)
+
+						Ω(messagesToEmit.RegistrationMessages).Should(HaveLen(2))
+						Ω(messagesToEmit.UnregistrationMessages).Should(BeEmpty())
+
+						message := RegistryMessageFor(container1, route1, route2)
+						Ω(messagesToEmit.RegistrationMessages).Should(ContainElement(message))
+
+						message = RegistryMessageFor(container2, route1, route2)
+						Ω(messagesToEmit.RegistrationMessages).Should(ContainElement(message))
+					})
+				})
+
+				Context("when routes are added", func() {
+					It("should emit registrations", func() {
+						messagesToEmit = table.SetRoutes(pg, route1, route2, route3)
+
+						Ω(messagesToEmit.RegistrationMessages).Should(HaveLen(2))
+						Ω(messagesToEmit.UnregistrationMessages).Should(BeEmpty())
+
+						message := RegistryMessageFor(container1, route1, route2, route3)
+						Ω(messagesToEmit.RegistrationMessages).Should(ContainElement(message))
+
+						message = RegistryMessageFor(container2, route1, route2, route3)
+						Ω(messagesToEmit.RegistrationMessages).Should(ContainElement(message))
+					})
+				})
+
+				Context("when routes are removed", func() {
+					It("should emit registrations and unregistrations", func() {
+						messagesToEmit = table.SetRoutes(pg, route1)
+
+						Ω(messagesToEmit.RegistrationMessages).Should(HaveLen(2))
+						Ω(messagesToEmit.UnregistrationMessages).Should(HaveLen(2))
+
+						message := RegistryMessageFor(container1, route1)
+						Ω(messagesToEmit.RegistrationMessages).Should(ContainElement(message))
+
+						message = RegistryMessageFor(container2, route1)
+						Ω(messagesToEmit.RegistrationMessages).Should(ContainElement(message))
+
+						message = RegistryMessageFor(container1, route2)
+						Ω(messagesToEmit.UnregistrationMessages).Should(ContainElement(message))
+
+						message = RegistryMessageFor(container2, route2)
+						Ω(messagesToEmit.UnregistrationMessages).Should(ContainElement(message))
+					})
+				})
+
+				Context("when routes are added and removed", func() {
+					It("should emit registrations and unregistrations", func() {
+						messagesToEmit = table.SetRoutes(pg, route1, route3)
+
+						Ω(messagesToEmit.RegistrationMessages).Should(HaveLen(2))
+						Ω(messagesToEmit.UnregistrationMessages).Should(HaveLen(2))
+
+						message := RegistryMessageFor(container1, route1, route3)
+						Ω(messagesToEmit.RegistrationMessages).Should(ContainElement(message))
+
+						message = RegistryMessageFor(container2, route1, route3)
+						Ω(messagesToEmit.RegistrationMessages).Should(ContainElement(message))
+
+						message = RegistryMessageFor(container1, route2)
+						Ω(messagesToEmit.UnregistrationMessages).Should(ContainElement(message))
+
+						message = RegistryMessageFor(container2, route2)
+						Ω(messagesToEmit.UnregistrationMessages).Should(ContainElement(message))
+					})
+				})
+			})
+
+			Context("when removing routes", func() {
+				It("should emit unregistrations", func() {
+					messagesToEmit = table.RemoveRoutes(pg)
+					Ω(messagesToEmit.RegistrationMessages).Should(BeEmpty())
+					Ω(messagesToEmit.UnregistrationMessages).Should(HaveLen(2))
+
+					message := RegistryMessageFor(container1, route1, route2)
+					Ω(messagesToEmit.UnregistrationMessages).Should(ContainElement(message))
+
+					message = RegistryMessageFor(container2, route1, route2)
+					Ω(messagesToEmit.UnregistrationMessages).Should(ContainElement(message))
+				})
+			})
+
+			Context("when adding/updating containers", func() {
+				Context("when the container already exists", func() {
+					It("should emit registrations", func() {
+						messagesToEmit = table.AddOrUpdateContainer(pg, container1)
+
+						Ω(messagesToEmit.RegistrationMessages).Should(HaveLen(2))
+						Ω(messagesToEmit.UnregistrationMessages).Should(BeEmpty())
+
+						message := RegistryMessageFor(container1, route1, route2)
+						Ω(messagesToEmit.RegistrationMessages).Should(ContainElement(message))
+
+						message = RegistryMessageFor(container2, route1, route2)
+						Ω(messagesToEmit.RegistrationMessages).Should(ContainElement(message))
+					})
+				})
+
+				Context("when the container does not already exist", func() {
+					It("should emit registrations", func() {
+						messagesToEmit = table.AddOrUpdateContainer(pg, container3)
+
+						Ω(messagesToEmit.RegistrationMessages).Should(HaveLen(3))
+						Ω(messagesToEmit.UnregistrationMessages).Should(BeEmpty())
+
+						message := RegistryMessageFor(container1, route1, route2)
+						Ω(messagesToEmit.RegistrationMessages).Should(ContainElement(message))
+
+						message = RegistryMessageFor(container2, route1, route2)
+						Ω(messagesToEmit.RegistrationMessages).Should(ContainElement(message))
+
+						message = RegistryMessageFor(container3, route1, route2)
+						Ω(messagesToEmit.RegistrationMessages).Should(ContainElement(message))
+					})
+				})
+			})
+
+			Context("when removing containers", func() {
+				It("should emit unregistrations", func() {
+					messagesToEmit = table.RemoveContainer(pg, container2)
+
+					Ω(messagesToEmit.RegistrationMessages).Should(HaveLen(1))
+					Ω(messagesToEmit.UnregistrationMessages).Should(HaveLen(1))
+
+					message := RegistryMessageFor(container1, route1, route2)
+					Ω(messagesToEmit.RegistrationMessages).Should(ContainElement(message))
+
+					message = RegistryMessageFor(container2, route1, route2)
+					Ω(messagesToEmit.UnregistrationMessages).Should(ContainElement(message))
+				})
+			})
+		})
+
+		Context("when there are only routes in the table", func() {
+			BeforeEach(func() {
+				table.SetRoutes(pg, route1, route2)
+			})
+
+			Context("When setting routes", func() {
+				It("should emit nothing", func() {
+					messagesToEmit = table.SetRoutes(pg, route1, route3)
+					Ω(messagesToEmit).Should(BeZero())
+				})
+			})
+
+			Context("when removing routes", func() {
+				It("should emit nothing", func() {
+					messagesToEmit = table.RemoveRoutes(pg)
+					Ω(messagesToEmit).Should(BeZero())
+				})
+			})
+
+			Context("when adding/updating containers", func() {
+				It("should emit registrations", func() {
+					messagesToEmit = table.AddOrUpdateContainer(pg, container1)
+
+					Ω(messagesToEmit.RegistrationMessages).Should(HaveLen(1))
+					Ω(messagesToEmit.UnregistrationMessages).Should(BeEmpty())
+
+					message := RegistryMessageFor(container1, route1, route2)
+					Ω(messagesToEmit.RegistrationMessages).Should(ContainElement(message))
+				})
+			})
+		})
+
+		Context("when there are only containers in the table", func() {
+			BeforeEach(func() {
+				table.AddOrUpdateContainer(pg, container1)
+				table.AddOrUpdateContainer(pg, container2)
+			})
+
+			Context("When setting routes", func() {
+				It("should emit registrations", func() {
+					messagesToEmit = table.SetRoutes(pg, route1, route2)
+
+					Ω(messagesToEmit.RegistrationMessages).Should(HaveLen(2))
+					Ω(messagesToEmit.UnregistrationMessages).Should(BeEmpty())
+
+					message := RegistryMessageFor(container1, route1, route2)
+					Ω(messagesToEmit.RegistrationMessages).Should(ContainElement(message))
+
+					message = RegistryMessageFor(container2, route1, route2)
+					Ω(messagesToEmit.RegistrationMessages).Should(ContainElement(message))
+				})
+			})
+
+			Context("when removing routes", func() {
+				It("should emit nothing", func() {
+					messagesToEmit = table.RemoveRoutes(pg)
+					Ω(messagesToEmit).Should(BeZero())
+				})
+			})
+
+			Context("when adding/updating containers", func() {
+				It("should emit nothing", func() {
+					messagesToEmit = table.AddOrUpdateContainer(pg, container2)
+					Ω(messagesToEmit).Should(BeZero())
+				})
+			})
+
+			Context("when removing containers", func() {
+				It("should emit nothing", func() {
+					messagesToEmit = table.RemoveContainer(pg, container1)
+					Ω(messagesToEmit).Should(BeZero())
+				})
+			})
+		})
+	})
 })

@@ -9,6 +9,10 @@ import (
 	"github.com/cloudfoundry/yagnats"
 )
 
+type NATSEmitterInterface interface {
+	Emit(messagesToEmit routing_table.MessagesToEmit) error
+}
+
 type NATSEmitter struct {
 	natsClient yagnats.NATSClient
 	logger     *gosteno.Logger
@@ -46,7 +50,7 @@ func (n *NATSEmitter) emit(subject string, message gibson.RegistryMessage, error
 		errors <- err
 	}()
 
-	n.logger.Debugd(map[string]interface{}{
+	n.logger.Infod(map[string]interface{}{
 		"subject": subject,
 		"message": message,
 	}, "route-emitter.emit")

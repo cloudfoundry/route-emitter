@@ -59,7 +59,7 @@ func main() {
 	emitter := initializeNatsEmitter(natsClient, logger)
 	table := initializeRoutingTable()
 
-	watcher := watcher.NewWatcher(bbs, natsClient, logger)
+	watcher := watcher.NewWatcher(bbs, table, emitter, logger)
 	syncer := syncer.NewSyncer(bbs, table, emitter, natsClient, logger)
 
 	process := grouper.EnvokeGroup(grouper.RunGroup{

@@ -242,7 +242,7 @@ var _ = Describe("Integration", func() {
 
 				It("immediately emits router.register", func() {
 					Eventually(registeredRoutes).Should(Receive(Equal(gibson.RegistryMessage{
-						URIs: []string{"route-3"},
+						URIs: []string{"route-1", "route-2", "route-3"},
 						Host: "1.2.3.4",
 						Port: 65100,
 					})))
