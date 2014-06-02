@@ -5,6 +5,8 @@ import (
 	"os"
 	"strings"
 
+	"github.com/cloudfoundry-incubator/route-emitter/nats_emitter"
+	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
 	"github.com/cloudfoundry-incubator/route-emitter/syncer"
 	"github.com/cloudfoundry-incubator/route-emitter/watcher"
 	Bbs "github.com/cloudfoundry-incubator/runtime-schema/bbs"
@@ -54,9 +56,11 @@ func main() {
 	logger := initializeLogger()
 	natsClient := initializeNatsClient(logger)
 	bbs := initializeBbs(logger)
+	emitter := initializeNatsEmitter(natsClient, logger)
+	table := initializeRoutingTable()
 
 	watcher := watcher.NewWatcher(bbs, natsClient, logger)
-	syncer := syncer.NewSyncer(bbs, natsClient, logger)
+	syncer := syncer.NewSyncer(bbs, table, emitter, natsClient, logger)
 
 	process := grouper.EnvokeGroup(grouper.RunGroup{
 		"watcher": watcher,
@@ -114,6 +118,14 @@ func initializeNatsClient(logger *steno.Logger) yagnats.NATSClient {
 	}
 
 	return natsClient
+}
+
+func initializeNatsEmitter(natsClient yagnats.NATSClient, logger *steno.Logger) *nats_emitter.NATSEmitter {
+	return nats_emitter.New(natsClient, logger)
+}
+
+func initializeRoutingTable() *routing_table.RoutingTable {
+	return routing_table.New()
 }
 
 func initializeBbs(logger *steno.Logger) Bbs.LRPRouterBBS {

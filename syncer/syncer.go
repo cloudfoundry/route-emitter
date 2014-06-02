@@ -5,6 +5,8 @@ import (
 	"os"
 	"time"
 
+	"github.com/cloudfoundry-incubator/route-emitter/nats_emitter"
+	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
 	"github.com/cloudfoundry-incubator/runtime-schema/bbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/cloudfoundry/gibson"
@@ -17,13 +19,17 @@ type Syncer struct {
 	bbs        bbs.LRPRouterBBS
 	natsClient yagnats.NATSClient
 	logger     *gosteno.Logger
+	table      *routing_table.RoutingTable
+	emitter    *nats_emitter.NATSEmitter
 
 	heartbeatInterval chan time.Duration
 }
 
-func NewSyncer(bbs bbs.LRPRouterBBS, natsClient yagnats.NATSClient, logger *gosteno.Logger) *Syncer {
+func NewSyncer(bbs bbs.LRPRouterBBS, table *routing_table.RoutingTable, emitter *nats_emitter.NATSEmitter, natsClient yagnats.NATSClient, logger *gosteno.Logger) *Syncer {
 	return &Syncer{
 		bbs:        bbs,
+		table:      table,
+		emitter:    emitter,
 		natsClient: natsClient,
 		logger:     logger,
 
@@ -42,7 +48,7 @@ func (syncer *Syncer) Run(signals <-chan os.Signal, ready chan<- struct{}) error
 	heartbeatInterval := <-syncer.heartbeatInterval
 
 	for {
-		allRunningActual, err := syncer.bbs.GetRunningActualLRPs()
+		allRunningActuals, err := syncer.bbs.GetRunningActualLRPs()
 		if err != nil {
 			syncer.logger.Warnd(map[string]interface{}{
 				"error": err.Error(),
@@ -56,12 +62,16 @@ func (syncer *Syncer) Run(signals <-chan os.Signal, ready chan<- struct{}) error
 			}, "syncer.get-desired.failed")
 		}
 
-		for _, actual := range allRunningActual {
-			for _, desired := range allDesired {
-				if desired.ProcessGuid == actual.ProcessGuid {
-					syncer.register(desired, actual)
-				}
-			}
+		routesToEmit := syncer.table.Sync(
+			routing_table.RoutesByProcessGuidFromDesireds(allDesired),
+			routing_table.ContainersByProcessGuidFromActuals(allRunningActuals),
+		)
+
+		err = syncer.emitter.Emit(routesToEmit)
+		if err != nil {
+			syncer.logger.Warnd(map[string]interface{}{
+				"error": err.Error(),
+			}, "syncer.emit-routes.failed")
 		}
 
 		select {

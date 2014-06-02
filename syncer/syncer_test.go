@@ -4,6 +4,9 @@ import (
 	"errors"
 	"os"
 	"time"
+
+	"github.com/cloudfoundry-incubator/route-emitter/nats_emitter"
+	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
 	. "github.com/cloudfoundry-incubator/route-emitter/syncer"
 	"github.com/cloudfoundry-incubator/runtime-schema/bbs/fake_bbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
@@ -20,6 +23,8 @@ var _ = Describe("Syncer", func() {
 	var (
 		bbs        *fake_bbs.FakeLRPRouterBBS
 		natsClient *fakeyagnats.FakeYagnats
+		emitter    *nats_emitter.NATSEmitter
+		table      *routing_table.RoutingTable
 		syncer     *Syncer
 		process    ifrit.Process
 
@@ -30,7 +35,9 @@ var _ = Describe("Syncer", func() {
 		bbs = fake_bbs.NewFakeLRPRouterBBS()
 		natsClient = fakeyagnats.New()
 		logger := gosteno.NewLogger("syncer")
-		syncer = NewSyncer(bbs, natsClient, logger)
+		emitter = nats_emitter.New(natsClient, logger)
+		table = routing_table.New()
+		syncer = NewSyncer(bbs, table, emitter, natsClient, logger)
 
 		startMessages := make(chan *yagnats.Message)
 		routerStartMessages = startMessages
