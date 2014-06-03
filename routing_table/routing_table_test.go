@@ -2,6 +2,8 @@ package routing_table_test
 
 import (
 	. "github.com/cloudfoundry-incubator/route-emitter/routing_table"
+	. "github.com/cloudfoundry-incubator/route-emitter/routing_table/matchers"
+	"github.com/cloudfoundry/gibson"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -36,14 +38,13 @@ var _ = Describe("RoutingTable", func() {
 				})
 
 				It("should emit registrations for each pairing", func() {
-					Ω(messagesToEmit.RegistrationMessages).Should(HaveLen(2))
-					Ω(messagesToEmit.UnregistrationMessages).Should(BeEmpty())
-
-					message := RegistryMessageFor(container1, route1, route2)
-					Ω(messagesToEmit.RegistrationMessages).Should(ContainElement(message))
-
-					message = RegistryMessageFor(container2, route1, route2)
-					Ω(messagesToEmit.RegistrationMessages).Should(ContainElement(message))
+					expected := MessagesToEmit{
+						RegistrationMessages: []gibson.RegistryMessage{
+							RegistryMessageFor(container1, route1, route2),
+							RegistryMessageFor(container2, route1, route2),
+						},
+					}
+					Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
 				})
 			})
 
@@ -56,8 +57,7 @@ var _ = Describe("RoutingTable", func() {
 				})
 
 				It("should not emit a registration", func() {
-					Ω(messagesToEmit.RegistrationMessages).Should(BeEmpty())
-					Ω(messagesToEmit.UnregistrationMessages).Should(BeEmpty())
+					Ω(messagesToEmit).Should(BeZero())
 				})
 
 				Context("when the containers subsequently arrive", func() {
@@ -69,11 +69,12 @@ var _ = Describe("RoutingTable", func() {
 					})
 
 					It("should emit registrations for each pairing", func() {
-						Ω(messagesToEmit.RegistrationMessages).Should(HaveLen(1))
-						Ω(messagesToEmit.UnregistrationMessages).Should(BeEmpty())
-
-						message := RegistryMessageFor(container1, route1)
-						Ω(messagesToEmit.RegistrationMessages).Should(ContainElement(message))
+						expected := MessagesToEmit{
+							RegistrationMessages: []gibson.RegistryMessage{
+								RegistryMessageFor(container1, route1),
+							},
+						}
+						Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
 					})
 				})
 
@@ -86,8 +87,7 @@ var _ = Describe("RoutingTable", func() {
 					})
 
 					It("should emit nothing", func() {
-						Ω(messagesToEmit.RegistrationMessages).Should(BeEmpty())
-						Ω(messagesToEmit.UnregistrationMessages).Should(BeEmpty())
+						Ω(messagesToEmit).Should(BeZero())
 					})
 				})
 			})
@@ -101,8 +101,7 @@ var _ = Describe("RoutingTable", func() {
 				})
 
 				It("should not emit a registration", func() {
-					Ω(messagesToEmit.RegistrationMessages).Should(BeEmpty())
-					Ω(messagesToEmit.UnregistrationMessages).Should(BeEmpty())
+					Ω(messagesToEmit).Should(BeZero())
 				})
 
 				Context("when the routes subsequently arrive", func() {
@@ -114,11 +113,12 @@ var _ = Describe("RoutingTable", func() {
 					})
 
 					It("should emit registrations for each pairing", func() {
-						Ω(messagesToEmit.RegistrationMessages).Should(HaveLen(1))
-						Ω(messagesToEmit.UnregistrationMessages).Should(BeEmpty())
-
-						message := RegistryMessageFor(container1, route1)
-						Ω(messagesToEmit.RegistrationMessages).Should(ContainElement(message))
+						expected := MessagesToEmit{
+							RegistrationMessages: []gibson.RegistryMessage{
+								RegistryMessageFor(container1, route1),
+							},
+						}
+						Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
 					})
 				})
 
@@ -131,8 +131,7 @@ var _ = Describe("RoutingTable", func() {
 					})
 
 					It("should emit nothing", func() {
-						Ω(messagesToEmit.RegistrationMessages).Should(BeEmpty())
-						Ω(messagesToEmit.UnregistrationMessages).Should(BeEmpty())
+						Ω(messagesToEmit).Should(BeZero())
 					})
 				})
 			})
@@ -155,14 +154,13 @@ var _ = Describe("RoutingTable", func() {
 				})
 
 				It("should emit all registrations and no unregisration", func() {
-					Ω(messagesToEmit.RegistrationMessages).Should(HaveLen(2))
-					Ω(messagesToEmit.UnregistrationMessages).Should(BeEmpty())
-
-					message := RegistryMessageFor(container1, route1, route2)
-					Ω(messagesToEmit.RegistrationMessages).Should(ContainElement(message))
-
-					message = RegistryMessageFor(container2, route1, route2)
-					Ω(messagesToEmit.RegistrationMessages).Should(ContainElement(message))
+					expected := MessagesToEmit{
+						RegistrationMessages: []gibson.RegistryMessage{
+							RegistryMessageFor(container1, route1, route2),
+							RegistryMessageFor(container2, route1, route2),
+						},
+					}
+					Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
 				})
 			})
 
@@ -175,14 +173,13 @@ var _ = Describe("RoutingTable", func() {
 				})
 
 				It("should emit all registrations and no unregisration", func() {
-					Ω(messagesToEmit.RegistrationMessages).Should(HaveLen(2))
-					Ω(messagesToEmit.UnregistrationMessages).Should(BeEmpty())
-
-					message := RegistryMessageFor(container1, route1, route2, route3)
-					Ω(messagesToEmit.RegistrationMessages).Should(ContainElement(message))
-
-					message = RegistryMessageFor(container2, route1, route2, route3)
-					Ω(messagesToEmit.RegistrationMessages).Should(ContainElement(message))
+					expected := MessagesToEmit{
+						RegistrationMessages: []gibson.RegistryMessage{
+							RegistryMessageFor(container1, route1, route2, route3),
+							RegistryMessageFor(container2, route1, route2, route3),
+						},
+					}
+					Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
 				})
 			})
 
@@ -195,17 +192,14 @@ var _ = Describe("RoutingTable", func() {
 				})
 
 				It("should emit all registrations and no unregisration", func() {
-					Ω(messagesToEmit.RegistrationMessages).Should(HaveLen(3))
-					Ω(messagesToEmit.UnregistrationMessages).Should(BeEmpty())
-
-					message := RegistryMessageFor(container1, route1, route2)
-					Ω(messagesToEmit.RegistrationMessages).Should(ContainElement(message))
-
-					message = RegistryMessageFor(container2, route1, route2)
-					Ω(messagesToEmit.RegistrationMessages).Should(ContainElement(message))
-
-					message = RegistryMessageFor(container3, route1, route2)
-					Ω(messagesToEmit.RegistrationMessages).Should(ContainElement(message))
+					expected := MessagesToEmit{
+						RegistrationMessages: []gibson.RegistryMessage{
+							RegistryMessageFor(container1, route1, route2),
+							RegistryMessageFor(container2, route1, route2),
+							RegistryMessageFor(container3, route1, route2),
+						},
+					}
+					Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
 				})
 			})
 
@@ -218,17 +212,14 @@ var _ = Describe("RoutingTable", func() {
 				})
 
 				It("should emit all registrations and no unregisration", func() {
-					Ω(messagesToEmit.RegistrationMessages).Should(HaveLen(3))
-					Ω(messagesToEmit.UnregistrationMessages).Should(BeEmpty())
-
-					message := RegistryMessageFor(container1, route1, route2, route3)
-					Ω(messagesToEmit.RegistrationMessages).Should(ContainElement(message))
-
-					message = RegistryMessageFor(container2, route1, route2, route3)
-					Ω(messagesToEmit.RegistrationMessages).Should(ContainElement(message))
-
-					message = RegistryMessageFor(container3, route1, route2, route3)
-					Ω(messagesToEmit.RegistrationMessages).Should(ContainElement(message))
+					expected := MessagesToEmit{
+						RegistrationMessages: []gibson.RegistryMessage{
+							RegistryMessageFor(container1, route1, route2, route3),
+							RegistryMessageFor(container2, route1, route2, route3),
+							RegistryMessageFor(container3, route1, route2, route3),
+						},
+					}
+					Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
 				})
 			})
 
@@ -241,20 +232,17 @@ var _ = Describe("RoutingTable", func() {
 				})
 
 				It("should emit all registrations and the relevant unregisrations", func() {
-					Ω(messagesToEmit.RegistrationMessages).Should(HaveLen(2))
-					Ω(messagesToEmit.UnregistrationMessages).Should(HaveLen(2))
-
-					message := RegistryMessageFor(container1, route1)
-					Ω(messagesToEmit.RegistrationMessages).Should(ContainElement(message))
-
-					message = RegistryMessageFor(container2, route1)
-					Ω(messagesToEmit.RegistrationMessages).Should(ContainElement(message))
-
-					message = RegistryMessageFor(container1, route2)
-					Ω(messagesToEmit.UnregistrationMessages).Should(ContainElement(message))
-
-					message = RegistryMessageFor(container2, route2)
-					Ω(messagesToEmit.UnregistrationMessages).Should(ContainElement(message))
+					expected := MessagesToEmit{
+						RegistrationMessages: []gibson.RegistryMessage{
+							RegistryMessageFor(container1, route1),
+							RegistryMessageFor(container2, route1),
+						},
+						UnregistrationMessages: []gibson.RegistryMessage{
+							RegistryMessageFor(container1, route2),
+							RegistryMessageFor(container2, route2),
+						},
+					}
+					Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
 				})
 			})
 
@@ -267,14 +255,15 @@ var _ = Describe("RoutingTable", func() {
 				})
 
 				It("should emit all registrations and the relevant unregisrations", func() {
-					Ω(messagesToEmit.RegistrationMessages).Should(HaveLen(1))
-					Ω(messagesToEmit.UnregistrationMessages).Should(HaveLen(1))
-
-					message := RegistryMessageFor(container1, route1, route2)
-					Ω(messagesToEmit.RegistrationMessages).Should(ContainElement(message))
-
-					message = RegistryMessageFor(container2, route1, route2)
-					Ω(messagesToEmit.UnregistrationMessages).Should(ContainElement(message))
+					expected := MessagesToEmit{
+						RegistrationMessages: []gibson.RegistryMessage{
+							RegistryMessageFor(container1, route1, route2),
+						},
+						UnregistrationMessages: []gibson.RegistryMessage{
+							RegistryMessageFor(container2, route1, route2),
+						},
+					}
+					Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
 				})
 			})
 
@@ -287,17 +276,16 @@ var _ = Describe("RoutingTable", func() {
 				})
 
 				It("should emit all registrations and the relevant unregisrations", func() {
-					Ω(messagesToEmit.RegistrationMessages).Should(HaveLen(1))
-					Ω(messagesToEmit.UnregistrationMessages).Should(HaveLen(2))
-
-					message := RegistryMessageFor(container1, route1)
-					Ω(messagesToEmit.RegistrationMessages).Should(ContainElement(message))
-
-					message = RegistryMessageFor(container1, route2)
-					Ω(messagesToEmit.UnregistrationMessages).Should(ContainElement(message))
-
-					message = RegistryMessageFor(container2, route1, route2)
-					Ω(messagesToEmit.UnregistrationMessages).Should(ContainElement(message))
+					expected := MessagesToEmit{
+						RegistrationMessages: []gibson.RegistryMessage{
+							RegistryMessageFor(container1, route1),
+						},
+						UnregistrationMessages: []gibson.RegistryMessage{
+							RegistryMessageFor(container1, route2),
+							RegistryMessageFor(container2, route1, route2),
+						},
+					}
+					Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
 				})
 			})
 
@@ -310,14 +298,15 @@ var _ = Describe("RoutingTable", func() {
 				})
 
 				It("should emit all registrations and the relevant unregisrations", func() {
-					Ω(messagesToEmit.RegistrationMessages).Should(HaveLen(1))
-					Ω(messagesToEmit.UnregistrationMessages).Should(HaveLen(1))
-
-					message := RegistryMessageFor(container1, route1, route2, route3)
-					Ω(messagesToEmit.RegistrationMessages).Should(ContainElement(message))
-
-					message = RegistryMessageFor(container2, route1, route2)
-					Ω(messagesToEmit.UnregistrationMessages).Should(ContainElement(message))
+					expected := MessagesToEmit{
+						RegistrationMessages: []gibson.RegistryMessage{
+							RegistryMessageFor(container1, route1, route2, route3),
+						},
+						UnregistrationMessages: []gibson.RegistryMessage{
+							RegistryMessageFor(container2, route1, route2),
+						},
+					}
+					Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
 				})
 			})
 
@@ -330,23 +319,18 @@ var _ = Describe("RoutingTable", func() {
 				})
 
 				It("should emit all registrations and the relevant unregisrations", func() {
-					Ω(messagesToEmit.RegistrationMessages).Should(HaveLen(3))
-					Ω(messagesToEmit.UnregistrationMessages).Should(HaveLen(2))
-
-					message := RegistryMessageFor(container1, route1)
-					Ω(messagesToEmit.RegistrationMessages).Should(ContainElement(message))
-
-					message = RegistryMessageFor(container2, route1)
-					Ω(messagesToEmit.RegistrationMessages).Should(ContainElement(message))
-
-					message = RegistryMessageFor(container3, route1)
-					Ω(messagesToEmit.RegistrationMessages).Should(ContainElement(message))
-
-					message = RegistryMessageFor(container1, route2)
-					Ω(messagesToEmit.UnregistrationMessages).Should(ContainElement(message))
-
-					message = RegistryMessageFor(container2, route2)
-					Ω(messagesToEmit.UnregistrationMessages).Should(ContainElement(message))
+					expected := MessagesToEmit{
+						RegistrationMessages: []gibson.RegistryMessage{
+							RegistryMessageFor(container1, route1),
+							RegistryMessageFor(container2, route1),
+							RegistryMessageFor(container3, route1),
+						},
+						UnregistrationMessages: []gibson.RegistryMessage{
+							RegistryMessageFor(container1, route2),
+							RegistryMessageFor(container2, route2),
+						},
+					}
+					Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
 				})
 			})
 
@@ -359,14 +343,13 @@ var _ = Describe("RoutingTable", func() {
 				})
 
 				It("should unregister the missing guids", func() {
-					Ω(messagesToEmit.RegistrationMessages).Should(BeEmpty())
-					Ω(messagesToEmit.UnregistrationMessages).Should(HaveLen(2))
-
-					message := RegistryMessageFor(container1, route1, route2)
-					Ω(messagesToEmit.UnregistrationMessages).Should(ContainElement(message))
-
-					message = RegistryMessageFor(container2, route1, route2)
-					Ω(messagesToEmit.UnregistrationMessages).Should(ContainElement(message))
+					expected := MessagesToEmit{
+						UnregistrationMessages: []gibson.RegistryMessage{
+							RegistryMessageFor(container1, route1, route2),
+							RegistryMessageFor(container2, route1, route2),
+						},
+					}
+					Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
 				})
 			})
 
@@ -386,8 +369,7 @@ var _ = Describe("RoutingTable", func() {
 					})
 
 					It("should emit nothing", func() {
-						Ω(messagesToEmit.RegistrationMessages).Should(BeEmpty())
-						Ω(messagesToEmit.UnregistrationMessages).Should(BeEmpty())
+						Ω(messagesToEmit).Should(BeZero())
 					})
 				})
 
@@ -406,8 +388,7 @@ var _ = Describe("RoutingTable", func() {
 					})
 
 					It("should emit nothing", func() {
-						Ω(messagesToEmit.RegistrationMessages).Should(BeEmpty())
-						Ω(messagesToEmit.UnregistrationMessages).Should(BeEmpty())
+						Ω(messagesToEmit).Should(BeZero())
 					})
 				})
 			})
@@ -457,14 +438,13 @@ var _ = Describe("RoutingTable", func() {
 					It("should emit registrations", func() {
 						messagesToEmit = table.SetRoutes(pg, route1, route2)
 
-						Ω(messagesToEmit.RegistrationMessages).Should(HaveLen(2))
-						Ω(messagesToEmit.UnregistrationMessages).Should(BeEmpty())
-
-						message := RegistryMessageFor(container1, route1, route2)
-						Ω(messagesToEmit.RegistrationMessages).Should(ContainElement(message))
-
-						message = RegistryMessageFor(container2, route1, route2)
-						Ω(messagesToEmit.RegistrationMessages).Should(ContainElement(message))
+						expected := MessagesToEmit{
+							RegistrationMessages: []gibson.RegistryMessage{
+								RegistryMessageFor(container1, route1, route2),
+								RegistryMessageFor(container2, route1, route2),
+							},
+						}
+						Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
 					})
 				})
 
@@ -472,14 +452,13 @@ var _ = Describe("RoutingTable", func() {
 					It("should emit registrations", func() {
 						messagesToEmit = table.SetRoutes(pg, route1, route2, route3)
 
-						Ω(messagesToEmit.RegistrationMessages).Should(HaveLen(2))
-						Ω(messagesToEmit.UnregistrationMessages).Should(BeEmpty())
-
-						message := RegistryMessageFor(container1, route1, route2, route3)
-						Ω(messagesToEmit.RegistrationMessages).Should(ContainElement(message))
-
-						message = RegistryMessageFor(container2, route1, route2, route3)
-						Ω(messagesToEmit.RegistrationMessages).Should(ContainElement(message))
+						expected := MessagesToEmit{
+							RegistrationMessages: []gibson.RegistryMessage{
+								RegistryMessageFor(container1, route1, route2, route3),
+								RegistryMessageFor(container2, route1, route2, route3),
+							},
+						}
+						Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
 					})
 				})
 
@@ -487,20 +466,17 @@ var _ = Describe("RoutingTable", func() {
 					It("should emit registrations and unregistrations", func() {
 						messagesToEmit = table.SetRoutes(pg, route1)
 
-						Ω(messagesToEmit.RegistrationMessages).Should(HaveLen(2))
-						Ω(messagesToEmit.UnregistrationMessages).Should(HaveLen(2))
-
-						message := RegistryMessageFor(container1, route1)
-						Ω(messagesToEmit.RegistrationMessages).Should(ContainElement(message))
-
-						message = RegistryMessageFor(container2, route1)
-						Ω(messagesToEmit.RegistrationMessages).Should(ContainElement(message))
-
-						message = RegistryMessageFor(container1, route2)
-						Ω(messagesToEmit.UnregistrationMessages).Should(ContainElement(message))
-
-						message = RegistryMessageFor(container2, route2)
-						Ω(messagesToEmit.UnregistrationMessages).Should(ContainElement(message))
+						expected := MessagesToEmit{
+							RegistrationMessages: []gibson.RegistryMessage{
+								RegistryMessageFor(container1, route1),
+								RegistryMessageFor(container2, route1),
+							},
+							UnregistrationMessages: []gibson.RegistryMessage{
+								RegistryMessageFor(container1, route2),
+								RegistryMessageFor(container2, route2),
+							},
+						}
+						Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
 					})
 				})
 
@@ -508,20 +484,17 @@ var _ = Describe("RoutingTable", func() {
 					It("should emit registrations and unregistrations", func() {
 						messagesToEmit = table.SetRoutes(pg, route1, route3)
 
-						Ω(messagesToEmit.RegistrationMessages).Should(HaveLen(2))
-						Ω(messagesToEmit.UnregistrationMessages).Should(HaveLen(2))
-
-						message := RegistryMessageFor(container1, route1, route3)
-						Ω(messagesToEmit.RegistrationMessages).Should(ContainElement(message))
-
-						message = RegistryMessageFor(container2, route1, route3)
-						Ω(messagesToEmit.RegistrationMessages).Should(ContainElement(message))
-
-						message = RegistryMessageFor(container1, route2)
-						Ω(messagesToEmit.UnregistrationMessages).Should(ContainElement(message))
-
-						message = RegistryMessageFor(container2, route2)
-						Ω(messagesToEmit.UnregistrationMessages).Should(ContainElement(message))
+						expected := MessagesToEmit{
+							RegistrationMessages: []gibson.RegistryMessage{
+								RegistryMessageFor(container1, route1, route3),
+								RegistryMessageFor(container2, route1, route3),
+							},
+							UnregistrationMessages: []gibson.RegistryMessage{
+								RegistryMessageFor(container1, route2),
+								RegistryMessageFor(container2, route2),
+							},
+						}
+						Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
 					})
 				})
 			})
@@ -529,14 +502,14 @@ var _ = Describe("RoutingTable", func() {
 			Context("when removing routes", func() {
 				It("should emit unregistrations", func() {
 					messagesToEmit = table.RemoveRoutes(pg)
-					Ω(messagesToEmit.RegistrationMessages).Should(BeEmpty())
-					Ω(messagesToEmit.UnregistrationMessages).Should(HaveLen(2))
 
-					message := RegistryMessageFor(container1, route1, route2)
-					Ω(messagesToEmit.UnregistrationMessages).Should(ContainElement(message))
-
-					message = RegistryMessageFor(container2, route1, route2)
-					Ω(messagesToEmit.UnregistrationMessages).Should(ContainElement(message))
+					expected := MessagesToEmit{
+						UnregistrationMessages: []gibson.RegistryMessage{
+							RegistryMessageFor(container1, route1, route2),
+							RegistryMessageFor(container2, route1, route2),
+						},
+					}
+					Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
 				})
 			})
 
@@ -545,14 +518,13 @@ var _ = Describe("RoutingTable", func() {
 					It("should emit registrations", func() {
 						messagesToEmit = table.AddOrUpdateContainer(pg, container1)
 
-						Ω(messagesToEmit.RegistrationMessages).Should(HaveLen(2))
-						Ω(messagesToEmit.UnregistrationMessages).Should(BeEmpty())
-
-						message := RegistryMessageFor(container1, route1, route2)
-						Ω(messagesToEmit.RegistrationMessages).Should(ContainElement(message))
-
-						message = RegistryMessageFor(container2, route1, route2)
-						Ω(messagesToEmit.RegistrationMessages).Should(ContainElement(message))
+						expected := MessagesToEmit{
+							RegistrationMessages: []gibson.RegistryMessage{
+								RegistryMessageFor(container1, route1, route2),
+								RegistryMessageFor(container2, route1, route2),
+							},
+						}
+						Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
 					})
 				})
 
@@ -560,17 +532,14 @@ var _ = Describe("RoutingTable", func() {
 					It("should emit registrations", func() {
 						messagesToEmit = table.AddOrUpdateContainer(pg, container3)
 
-						Ω(messagesToEmit.RegistrationMessages).Should(HaveLen(3))
-						Ω(messagesToEmit.UnregistrationMessages).Should(BeEmpty())
-
-						message := RegistryMessageFor(container1, route1, route2)
-						Ω(messagesToEmit.RegistrationMessages).Should(ContainElement(message))
-
-						message = RegistryMessageFor(container2, route1, route2)
-						Ω(messagesToEmit.RegistrationMessages).Should(ContainElement(message))
-
-						message = RegistryMessageFor(container3, route1, route2)
-						Ω(messagesToEmit.RegistrationMessages).Should(ContainElement(message))
+						expected := MessagesToEmit{
+							RegistrationMessages: []gibson.RegistryMessage{
+								RegistryMessageFor(container1, route1, route2),
+								RegistryMessageFor(container2, route1, route2),
+								RegistryMessageFor(container3, route1, route2),
+							},
+						}
+						Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
 					})
 				})
 			})
@@ -579,14 +548,15 @@ var _ = Describe("RoutingTable", func() {
 				It("should emit unregistrations", func() {
 					messagesToEmit = table.RemoveContainer(pg, container2)
 
-					Ω(messagesToEmit.RegistrationMessages).Should(HaveLen(1))
-					Ω(messagesToEmit.UnregistrationMessages).Should(HaveLen(1))
-
-					message := RegistryMessageFor(container1, route1, route2)
-					Ω(messagesToEmit.RegistrationMessages).Should(ContainElement(message))
-
-					message = RegistryMessageFor(container2, route1, route2)
-					Ω(messagesToEmit.UnregistrationMessages).Should(ContainElement(message))
+					expected := MessagesToEmit{
+						RegistrationMessages: []gibson.RegistryMessage{
+							RegistryMessageFor(container1, route1, route2),
+						},
+						UnregistrationMessages: []gibson.RegistryMessage{
+							RegistryMessageFor(container2, route1, route2),
+						},
+					}
+					Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
 				})
 			})
 		})
@@ -614,11 +584,12 @@ var _ = Describe("RoutingTable", func() {
 				It("should emit registrations", func() {
 					messagesToEmit = table.AddOrUpdateContainer(pg, container1)
 
-					Ω(messagesToEmit.RegistrationMessages).Should(HaveLen(1))
-					Ω(messagesToEmit.UnregistrationMessages).Should(BeEmpty())
-
-					message := RegistryMessageFor(container1, route1, route2)
-					Ω(messagesToEmit.RegistrationMessages).Should(ContainElement(message))
+					expected := MessagesToEmit{
+						RegistrationMessages: []gibson.RegistryMessage{
+							RegistryMessageFor(container1, route1, route2),
+						},
+					}
+					Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
 				})
 			})
 		})
@@ -633,14 +604,13 @@ var _ = Describe("RoutingTable", func() {
 				It("should emit registrations", func() {
 					messagesToEmit = table.SetRoutes(pg, route1, route2)
 
-					Ω(messagesToEmit.RegistrationMessages).Should(HaveLen(2))
-					Ω(messagesToEmit.UnregistrationMessages).Should(BeEmpty())
-
-					message := RegistryMessageFor(container1, route1, route2)
-					Ω(messagesToEmit.RegistrationMessages).Should(ContainElement(message))
-
-					message = RegistryMessageFor(container2, route1, route2)
-					Ω(messagesToEmit.RegistrationMessages).Should(ContainElement(message))
+					expected := MessagesToEmit{
+						RegistrationMessages: []gibson.RegistryMessage{
+							RegistryMessageFor(container1, route1, route2),
+							RegistryMessageFor(container2, route1, route2),
+						},
+					}
+					Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
 				})
 			})
 

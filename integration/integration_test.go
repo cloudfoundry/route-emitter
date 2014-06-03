@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"time"
 
+	. "github.com/cloudfoundry-incubator/route-emitter/routing_table/matchers"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/cloudfoundry/gibson"
 	"github.com/cloudfoundry/yagnats"
@@ -91,7 +92,7 @@ var _ = Describe("Integration", func() {
 				})
 
 				It("emits its routes immediately", func() {
-					Eventually(registeredRoutes).Should(Receive(Equal(gibson.RegistryMessage{
+					Eventually(registeredRoutes).Should(Receive(MatchRegistryMessage(gibson.RegistryMessage{
 						URIs: []string{"route-1", "route-2"},
 						Host: "1.2.3.4",
 						Port: 65100,
@@ -156,7 +157,7 @@ var _ = Describe("Integration", func() {
 				})
 
 				It("emits its routes immediately", func() {
-					Eventually(registeredRoutes).Should(Receive(Equal(gibson.RegistryMessage{
+					Eventually(registeredRoutes).Should(Receive(MatchRegistryMessage(gibson.RegistryMessage{
 						URIs: []string{"route-1", "route-2"},
 						Host: "1.2.3.4",
 						Port: 65100,
@@ -172,7 +173,7 @@ var _ = Describe("Integration", func() {
 					Eventually(registeredRoutes, 5).Should(Receive(&msg2))
 					t2 := time.Now()
 
-					Ω(msg2).Should(Equal(msg1))
+					Ω(msg2).Should(MatchRegistryMessage(msg1))
 					Ω(t2.Sub(t1)).Should(BeNumerically("~", 2*time.Second, 500*time.Millisecond))
 				})
 			})
@@ -220,7 +221,7 @@ var _ = Describe("Integration", func() {
 			})
 
 			It("immediately emits all routes", func() {
-				Eventually(registeredRoutes).Should(Receive(Equal(gibson.RegistryMessage{
+				Eventually(registeredRoutes).Should(Receive(MatchRegistryMessage(gibson.RegistryMessage{
 					URIs: []string{"route-1", "route-2"},
 					Host: "1.2.3.4",
 					Port: 65100,
@@ -241,7 +242,7 @@ var _ = Describe("Integration", func() {
 				})
 
 				It("immediately emits router.register", func() {
-					Eventually(registeredRoutes).Should(Receive(Equal(gibson.RegistryMessage{
+					Eventually(registeredRoutes).Should(Receive(MatchRegistryMessage(gibson.RegistryMessage{
 						URIs: []string{"route-1", "route-2", "route-3"},
 						Host: "1.2.3.4",
 						Port: 65100,
@@ -263,7 +264,7 @@ var _ = Describe("Integration", func() {
 				})
 
 				It("immediately emits router.unregister", func() {
-					Eventually(unregisteredRoutes).Should(Receive(Equal(gibson.RegistryMessage{
+					Eventually(unregisteredRoutes).Should(Receive(MatchRegistryMessage(gibson.RegistryMessage{
 						URIs: []string{"route-1"},
 						Host: "1.2.3.4",
 						Port: 65100,
