@@ -16,16 +16,16 @@ import (
 )
 
 type Syncer struct {
-	bbs        bbs.LRPRouterBBS
-	natsClient yagnats.NATSClient
-	logger     *gosteno.Logger
-	table      routing_table.RoutingTableInterface
-	emitter    nats_emitter.NATSEmitterInterface
-
+	bbs               bbs.LRPRouterBBS
+	natsClient        yagnats.NATSClient
+	logger            *gosteno.Logger
+	table             routing_table.RoutingTableInterface
+	emitter           nats_emitter.NATSEmitterInterface
+	syncDuration      time.Duration
 	heartbeatInterval chan time.Duration
 }
 
-func NewSyncer(bbs bbs.LRPRouterBBS, table routing_table.RoutingTableInterface, emitter nats_emitter.NATSEmitterInterface, natsClient yagnats.NATSClient, logger *gosteno.Logger) *Syncer {
+func NewSyncer(bbs bbs.LRPRouterBBS, table routing_table.RoutingTableInterface, emitter nats_emitter.NATSEmitterInterface, syncDuration time.Duration, natsClient yagnats.NATSClient, logger *gosteno.Logger) *Syncer {
 	return &Syncer{
 		bbs:        bbs,
 		table:      table,
@@ -33,6 +33,7 @@ func NewSyncer(bbs bbs.LRPRouterBBS, table routing_table.RoutingTableInterface, 
 		natsClient: natsClient,
 		logger:     logger,
 
+		syncDuration:      syncDuration,
 		heartbeatInterval: make(chan time.Duration),
 	}
 }
@@ -47,36 +48,19 @@ func (syncer *Syncer) Run(signals <-chan os.Signal, ready chan<- struct{}) error
 
 	heartbeatInterval := <-syncer.heartbeatInterval
 
+	syncTicker := time.NewTicker(syncer.syncDuration)
+	syncer.syncAndEmit()
+
 	for {
-		allRunningActuals, err := syncer.bbs.GetRunningActualLRPs()
-		if err != nil {
-			syncer.logger.Warnd(map[string]interface{}{
-				"error": err.Error(),
-			}, "syncer.get-actual.failed")
-		}
-
-		allDesired, err := syncer.bbs.GetAllDesiredLRPs()
-		if err != nil {
-			syncer.logger.Warnd(map[string]interface{}{
-				"error": err.Error(),
-			}, "syncer.get-desired.failed")
-		}
-
-		routesToEmit := syncer.table.Sync(
-			routing_table.RoutesByProcessGuidFromDesireds(allDesired),
-			routing_table.ContainersByProcessGuidFromActuals(allRunningActuals),
-		)
-
-		err = syncer.emitter.Emit(routesToEmit)
-		if err != nil {
-			syncer.logger.Warnd(map[string]interface{}{
-				"error": err.Error(),
-			}, "syncer.emit-routes.failed")
-		}
-
 		select {
 		case heartbeatInterval = <-syncer.heartbeatInterval:
+			syncer.emit()
 		case <-time.After(heartbeatInterval):
+			syncer.emit()
+		case <-syncTicker.C:
+			//we decouple syncing the routing table (via etcd) from emitting the routes
+			//since the watcher is receiving deltas our internal cache should be generally up-to-date
+			syncer.syncAndEmit()
 		case <-signals:
 			syncer.logger.Info("route-emitter.syncer.stopping")
 			return nil
@@ -84,6 +68,45 @@ func (syncer *Syncer) Run(signals <-chan os.Signal, ready chan<- struct{}) error
 	}
 
 	return nil
+}
+
+func (syncer *Syncer) emit() {
+	messagesToEmit := syncer.table.MessagesToEmit()
+
+	err := syncer.emitter.Emit(messagesToEmit)
+	if err != nil {
+		syncer.logger.Warnd(map[string]interface{}{
+			"error": err.Error(),
+		}, "syncer.emit-routes.failed")
+	}
+}
+
+func (syncer *Syncer) syncAndEmit() {
+	allRunningActuals, err := syncer.bbs.GetRunningActualLRPs()
+	if err != nil {
+		syncer.logger.Warnd(map[string]interface{}{
+			"error": err.Error(),
+		}, "syncer.get-actual.failed")
+	}
+
+	allDesired, err := syncer.bbs.GetAllDesiredLRPs()
+	if err != nil {
+		syncer.logger.Warnd(map[string]interface{}{
+			"error": err.Error(),
+		}, "syncer.get-desired.failed")
+	}
+
+	routesToEmit := syncer.table.Sync(
+		routing_table.RoutesByProcessGuidFromDesireds(allDesired),
+		routing_table.ContainersByProcessGuidFromActuals(allRunningActuals),
+	)
+
+	err = syncer.emitter.Emit(routesToEmit)
+	if err != nil {
+		syncer.logger.Warnd(map[string]interface{}{
+			"error": err.Error(),
+		}, "syncer.sync-and-emit-routes.failed-to-emit")
+	}
 }
 
 func (syncer *Syncer) register(desired models.DesiredLRP, actual models.ActualLRP) error {

@@ -4,6 +4,7 @@ import (
 	"flag"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/cloudfoundry-incubator/route-emitter/nats_emitter"
 	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
@@ -50,6 +51,12 @@ var syslogName = flag.String(
 	"syslog name",
 )
 
+var syncInterval = flag.Duration(
+	"syncInterval",
+	time.Minute,
+	"the interval between syncs of the routing table from etcd",
+)
+
 func main() {
 	flag.Parse()
 
@@ -60,7 +67,7 @@ func main() {
 	table := initializeRoutingTable()
 
 	watcher := watcher.NewWatcher(bbs, table, emitter, logger)
-	syncer := syncer.NewSyncer(bbs, table, emitter, natsClient, logger)
+	syncer := syncer.NewSyncer(bbs, table, emitter, *syncInterval, natsClient, logger)
 
 	process := grouper.EnvokeGroup(grouper.RunGroup{
 		"watcher": watcher,

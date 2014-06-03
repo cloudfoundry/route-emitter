@@ -636,4 +636,56 @@ var _ = Describe("RoutingTable", func() {
 			})
 		})
 	})
+
+	Describe("MessagesToEmit", func() {
+		Context("when the table is empty", func() {
+			It("should be empty", func() {
+				messagesToEmit = table.MessagesToEmit()
+				Ω(messagesToEmit).Should(BeZero())
+			})
+		})
+
+		Context("when the table has routes but no containers", func() {
+			BeforeEach(func() {
+				table.SetRoutes(pg, route1, route2)
+			})
+
+			It("should be empty", func() {
+				messagesToEmit = table.MessagesToEmit()
+				Ω(messagesToEmit).Should(BeZero())
+			})
+		})
+
+		Context("when the table has containers but no routes", func() {
+			BeforeEach(func() {
+				table.AddOrUpdateContainer(pg, container1)
+				table.AddOrUpdateContainer(pg, container2)
+			})
+
+			It("should be empty", func() {
+				messagesToEmit = table.MessagesToEmit()
+				Ω(messagesToEmit).Should(BeZero())
+			})
+		})
+
+		Context("when the table has routes and containers", func() {
+			BeforeEach(func() {
+				table.SetRoutes(pg, route1, route2)
+				table.AddOrUpdateContainer(pg, container1)
+				table.AddOrUpdateContainer(pg, container2)
+			})
+
+			It("should emit the registrations", func() {
+				messagesToEmit = table.MessagesToEmit()
+
+				expected := MessagesToEmit{
+					RegistrationMessages: []gibson.RegistryMessage{
+						RegistryMessageFor(container1, route1, route2),
+						RegistryMessageFor(container2, route1, route2),
+					},
+				}
+				Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
+			})
+		})
+	})
 })

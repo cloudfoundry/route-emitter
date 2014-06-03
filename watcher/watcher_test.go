@@ -29,8 +29,8 @@ var _ = Describe("Watcher", func() {
 
 	BeforeEach(func() {
 		bbs = fake_bbs.NewFakeLRPRouterBBS()
-		table = fake_routing_table.New()
-		emitter = fake_nats_emitter.New()
+		table = &fake_routing_table.FakeRoutingTable{}
+		emitter = &fake_nats_emitter.FakeNATSEmitter{}
 		logger := gosteno.NewLogger("watcher")
 
 		dummyContainer := routing_table.Container{Host: "1.1.1.1", Port: 11}

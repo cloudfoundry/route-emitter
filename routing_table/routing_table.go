@@ -4,6 +4,7 @@ import "sync"
 
 type RoutingTableInterface interface {
 	Sync(routes RoutesByProcessGuid, containers ContainersByProcessGuid) MessagesToEmit
+	MessagesToEmit() MessagesToEmit
 
 	SetRoutes(processGuid string, routes ...string) MessagesToEmit
 	RemoveRoutes(processGuid string) MessagesToEmit
@@ -41,6 +42,14 @@ func (table *RoutingTable) Sync(routes RoutesByProcessGuid, containers Container
 
 	table.entries = newEntries
 
+	return messagesToEmit
+}
+
+func (table *RoutingTable) MessagesToEmit() MessagesToEmit {
+	messagesToEmit := MessagesToEmit{}
+	for _, entry := range table.entries {
+		messagesToEmit = messagesToEmit.merge(registrationsFor(entry))
+	}
 	return messagesToEmit
 }
 

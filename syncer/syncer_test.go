@@ -1,7 +1,6 @@
 package syncer_test
 
 import (
-	"errors"
 	"os"
 	"time"
 	"github.com/cloudfoundry-incubator/route-emitter/nats_emitter/fake_nats_emitter"
@@ -22,13 +21,15 @@ import (
 
 var _ = Describe("Syncer", func() {
 	var (
-		bbs                 *fake_bbs.FakeLRPRouterBBS
-		natsClient          *fakeyagnats.FakeYagnats
-		emitter             *fake_nats_emitter.FakeNATSEmitter
-		table               *fake_routing_table.FakeRoutingTable
-		syncer              *Syncer
-		process             ifrit.Process
-		dummyMessagesToEmit routing_table.MessagesToEmit
+		bbs          *fake_bbs.FakeLRPRouterBBS
+		natsClient   *fakeyagnats.FakeYagnats
+		emitter      *fake_nats_emitter.FakeNATSEmitter
+		table        *fake_routing_table.FakeRoutingTable
+		syncer       *Syncer
+		process      ifrit.Process
+		syncMessages routing_table.MessagesToEmit
+		emitMessages routing_table.MessagesToEmit
+		syncDuration time.Duration
 
 		routerStartMessages chan<- *yagnats.Message
 	)
@@ -36,10 +37,9 @@ var _ = Describe("Syncer", func() {
 	BeforeEach(func() {
 		bbs = fake_bbs.NewFakeLRPRouterBBS()
 		natsClient = fakeyagnats.New()
-		logger := gosteno.NewLogger("syncer")
-		emitter = fake_nats_emitter.New()
-		table = fake_routing_table.New()
-		syncer = NewSyncer(bbs, table, emitter, natsClient, logger)
+		emitter = &fake_nats_emitter.FakeNATSEmitter{}
+		table = &fake_routing_table.FakeRoutingTable{}
+		syncDuration = 10 * time.Second
 
 		startMessages := make(chan *yagnats.Message)
 		routerStartMessages = startMessages
@@ -54,13 +54,27 @@ var _ = Describe("Syncer", func() {
 			return nil
 		})
 
+		//what follows is fake data to distinguish between
+		//the "sync" and "emit" codepaths
 		dummyContainer := routing_table.Container{Host: "1.1.1.1", Port: 11}
 		dummyMessage := routing_table.RegistryMessageFor(dummyContainer, "foo.com", "bar.com")
-		dummyMessagesToEmit = routing_table.MessagesToEmit{
+		syncMessages = routing_table.MessagesToEmit{
 			RegistrationMessages: []gibson.RegistryMessage{dummyMessage},
 		}
 
-		table.SyncReturns(dummyMessagesToEmit)
+		dummyContainer = routing_table.Container{Host: "2.2.2.2", Port: 22}
+		dummyMessage = routing_table.RegistryMessageFor(dummyContainer, "baz.com")
+		emitMessages = routing_table.MessagesToEmit{
+			RegistrationMessages: []gibson.RegistryMessage{dummyMessage},
+		}
+
+		table.SyncReturns(syncMessages)
+		table.MessagesToEmitReturns(emitMessages)
+	})
+
+	JustBeforeEach(func() {
+		logger := gosteno.NewLogger("syncer")
+		syncer = NewSyncer(bbs, table, emitter, syncDuration, natsClient, logger)
 	})
 
 	Describe("when the syncer is started up", func() {
@@ -104,7 +118,7 @@ var _ = Describe("Syncer", func() {
 				}
 			})
 
-			It("immediately registers all routes for all LRPs", func() {
+			It("immediately synces", func() {
 				Eventually(table.SyncCallCount).Should(Equal(1))
 				routes, containers := table.SyncArgsForCall(0)
 				Ω(routes["process-guid-1"]).Should(Equal([]string{"route-1", "route-2"}))
@@ -113,15 +127,17 @@ var _ = Describe("Syncer", func() {
 				}))
 
 				Eventually(emitter.EmitCallCount).Should(Equal(1))
-				Ω(emitter.EmitArgsForCall(0)).Should(Equal(dummyMessagesToEmit))
+				Ω(emitter.EmitArgsForCall(0)).Should(Equal(syncMessages))
 			})
 
 			It("emits the routes again after the specified interval", func() {
 				Eventually(emitter.EmitCallCount).Should(Equal(1))
 				t1 := time.Now()
 
-				Eventually(emitter.EmitCallCount).Should(Equal(2))
+				Eventually(emitter.EmitCallCount, 2).Should(Equal(2))
 				t2 := time.Now()
+
+				Ω(emitter.EmitArgsForCall(1)).Should(Equal(emitMessages))
 
 				Ω(t2.Sub(t1)).Should(BeNumerically("~", 1*time.Second, 200*time.Millisecond))
 			})
@@ -144,6 +160,7 @@ var _ = Describe("Syncer", func() {
 			It("immediately registers routes for all LRPs", func() {
 				Eventually(table.SyncCallCount).Should(Equal(1))
 				Eventually(emitter.EmitCallCount).Should(Equal(1))
+				Ω(emitter.EmitArgsForCall(0)).Should(Equal(syncMessages))
 			})
 
 			Context("when router.start is received", func() {
@@ -160,16 +177,23 @@ var _ = Describe("Syncer", func() {
 				})
 
 				It("immediately registers all routes for all LRPs", func() {
-					Eventually(table.SyncCallCount).Should(Equal(2))
+					Eventually(table.SyncCallCount).Should(Equal(1))
 					Eventually(emitter.EmitCallCount).Should(Equal(2))
+					Ω(emitter.EmitArgsForCall(0)).Should(Equal(syncMessages))
+					Ω(emitter.EmitArgsForCall(1)).Should(Equal(emitMessages))
 				})
 
 				It("emits the routes again after the specified interval", func() {
 					Eventually(emitter.EmitCallCount).Should(Equal(2))
 					t1 := time.Now()
 
-					Eventually(emitter.EmitCallCount, 2).Should(Equal(3))
+					Eventually(emitter.EmitCallCount, 3).Should(Equal(3))
 					t2 := time.Now()
+
+					Ω(table.SyncCallCount()).Should(Equal(1))
+					Ω(emitter.EmitArgsForCall(0)).Should(Equal(syncMessages))
+					Ω(emitter.EmitArgsForCall(1)).Should(Equal(emitMessages))
+					Ω(emitter.EmitArgsForCall(2)).Should(Equal(emitMessages))
 
 					Ω(t2.Sub(t1)).Should(BeNumerically("~", 2*time.Second, 200*time.Millisecond))
 				})
@@ -186,47 +210,38 @@ var _ = Describe("Syncer", func() {
 						Eventually(emitter.EmitCallCount, 2).Should(Equal(2))
 						t2 := time.Now()
 
+						Ω(emitter.EmitArgsForCall(0)).Should(Equal(syncMessages))
+						Ω(emitter.EmitArgsForCall(1)).Should(Equal(emitMessages))
+
 						Ω(t2.Sub(t1)).Should(BeNumerically("~", 1*time.Second, 200*time.Millisecond))
 					})
 				})
 			})
+		})
 
-			Context("when getting all actual LRPs fails", func() {
-				BeforeEach(func() {
-					firstTime := true
-					bbs.WhenGettingRunningActualLRPs = func() ([]models.ActualLRP, error) {
-						if firstTime {
-							firstTime = false
-							return []models.ActualLRP{}, errors.New("NO")
-						} else {
-							return bbs.AllActualLRPs, nil
-						}
-					}
-				})
-
-				It("keeps on truckin'", func() {
-					Eventually(table.SyncCallCount).Should(Equal(1))
-					Eventually(emitter.EmitCallCount).Should(Equal(1))
-				})
+		Context("after the sync duration elapses", func() {
+			BeforeEach(func() {
+				syncDuration = time.Second
 			})
 
-			Context("when getting all desired LRPs fails", func() {
-				BeforeEach(func() {
-					firstTime := true
-					bbs.WhenGettingAllDesiredLRPs = func() ([]models.DesiredLRP, error) {
-						if firstTime {
-							firstTime = false
-							return []models.DesiredLRP{}, errors.New("NO")
-						} else {
-							return bbs.AllDesiredLRPs, nil
-						}
-					}
-				})
+			JustBeforeEach(func() {
+				routerStartMessages <- &yagnats.Message{
+					Payload: []byte(`{"minimumRegisterIntervalInSeconds":10}`),
+				}
+			})
 
-				It("keeps on truckin'", func() {
-					Eventually(table.SyncCallCount).Should(Equal(1))
-					Eventually(emitter.EmitCallCount).Should(Equal(1))
-				})
+			It("should resync via the BBS and emit routes", func() {
+				Eventually(table.SyncCallCount).Should(Equal(1))
+				Eventually(emitter.EmitCallCount).Should(Equal(1))
+				t1 := time.Now()
+
+				Eventually(table.SyncCallCount, 2).Should(Equal(2))
+				Eventually(emitter.EmitCallCount, 2).Should(Equal(2))
+				t2 := time.Now()
+
+				Ω(emitter.EmitArgsForCall(0)).Should(Equal(syncMessages))
+				Ω(emitter.EmitArgsForCall(1)).Should(Equal(syncMessages))
+				Ω(t2.Sub(t1)).Should(BeNumerically("~", time.Second, 200*time.Millisecond))
 			})
 		})
 	})
