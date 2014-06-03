@@ -39,18 +39,44 @@ func NewSyncer(bbs bbs.LRPRouterBBS, table routing_table.RoutingTableInterface, 
 }
 
 func (syncer *Syncer) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
-	err := syncer.greetWithRouter()
+	replyUuid, err := uuid.NewV4()
 	if err != nil {
 		return err
 	}
 
+	err = syncer.listenForHeartbeatInterval(replyUuid.String())
+	if err != nil {
+		return err
+	}
+
+	syncer.syncAndEmit()
 	close(ready)
 
-	heartbeatInterval := <-syncer.heartbeatInterval
+	var heartbeatInterval time.Duration
+	retryGreetingTicker := time.NewTicker(time.Second)
 
+	//keep trying to greet until we hear from the router
+GREET_LOOP:
+	for {
+		syncer.logger.Info("route-emitter.syncer.greeting-router")
+		err := syncer.greetRouter(replyUuid.String())
+		if err != nil {
+			return err
+		}
+
+		select {
+		case heartbeatInterval = <-syncer.heartbeatInterval:
+			break GREET_LOOP
+		case <-retryGreetingTicker.C:
+		case <-signals:
+			syncer.logger.Info("route-emitter.syncer.stopping")
+			return nil
+		}
+	}
+	retryGreetingTicker.Stop()
+
+	//now keep emitting at the desired interval, syncing with etcd every syncDuration
 	syncTicker := time.NewTicker(syncer.syncDuration)
-	syncer.syncAndEmit()
-
 	for {
 		select {
 		case heartbeatInterval = <-syncer.heartbeatInterval:
@@ -87,6 +113,7 @@ func (syncer *Syncer) syncAndEmit() {
 		syncer.logger.Warnd(map[string]interface{}{
 			"error": err.Error(),
 		}, "syncer.get-actual.failed")
+		return
 	}
 
 	allDesired, err := syncer.bbs.GetAllDesiredLRPs()
@@ -94,6 +121,7 @@ func (syncer *Syncer) syncAndEmit() {
 		syncer.logger.Warnd(map[string]interface{}{
 			"error": err.Error(),
 		}, "syncer.get-desired.failed")
+		return
 	}
 
 	routesToEmit := syncer.table.Sync(
@@ -124,27 +152,22 @@ func (syncer *Syncer) register(desired models.DesiredLRP, actual models.ActualLR
 	return syncer.natsClient.Publish("router.register", payload)
 }
 
-func (syncer *Syncer) greetWithRouter() error {
-	replyUuid, err := uuid.NewV4()
+func (syncer *Syncer) listenForHeartbeatInterval(replyUUID string) error {
+	_, err := syncer.natsClient.Subscribe("router.start", syncer.gotRouterHeartbeatInterval)
 	if err != nil {
 		return err
 	}
 
-	var subscription int64
-	subscription, err = syncer.natsClient.Subscribe(replyUuid.String(), func(msg *yagnats.Message) {
-		syncer.gotRouterHeartbeatInterval(msg)
-		syncer.natsClient.Unsubscribe(subscription)
-	})
+	_, err = syncer.natsClient.Subscribe(replyUUID, syncer.gotRouterHeartbeatInterval)
 	if err != nil {
 		return err
 	}
 
-	_, err = syncer.natsClient.Subscribe("router.start", syncer.gotRouterHeartbeatInterval)
-	if err != nil {
-		return err
-	}
+	return nil
+}
 
-	err = syncer.natsClient.PublishWithReplyTo("router.greet", replyUuid.String(), []byte{})
+func (syncer *Syncer) greetRouter(replyUUID string) error {
+	err := syncer.natsClient.PublishWithReplyTo("router.greet", replyUUID, []byte{})
 	if err != nil {
 		return err
 	}
