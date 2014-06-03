@@ -46,6 +46,9 @@ func (table *RoutingTable) Sync(routes RoutesByProcessGuid, containers Container
 }
 
 func (table *RoutingTable) MessagesToEmit() MessagesToEmit {
+	table.Lock()
+	defer table.Unlock()
+
 	messagesToEmit := MessagesToEmit{}
 	for _, entry := range table.entries {
 		messagesToEmit = messagesToEmit.merge(registrationsFor(entry))
