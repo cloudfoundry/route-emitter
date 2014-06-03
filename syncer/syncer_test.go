@@ -4,12 +4,13 @@ import (
 	"errors"
 	"os"
 	"time"
-
-	"github.com/cloudfoundry-incubator/route-emitter/nats_emitter"
+	"github.com/cloudfoundry-incubator/route-emitter/nats_emitter/fake_nats_emitter"
 	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
+	"github.com/cloudfoundry-incubator/route-emitter/routing_table/fake_routing_table"
 	. "github.com/cloudfoundry-incubator/route-emitter/syncer"
 	"github.com/cloudfoundry-incubator/runtime-schema/bbs/fake_bbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
+	"github.com/cloudfoundry/gibson"
 	"github.com/cloudfoundry/gosteno"
 	"github.com/cloudfoundry/yagnats"
 	"github.com/cloudfoundry/yagnats/fakeyagnats"
@@ -21,12 +22,13 @@ import (
 
 var _ = Describe("Syncer", func() {
 	var (
-		bbs        *fake_bbs.FakeLRPRouterBBS
-		natsClient *fakeyagnats.FakeYagnats
-		emitter    *nats_emitter.NATSEmitter
-		table      *routing_table.RoutingTable
-		syncer     *Syncer
-		process    ifrit.Process
+		bbs                 *fake_bbs.FakeLRPRouterBBS
+		natsClient          *fakeyagnats.FakeYagnats
+		emitter             *fake_nats_emitter.FakeNATSEmitter
+		table               *fake_routing_table.FakeRoutingTable
+		syncer              *Syncer
+		process             ifrit.Process
+		dummyMessagesToEmit routing_table.MessagesToEmit
 
 		routerStartMessages chan<- *yagnats.Message
 	)
@@ -35,8 +37,8 @@ var _ = Describe("Syncer", func() {
 		bbs = fake_bbs.NewFakeLRPRouterBBS()
 		natsClient = fakeyagnats.New()
 		logger := gosteno.NewLogger("syncer")
-		emitter = nats_emitter.New(natsClient, logger)
-		table = routing_table.New()
+		emitter = fake_nats_emitter.New()
+		table = fake_routing_table.New()
 		syncer = NewSyncer(bbs, table, emitter, natsClient, logger)
 
 		startMessages := make(chan *yagnats.Message)
@@ -51,6 +53,14 @@ var _ = Describe("Syncer", func() {
 
 			return nil
 		})
+
+		dummyContainer := routing_table.Container{Host: "1.1.1.1", Port: 11}
+		dummyMessage := routing_table.RegistryMessageFor(dummyContainer, "foo.com", "bar.com")
+		dummyMessagesToEmit = routing_table.MessagesToEmit{
+			RegistrationMessages: []gibson.RegistryMessage{dummyMessage},
+		}
+
+		table.SyncReturns(dummyMessagesToEmit)
 	})
 
 	Describe("when the syncer is started up", func() {
@@ -95,28 +105,22 @@ var _ = Describe("Syncer", func() {
 			})
 
 			It("immediately registers all routes for all LRPs", func() {
-				Eventually(func() interface{} {
-					return natsClient.PublishedMessages("router.register")
-				}).Should(HaveLen(1))
+				Eventually(table.SyncCallCount).Should(Equal(1))
+				routes, containers := table.SyncArgsForCall(0)
+				Ω(routes["process-guid-1"]).Should(Equal([]string{"route-1", "route-2"}))
+				Ω(containers["process-guid-1"]).Should(Equal([]routing_table.Container{
+					{Host: "1.2.3.4", Port: 1234},
+				}))
 
-				Ω(natsClient.PublishedMessages("router.register")[0].Payload).Should(MatchJSON(`
-					{
-						"uris":["route-1","route-2"],
-						"host":"1.2.3.4",
-						"port":1234
-					}
-				`))
+				Eventually(emitter.EmitCallCount).Should(Equal(1))
+				Ω(emitter.EmitArgsForCall(0)).Should(Equal(dummyMessagesToEmit))
 			})
 
 			It("emits the routes again after the specified interval", func() {
-				Eventually(func() interface{} {
-					return natsClient.PublishedMessages("router.register")
-				}).Should(HaveLen(1))
+				Eventually(emitter.EmitCallCount).Should(Equal(1))
 				t1 := time.Now()
 
-				Eventually(func() interface{} {
-					return natsClient.PublishedMessages("router.register")
-				}, 2).Should(HaveLen(2))
+				Eventually(emitter.EmitCallCount).Should(Equal(2))
 				t2 := time.Now()
 
 				Ω(t2.Sub(t1)).Should(BeNumerically("~", 1*time.Second, 200*time.Millisecond))
@@ -138,17 +142,8 @@ var _ = Describe("Syncer", func() {
 			})
 
 			It("immediately registers routes for all LRPs", func() {
-				Eventually(func() interface{} {
-					return natsClient.PublishedMessages("router.register")
-				}).Should(HaveLen(1))
-
-				Ω(natsClient.PublishedMessages("router.register")[0].Payload).Should(MatchJSON(`
-					{
-						"uris":["route-1","route-2"],
-						"host":"1.2.3.4",
-						"port":1234
-					}
-				`))
+				Eventually(table.SyncCallCount).Should(Equal(1))
+				Eventually(emitter.EmitCallCount).Should(Equal(1))
 			})
 
 			Context("when router.start is received", func() {
@@ -165,28 +160,15 @@ var _ = Describe("Syncer", func() {
 				})
 
 				It("immediately registers all routes for all LRPs", func() {
-					Eventually(func() interface{} {
-						return natsClient.PublishedMessages("router.register")
-					}).Should(HaveLen(2))
-
-					Ω(natsClient.PublishedMessages("router.register")[0].Payload).Should(MatchJSON(`
-						{
-							"uris": ["route-1","route-2"],
-							"host": "1.2.3.4",
-							"port": 1234
-						}
-					`))
+					Eventually(table.SyncCallCount).Should(Equal(2))
+					Eventually(emitter.EmitCallCount).Should(Equal(2))
 				})
 
 				It("emits the routes again after the specified interval", func() {
-					Eventually(func() interface{} {
-						return natsClient.PublishedMessages("router.register")
-					}).Should(HaveLen(2))
+					Eventually(emitter.EmitCallCount).Should(Equal(2))
 					t1 := time.Now()
 
-					Eventually(func() interface{} {
-						return natsClient.PublishedMessages("router.register")
-					}, 3).Should(HaveLen(3))
+					Eventually(emitter.EmitCallCount, 2).Should(Equal(3))
 					t2 := time.Now()
 
 					Ω(t2.Sub(t1)).Should(BeNumerically("~", 2*time.Second, 200*time.Millisecond))
@@ -198,14 +180,10 @@ var _ = Describe("Syncer", func() {
 					})
 
 					It("does not update the interval", func() {
-						Eventually(func() interface{} {
-							return natsClient.PublishedMessages("router.register")
-						}).Should(HaveLen(1))
+						Eventually(emitter.EmitCallCount).Should(Equal(1))
 						t1 := time.Now()
 
-						Eventually(func() interface{} {
-							return natsClient.PublishedMessages("router.register")
-						}, 2).Should(HaveLen(2))
+						Eventually(emitter.EmitCallCount, 2).Should(Equal(2))
 						t2 := time.Now()
 
 						Ω(t2.Sub(t1)).Should(BeNumerically("~", 1*time.Second, 200*time.Millisecond))
@@ -227,17 +205,8 @@ var _ = Describe("Syncer", func() {
 				})
 
 				It("keeps on truckin'", func() {
-					Eventually(func() interface{} {
-						return natsClient.PublishedMessages("router.register")
-					}, 2).Should(HaveLen(1))
-
-					Ω(natsClient.PublishedMessages("router.register")[0].Payload).Should(MatchJSON(`
-						{
-							"uris":["route-1","route-2"],
-							"host":"1.2.3.4",
-							"port":1234
-						}
-					`))
+					Eventually(table.SyncCallCount).Should(Equal(1))
+					Eventually(emitter.EmitCallCount).Should(Equal(1))
 				})
 			})
 
@@ -255,17 +224,8 @@ var _ = Describe("Syncer", func() {
 				})
 
 				It("keeps on truckin'", func() {
-					Eventually(func() interface{} {
-						return natsClient.PublishedMessages("router.register")
-					}, 2).Should(HaveLen(1))
-
-					Ω(natsClient.PublishedMessages("router.register")[0].Payload).Should(MatchJSON(`
-						{
-							"uris":["route-1","route-2"],
-							"host":"1.2.3.4",
-							"port":1234
-						}
-					`))
+					Eventually(table.SyncCallCount).Should(Equal(1))
+					Eventually(emitter.EmitCallCount).Should(Equal(1))
 				})
 			})
 		})
