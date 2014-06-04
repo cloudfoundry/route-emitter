@@ -61,11 +61,15 @@ GREET_LOOP:
 		syncer.logger.Info("route-emitter.syncer.greeting-router")
 		err := syncer.greetRouter(replyUuid.String())
 		if err != nil {
+			syncer.logger.Errord(map[string]interface{}{
+				"error": err.Error(),
+			}, "route-emitter.syncer.failed-to-greet-router")
 			return err
 		}
 
 		select {
 		case heartbeatInterval = <-syncer.heartbeatInterval:
+			syncer.logger.Info("route-emitter.syncer.received-heartbeat-interval")
 			break GREET_LOOP
 		case <-retryGreetingTicker.C:
 		case <-signals:
@@ -80,12 +84,15 @@ GREET_LOOP:
 	for {
 		select {
 		case heartbeatInterval = <-syncer.heartbeatInterval:
+			syncer.logger.Info("route-emitter.syncer.received-new-heartbeat-interval")
 			syncer.emit()
 		case <-time.After(heartbeatInterval):
+			syncer.logger.Info("route-emitter.syncer.emitting-routes")
 			syncer.emit()
 		case <-syncTicker.C:
 			//we decouple syncing the routing table (via etcd) from emitting the routes
 			//since the watcher is receiving deltas our internal cache should be generally up-to-date
+			syncer.logger.Info("route-emitter.syncer.syncing")
 			syncer.syncAndEmit()
 		case <-signals:
 			syncer.logger.Info("route-emitter.syncer.stopping")
@@ -144,10 +151,7 @@ func (syncer *Syncer) register(desired models.DesiredLRP, actual models.ActualLR
 		Port: int(actual.Ports[0].HostPort),
 	}
 
-	payload, err := json.Marshal(message)
-	if err != nil {
-		panic(err)
-	}
+	payload, _ := json.Marshal(message)
 
 	return syncer.natsClient.Publish("router.register", payload)
 }
