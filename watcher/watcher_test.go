@@ -128,6 +128,11 @@ var _ = Describe("Watcher", func() {
 				Ω(time.Since(errorTime)).Should(BeNumerically("~", 3*time.Second, 200*time.Millisecond))
 			})
 
+			It("should be possible to SIGINT the route emitter", func() {
+				process.Signal(os.Interrupt)
+				Eventually(process.Wait()).Should(Receive())
+			})
+
 		})
 	})
 
@@ -192,6 +197,12 @@ var _ = Describe("Watcher", func() {
 				Eventually(emitter.EmitCallCount, 5).Should(Equal(1))
 				Ω(time.Since(errorTime)).Should(BeNumerically("~", 3*time.Second, 200*time.Millisecond))
 			})
+
+			It("should be possible to SIGINT the route emitter", func() {
+				process.Signal(os.Interrupt)
+				Eventually(process.Wait()).Should(Receive())
+			})
+
 		})
 
 		Context("when the change is a delete (no after)", func() {

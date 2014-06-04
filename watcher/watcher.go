@@ -32,6 +32,9 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 
 	close(ready)
 
+	var reWatchActual <-chan time.Time
+	var reWatchDesired <-chan time.Time
+
 	for {
 	InnerLoop:
 		for {
@@ -89,22 +92,26 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 					"error": err.Error(),
 				}, "route-emitter.watcher.desired-watch-failed")
 
-				time.Sleep(3 * time.Second)
-
-				desiredLRPChanges, _, desiredErrors = watcher.bbs.WatchForDesiredLRPChanges()
-
-				break InnerLoop
+				reWatchDesired = time.After(3 * time.Second)
+				desiredLRPChanges = nil
+				desiredErrors = nil
 
 			case err := <-actualErrors:
 				watcher.logger.Errord(map[string]interface{}{
 					"error": err.Error(),
 				}, "route-emitter.watcher.actual-watch-failed")
 
-				time.Sleep(3 * time.Second)
+				reWatchActual = time.After(3 * time.Second)
+				actualLRPChanges = nil
+				actualErrors = nil
 
+			case <-reWatchActual:
 				actualLRPChanges, _, actualErrors = watcher.bbs.WatchForActualLRPChanges()
+				reWatchActual = nil
 
-				break InnerLoop
+			case <-reWatchDesired:
+				desiredLRPChanges, _, desiredErrors = watcher.bbs.WatchForDesiredLRPChanges()
+				reWatchDesired = nil
 
 			case <-signals:
 				watcher.logger.Info("route-emitter.watcher.stopping")
