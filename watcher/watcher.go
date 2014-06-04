@@ -2,6 +2,7 @@ package watcher
 
 import (
 	"os"
+	"time"
 
 	"github.com/cloudfoundry-incubator/route-emitter/nats_emitter"
 	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
@@ -88,6 +89,8 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 					"error": err.Error(),
 				}, "route-emitter.watcher.desired-watch-failed")
 
+				time.Sleep(3 * time.Second)
+
 				desiredLRPChanges, _, desiredErrors = watcher.bbs.WatchForDesiredLRPChanges()
 
 				break InnerLoop
@@ -96,6 +99,8 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 				watcher.logger.Errord(map[string]interface{}{
 					"error": err.Error(),
 				}, "route-emitter.watcher.actual-watch-failed")
+
+				time.Sleep(3 * time.Second)
 
 				actualLRPChanges, _, actualErrors = watcher.bbs.WatchForActualLRPChanges()
 

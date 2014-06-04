@@ -1,7 +1,9 @@
 package watcher_test
 
 import (
+	"errors"
 	"os"
+	"time"
 
 	"github.com/cloudfoundry-incubator/runtime-schema/bbs/fake_bbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
@@ -43,14 +45,13 @@ var _ = Describe("Watcher", func() {
 		process = ifrit.Envoke(watcher)
 	})
 
-	AfterEach(func(done Done) {
+	AfterEach(func() {
 		process.Signal(os.Interrupt)
-		<-process.Wait()
-		close(done)
+		Eventually(process.Wait()).Should(Receive())
 	})
 
-	Describe("when a desired LRP change arrives", func() {
-		Context("when the change is a create/update (includes an after)", func() {
+	Describe("Desired LRP changes", func() {
+		Context("when a create/update (includes an after) change arrives", func() {
 			BeforeEach(func() {
 				desiredChange := models.DesiredLRPChange{
 					Before: nil,
@@ -104,10 +105,34 @@ var _ = Describe("Watcher", func() {
 				Ω(emitter.EmitArgsForCall(0)).Should(Equal(dummyMessagesToEmit))
 			})
 		})
+
+		Context("when watching for change fails", func() {
+			var errorTime time.Time
+
+			BeforeEach(func() {
+				errorTime = time.Now()
+				bbs.SendWatchForDesiredLRPChangesError(errors.New("bbs watch failed"))
+
+				desiredChange := models.DesiredLRPChange{
+					Before: nil,
+					After: &models.DesiredLRP{
+						ProcessGuid: "pg",
+						Routes:      []string{"route-1", "route-2"},
+					},
+				}
+				bbs.DesiredLRPChangeChan <- desiredChange
+			})
+
+			It("should retry after 3 seconds", func() {
+				Eventually(table.SetRoutesCallCount, 5).Should(Equal(1))
+				Ω(time.Since(errorTime)).Should(BeNumerically("~", 3*time.Second, 200*time.Millisecond))
+			})
+
+		})
 	})
 
-	Describe("when an actual LRP change arrives", func() {
-		Context("when the change is a create/update (includes an after)", func() {
+	Describe("Actual LRP changes", func() {
+		Context("when a create/update (includes an after) change arrives", func() {
 			BeforeEach(func() {
 				actualChange := models.ActualLRPChange{
 					Before: nil,
@@ -136,6 +161,36 @@ var _ = Describe("Watcher", func() {
 			It("should emit whatever the table tells it to emit", func() {
 				Eventually(emitter.EmitCallCount).Should(Equal(1))
 				Ω(emitter.EmitArgsForCall(0)).Should(Equal(dummyMessagesToEmit))
+			})
+		})
+
+		Context("when watching for change fails", func() {
+			var errorTime time.Time
+
+			BeforeEach(func() {
+				errorTime = time.Now()
+				bbs.SendWatchForActualLRPChangesError(errors.New("bbs watch failed"))
+
+				actualChange := models.ActualLRPChange{
+					Before: nil,
+					After: &models.ActualLRP{
+						ProcessGuid: "pg",
+						Host:        "1.1.1.1",
+						State:       models.ActualLRPStateRunning,
+						Ports: []models.PortMapping{
+							{ContainerPort: 8080, HostPort: 11},
+						},
+					},
+				}
+
+				table.AddOrUpdateContainerReturns(dummyMessagesToEmit)
+
+				bbs.ActualLRPChangeChan <- actualChange
+			})
+
+			It("should retry after 3 seconds", func() {
+				Eventually(emitter.EmitCallCount, 5).Should(Equal(1))
+				Ω(time.Since(errorTime)).Should(BeNumerically("~", 3*time.Second, 200*time.Millisecond))
 			})
 		})
 
