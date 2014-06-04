@@ -32,6 +32,7 @@ func (table *RoutingTable) Sync(routes RoutesByProcessGuid, containers Container
 	messagesToEmit := MessagesToEmit{}
 
 	for _, newEntry := range newEntries {
+		//always register everything on sync
 		messagesToEmit = messagesToEmit.merge(registrationsFor(newEntry))
 	}
 
@@ -97,8 +98,10 @@ func (table *RoutingTable) RemoveContainer(processGuid string, container Contain
 }
 
 func (table *RoutingTable) updateEntry(processGuid string, newEntry RoutingTableEntry) MessagesToEmit {
-	messagesToEmit := registrationsFor(newEntry)
-	messagesToEmit = messagesToEmit.merge(unregistrationsForTransition(table.entries[processGuid], newEntry))
+	existingEntry := table.entries[processGuid]
+
+	messagesToEmit := registrationsForTransition(existingEntry, newEntry)
+	messagesToEmit = messagesToEmit.merge(unregistrationsForTransition(existingEntry, newEntry))
 
 	table.entries[processGuid] = newEntry
 	return messagesToEmit
@@ -137,6 +140,30 @@ func registrationsFor(entry RoutingTableEntry) MessagesToEmit {
 	return messagesToEmit
 }
 
+func registrationsForTransition(existingEntry RoutingTableEntry, newEntry RoutingTableEntry) MessagesToEmit {
+	messagesToEmit := MessagesToEmit{}
+
+	if len(newEntry.Routes) == 0 {
+		//no routes, so nothing could possibly be registered
+		return messagesToEmit
+	}
+
+	if routesHaveChanged(existingEntry, newEntry) {
+		//register everything
+		return registrationsFor(newEntry)
+	}
+
+	//otherwise only register *new* containers
+	for container := range newEntry.Containers {
+		if !existingEntry.hasContainer(container) {
+			message := RegistryMessageFor(container, newEntry.allRoutes()...)
+			messagesToEmit.RegistrationMessages = append(messagesToEmit.RegistrationMessages, message)
+		}
+	}
+
+	return messagesToEmit
+}
+
 func unregistrationsForTransition(existingEntry RoutingTableEntry, newEntry RoutingTableEntry) MessagesToEmit {
 	messagesToEmit := MessagesToEmit{}
 
@@ -150,6 +177,7 @@ func unregistrationsForTransition(existingEntry RoutingTableEntry, newEntry Rout
 		if newEntry.hasContainer(container) {
 			containersThatAreStillPresent = append(containersThatAreStillPresent, container)
 		} else {
+			//if the container has disappeared unregister all its previous routes
 			message := RegistryMessageFor(container, existingEntry.allRoutes()...)
 			messagesToEmit.UnregistrationMessages = append(messagesToEmit.UnregistrationMessages, message)
 		}
@@ -164,10 +192,25 @@ func unregistrationsForTransition(existingEntry RoutingTableEntry, newEntry Rout
 
 	if len(routesThatDisappeared) > 0 {
 		for _, container := range containersThatAreStillPresent {
+			//if a container is still present, and routes have disappeared, unregister those routes
 			message := RegistryMessageFor(container, routesThatDisappeared...)
 			messagesToEmit.UnregistrationMessages = append(messagesToEmit.UnregistrationMessages, message)
 		}
 	}
 
 	return messagesToEmit
+}
+
+func routesHaveChanged(existingEntry RoutingTableEntry, newEntry RoutingTableEntry) bool {
+	if len(newEntry.Routes) != len(existingEntry.Routes) {
+		return true
+	} else {
+		for route := range newEntry.Routes {
+			if !existingEntry.hasRoute(route) {
+				return true
+			}
+		}
+	}
+
+	return false
 }

@@ -435,16 +435,9 @@ var _ = Describe("RoutingTable", func() {
 
 			Context("When setting routes", func() {
 				Context("when the routes do not change", func() {
-					It("should emit registrations", func() {
+					It("should emit nothing", func() {
 						messagesToEmit = table.SetRoutes(pg, route1, route2)
-
-						expected := MessagesToEmit{
-							RegistrationMessages: []gibson.RegistryMessage{
-								RegistryMessageFor(container1, route1, route2),
-								RegistryMessageFor(container2, route1, route2),
-							},
-						}
-						Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
+						Ω(messagesToEmit).Should(BeZero())
 					})
 				})
 
@@ -463,7 +456,7 @@ var _ = Describe("RoutingTable", func() {
 				})
 
 				Context("when routes are removed", func() {
-					It("should emit registrations and unregistrations", func() {
+					It("should emit unregistrations and registrations", func() {
 						messagesToEmit = table.SetRoutes(pg, route1)
 
 						expected := MessagesToEmit{
@@ -515,16 +508,9 @@ var _ = Describe("RoutingTable", func() {
 
 			Context("when adding/updating containers", func() {
 				Context("when the container already exists", func() {
-					It("should emit registrations", func() {
+					It("should emit nothing", func() {
 						messagesToEmit = table.AddOrUpdateContainer(pg, container1)
-
-						expected := MessagesToEmit{
-							RegistrationMessages: []gibson.RegistryMessage{
-								RegistryMessageFor(container1, route1, route2),
-								RegistryMessageFor(container2, route1, route2),
-							},
-						}
-						Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
+						Ω(messagesToEmit).Should(BeZero())
 					})
 				})
 
@@ -534,8 +520,6 @@ var _ = Describe("RoutingTable", func() {
 
 						expected := MessagesToEmit{
 							RegistrationMessages: []gibson.RegistryMessage{
-								RegistryMessageFor(container1, route1, route2),
-								RegistryMessageFor(container2, route1, route2),
 								RegistryMessageFor(container3, route1, route2),
 							},
 						}
@@ -549,9 +533,6 @@ var _ = Describe("RoutingTable", func() {
 					messagesToEmit = table.RemoveContainer(pg, container2)
 
 					expected := MessagesToEmit{
-						RegistrationMessages: []gibson.RegistryMessage{
-							RegistryMessageFor(container1, route1, route2),
-						},
 						UnregistrationMessages: []gibson.RegistryMessage{
 							RegistryMessageFor(container2, route1, route2),
 						},
