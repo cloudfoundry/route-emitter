@@ -7,6 +7,7 @@ import (
 	"github.com/cloudfoundry-incubator/route-emitter/nats_emitter"
 	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
 	"github.com/cloudfoundry-incubator/runtime-schema/bbs"
+	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/cloudfoundry/gosteno"
 )
 
@@ -36,89 +37,98 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 	var reWatchDesired <-chan time.Time
 
 	for {
-	InnerLoop:
-		for {
-			select {
-			case desiredChange, ok := <-desiredLRPChanges:
-				if !ok {
-					break InnerLoop
-				}
-
-				watcher.logger.Infod(map[string]interface{}{
-					"desired-change": desiredChange,
-				}, "route-emitter.watcher.detected-desired-change")
-
-				var messagesToEmit routing_table.MessagesToEmit
-				if desiredChange.After == nil {
-					if desiredChange.Before != nil {
-						messagesToEmit = watcher.table.RemoveRoutes(desiredChange.Before.ProcessGuid)
-					}
-				} else {
-					messagesToEmit = watcher.table.SetRoutes(desiredChange.After.ProcessGuid, desiredChange.After.Routes...)
-				}
-
-				watcher.emitter.Emit(messagesToEmit)
-
-			case actualChange, ok := <-actualLRPChanges:
-				if !ok {
-					break InnerLoop
-				}
-
-				watcher.logger.Infod(map[string]interface{}{
-					"actual-change": actualChange,
-				}, "route-emitter.watcher.detected-actual-change")
-
-				var messagesToEmit routing_table.MessagesToEmit
-				if actualChange.After == nil {
-					if actualChange.Before != nil {
-						container, err := routing_table.ContainerFromActual(*actualChange.Before)
-						if err != nil {
-							continue
-						}
-						messagesToEmit = watcher.table.RemoveContainer(actualChange.Before.ProcessGuid, container)
-					}
-				} else {
-					container, err := routing_table.ContainerFromActual(*actualChange.After)
-					if err != nil {
-						continue
-					}
-					messagesToEmit = watcher.table.AddOrUpdateContainer(actualChange.After.ProcessGuid, container)
-				}
-
-				watcher.emitter.Emit(messagesToEmit)
-
-			case err := <-desiredErrors:
-				watcher.logger.Errord(map[string]interface{}{
-					"error": err.Error(),
-				}, "route-emitter.watcher.desired-watch-failed")
-
-				reWatchDesired = time.After(3 * time.Second)
+		select {
+		case desiredChange, ok := <-desiredLRPChanges:
+			if !ok {
 				desiredLRPChanges = nil
-				desiredErrors = nil
-
-			case err := <-actualErrors:
-				watcher.logger.Errord(map[string]interface{}{
-					"error": err.Error(),
-				}, "route-emitter.watcher.actual-watch-failed")
-
-				reWatchActual = time.After(3 * time.Second)
-				actualLRPChanges = nil
-				actualErrors = nil
-
-			case <-reWatchActual:
-				actualLRPChanges, _, actualErrors = watcher.bbs.WatchForActualLRPChanges()
-				reWatchActual = nil
-
-			case <-reWatchDesired:
-				desiredLRPChanges, _, desiredErrors = watcher.bbs.WatchForDesiredLRPChanges()
-				reWatchDesired = nil
-
-			case <-signals:
-				watcher.logger.Info("route-emitter.watcher.stopping")
-				return nil
+				break
 			}
+
+			watcher.handleDesiredChange(desiredChange)
+
+		case actualChange, ok := <-actualLRPChanges:
+			if !ok {
+				actualLRPChanges = nil
+				break
+			}
+
+			watcher.handleActualChange(actualChange)
+
+		case err := <-desiredErrors:
+			watcher.logger.Errord(map[string]interface{}{
+				"error": err.Error(),
+			}, "route-emitter.watcher.desired-watch-failed")
+
+			reWatchDesired = time.After(3 * time.Second)
+			desiredLRPChanges = nil
+			desiredErrors = nil
+
+		case err := <-actualErrors:
+			watcher.logger.Errord(map[string]interface{}{
+				"error": err.Error(),
+			}, "route-emitter.watcher.actual-watch-failed")
+
+			reWatchActual = time.After(3 * time.Second)
+			actualLRPChanges = nil
+			actualErrors = nil
+
+		case <-reWatchActual:
+			actualLRPChanges, _, actualErrors = watcher.bbs.WatchForActualLRPChanges()
+			reWatchActual = nil
+
+		case <-reWatchDesired:
+			desiredLRPChanges, _, desiredErrors = watcher.bbs.WatchForDesiredLRPChanges()
+			reWatchDesired = nil
+
+		case <-signals:
+			watcher.logger.Info("route-emitter.watcher.stopping")
+			return nil
 		}
 	}
 
 	return nil
+}
+
+func (watcher *Watcher) handleActualChange(change models.ActualLRPChange) {
+	watcher.logger.Infod(map[string]interface{}{
+		"actual-change": change,
+	}, "route-emitter.watcher.detected-actual-change")
+
+	var messagesToEmit routing_table.MessagesToEmit
+	if change.After == nil {
+		if change.Before != nil {
+			container, err := routing_table.ContainerFromActual(*change.Before)
+			if err != nil {
+				return
+			}
+
+			messagesToEmit = watcher.table.RemoveContainer(change.Before.ProcessGuid, container)
+		}
+	} else {
+		container, err := routing_table.ContainerFromActual(*change.After)
+		if err != nil {
+			return
+		}
+
+		messagesToEmit = watcher.table.AddOrUpdateContainer(change.After.ProcessGuid, container)
+	}
+
+	watcher.emitter.Emit(messagesToEmit)
+}
+
+func (watcher *Watcher) handleDesiredChange(change models.DesiredLRPChange) {
+	watcher.logger.Infod(map[string]interface{}{
+		"desired-change": change,
+	}, "route-emitter.watcher.detected-desired-change")
+
+	var messagesToEmit routing_table.MessagesToEmit
+	if change.After == nil {
+		if change.Before != nil {
+			messagesToEmit = watcher.table.RemoveRoutes(change.Before.ProcessGuid)
+		}
+	} else {
+		messagesToEmit = watcher.table.SetRoutes(change.After.ProcessGuid, change.After.Routes...)
+	}
+
+	watcher.emitter.Emit(messagesToEmit)
 }
