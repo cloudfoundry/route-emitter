@@ -87,7 +87,7 @@ var _ = Describe("Integration", func() {
 						Ports: []models.PortMapping{
 							{ContainerPort: 8080, HostPort: 65100},
 						},
-					})
+					}, "executor-id")
 					Ω(err).ShouldNot(HaveOccurred())
 				})
 
@@ -117,7 +117,7 @@ var _ = Describe("Integration", func() {
 					ProcessGuid:  "guid1",
 					Index:        0,
 					InstanceGuid: "iguid1",
-				})
+				}, "executor-id")
 				Ω(err).ShouldNot(HaveOccurred())
 
 			})
@@ -138,7 +138,7 @@ var _ = Describe("Integration", func() {
 					Ports: []models.PortMapping{
 						{ContainerPort: 8080, HostPort: 65100},
 					},
-				})
+				}, "executor-id")
 				Ω(err).ShouldNot(HaveOccurred())
 			})
 
@@ -211,7 +211,7 @@ var _ = Describe("Integration", func() {
 				Ports: []models.PortMapping{
 					{ContainerPort: 8080, HostPort: 65100},
 				},
-			})
+			}, "executor-id")
 			Ω(err).ShouldNot(HaveOccurred())
 		})
 
