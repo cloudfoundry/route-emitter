@@ -12,13 +12,13 @@ import (
 )
 
 type Watcher struct {
-	bbs     bbs.LRPRouterBBS
+	bbs     bbs.RouteEmitterBBS
 	table   routing_table.RoutingTableInterface
 	emitter nats_emitter.NATSEmitterInterface
 	logger  *gosteno.Logger
 }
 
-func NewWatcher(bbs bbs.LRPRouterBBS, table routing_table.RoutingTableInterface, emitter nats_emitter.NATSEmitterInterface, logger *gosteno.Logger) *Watcher {
+func NewWatcher(bbs bbs.RouteEmitterBBS, table routing_table.RoutingTableInterface, emitter nats_emitter.NATSEmitterInterface, logger *gosteno.Logger) *Watcher {
 	return &Watcher{
 		bbs:     bbs,
 		table:   table,

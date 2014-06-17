@@ -21,7 +21,7 @@ import (
 
 var _ = Describe("Watcher", func() {
 	var (
-		bbs                 *fake_bbs.FakeLRPRouterBBS
+		bbs                 *fake_bbs.FakeRouteEmitterBBS
 		table               *fake_routing_table.FakeRoutingTable
 		emitter             *fake_nats_emitter.FakeNATSEmitter
 		watcher             *Watcher
@@ -30,7 +30,7 @@ var _ = Describe("Watcher", func() {
 	)
 
 	BeforeEach(func() {
-		bbs = fake_bbs.NewFakeLRPRouterBBS()
+		bbs = fake_bbs.NewFakeRouteEmitterBBS()
 		table = &fake_routing_table.FakeRoutingTable{}
 		emitter = &fake_nats_emitter.FakeNATSEmitter{}
 		logger := gosteno.NewLogger("watcher")

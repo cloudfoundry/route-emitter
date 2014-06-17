@@ -135,7 +135,7 @@ func initializeRoutingTable() *routing_table.RoutingTable {
 	return routing_table.New()
 }
 
-func initializeBbs(logger *steno.Logger) Bbs.LRPRouterBBS {
+func initializeBbs(logger *steno.Logger) Bbs.RouteEmitterBBS {
 	etcdAdapter := etcdstoreadapter.NewETCDStoreAdapter(
 		strings.Split(*etcdCluster, ","),
 		workerpool.NewWorkerPool(10),
@@ -146,5 +146,5 @@ func initializeBbs(logger *steno.Logger) Bbs.LRPRouterBBS {
 		logger.Fatalf("Error connecting to etcd: %s\n", err)
 	}
 
-	return Bbs.NewLRPRouterBBS(etcdAdapter, timeprovider.NewTimeProvider(), logger)
+	return Bbs.NewRouteEmitterBBS(etcdAdapter, timeprovider.NewTimeProvider(), logger)
 }

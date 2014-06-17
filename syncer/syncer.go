@@ -16,7 +16,7 @@ import (
 )
 
 type Syncer struct {
-	bbs               bbs.LRPRouterBBS
+	bbs               bbs.RouteEmitterBBS
 	natsClient        yagnats.NATSClient
 	logger            *gosteno.Logger
 	table             routing_table.RoutingTableInterface
@@ -25,7 +25,7 @@ type Syncer struct {
 	heartbeatInterval chan time.Duration
 }
 
-func NewSyncer(bbs bbs.LRPRouterBBS, table routing_table.RoutingTableInterface, emitter nats_emitter.NATSEmitterInterface, syncDuration time.Duration, natsClient yagnats.NATSClient, logger *gosteno.Logger) *Syncer {
+func NewSyncer(bbs bbs.RouteEmitterBBS, table routing_table.RoutingTableInterface, emitter nats_emitter.NATSEmitterInterface, syncDuration time.Duration, natsClient yagnats.NATSClient, logger *gosteno.Logger) *Syncer {
 	return &Syncer{
 		bbs:        bbs,
 		table:      table,

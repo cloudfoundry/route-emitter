@@ -24,7 +24,7 @@ import (
 
 var _ = Describe("Syncer", func() {
 	var (
-		bbs          *fake_bbs.FakeLRPRouterBBS
+		bbs          *fake_bbs.FakeRouteEmitterBBS
 		natsClient   *fakeyagnats.FakeYagnats
 		emitter      *fake_nats_emitter.FakeNATSEmitter
 		table        *fake_routing_table.FakeRoutingTable
@@ -38,7 +38,7 @@ var _ = Describe("Syncer", func() {
 	)
 
 	BeforeEach(func() {
-		bbs = fake_bbs.NewFakeLRPRouterBBS()
+		bbs = fake_bbs.NewFakeRouteEmitterBBS()
 		natsClient = fakeyagnats.New()
 		emitter = &fake_nats_emitter.FakeNATSEmitter{}
 		table = &fake_routing_table.FakeRoutingTable{}
