@@ -72,6 +72,7 @@ var _ = Describe("Integration", func() {
 					Stack:       "some-stack",
 					MemoryMB:    1024,
 					DiskMB:      512,
+					Source:      "http://example.com/",
 				})
 				Ω(err).ShouldNot(HaveOccurred())
 			})
@@ -110,6 +111,7 @@ var _ = Describe("Integration", func() {
 					Stack:       "some-stack",
 					MemoryMB:    1024,
 					DiskMB:      512,
+					Source:      "http://example.com/",
 				})
 				Ω(err).ShouldNot(HaveOccurred())
 
@@ -152,6 +154,7 @@ var _ = Describe("Integration", func() {
 						Stack:       "some-stack",
 						MemoryMB:    1024,
 						DiskMB:      512,
+						Source:      "http://example.com/",
 					})
 					Ω(err).ShouldNot(HaveOccurred())
 				})
@@ -199,6 +202,7 @@ var _ = Describe("Integration", func() {
 				Stack:       "some-stack",
 				MemoryMB:    1024,
 				DiskMB:      512,
+				Source:      "http://example.com/",
 			})
 			Ω(err).ShouldNot(HaveOccurred())
 
@@ -237,6 +241,7 @@ var _ = Describe("Integration", func() {
 						Stack:       "some-stack",
 						MemoryMB:    1024,
 						DiskMB:      512,
+						Source:      "http://example.com/",
 					})
 					Ω(err).ShouldNot(HaveOccurred())
 				})
@@ -259,6 +264,7 @@ var _ = Describe("Integration", func() {
 						Stack:       "some-stack",
 						MemoryMB:    1024,
 						DiskMB:      512,
+						Source:      "http://example.com/",
 					})
 					Ω(err).ShouldNot(HaveOccurred())
 				})
