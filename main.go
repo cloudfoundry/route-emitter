@@ -12,7 +12,6 @@ import (
 	"github.com/cloudfoundry-incubator/route-emitter/syncer"
 	"github.com/cloudfoundry-incubator/route-emitter/watcher"
 	Bbs "github.com/cloudfoundry-incubator/runtime-schema/bbs"
-	steno "github.com/cloudfoundry/gosteno"
 	"github.com/cloudfoundry/gunk/timeprovider"
 	"github.com/cloudfoundry/storeadapter/etcdstoreadapter"
 	"github.com/cloudfoundry/storeadapter/workerpool"
@@ -47,12 +46,6 @@ var natsPassword = flag.String(
 	"Password for nats user",
 )
 
-var syslogName = flag.String(
-	"syslogName",
-	"",
-	"syslog name",
-)
-
 var syncInterval = flag.Duration(
 	"syncInterval",
 	time.Minute,
@@ -64,7 +57,7 @@ func main() {
 
 	logger := cf_lager.New("route-emitter")
 	natsClient := initializeNatsClient(logger)
-	bbs := initializeBbs(initializeStenoLogger())
+	bbs := initializeBbs(logger)
 	emitter := initializeNatsEmitter(natsClient, logger)
 	table := initializeRoutingTable()
 
@@ -87,22 +80,6 @@ func main() {
 	}
 
 	logger.Info("exited")
-}
-
-func initializeStenoLogger() *steno.Logger {
-	stenoConfig := &steno.Config{
-		Sinks: []steno.Sink{
-			steno.NewIOSink(os.Stdout),
-		},
-	}
-
-	if *syslogName != "" {
-		stenoConfig.Sinks = append(stenoConfig.Sinks, steno.NewSyslogSink(*syslogName))
-	}
-
-	steno.Init(stenoConfig)
-
-	return steno.NewLogger("RouteEmitter")
 }
 
 func initializeNatsClient(logger lager.Logger) yagnats.NATSClient {
@@ -139,7 +116,7 @@ func initializeRoutingTable() *routing_table.RoutingTable {
 	return routing_table.New()
 }
 
-func initializeBbs(logger *steno.Logger) Bbs.RouteEmitterBBS {
+func initializeBbs(logger lager.Logger) Bbs.RouteEmitterBBS {
 	etcdAdapter := etcdstoreadapter.NewETCDStoreAdapter(
 		strings.Split(*etcdCluster, ","),
 		workerpool.NewWorkerPool(10),
@@ -147,7 +124,7 @@ func initializeBbs(logger *steno.Logger) Bbs.RouteEmitterBBS {
 
 	err := etcdAdapter.Connect()
 	if err != nil {
-		logger.Fatalf("Error connecting to etcd: %s\n", err)
+		logger.Fatal("failed-to-connect-to-etcd", err)
 	}
 
 	return Bbs.NewRouteEmitterBBS(etcdAdapter, timeprovider.NewTimeProvider(), logger)

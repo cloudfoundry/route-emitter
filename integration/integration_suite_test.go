@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"testing"
 
-	steno "github.com/cloudfoundry/gosteno"
 	"github.com/cloudfoundry/gunk/natsrunner"
 	"github.com/cloudfoundry/gunk/timeprovider"
 	"github.com/cloudfoundry/storeadapter"
@@ -12,6 +11,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gexec"
+	"github.com/pivotal-golang/lager/lagertest"
 
 	"github.com/cloudfoundry-incubator/route-emitter/integration/route_emitter_runner"
 	Bbs "github.com/cloudfoundry-incubator/runtime-schema/bbs"
@@ -40,14 +40,7 @@ var _ = BeforeSuite(func() {
 
 	store = etcdRunner.Adapter()
 
-	logSink := steno.NewTestingSink()
-	steno.Init(&steno.Config{
-		Sinks: []steno.Sink{logSink},
-	})
-	logger := steno.NewLogger("the-logger")
-	steno.EnterTestMode()
-
-	bbs = Bbs.NewBBS(store, timeprovider.NewTimeProvider(), logger)
+	bbs = Bbs.NewBBS(store, timeprovider.NewTimeProvider(), lagertest.NewTestLogger("test"))
 
 	runner = route_emitter_runner.New(
 		emitterPath,
