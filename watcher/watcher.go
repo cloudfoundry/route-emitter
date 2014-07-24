@@ -8,22 +8,27 @@ import (
 	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
 	"github.com/cloudfoundry-incubator/runtime-schema/bbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
-	"github.com/cloudfoundry/gosteno"
+	"github.com/pivotal-golang/lager"
 )
 
 type Watcher struct {
 	bbs     bbs.RouteEmitterBBS
 	table   routing_table.RoutingTableInterface
 	emitter nats_emitter.NATSEmitterInterface
-	logger  *gosteno.Logger
+	logger  lager.Logger
 }
 
-func NewWatcher(bbs bbs.RouteEmitterBBS, table routing_table.RoutingTableInterface, emitter nats_emitter.NATSEmitterInterface, logger *gosteno.Logger) *Watcher {
+func NewWatcher(
+	bbs bbs.RouteEmitterBBS,
+	table routing_table.RoutingTableInterface,
+	emitter nats_emitter.NATSEmitterInterface,
+	logger lager.Logger,
+) *Watcher {
 	return &Watcher{
 		bbs:     bbs,
 		table:   table,
 		emitter: emitter,
-		logger:  logger,
+		logger:  logger.Session("watcher"),
 	}
 }
 
@@ -55,18 +60,14 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 			watcher.handleActualChange(actualChange)
 
 		case err := <-desiredErrors:
-			watcher.logger.Errord(map[string]interface{}{
-				"error": err.Error(),
-			}, "route-emitter.watcher.desired-watch-failed")
+			watcher.logger.Error("desired-watch-failed", err)
 
 			reWatchDesired = time.After(3 * time.Second)
 			desiredLRPChanges = nil
 			desiredErrors = nil
 
 		case err := <-actualErrors:
-			watcher.logger.Errord(map[string]interface{}{
-				"error": err.Error(),
-			}, "route-emitter.watcher.actual-watch-failed")
+			watcher.logger.Error("actual-watch-failed", err)
 
 			reWatchActual = time.After(3 * time.Second)
 			actualLRPChanges = nil
@@ -81,7 +82,7 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 			reWatchDesired = nil
 
 		case <-signals:
-			watcher.logger.Info("route-emitter.watcher.stopping")
+			watcher.logger.Info("stopping")
 			return nil
 		}
 	}
@@ -90,9 +91,9 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 }
 
 func (watcher *Watcher) handleActualChange(change models.ActualLRPChange) {
-	watcher.logger.Infod(map[string]interface{}{
+	watcher.logger.Info("detected-actual-change", lager.Data{
 		"actual-change": change,
-	}, "route-emitter.watcher.detected-actual-change")
+	})
 
 	var messagesToEmit routing_table.MessagesToEmit
 	if change.After == nil {
@@ -117,9 +118,9 @@ func (watcher *Watcher) handleActualChange(change models.ActualLRPChange) {
 }
 
 func (watcher *Watcher) handleDesiredChange(change models.DesiredLRPChange) {
-	watcher.logger.Infod(map[string]interface{}{
+	watcher.logger.Info("detected-desired-change", lager.Data{
 		"desired-change": change,
-	}, "route-emitter.watcher.detected-desired-change")
+	})
 
 	var messagesToEmit routing_table.MessagesToEmit
 	if change.After == nil {

@@ -1,13 +1,13 @@
-package watcher_test
+package lager_test
 
 import (
-	"testing"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+
+	"testing"
 )
 
-func TestWatcher(t *testing.T) {
+func TestLager(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Watcher Suite")
+	RunSpecs(t, "Lager Suite")
 }

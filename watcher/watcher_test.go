@@ -8,9 +8,9 @@ import (
 	"github.com/cloudfoundry-incubator/runtime-schema/bbs/fake_bbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/cloudfoundry/gibson"
-	"github.com/cloudfoundry/gosteno"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/pivotal-golang/lager/lagertest"
 	"github.com/tedsuo/ifrit"
 
 	"github.com/cloudfoundry-incubator/route-emitter/nats_emitter/fake_nats_emitter"
@@ -33,7 +33,7 @@ var _ = Describe("Watcher", func() {
 		bbs = fake_bbs.NewFakeRouteEmitterBBS()
 		table = &fake_routing_table.FakeRoutingTable{}
 		emitter = &fake_nats_emitter.FakeNATSEmitter{}
-		logger := gosteno.NewLogger("watcher")
+		logger := lagertest.NewTestLogger("test")
 
 		dummyContainer := routing_table.Container{Host: "1.1.1.1", Port: 11}
 		dummyMessage := routing_table.RegistryMessageFor(dummyContainer, "foo.com", "bar.com")

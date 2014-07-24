@@ -6,6 +6,10 @@
 	],
 	"Deps": [
 		{
+			"ImportPath": "github.com/cloudfoundry-incubator/cf-lager",
+			"Rev": "c88fc2b60504c2feb0a40435d505cf21d9cd58d3"
+		},
+		{
 			"ImportPath": "github.com/cloudfoundry-incubator/delta_force/delta_force",
 			"Rev": "8300c5546d32d8533295f666c1cd0941113fd7bb"
 		},
@@ -59,6 +63,10 @@
 		{
 			"ImportPath": "github.com/onsi/gomega",
 			"Rev": "28e5ce936abc528d8c6b5eb3dd5689e7e81e9272"
+		},
+		{
+			"ImportPath": "github.com/pivotal-golang/lager",
+			"Rev": "e8822eb6379ecd32065776bd84139100cffa5563"
 		},
 		{
 			"ImportPath": "github.com/tedsuo/ifrit",

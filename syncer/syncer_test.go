@@ -13,9 +13,9 @@ import (
 	"github.com/cloudfoundry-incubator/runtime-schema/bbs/fake_bbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/cloudfoundry/gibson"
-	"github.com/cloudfoundry/gosteno"
 	"github.com/cloudfoundry/yagnats"
 	"github.com/cloudfoundry/yagnats/fakeyagnats"
+	"github.com/pivotal-golang/lager/lagertest"
 	"github.com/tedsuo/ifrit"
 
 	. "github.com/onsi/ginkgo"
@@ -99,7 +99,7 @@ var _ = Describe("Syncer", func() {
 	})
 
 	JustBeforeEach(func() {
-		logger := gosteno.NewLogger("syncer")
+		logger := lagertest.NewTestLogger("test")
 		syncer = NewSyncer(bbs, table, emitter, syncDuration, natsClient, logger)
 		process = ifrit.Envoke(syncer)
 	})

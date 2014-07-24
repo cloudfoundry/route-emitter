@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cloudfoundry-incubator/cf-lager"
 	"github.com/cloudfoundry-incubator/route-emitter/nats_emitter"
 	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
 	"github.com/cloudfoundry-incubator/route-emitter/syncer"
@@ -16,6 +17,7 @@ import (
 	"github.com/cloudfoundry/storeadapter/etcdstoreadapter"
 	"github.com/cloudfoundry/storeadapter/workerpool"
 	"github.com/cloudfoundry/yagnats"
+	"github.com/pivotal-golang/lager"
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/ifrit/grouper"
 	"github.com/tedsuo/ifrit/sigmon"
@@ -60,9 +62,9 @@ var syncInterval = flag.Duration(
 func main() {
 	flag.Parse()
 
-	logger := initializeLogger()
+	logger := cf_lager.New("route-emitter")
 	natsClient := initializeNatsClient(logger)
-	bbs := initializeBbs(logger)
+	bbs := initializeBbs(initializeStenoLogger())
 	emitter := initializeNatsEmitter(natsClient, logger)
 	table := initializeRoutingTable()
 
@@ -74,22 +76,20 @@ func main() {
 		"syncer":  syncer,
 	})
 
-	logger.Infof("route-emitter.started")
+	logger.Info("started")
 
 	monitor := ifrit.Envoke(sigmon.New(process))
 
 	err := <-monitor.Wait()
 	if err != nil {
-		logger.Errord(map[string]interface{}{
-			"error": err.Error(),
-		}, "route-emitter.exited")
+		logger.Error("exited-with-failure", err)
 		os.Exit(1)
 	}
 
-	logger.Info("route-emitter.exited")
+	logger.Info("exited")
 }
 
-func initializeLogger() *steno.Logger {
+func initializeStenoLogger() *steno.Logger {
 	stenoConfig := &steno.Config{
 		Sinks: []steno.Sink{
 			steno.NewIOSink(os.Stdout),
@@ -105,7 +105,7 @@ func initializeLogger() *steno.Logger {
 	return steno.NewLogger("RouteEmitter")
 }
 
-func initializeNatsClient(logger *steno.Logger) yagnats.NATSClient {
+func initializeNatsClient(logger lager.Logger) yagnats.NATSClient {
 	natsClient := yagnats.NewClient()
 
 	natsMembers := []yagnats.ConnectionProvider{}
@@ -125,13 +125,13 @@ func initializeNatsClient(logger *steno.Logger) yagnats.NATSClient {
 	})
 
 	if err != nil {
-		logger.Fatalf("Error connecting to NATS: %s\n", err)
+		logger.Fatal("failed-to-connect-to-nats", err)
 	}
 
 	return natsClient
 }
 
-func initializeNatsEmitter(natsClient yagnats.NATSClient, logger *steno.Logger) *nats_emitter.NATSEmitter {
+func initializeNatsEmitter(natsClient yagnats.NATSClient, logger lager.Logger) *nats_emitter.NATSEmitter {
 	return nats_emitter.New(natsClient, logger)
 }
 

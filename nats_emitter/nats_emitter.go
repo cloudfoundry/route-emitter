@@ -5,8 +5,8 @@ import (
 
 	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
 	"github.com/cloudfoundry/gibson"
-	"github.com/cloudfoundry/gosteno"
 	"github.com/cloudfoundry/yagnats"
+	"github.com/pivotal-golang/lager"
 )
 
 type NATSEmitterInterface interface {
@@ -15,13 +15,13 @@ type NATSEmitterInterface interface {
 
 type NATSEmitter struct {
 	natsClient yagnats.NATSClient
-	logger     *gosteno.Logger
+	logger     lager.Logger
 }
 
-func New(natsClient yagnats.NATSClient, logger *gosteno.Logger) *NATSEmitter {
+func New(natsClient yagnats.NATSClient, logger lager.Logger) *NATSEmitter {
 	return &NATSEmitter{
 		natsClient: natsClient,
-		logger:     logger,
+		logger:     logger.Session("nats-emitter"),
 	}
 }
 
@@ -50,28 +50,26 @@ func (n *NATSEmitter) emit(subject string, message gibson.RegistryMessage, error
 		errors <- err
 	}()
 
-	n.logger.Infod(map[string]interface{}{
+	n.logger.Info("emit", lager.Data{
 		"subject": subject,
 		"message": message,
-	}, "route-emitter.emit")
+	})
 
 	payload, err := json.Marshal(message)
 	if err != nil {
-		n.logger.Errord(map[string]interface{}{
-			"error":   err.Error(),
+		n.logger.Error("failed-to-marshal", err, lager.Data{
 			"message": message,
 			"subject": subject,
-		}, "route-emitter.emit.json-marshal-failed")
+		})
 		return
 	}
 
 	err = n.natsClient.Publish(subject, payload)
 	if err != nil {
-		n.logger.Errord(map[string]interface{}{
-			"error":   err.Error(),
+		n.logger.Error("failed-to-publish", err, lager.Data{
 			"message": message,
 			"subject": subject,
-		}, "route-emitter.emit.publish-failed")
+		})
 		return
 	}
 }

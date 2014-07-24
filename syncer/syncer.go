@@ -10,28 +10,35 @@ import (
 	"github.com/cloudfoundry-incubator/runtime-schema/bbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/cloudfoundry/gibson"
-	"github.com/cloudfoundry/gosteno"
 	"github.com/cloudfoundry/yagnats"
 	"github.com/nu7hatch/gouuid"
+	"github.com/pivotal-golang/lager"
 )
 
 type Syncer struct {
 	bbs               bbs.RouteEmitterBBS
 	natsClient        yagnats.NATSClient
-	logger            *gosteno.Logger
+	logger            lager.Logger
 	table             routing_table.RoutingTableInterface
 	emitter           nats_emitter.NATSEmitterInterface
 	syncDuration      time.Duration
 	heartbeatInterval chan time.Duration
 }
 
-func NewSyncer(bbs bbs.RouteEmitterBBS, table routing_table.RoutingTableInterface, emitter nats_emitter.NATSEmitterInterface, syncDuration time.Duration, natsClient yagnats.NATSClient, logger *gosteno.Logger) *Syncer {
+func NewSyncer(
+	bbs bbs.RouteEmitterBBS,
+	table routing_table.RoutingTableInterface,
+	emitter nats_emitter.NATSEmitterInterface,
+	syncDuration time.Duration,
+	natsClient yagnats.NATSClient,
+	logger lager.Logger,
+) *Syncer {
 	return &Syncer{
 		bbs:        bbs,
 		table:      table,
 		emitter:    emitter,
 		natsClient: natsClient,
-		logger:     logger,
+		logger:     logger.Session("syncer"),
 
 		syncDuration:      syncDuration,
 		heartbeatInterval: make(chan time.Duration),
@@ -58,22 +65,20 @@ func (syncer *Syncer) Run(signals <-chan os.Signal, ready chan<- struct{}) error
 	//keep trying to greet until we hear from the router
 GREET_LOOP:
 	for {
-		syncer.logger.Info("route-emitter.syncer.greeting-router")
+		syncer.logger.Info("greeting-router")
 		err := syncer.greetRouter(replyUuid.String())
 		if err != nil {
-			syncer.logger.Errord(map[string]interface{}{
-				"error": err.Error(),
-			}, "route-emitter.syncer.failed-to-greet-router")
+			syncer.logger.Error("failed-to-greet-router", err)
 			return err
 		}
 
 		select {
 		case heartbeatInterval = <-syncer.heartbeatInterval:
-			syncer.logger.Info("route-emitter.syncer.received-heartbeat-interval")
+			syncer.logger.Info("received-heartbeat-interval")
 			break GREET_LOOP
 		case <-retryGreetingTicker.C:
 		case <-signals:
-			syncer.logger.Info("route-emitter.syncer.stopping")
+			syncer.logger.Info("stopping")
 			return nil
 		}
 	}
@@ -84,18 +89,18 @@ GREET_LOOP:
 	for {
 		select {
 		case heartbeatInterval = <-syncer.heartbeatInterval:
-			syncer.logger.Info("route-emitter.syncer.received-new-heartbeat-interval")
+			syncer.logger.Info("received-new-heartbeat-interval")
 			syncer.emit()
 		case <-time.After(heartbeatInterval):
-			syncer.logger.Info("route-emitter.syncer.emitting-routes")
+			syncer.logger.Info("emitting-routes")
 			syncer.emit()
 		case <-syncTicker.C:
 			//we decouple syncing the routing table (via etcd) from emitting the routes
 			//since the watcher is receiving deltas our internal cache should be generally up-to-date
-			syncer.logger.Info("route-emitter.syncer.syncing")
+			syncer.logger.Info("syncing")
 			syncer.syncAndEmit()
 		case <-signals:
-			syncer.logger.Info("route-emitter.syncer.stopping")
+			syncer.logger.Info("stopping")
 			return nil
 		}
 	}
@@ -108,26 +113,20 @@ func (syncer *Syncer) emit() {
 
 	err := syncer.emitter.Emit(messagesToEmit)
 	if err != nil {
-		syncer.logger.Warnd(map[string]interface{}{
-			"error": err.Error(),
-		}, "syncer.emit-routes.failed")
+		syncer.logger.Error("failed-to-emit-routes", err)
 	}
 }
 
 func (syncer *Syncer) syncAndEmit() {
 	allRunningActuals, err := syncer.bbs.GetRunningActualLRPs()
 	if err != nil {
-		syncer.logger.Warnd(map[string]interface{}{
-			"error": err.Error(),
-		}, "syncer.get-actual.failed")
+		syncer.logger.Error("failed-to-get-actual", err)
 		return
 	}
 
 	allDesired, err := syncer.bbs.GetAllDesiredLRPs()
 	if err != nil {
-		syncer.logger.Warnd(map[string]interface{}{
-			"error": err.Error(),
-		}, "syncer.get-desired.failed")
+		syncer.logger.Error("failed-to-get-desired", err)
 		return
 	}
 
@@ -138,9 +137,7 @@ func (syncer *Syncer) syncAndEmit() {
 
 	err = syncer.emitter.Emit(routesToEmit)
 	if err != nil {
-		syncer.logger.Warnd(map[string]interface{}{
-			"error": err.Error(),
-		}, "syncer.sync-and-emit-routes.failed-to-emit")
+		syncer.logger.Error("failed-to-emit-synced", err)
 	}
 }
 
@@ -184,10 +181,9 @@ func (syncer *Syncer) gotRouterHeartbeatInterval(msg *yagnats.Message) {
 
 	err := json.Unmarshal(msg.Payload, &response)
 	if err != nil {
-		syncer.logger.Warnd(map[string]interface{}{
-			"error":   err.Error(),
+		syncer.logger.Error("received-invalid-router-start", err, lager.Data{
 			"payload": msg.Payload,
-		}, "syncer.invalid-router-start.received")
+		})
 		return
 	}
 

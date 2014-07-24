@@ -2,12 +2,13 @@ package nats_emitter_test
 
 import (
 	"errors"
+
 	. "github.com/cloudfoundry-incubator/route-emitter/nats_emitter"
 	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
 	"github.com/cloudfoundry/gibson"
-	"github.com/cloudfoundry/gosteno"
 	"github.com/cloudfoundry/yagnats"
 	"github.com/cloudfoundry/yagnats/fakeyagnats"
+	"github.com/pivotal-golang/lager/lagertest"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -30,7 +31,7 @@ var _ = Describe("NatsEmitter", func() {
 
 	BeforeEach(func() {
 		natsClient = fakeyagnats.New()
-		logger := gosteno.NewLogger("test")
+		logger := lagertest.NewTestLogger("test")
 		emitter = New(natsClient, logger)
 	})
 
