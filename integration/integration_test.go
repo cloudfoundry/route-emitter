@@ -72,7 +72,13 @@ var _ = Describe("Integration", func() {
 					Stack:       "some-stack",
 					MemoryMB:    1024,
 					DiskMB:      512,
-					Source:      "http://example.com/",
+					Actions: []models.ExecutorAction{
+						models.ExecutorAction{
+							models.RunAction{
+								Path: "ls",
+							},
+						},
+					},
 				})
 				Ω(err).ShouldNot(HaveOccurred())
 			})
@@ -111,7 +117,13 @@ var _ = Describe("Integration", func() {
 					Stack:       "some-stack",
 					MemoryMB:    1024,
 					DiskMB:      512,
-					Source:      "http://example.com/",
+					Actions: []models.ExecutorAction{
+						models.ExecutorAction{
+							models.RunAction{
+								Path: "ls",
+							},
+						},
+					},
 				})
 				Ω(err).ShouldNot(HaveOccurred())
 
@@ -154,7 +166,13 @@ var _ = Describe("Integration", func() {
 						Stack:       "some-stack",
 						MemoryMB:    1024,
 						DiskMB:      512,
-						Source:      "http://example.com/",
+						Actions: []models.ExecutorAction{
+							models.ExecutorAction{
+								models.RunAction{
+									Path: "ls",
+								},
+							},
+						},
 					})
 					Ω(err).ShouldNot(HaveOccurred())
 				})
@@ -202,7 +220,13 @@ var _ = Describe("Integration", func() {
 				Stack:       "some-stack",
 				MemoryMB:    1024,
 				DiskMB:      512,
-				Source:      "http://example.com/",
+				Actions: []models.ExecutorAction{
+					models.ExecutorAction{
+						models.RunAction{
+							Path: "ls",
+						},
+					},
+				},
 			})
 			Ω(err).ShouldNot(HaveOccurred())
 
@@ -241,7 +265,13 @@ var _ = Describe("Integration", func() {
 						Stack:       "some-stack",
 						MemoryMB:    1024,
 						DiskMB:      512,
-						Source:      "http://example.com/",
+						Actions: []models.ExecutorAction{
+							models.ExecutorAction{
+								models.RunAction{
+									Path: "ls",
+								},
+							},
+						},
 					})
 					Ω(err).ShouldNot(HaveOccurred())
 				})
@@ -264,7 +294,13 @@ var _ = Describe("Integration", func() {
 						Stack:       "some-stack",
 						MemoryMB:    1024,
 						DiskMB:      512,
-						Source:      "http://example.com/",
+						Actions: []models.ExecutorAction{
+							models.ExecutorAction{
+								models.RunAction{
+									Path: "ls",
+								},
+							},
+						},
 					})
 					Ω(err).ShouldNot(HaveOccurred())
 				})
