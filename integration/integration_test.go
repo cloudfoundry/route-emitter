@@ -66,6 +66,7 @@ var _ = Describe("Integration", func() {
 		Context("and routes are desired", func() {
 			BeforeEach(func() {
 				err := bbs.DesireLRP(models.DesiredLRP{
+					Domain:      "tests",
 					ProcessGuid: "guid1",
 					Routes:      []string{"route-1", "route-2"},
 					Instances:   5,
@@ -111,6 +112,7 @@ var _ = Describe("Integration", func() {
 		Context("and an instance starts running", func() {
 			BeforeEach(func() {
 				err := bbs.DesireLRP(models.DesiredLRP{
+					Domain:      "tests",
 					ProcessGuid: "guid1",
 					Routes:      []string{"route-1", "route-2"},
 					Instances:   5,
@@ -160,6 +162,7 @@ var _ = Describe("Integration", func() {
 				BeforeEach(func() {
 					time.Sleep(100 * time.Millisecond)
 					err := bbs.DesireLRP(models.DesiredLRP{
+						Domain:      "tests",
 						ProcessGuid: "guid1",
 						Routes:      []string{"route-1", "route-2"},
 						Instances:   5,
@@ -214,6 +217,7 @@ var _ = Describe("Integration", func() {
 	Context("when the bbs has routes to emit in /desired and /actual", func() {
 		BeforeEach(func() {
 			err := bbs.DesireLRP(models.DesiredLRP{
+				Domain:      "tests",
 				ProcessGuid: "guid1",
 				Routes:      []string{"route-1", "route-2"},
 				Instances:   5,
@@ -259,6 +263,7 @@ var _ = Describe("Integration", func() {
 			Context("and a route is added", func() {
 				BeforeEach(func() {
 					err := bbs.DesireLRP(models.DesiredLRP{
+						Domain:      "tests",
 						ProcessGuid: "guid1",
 						Routes:      []string{"route-1", "route-2", "route-3"},
 						Instances:   5,
@@ -288,6 +293,7 @@ var _ = Describe("Integration", func() {
 			Context("and a route is removed", func() {
 				BeforeEach(func() {
 					err := bbs.DesireLRP(models.DesiredLRP{
+						Domain:      "tests",
 						ProcessGuid: "guid1",
 						Routes:      []string{"route-2"},
 						Instances:   5,

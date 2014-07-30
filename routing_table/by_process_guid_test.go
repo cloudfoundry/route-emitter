@@ -12,8 +12,8 @@ var _ = Describe("ByProcessGuid", func() {
 	Describe("RoutesByProcessGuidFromDesireds", func() {
 		It("should build a map of routes", func() {
 			routes := RoutesByProcessGuidFromDesireds([]models.DesiredLRP{
-				{ProcessGuid: "abc", Routes: []string{"foo.com", "bar.com"}},
-				{ProcessGuid: "def", Routes: []string{"baz.com"}},
+				{Domain: "tests", ProcessGuid: "abc", Routes: []string{"foo.com", "bar.com"}},
+				{Domain: "tests", ProcessGuid: "def", Routes: []string{"baz.com"}},
 			})
 
 			Ω(routes).Should(HaveLen(2))

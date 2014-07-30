@@ -56,6 +56,7 @@ var _ = Describe("Watcher", func() {
 				desiredChange := models.DesiredLRPChange{
 					Before: nil,
 					After: &models.DesiredLRP{
+						Domain:      "tests",
 						ProcessGuid: "pg",
 						Routes:      []string{"route-1", "route-2"},
 					},
@@ -83,6 +84,7 @@ var _ = Describe("Watcher", func() {
 			BeforeEach(func() {
 				desiredChange := models.DesiredLRPChange{
 					Before: &models.DesiredLRP{
+						Domain:      "tests",
 						ProcessGuid: "pg",
 						Routes:      []string{"route-1"},
 					},
@@ -116,6 +118,7 @@ var _ = Describe("Watcher", func() {
 				desiredChange := models.DesiredLRPChange{
 					Before: nil,
 					After: &models.DesiredLRP{
+						Domain:      "tests",
 						ProcessGuid: "pg",
 						Routes:      []string{"route-1", "route-2"},
 					},
@@ -132,7 +135,6 @@ var _ = Describe("Watcher", func() {
 				process.Signal(os.Interrupt)
 				Eventually(process.Wait()).Should(Receive())
 			})
-
 		})
 	})
 
