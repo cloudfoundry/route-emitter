@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cloudfoundry-incubator/cf-debug-server"
 	"github.com/cloudfoundry-incubator/cf-lager"
 	"github.com/cloudfoundry-incubator/route-emitter/nats_emitter"
 	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
@@ -56,6 +57,9 @@ func main() {
 	flag.Parse()
 
 	logger := cf_lager.New("route-emitter")
+
+	cf_debug_server.Run()
+
 	natsClient := initializeNatsClient(logger)
 	bbs := initializeBbs(logger)
 	emitter := initializeNatsEmitter(natsClient, logger)
