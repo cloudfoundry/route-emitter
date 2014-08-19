@@ -13,13 +13,13 @@ import (
 	"github.com/cloudfoundry-incubator/route-emitter/syncer"
 	"github.com/cloudfoundry-incubator/route-emitter/watcher"
 	Bbs "github.com/cloudfoundry-incubator/runtime-schema/bbs"
+	"github.com/cloudfoundry/gunk/group_runner"
 	"github.com/cloudfoundry/gunk/timeprovider"
 	"github.com/cloudfoundry/storeadapter/etcdstoreadapter"
 	"github.com/cloudfoundry/storeadapter/workerpool"
 	"github.com/cloudfoundry/yagnats"
 	"github.com/pivotal-golang/lager"
 	"github.com/tedsuo/ifrit"
-	"github.com/tedsuo/ifrit/grouper"
 	"github.com/tedsuo/ifrit/sigmon"
 )
 
@@ -68,14 +68,14 @@ func main() {
 	watcher := watcher.NewWatcher(bbs, table, emitter, logger)
 	syncer := syncer.NewSyncer(bbs, table, emitter, *syncInterval, natsClient, logger)
 
-	process := grouper.EnvokeGroup(grouper.RunGroup{
-		"watcher": watcher,
-		"syncer":  syncer,
+	group := group_runner.New([]group_runner.Member{
+		{"watcher", watcher},
+		{"syncer", syncer},
 	})
 
-	logger.Info("started")
+	monitor := ifrit.Envoke(sigmon.New(group))
 
-	monitor := ifrit.Envoke(sigmon.New(process))
+	logger.Info("started")
 
 	err := <-monitor.Wait()
 	if err != nil {
