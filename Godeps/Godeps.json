@@ -22,6 +22,10 @@
 			"Rev": "4664f1dff19485bee39602bf645711ba2a4d14fd"
 		},
 		{
+			"ImportPath": "github.com/cloudfoundry-incubator/runtime-schema/heartbeater",
+			"Rev": "4664f1dff19485bee39602bf645711ba2a4d14fd"
+		},
+		{
 			"ImportPath": "github.com/cloudfoundry-incubator/runtime-schema/models",
 			"Rev": "4664f1dff19485bee39602bf645711ba2a4d14fd"
 		},
