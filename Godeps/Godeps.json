@@ -19,11 +19,11 @@
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/runtime-schema/bbs",
-			"Rev": "538875d73b153d53c129dbc7085206853785fdf9"
+			"Rev": "4664f1dff19485bee39602bf645711ba2a4d14fd"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/runtime-schema/models",
-			"Rev": "538875d73b153d53c129dbc7085206853785fdf9"
+			"Rev": "4664f1dff19485bee39602bf645711ba2a4d14fd"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/gibson",
