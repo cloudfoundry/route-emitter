@@ -28,10 +28,11 @@ func TestIntegration(t *testing.T) {
 	RunSpecs(t, "Integration Suite")
 }
 
-var _ = BeforeSuite(func() {
+var _ = SynchronizedBeforeSuite(func() []byte {
 	emitterPath, err := gexec.Build("github.com/cloudfoundry-incubator/route-emitter", "-race")
 	Ω(err).ShouldNot(HaveOccurred())
-
+	return []byte(emitterPath)
+}, func(emitterPath []byte) {
 	etcdPort := 5001 + GinkgoParallelNode()
 	natsPort := 4001 + GinkgoParallelNode()
 
@@ -43,7 +44,7 @@ var _ = BeforeSuite(func() {
 	bbs = Bbs.NewBBS(store, timeprovider.NewTimeProvider(), lagertest.NewTestLogger("test"))
 
 	runner = route_emitter_runner.New(
-		emitterPath,
+		string(emitterPath),
 		[]string{fmt.Sprintf("http://127.0.0.1:%d", etcdPort)},
 		[]string{fmt.Sprintf("127.0.0.1:%d", natsPort)},
 	)
@@ -52,7 +53,6 @@ var _ = BeforeSuite(func() {
 var _ = BeforeEach(func() {
 	etcdRunner.Start()
 	natsRunner.Start()
-	//runner.Start()
 })
 
 var _ = AfterEach(func() {
@@ -61,8 +61,7 @@ var _ = AfterEach(func() {
 	natsRunner.Stop()
 })
 
-var _ = AfterSuite(func() {
-	gexec.CleanupBuildArtifacts()
+var _ = SynchronizedAfterSuite(func() {
 	if etcdRunner != nil {
 		etcdRunner.Stop()
 	}
@@ -72,4 +71,6 @@ var _ = AfterSuite(func() {
 	if runner != nil {
 		runner.KillWithFire()
 	}
+}, func() {
+	gexec.CleanupBuildArtifacts()
 })
