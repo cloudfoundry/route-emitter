@@ -6,6 +6,10 @@
 	],
 	"Deps": [
 		{
+			"ImportPath": "code.google.com/p/gogoprotobuf/proto",
+			"Rev": "6c980277330804e94257ac7ef70a3adbe1641059"
+		},
+		{
 			"ImportPath": "github.com/cloudfoundry-incubator/cf-debug-server",
 			"Rev": "9423f9d0c1282337332ee35f2f5b0be10c83279b"
 		},
@@ -28,6 +32,10 @@
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/runtime-schema/models",
 			"Rev": "c08b36cbd586a7ef869c45bb669fd82b159f8504"
+		},
+		{
+			"ImportPath": "github.com/cloudfoundry/dropsonde",
+			"Rev": "745db2c25d3ab992140b84324787377f1c9b618a"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/gibson",
