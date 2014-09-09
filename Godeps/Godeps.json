@@ -23,15 +23,15 @@
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/runtime-schema/bbs",
-			"Rev": "c08b36cbd586a7ef869c45bb669fd82b159f8504"
+			"Rev": "85a945854a330fc171a3c19eb3527bb01dfb3256"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/runtime-schema/heartbeater",
-			"Rev": "c08b36cbd586a7ef869c45bb669fd82b159f8504"
+			"Rev": "85a945854a330fc171a3c19eb3527bb01dfb3256"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry-incubator/runtime-schema/models",
-			"Rev": "c08b36cbd586a7ef869c45bb669fd82b159f8504"
+			"Rev": "85a945854a330fc171a3c19eb3527bb01dfb3256"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/dropsonde",
@@ -43,15 +43,15 @@
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/gunk/group_runner",
-			"Rev": "48b03ff5d4d966a0954af043646abe60a04f6934"
+			"Rev": "d3d2d94e738fb19b5ae6504be161fd0eacc3f22d"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/gunk/natsrunner",
-			"Rev": "48b03ff5d4d966a0954af043646abe60a04f6934"
+			"Rev": "d3d2d94e738fb19b5ae6504be161fd0eacc3f22d"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/gunk/timeprovider",
-			"Rev": "48b03ff5d4d966a0954af043646abe60a04f6934"
+			"Rev": "d3d2d94e738fb19b5ae6504be161fd0eacc3f22d"
 		},
 		{
 			"ImportPath": "github.com/cloudfoundry/storeadapter",
@@ -86,7 +86,7 @@
 		},
 		{
 			"ImportPath": "github.com/tedsuo/ifrit",
-			"Rev": "8084b96f4d9e395019d2208322e062bbf3046378"
+			"Rev": "fcdd56f5f4e33c55e7f7edbd911abbadba2e49ed"
 		}
 	]
 }

@@ -44,26 +44,24 @@ func New(members []Member) ifrit.Runner {
 
 func (r *groupRunner) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
 	processes := []ifrit.Process{}
-	processChan := make(chan ifrit.Process)
 	exitTrace := make(ExitTrace, 0, len(r.members))
 	exitEvents := make(chan ExitEvent)
 	shutdown := false
 
-	go func() {
-		for _, member := range r.members {
-			process := ifrit.Background(member)
-			go func(member Member) {
-				err := <-process.Wait()
-				exitEvents <- ExitEvent{
-					Err:    err,
-					Member: member,
-				}
-			}(member)
-			processChan <- process
-			<-process.Ready()
-		}
-		close(ready)
-	}()
+	for _, member := range r.members {
+		process := ifrit.Envoke(member)
+		processes = append(processes, process)
+
+		go func(member Member) {
+			err := <-process.Wait()
+			exitEvents <- ExitEvent{
+				Err:    err,
+				Member: member,
+			}
+		}(member)
+	}
+
+	close(ready)
 
 	for {
 		select {
@@ -73,13 +71,10 @@ func (r *groupRunner) Run(signals <-chan os.Signal, ready chan<- struct{}) error
 				process.Signal(sig)
 			}
 
-		case process := <-processChan:
-			processes = append(processes, process)
-
 		case exit := <-exitEvents:
 			exitTrace = append(exitTrace, exit)
 
-			if len(exitTrace) == len(processes) {
+			if len(exitTrace) == len(r.members) {
 				return exitTrace.ToError()
 			}
 
