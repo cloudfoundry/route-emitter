@@ -129,13 +129,8 @@ var _ = Describe("Integration", func() {
 				})
 				Ω(err).ShouldNot(HaveOccurred())
 
-				err = bbs.ReportActualLRPAsStarting(models.ActualLRP{
-					ProcessGuid:  "guid1",
-					Index:        0,
-					InstanceGuid: "iguid1",
-				}, "executor-id")
+				_, err = bbs.ReportActualLRPAsStarting("guid1", "iguid1", "executor-id", 0)
 				Ω(err).ShouldNot(HaveOccurred())
-
 			})
 
 			It("does not emit routes", func() {
