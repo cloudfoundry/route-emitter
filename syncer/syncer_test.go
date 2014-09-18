@@ -169,11 +169,7 @@ var _ = Describe("Syncer", func() {
 				Eventually(greetings, 2).Should(Receive(&msg))
 				go natsClient.Publish(msg.Reply, []byte(`{"minimumRegisterIntervalInSeconds":1}`))
 
-				// go natsClient.Subscriptions(msg.Reply)[0].Callback(&nats.Msg{
-				// 	Data: []byte(`{"minimumRegisterIntervalInSeconds":1}`),
-				// })
-
-				//shold now be emittingn regularly at the specified interval
+				//should now be emitting regularly at the specified interval
 				Eventually(emitter.EmitCallCount, 2).Should(Equal(2))
 				Ω(emitter.EmitArgsForCall(1)).Should(Equal(emitMessages))
 				t1 := time.Now()
