@@ -2,8 +2,8 @@
 package fake_routing_table
 
 import (
-	"sync"
 	. "github.com/cloudfoundry-incubator/route-emitter/routing_table"
+	"sync"
 )
 
 type FakeRoutingTable struct {

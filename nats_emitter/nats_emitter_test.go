@@ -3,10 +3,10 @@ package nats_emitter_test
 import (
 	"errors"
 
+	"github.com/apcera/nats"
 	. "github.com/cloudfoundry-incubator/route-emitter/nats_emitter"
 	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
 	"github.com/cloudfoundry/gibson"
-	"github.com/apcera/nats"
 	"github.com/cloudfoundry/yagnats/fakeyagnats"
 	"github.com/pivotal-golang/lager/lagertest"
 

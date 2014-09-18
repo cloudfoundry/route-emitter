@@ -5,13 +5,13 @@ import (
 	"os"
 	"time"
 
+	"github.com/apcera/nats"
 	"github.com/cloudfoundry-incubator/route-emitter/nats_emitter"
 	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
 	"github.com/cloudfoundry-incubator/runtime-schema/bbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/cloudfoundry/gibson"
 	"github.com/cloudfoundry/yagnats"
-	"github.com/apcera/nats"
 	"github.com/nu7hatch/gouuid"
 	"github.com/pivotal-golang/lager"
 )
