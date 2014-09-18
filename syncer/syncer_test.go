@@ -13,7 +13,7 @@ import (
 	"github.com/cloudfoundry-incubator/runtime-schema/bbs/fake_bbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/cloudfoundry/gibson"
-	"github.com/cloudfoundry/yagnats"
+	"github.com/apcera/nats"
 	"github.com/cloudfoundry/yagnats/fakeyagnats"
 	"github.com/pivotal-golang/lager/lagertest"
 	"github.com/tedsuo/ifrit"
@@ -25,7 +25,7 @@ import (
 var _ = Describe("Syncer", func() {
 	var (
 		bbs          *fake_bbs.FakeRouteEmitterBBS
-		natsClient   *fakeyagnats.FakeYagnats
+		natsClient   *fakeyagnats.FakeApceraWrapper
 		emitter      *fake_nats_emitter.FakeNATSEmitter
 		table        *fake_routing_table.FakeRoutingTable
 		syncer       *Syncer
@@ -34,20 +34,20 @@ var _ = Describe("Syncer", func() {
 		emitMessages routing_table.MessagesToEmit
 		syncDuration time.Duration
 
-		routerStartMessages chan<- *yagnats.Message
+		routerStartMessages chan<- *nats.Msg
 	)
 
 	BeforeEach(func() {
 		bbs = fake_bbs.NewFakeRouteEmitterBBS()
-		natsClient = fakeyagnats.New()
+		natsClient = fakeyagnats.NewApceraClientWrapper()
 		emitter = &fake_nats_emitter.FakeNATSEmitter{}
 		table = &fake_routing_table.FakeRoutingTable{}
 		syncDuration = 10 * time.Second
 
-		startMessages := make(chan *yagnats.Message)
+		startMessages := make(chan *nats.Msg)
 		routerStartMessages = startMessages
 
-		natsClient.WhenSubscribing("router.start", func(callback yagnats.Callback) error {
+		natsClient.WhenSubscribing("router.start", func(callback nats.MsgHandler) error {
 			go func() {
 				for msg := range startMessages {
 					callback(msg)
@@ -125,10 +125,10 @@ var _ = Describe("Syncer", func() {
 	})
 
 	Describe("getting the heartbeat interval from the router", func() {
-		var greetings chan *yagnats.Message
+		var greetings chan *nats.Msg
 		BeforeEach(func() {
-			greetings = make(chan *yagnats.Message, 3)
-			natsClient.WhenPublishing("router.greet", func(msg *yagnats.Message) error {
+			greetings = make(chan *nats.Msg, 3)
+			natsClient.WhenPublishing("router.greet", func(msg *nats.Msg) error {
 				greetings <- msg
 				return nil
 			})
@@ -136,8 +136,8 @@ var _ = Describe("Syncer", func() {
 
 		Context("when the router emits a router.start", func() {
 			JustBeforeEach(func() {
-				routerStartMessages <- &yagnats.Message{
-					Payload: []byte(`{"minimumRegisterIntervalInSeconds":1}`),
+				routerStartMessages <- &nats.Msg{
+					Data: []byte(`{"minimumRegisterIntervalInSeconds":1}`),
 				}
 			})
 
@@ -165,11 +165,13 @@ var _ = Describe("Syncer", func() {
 				Eventually(greetings, 2).Should(Receive())
 
 				//get the second greeting, and respond
-				var msg *yagnats.Message
+				var msg *nats.Msg
 				Eventually(greetings, 2).Should(Receive(&msg))
-				go natsClient.Subscriptions(msg.ReplyTo)[0].Callback(&yagnats.Message{
-					Payload: []byte(`{"minimumRegisterIntervalInSeconds":1}`),
-				})
+				go natsClient.Publish(msg.Reply, []byte(`{"minimumRegisterIntervalInSeconds":1}`))
+
+				// go natsClient.Subscriptions(msg.Reply)[0].Callback(&nats.Msg{
+				// 	Data: []byte(`{"minimumRegisterIntervalInSeconds":1}`),
+				// })
 
 				//shold now be emittingn regularly at the specified interval
 				Eventually(emitter.EmitCallCount, 2).Should(Equal(2))
@@ -189,14 +191,14 @@ var _ = Describe("Syncer", func() {
 
 		Context("after getting the first interval, when a second interval arrives", func() {
 			JustBeforeEach(func() {
-				routerStartMessages <- &yagnats.Message{
-					Payload: []byte(`{"minimumRegisterIntervalInSeconds":1}`),
+				routerStartMessages <- &nats.Msg{
+					Data: []byte(`{"minimumRegisterIntervalInSeconds":1}`),
 				}
 			})
 
 			It("should modify its update rate", func() {
-				routerStartMessages <- &yagnats.Message{
-					Payload: []byte(`{"minimumRegisterIntervalInSeconds":2}`),
+				routerStartMessages <- &nats.Msg{
+					Data: []byte(`{"minimumRegisterIntervalInSeconds":2}`),
 				}
 
 				//first emit should be pretty quick, it is in response to the incoming heartbeat interval
@@ -227,8 +229,8 @@ var _ = Describe("Syncer", func() {
 
 		It("should sync on the specified interval", func() {
 			//we set the emit interval real high to avoid colliding with our sync interval
-			routerStartMessages <- &yagnats.Message{
-				Payload: []byte(`{"minimumRegisterIntervalInSeconds":10}`),
+			routerStartMessages <- &nats.Msg{
+				Data: []byte(`{"minimumRegisterIntervalInSeconds":10}`),
 			}
 
 			Eventually(table.SyncCallCount).Should(Equal(2))
@@ -262,8 +264,8 @@ var _ = Describe("Syncer", func() {
 			It("should not call sync until the error resolves", func() {
 				Ω(table.SyncCallCount()).Should(Equal(0))
 
-				routerStartMessages <- &yagnats.Message{
-					Payload: []byte(`{"minimumRegisterIntervalInSeconds":10}`),
+				routerStartMessages <- &nats.Msg{
+					Data: []byte(`{"minimumRegisterIntervalInSeconds":10}`),
 				}
 
 				Eventually(table.SyncCallCount).Should(Equal(1))
@@ -288,8 +290,8 @@ var _ = Describe("Syncer", func() {
 			It("should not call sync until the error resolves", func() {
 				Ω(table.SyncCallCount()).Should(Equal(0))
 
-				routerStartMessages <- &yagnats.Message{
-					Payload: []byte(`{"minimumRegisterIntervalInSeconds":10}`),
+				routerStartMessages <- &nats.Msg{
+					Data: []byte(`{"minimumRegisterIntervalInSeconds":10}`),
 				}
 
 				Eventually(table.SyncCallCount).Should(Equal(1))

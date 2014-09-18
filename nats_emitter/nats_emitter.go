@@ -14,11 +14,11 @@ type NATSEmitterInterface interface {
 }
 
 type NATSEmitter struct {
-	natsClient yagnats.NATSClient
+	natsClient yagnats.ApceraWrapperNATSClient
 	logger     lager.Logger
 }
 
-func New(natsClient yagnats.NATSClient, logger lager.Logger) *NATSEmitter {
+func New(natsClient yagnats.ApceraWrapperNATSClient, logger lager.Logger) *NATSEmitter {
 	return &NATSEmitter{
 		natsClient: natsClient,
 		logger:     logger.Session("nats-emitter"),

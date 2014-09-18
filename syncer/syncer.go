@@ -11,13 +11,14 @@ import (
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/cloudfoundry/gibson"
 	"github.com/cloudfoundry/yagnats"
+	"github.com/apcera/nats"
 	"github.com/nu7hatch/gouuid"
 	"github.com/pivotal-golang/lager"
 )
 
 type Syncer struct {
 	bbs               bbs.RouteEmitterBBS
-	natsClient        yagnats.NATSClient
+	natsClient        yagnats.ApceraWrapperNATSClient
 	logger            lager.Logger
 	table             routing_table.RoutingTableInterface
 	emitter           nats_emitter.NATSEmitterInterface
@@ -30,7 +31,7 @@ func NewSyncer(
 	table routing_table.RoutingTableInterface,
 	emitter nats_emitter.NATSEmitterInterface,
 	syncDuration time.Duration,
-	natsClient yagnats.NATSClient,
+	natsClient yagnats.ApceraWrapperNATSClient,
 	logger lager.Logger,
 ) *Syncer {
 	return &Syncer{
@@ -176,13 +177,13 @@ func (syncer *Syncer) greetRouter(replyUUID string) error {
 	return nil
 }
 
-func (syncer *Syncer) gotRouterHeartbeatInterval(msg *yagnats.Message) {
+func (syncer *Syncer) gotRouterHeartbeatInterval(msg *nats.Msg) {
 	var response gibson.RouterGreetingMessage
 
-	err := json.Unmarshal(msg.Payload, &response)
+	err := json.Unmarshal(msg.Data, &response)
 	if err != nil {
 		syncer.logger.Error("received-invalid-router-start", err, lager.Data{
-			"payload": msg.Payload,
+			"payload": msg.Data,
 		})
 		return
 	}

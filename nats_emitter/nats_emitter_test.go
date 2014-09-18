@@ -6,7 +6,7 @@ import (
 	. "github.com/cloudfoundry-incubator/route-emitter/nats_emitter"
 	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
 	"github.com/cloudfoundry/gibson"
-	"github.com/cloudfoundry/yagnats"
+	"github.com/apcera/nats"
 	"github.com/cloudfoundry/yagnats/fakeyagnats"
 	"github.com/pivotal-golang/lager/lagertest"
 
@@ -16,7 +16,7 @@ import (
 
 var _ = Describe("NatsEmitter", func() {
 	var emitter *NATSEmitter
-	var natsClient *fakeyagnats.FakeYagnats
+	var natsClient *fakeyagnats.FakeApceraWrapper
 
 	messagesToEmit := routing_table.MessagesToEmit{
 		RegistrationMessages: []gibson.RegistryMessage{
@@ -30,7 +30,7 @@ var _ = Describe("NatsEmitter", func() {
 	}
 
 	BeforeEach(func() {
-		natsClient = fakeyagnats.New()
+		natsClient = fakeyagnats.NewApceraClientWrapper()
 		logger := lagertest.NewTestLogger("test")
 		emitter = New(natsClient, logger)
 	})
@@ -44,13 +44,13 @@ var _ = Describe("NatsEmitter", func() {
 			Ω(natsClient.PublishedMessages("router.unregister")).Should(HaveLen(2))
 
 			registeredPayloads := [][]byte{
-				natsClient.PublishedMessages("router.register")[0].Payload,
-				natsClient.PublishedMessages("router.register")[1].Payload,
+				natsClient.PublishedMessages("router.register")[0].Data,
+				natsClient.PublishedMessages("router.register")[1].Data,
 			}
 
 			unregisteredPayloads := [][]byte{
-				natsClient.PublishedMessages("router.unregister")[0].Payload,
-				natsClient.PublishedMessages("router.unregister")[1].Payload,
+				natsClient.PublishedMessages("router.unregister")[0].Data,
+				natsClient.PublishedMessages("router.unregister")[1].Data,
 			}
 
 			Ω(registeredPayloads).Should(ContainElement(MatchJSON(`
@@ -86,7 +86,7 @@ var _ = Describe("NatsEmitter", func() {
 
 		Context("when the nats client errors", func() {
 			BeforeEach(func() {
-				natsClient.WhenPublishing("router.register", func(*yagnats.Message) error {
+				natsClient.WhenPublishing("router.register", func(*nats.Msg) error {
 					return errors.New("bam")
 				})
 			})

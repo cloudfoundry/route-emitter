@@ -7,7 +7,7 @@ import (
 	. "github.com/cloudfoundry-incubator/route-emitter/routing_table/matchers"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/cloudfoundry/gibson"
-	"github.com/cloudfoundry/yagnats"
+	"github.com/apcera/nats"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gexec"
@@ -17,11 +17,11 @@ var _ = Describe("Integration", func() {
 	listenForRoutes := func(subject string) <-chan gibson.RegistryMessage {
 		routes := make(chan gibson.RegistryMessage)
 
-		natsRunner.MessageBus.Subscribe(subject, func(msg *yagnats.Message) {
+		natsRunner.MessageBus.Subscribe(subject, func(msg *nats.Msg) {
 			defer GinkgoRecover()
 
 			var message gibson.RegistryMessage
-			err := json.Unmarshal(msg.Payload, &message)
+			err := json.Unmarshal(msg.Data, &message)
 			Ω(err).ShouldNot(HaveOccurred())
 
 			routes <- message
@@ -39,7 +39,7 @@ var _ = Describe("Integration", func() {
 		registeredRoutes = listenForRoutes("router.register")
 		unregisteredRoutes = listenForRoutes("router.unregister")
 
-		natsRunner.MessageBus.Subscribe("router.greet", func(msg *yagnats.Message) {
+		natsRunner.MessageBus.Subscribe("router.greet", func(msg *nats.Msg) {
 			defer GinkgoRecover()
 
 			greeting := gibson.RouterGreetingMessage{
@@ -49,7 +49,7 @@ var _ = Describe("Integration", func() {
 			response, err := json.Marshal(greeting)
 			Ω(err).ShouldNot(HaveOccurred())
 
-			err = natsRunner.MessageBus.Publish(msg.ReplyTo, response)
+			err = natsRunner.MessageBus.Publish(msg.Reply, response)
 			Ω(err).ShouldNot(HaveOccurred())
 		})
 	})
