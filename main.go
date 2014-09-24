@@ -2,7 +2,6 @@ package main
 
 import (
 	"flag"
-	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -16,6 +15,7 @@ import (
 	Bbs "github.com/cloudfoundry-incubator/runtime-schema/bbs"
 	_ "github.com/cloudfoundry/dropsonde/autowire"
 	"github.com/cloudfoundry/gunk/group_runner"
+	"github.com/cloudfoundry/gunk/natsclientrunner"
 	"github.com/cloudfoundry/gunk/timeprovider"
 	"github.com/cloudfoundry/storeadapter/etcdstoreadapter"
 	"github.com/cloudfoundry/storeadapter/workerpool"
@@ -62,7 +62,13 @@ func main() {
 
 	cf_debug_server.Run()
 
-	natsClient := initializeNatsClient(logger)
+	natsClient := natsclientrunner.NewClient(
+		*natsAddresses,
+		*natsUsername,
+		*natsPassword,
+	)
+	natsClientRunner := natsclientrunner.New(natsClient, logger)
+
 	bbs := initializeBbs(logger)
 	emitter := initializeNatsEmitter(natsClient, logger)
 	table := initializeRoutingTable()
@@ -71,6 +77,7 @@ func main() {
 	syncer := syncer.NewSyncer(bbs, table, emitter, *syncInterval, natsClient, logger)
 
 	group := group_runner.New([]group_runner.Member{
+		{"nats-client", natsClientRunner},
 		{"watcher", watcher},
 		{"syncer", syncer},
 	})
@@ -86,26 +93,6 @@ func main() {
 	}
 
 	logger.Info("exited")
-}
-
-func initializeNatsClient(logger lager.Logger) yagnats.ApceraWrapperNATSClient {
-	natsMembers := []string{}
-	for _, addr := range strings.Split(*natsAddresses, ",") {
-		uri := url.URL{
-			Scheme: "nats",
-			User:   url.UserPassword(*natsUsername, *natsPassword),
-			Host:   addr,
-		}
-		natsMembers = append(natsMembers, uri.String())
-	}
-	natsClient := yagnats.NewApceraClientWrapper(natsMembers)
-
-	err := natsClient.Connect()
-	if err != nil {
-		logger.Fatal("failed-to-connect-to-nats", err)
-	}
-
-	return natsClient
 }
 
 func initializeNatsEmitter(natsClient yagnats.ApceraWrapperNATSClient, logger lager.Logger) *nats_emitter.NATSEmitter {
