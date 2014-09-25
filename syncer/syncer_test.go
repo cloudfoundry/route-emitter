@@ -25,7 +25,7 @@ import (
 var _ = Describe("Syncer", func() {
 	var (
 		bbs          *fake_bbs.FakeRouteEmitterBBS
-		natsClient   *fakeyagnats.FakeApceraWrapper
+		natsClient   *fakeyagnats.FakeNATSConn
 		emitter      *fake_nats_emitter.FakeNATSEmitter
 		table        *fake_routing_table.FakeRoutingTable
 		syncer       *Syncer
@@ -39,7 +39,7 @@ var _ = Describe("Syncer", func() {
 
 	BeforeEach(func() {
 		bbs = fake_bbs.NewFakeRouteEmitterBBS()
-		natsClient = fakeyagnats.NewApceraClientWrapper()
+		natsClient = fakeyagnats.Connect()
 		emitter = &fake_nats_emitter.FakeNATSEmitter{}
 		table = &fake_routing_table.FakeRoutingTable{}
 		syncDuration = 10 * time.Second

@@ -62,19 +62,21 @@ func main() {
 
 	cf_debug_server.Run()
 
-	natsClient := natsclientrunner.NewClient(
-		*natsAddresses,
-		*natsUsername,
-		*natsPassword,
-	)
-	natsClientRunner := natsclientrunner.New(natsClient, logger)
-
 	bbs := initializeBbs(logger)
-	emitter := initializeNatsEmitter(natsClient, logger)
 	table := initializeRoutingTable()
 
-	watcher := watcher.NewWatcher(bbs, table, emitter, logger)
-	syncer := syncer.NewSyncer(bbs, table, emitter, *syncInterval, natsClient, logger)
+	var natsClient yagnats.NATSConn
+	var emitter *nats_emitter.NATSEmitter
+	natsClientRunner := natsclientrunner.New(*natsAddresses, *natsUsername, *natsPassword, logger, &natsClient)
+
+	watcher := ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
+		emitter = initializeNatsEmitter(natsClient, logger)
+		return watcher.NewWatcher(bbs, table, emitter, logger).Run(signals, ready)
+	})
+
+	syncer := ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
+		return syncer.NewSyncer(bbs, table, emitter, *syncInterval, natsClient, logger).Run(signals, ready)
+	})
 
 	group := group_runner.New([]group_runner.Member{
 		{"nats-client", natsClientRunner},
@@ -95,7 +97,7 @@ func main() {
 	logger.Info("exited")
 }
 
-func initializeNatsEmitter(natsClient yagnats.ApceraWrapperNATSClient, logger lager.Logger) *nats_emitter.NATSEmitter {
+func initializeNatsEmitter(natsClient yagnats.NATSConn, logger lager.Logger) *nats_emitter.NATSEmitter {
 	return nats_emitter.New(natsClient, logger)
 }
 

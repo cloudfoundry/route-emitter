@@ -18,7 +18,7 @@ import (
 
 type Syncer struct {
 	bbs               bbs.RouteEmitterBBS
-	natsClient        yagnats.ApceraWrapperNATSClient
+	natsClient        yagnats.NATSConn
 	logger            lager.Logger
 	table             routing_table.RoutingTableInterface
 	emitter           nats_emitter.NATSEmitterInterface
@@ -31,7 +31,7 @@ func NewSyncer(
 	table routing_table.RoutingTableInterface,
 	emitter nats_emitter.NATSEmitterInterface,
 	syncDuration time.Duration,
-	natsClient yagnats.ApceraWrapperNATSClient,
+	natsClient yagnats.NATSConn,
 	logger lager.Logger,
 ) *Syncer {
 	return &Syncer{
@@ -169,7 +169,7 @@ func (syncer *Syncer) listenForHeartbeatInterval(replyUUID string) error {
 }
 
 func (syncer *Syncer) greetRouter(replyUUID string) error {
-	err := syncer.natsClient.PublishWithReplyTo("router.greet", replyUUID, []byte{})
+	err := syncer.natsClient.PublishRequest("router.greet", replyUUID, []byte{})
 	if err != nil {
 		return err
 	}

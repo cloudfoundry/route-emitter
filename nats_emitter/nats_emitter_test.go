@@ -16,7 +16,7 @@ import (
 
 var _ = Describe("NatsEmitter", func() {
 	var emitter *NATSEmitter
-	var natsClient *fakeyagnats.FakeApceraWrapper
+	var natsClient *fakeyagnats.FakeNATSConn
 
 	messagesToEmit := routing_table.MessagesToEmit{
 		RegistrationMessages: []gibson.RegistryMessage{
@@ -30,7 +30,7 @@ var _ = Describe("NatsEmitter", func() {
 	}
 
 	BeforeEach(func() {
-		natsClient = fakeyagnats.NewApceraClientWrapper()
+		natsClient = fakeyagnats.Connect()
 		logger := lagertest.NewTestLogger("test")
 		emitter = New(natsClient, logger)
 	})
