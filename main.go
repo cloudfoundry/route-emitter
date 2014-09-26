@@ -14,7 +14,6 @@ import (
 	"github.com/cloudfoundry-incubator/route-emitter/watcher"
 	Bbs "github.com/cloudfoundry-incubator/runtime-schema/bbs"
 	_ "github.com/cloudfoundry/dropsonde/autowire"
-	"github.com/cloudfoundry/gunk/group_runner"
 	"github.com/cloudfoundry/gunk/natsclientrunner"
 	"github.com/cloudfoundry/gunk/timeprovider"
 	"github.com/cloudfoundry/storeadapter/etcdstoreadapter"
@@ -22,6 +21,7 @@ import (
 	"github.com/cloudfoundry/yagnats"
 	"github.com/pivotal-golang/lager"
 	"github.com/tedsuo/ifrit"
+	"github.com/tedsuo/ifrit/grouper"
 	"github.com/tedsuo/ifrit/sigmon"
 )
 
@@ -78,7 +78,7 @@ func main() {
 		return syncer.NewSyncer(bbs, table, emitter, *syncInterval, natsClient, logger).Run(signals, ready)
 	})
 
-	group := group_runner.New([]group_runner.Member{
+	group := grouper.NewOrdered(os.Interrupt, grouper.Members{
 		{"nats-client", natsClientRunner},
 		{"watcher", watcher},
 		{"syncer", syncer},
