@@ -76,7 +76,7 @@ var _ = Describe("Integration", func() {
 
 	Context("when the emitter is running", func() {
 		BeforeEach(func() {
-			emitter = ifrit.Envoke(runner)
+			emitter = ginkgomon.Invoke(runner)
 		})
 
 		Context("and routes are desired", func() {
@@ -241,7 +241,7 @@ var _ = Describe("Integration", func() {
 				secondRunner = createEmitterRunner()
 				secondRunner.StartCheck = ""
 
-				secondEmitter = ifrit.Envoke(secondRunner)
+				secondEmitter = ginkgomon.Invoke(secondRunner)
 			})
 
 			AfterEach(func() {
@@ -320,7 +320,7 @@ var _ = Describe("Integration", func() {
 
 		Context("and the emitter is started", func() {
 			BeforeEach(func() {
-				emitter = ifrit.Envoke(runner)
+				emitter = ginkgomon.Invoke(runner)
 			})
 
 			It("immediately emits all routes", func() {
