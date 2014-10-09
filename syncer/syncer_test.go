@@ -38,7 +38,7 @@ var _ = Describe("Syncer", func() {
 	)
 
 	BeforeEach(func() {
-		bbs = fake_bbs.NewFakeRouteEmitterBBS()
+		bbs = new(fake_bbs.FakeRouteEmitterBBS)
 		natsClient = fakeyagnats.Connect()
 		emitter = &fake_nats_emitter.FakeNATSEmitter{}
 		table = &fake_routing_table.FakeRoutingTable{}
@@ -75,7 +75,7 @@ var _ = Describe("Syncer", func() {
 		table.MessagesToEmitReturns(emitMessages)
 
 		//Set up some BBS data
-		bbs.AllActualLRPs = []models.ActualLRP{
+		bbs.GetRunningActualLRPsReturns([]models.ActualLRP{
 			{
 				ProcessGuid:  "process-guid-1",
 				Index:        0,
@@ -88,14 +88,14 @@ var _ = Describe("Syncer", func() {
 					},
 				},
 			},
-		}
+		}, nil)
 
-		bbs.AllDesiredLRPs = []models.DesiredLRP{
+		bbs.GetAllDesiredLRPsReturns([]models.DesiredLRP{
 			{
 				ProcessGuid: "process-guid-1",
 				Routes:      []string{"route-1", "route-2"},
 			},
-		}
+		}, nil)
 	})
 
 	JustBeforeEach(func() {
@@ -246,14 +246,16 @@ var _ = Describe("Syncer", func() {
 			BeforeEach(func() {
 				lock := &sync.Mutex{}
 				calls := 0
-				bbs.WhenGettingRunningActualLRPs = func() ([]models.ActualLRP, error) {
+
+				bbs.GetRunningActualLRPsStub = func() ([]models.ActualLRP, error) {
 					lock.Lock()
 					defer lock.Unlock()
 					if calls == 0 {
 						calls++
 						return nil, errors.New("bam")
 					}
-					return bbs.AllActualLRPs, nil
+
+					return []models.ActualLRP{}, nil
 				}
 			})
 
@@ -272,14 +274,15 @@ var _ = Describe("Syncer", func() {
 			BeforeEach(func() {
 				lock := &sync.Mutex{}
 				calls := 0
-				bbs.WhenGettingAllDesiredLRPs = func() ([]models.DesiredLRP, error) {
+				bbs.GetAllDesiredLRPsStub = func() ([]models.DesiredLRP, error) {
 					lock.Lock()
 					defer lock.Unlock()
 					if calls == 0 {
 						calls++
 						return nil, errors.New("bam")
 					}
-					return bbs.AllDesiredLRPs, nil
+
+					return []models.DesiredLRP{}, nil
 				}
 			})
 

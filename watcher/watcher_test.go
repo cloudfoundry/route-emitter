@@ -27,10 +27,16 @@ var _ = Describe("Watcher", func() {
 		watcher             *Watcher
 		process             ifrit.Process
 		dummyMessagesToEmit routing_table.MessagesToEmit
+
+		desiredLRPChanges chan<- models.DesiredLRPChange
+		desiredLRPErrors  chan<- error
+
+		actualLRPChanges chan<- models.ActualLRPChange
+		actualLRPErrors  chan<- error
 	)
 
 	BeforeEach(func() {
-		bbs = fake_bbs.NewFakeRouteEmitterBBS()
+		bbs = new(fake_bbs.FakeRouteEmitterBBS)
 		table = &fake_routing_table.FakeRoutingTable{}
 		emitter = &fake_nats_emitter.FakeNATSEmitter{}
 		logger := lagertest.NewTestLogger("test")
@@ -40,6 +46,21 @@ var _ = Describe("Watcher", func() {
 		dummyMessagesToEmit = routing_table.MessagesToEmit{
 			RegistrationMessages: []gibson.RegistryMessage{dummyMessage},
 		}
+
+		desiredChChChChanges := make(chan models.DesiredLRPChange)
+		desiredChChChErrors := make(chan error)
+
+		actualChChChChanges := make(chan models.ActualLRPChange)
+		actualChChChErrors := make(chan error)
+
+		desiredLRPChanges = desiredChChChChanges
+		desiredLRPErrors = desiredChChChErrors
+
+		actualLRPChanges = actualChChChChanges
+		actualLRPErrors = actualChChChErrors
+
+		bbs.WatchForDesiredLRPChangesReturns(desiredChChChChanges, nil, desiredChChChErrors)
+		bbs.WatchForActualLRPChangesReturns(actualChChChChanges, nil, actualChChChErrors)
 
 		watcher = NewWatcher(bbs, table, emitter, logger)
 		process = ifrit.Envoke(watcher)
@@ -64,7 +85,7 @@ var _ = Describe("Watcher", func() {
 
 				table.SetRoutesReturns(dummyMessagesToEmit)
 
-				bbs.DesiredLRPChangeChan <- desiredChange
+				desiredLRPChanges <- desiredChange
 			})
 
 			It("should set the routes on the table", func() {
@@ -93,7 +114,7 @@ var _ = Describe("Watcher", func() {
 
 				table.RemoveRoutesReturns(dummyMessagesToEmit)
 
-				bbs.DesiredLRPChangeChan <- desiredChange
+				desiredLRPChanges <- desiredChange
 			})
 
 			It("should remove the routes from the table", func() {
@@ -113,7 +134,8 @@ var _ = Describe("Watcher", func() {
 
 			BeforeEach(func() {
 				errorTime = time.Now()
-				bbs.SendWatchForDesiredLRPChangesError(errors.New("bbs watch failed"))
+
+				desiredLRPErrors <- errors.New("bbs watch failed")
 
 				desiredChange := models.DesiredLRPChange{
 					Before: nil,
@@ -123,7 +145,8 @@ var _ = Describe("Watcher", func() {
 						Routes:      []string{"route-1", "route-2"},
 					},
 				}
-				bbs.DesiredLRPChangeChan <- desiredChange
+
+				desiredLRPChanges <- desiredChange
 			})
 
 			It("should retry after 3 seconds", func() {
@@ -155,7 +178,7 @@ var _ = Describe("Watcher", func() {
 
 				table.AddOrUpdateContainerReturns(dummyMessagesToEmit)
 
-				bbs.ActualLRPChangeChan <- actualChange
+				actualLRPChanges <- actualChange
 			})
 
 			It("should add/update the container on the table", func() {
@@ -176,7 +199,8 @@ var _ = Describe("Watcher", func() {
 
 			BeforeEach(func() {
 				errorTime = time.Now()
-				bbs.SendWatchForActualLRPChangesError(errors.New("bbs watch failed"))
+
+				actualLRPErrors <- errors.New("bbs watch failed")
 
 				actualChange := models.ActualLRPChange{
 					Before: nil,
@@ -192,7 +216,7 @@ var _ = Describe("Watcher", func() {
 
 				table.AddOrUpdateContainerReturns(dummyMessagesToEmit)
 
-				bbs.ActualLRPChangeChan <- actualChange
+				actualLRPChanges <- actualChange
 			})
 
 			It("should retry after 3 seconds", func() {
@@ -223,7 +247,7 @@ var _ = Describe("Watcher", func() {
 
 				table.RemoveContainerReturns(dummyMessagesToEmit)
 
-				bbs.ActualLRPChangeChan <- actualChange
+				actualLRPChanges <- actualChange
 			})
 
 			It("should remove the container from the table", func() {

@@ -13,15 +13,19 @@ import (
 	"github.com/cloudfoundry-incubator/route-emitter/syncer"
 	"github.com/cloudfoundry-incubator/route-emitter/watcher"
 	Bbs "github.com/cloudfoundry-incubator/runtime-schema/bbs"
+	"github.com/cloudfoundry-incubator/runtime-schema/bbs/lock_bbs"
+	"github.com/cloudfoundry-incubator/runtime-schema/heartbeater"
 	_ "github.com/cloudfoundry/dropsonde/autowire"
 	"github.com/cloudfoundry/gunk/natsclientrunner"
 	"github.com/cloudfoundry/gunk/timeprovider"
 	"github.com/cloudfoundry/storeadapter/etcdstoreadapter"
 	"github.com/cloudfoundry/storeadapter/workerpool"
 	"github.com/cloudfoundry/yagnats"
+	"github.com/nu7hatch/gouuid"
 	"github.com/pivotal-golang/lager"
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/ifrit/grouper"
+	"github.com/tedsuo/ifrit/restart"
 	"github.com/tedsuo/ifrit/sigmon"
 )
 
@@ -55,6 +59,12 @@ var syncInterval = flag.Duration(
 	"the interval between syncs of the routing table from etcd",
 )
 
+var heartbeatInterval = flag.Duration(
+	"heartbeatInterval",
+	lock_bbs.HEARTBEAT_INTERVAL,
+	"the interval between heartbeats to the lock",
+)
+
 func main() {
 	flag.Parse()
 
@@ -78,7 +88,15 @@ func main() {
 		return syncer.NewSyncer(bbs, table, emitter, *syncInterval, natsClient, logger).Run(signals, ready)
 	})
 
+	uuid, err := uuid.NewV4()
+	if err != nil {
+		logger.Fatal("Couldn't generate uuid", err)
+	}
+
+	heartbeat := bbs.NewRouteEmitterLock(uuid.String(), *heartbeatInterval)
+
 	group := grouper.NewOrdered(os.Interrupt, grouper.Members{
+		{"heartbeater", restart.OnError(heartbeat, heartbeater.ErrStoreUnavailable)},
 		{"nats-client", natsClientRunner},
 		{"watcher", watcher},
 		{"syncer", syncer},
@@ -88,7 +106,7 @@ func main() {
 
 	logger.Info("started")
 
-	err := <-monitor.Wait()
+	err = <-monitor.Wait()
 	if err != nil {
 		logger.Error("exited-with-failure", err)
 		os.Exit(1)

@@ -2,6 +2,7 @@ package integration_test
 
 import (
 	"encoding/json"
+	"os"
 	"time"
 
 	"github.com/apcera/nats"
@@ -10,7 +11,9 @@ import (
 	"github.com/cloudfoundry/gibson"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/onsi/gomega/gexec"
+	"github.com/onsi/gomega/gbytes"
+	"github.com/tedsuo/ifrit"
+	"github.com/tedsuo/ifrit/ginkgomon"
 )
 
 var _ = Describe("Integration", func() {
@@ -31,11 +34,16 @@ var _ = Describe("Integration", func() {
 	}
 
 	var (
+		runner  *ginkgomon.Runner
+		emitter ifrit.Process
+
 		registeredRoutes   <-chan gibson.RegistryMessage
 		unregisteredRoutes <-chan gibson.RegistryMessage
 	)
 
 	BeforeEach(func() {
+		emitter = nil
+
 		registeredRoutes = listenForRoutes("router.register")
 		unregisteredRoutes = listenForRoutes("router.unregister")
 
@@ -52,15 +60,23 @@ var _ = Describe("Integration", func() {
 			err = natsRunner.MessageBus.Publish(msg.Reply, response)
 			Ω(err).ShouldNot(HaveOccurred())
 		})
+
+		runner = createEmitterRunner()
 	})
 
 	AfterEach(func() {
-		Ω(runner.Session).ShouldNot(gexec.Exit(), "Runner should not have exploded!")
+		if emitter != nil {
+			Ω(emitter.Wait()).ShouldNot(Receive(), "Runner should not have exploded!")
+		}
+
+		emitter.Signal(os.Interrupt)
+
+		Eventually(emitter.Wait(), 5*time.Second).Should(Receive())
 	})
 
 	Context("when the emitter is running", func() {
 		BeforeEach(func() {
-			runner.Start()
+			emitter = ifrit.Envoke(runner)
 		})
 
 		Context("and routes are desired", func() {
@@ -198,13 +214,56 @@ var _ = Describe("Integration", func() {
 			})
 		})
 
+		Context("and another emitter starts", func() {
+			var (
+				secondRunner  *ginkgomon.Runner
+				secondEmitter ifrit.Process
+			)
+
+			BeforeEach(func() {
+				secondRunner = createEmitterRunner()
+				secondRunner.StartCheck = ""
+
+				secondEmitter = ifrit.Envoke(secondRunner)
+			})
+
+			AfterEach(func() {
+				if secondEmitter != nil {
+					Ω(secondEmitter.Wait()).ShouldNot(Receive(), "Runner should not have exploded!")
+				}
+
+				secondEmitter.Signal(os.Interrupt)
+
+				Eventually(secondEmitter.Wait(), 5*time.Second).Should(Receive())
+			})
+
+			Describe("the second emitter", func() {
+				It("does not become active", func() {
+					Consistently(secondRunner.Buffer, 5*time.Second).ShouldNot(gbytes.Say("route-emitter.started"))
+				})
+			})
+
+			Context("and the first emitter goes away", func() {
+				BeforeEach(func() {
+					emitter.Signal(os.Interrupt)
+					Eventually(emitter.Wait(), 5*time.Second).Should(Receive())
+				})
+
+				Describe("the second emitter", func() {
+					It("becomes active", func() {
+						Eventually(secondRunner.Buffer, 5*time.Second).Should(gbytes.Say("route-emitter.started"))
+					})
+				})
+			})
+		})
+
 		Context("and etcd goes away", func() {
 			BeforeEach(func() {
 				etcdRunner.Stop()
 			})
 
 			It("does not explode", func() {
-				Consistently(runner.Session, 5).ShouldNot(gexec.Exit())
+				Consistently(emitter.Wait(), 5).ShouldNot(Receive())
 			})
 		})
 	})
@@ -244,7 +303,7 @@ var _ = Describe("Integration", func() {
 
 		Context("and the emitter is started", func() {
 			BeforeEach(func() {
-				runner.Start()
+				emitter = ifrit.Envoke(runner)
 			})
 
 			It("immediately emits all routes", func() {
