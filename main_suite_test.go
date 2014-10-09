@@ -1,4 +1,4 @@
-package integration_test
+package main_test
 
 import (
 	"fmt"
@@ -33,9 +33,9 @@ var natsRunner *natsrunner.NATSRunner
 var store storeadapter.StoreAdapter
 var bbs *Bbs.BBS
 
-func TestIntegration(t *testing.T) {
+func TestRouteEmitter(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Integration Suite")
+	RunSpecs(t, "Route Emitter Suite")
 }
 
 func createEmitterRunner() *ginkgomon.Runner {

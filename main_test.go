@@ -1,4 +1,4 @@
-package integration_test
+package main_test
 
 import (
 	"encoding/json"
@@ -16,7 +16,7 @@ import (
 	"github.com/tedsuo/ifrit/ginkgomon"
 )
 
-var _ = Describe("Integration", func() {
+var _ = Describe("Route Emitter", func() {
 	listenForRoutes := func(subject string) <-chan gibson.RegistryMessage {
 		routes := make(chan gibson.RegistryMessage)
 
