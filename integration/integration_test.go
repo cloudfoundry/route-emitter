@@ -211,6 +211,23 @@ var _ = Describe("Integration", func() {
 					Ω(msg2).Should(MatchRegistryMessage(msg1))
 					Ω(t2.Sub(t1)).Should(BeNumerically("~", 2*time.Second, 500*time.Millisecond))
 				})
+
+				Context("when etcd goes away", func() {
+					var msg1 gibson.RegistryMessage
+					var msg2 gibson.RegistryMessage
+
+					BeforeEach(func() {
+						// ensure it's seen the route at least once
+						Eventually(registeredRoutes).Should(Receive(&msg1))
+
+						etcdRunner.Stop()
+					})
+
+					It("continues to broadcast routes", func() {
+						Eventually(registeredRoutes, 5).Should(Receive(&msg2))
+						Ω(msg2).Should(MatchRegistryMessage(msg1))
+					})
+				})
 			})
 		})
 
