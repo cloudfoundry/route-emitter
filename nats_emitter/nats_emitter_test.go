@@ -7,7 +7,7 @@ import (
 	. "github.com/cloudfoundry-incubator/route-emitter/nats_emitter"
 	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
 	"github.com/cloudfoundry/gibson"
-	"github.com/cloudfoundry/yagnats/fakeyagnats"
+	"github.com/cloudfoundry/gunk/diegonats"
 	"github.com/pivotal-golang/lager/lagertest"
 
 	. "github.com/onsi/ginkgo"
@@ -16,7 +16,7 @@ import (
 
 var _ = Describe("NatsEmitter", func() {
 	var emitter *NATSEmitter
-	var natsClient *fakeyagnats.FakeNATSConn
+	var natsClient *diegonats.FakeNATSClient
 
 	messagesToEmit := routing_table.MessagesToEmit{
 		RegistrationMessages: []gibson.RegistryMessage{
@@ -30,7 +30,7 @@ var _ = Describe("NatsEmitter", func() {
 	}
 
 	BeforeEach(func() {
-		natsClient = fakeyagnats.Connect()
+		natsClient = diegonats.NewFakeClient()
 		logger := lagertest.NewTestLogger("test")
 		emitter = New(natsClient, logger)
 	})

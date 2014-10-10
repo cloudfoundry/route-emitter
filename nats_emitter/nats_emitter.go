@@ -5,7 +5,7 @@ import (
 
 	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
 	"github.com/cloudfoundry/gibson"
-	"github.com/cloudfoundry/yagnats"
+	"github.com/cloudfoundry/gunk/diegonats"
 	"github.com/pivotal-golang/lager"
 )
 
@@ -14,11 +14,11 @@ type NATSEmitterInterface interface {
 }
 
 type NATSEmitter struct {
-	natsClient yagnats.NATSConn
+	natsClient diegonats.NATSClient
 	logger     lager.Logger
 }
 
-func New(natsClient yagnats.NATSConn, logger lager.Logger) *NATSEmitter {
+func New(natsClient diegonats.NATSClient, logger lager.Logger) *NATSEmitter {
 	return &NATSEmitter{
 		natsClient: natsClient,
 		logger:     logger.Session("nats-emitter"),

@@ -14,7 +14,7 @@ import (
 	"github.com/cloudfoundry-incubator/runtime-schema/bbs/fake_bbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/cloudfoundry/gibson"
-	"github.com/cloudfoundry/yagnats/fakeyagnats"
+	"github.com/cloudfoundry/gunk/diegonats"
 	"github.com/pivotal-golang/lager/lagertest"
 	"github.com/tedsuo/ifrit"
 
@@ -25,7 +25,7 @@ import (
 var _ = Describe("Syncer", func() {
 	var (
 		bbs          *fake_bbs.FakeRouteEmitterBBS
-		natsClient   *fakeyagnats.FakeNATSConn
+		natsClient   *diegonats.FakeNATSClient
 		emitter      *fake_nats_emitter.FakeNATSEmitter
 		table        *fake_routing_table.FakeRoutingTable
 		syncer       *Syncer
@@ -39,7 +39,7 @@ var _ = Describe("Syncer", func() {
 
 	BeforeEach(func() {
 		bbs = new(fake_bbs.FakeRouteEmitterBBS)
-		natsClient = fakeyagnats.Connect()
+		natsClient = diegonats.NewFakeClient()
 		emitter = &fake_nats_emitter.FakeNATSEmitter{}
 		table = &fake_routing_table.FakeRoutingTable{}
 		syncDuration = 10 * time.Second

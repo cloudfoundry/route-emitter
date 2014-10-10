@@ -16,11 +16,10 @@ import (
 	"github.com/cloudfoundry-incubator/runtime-schema/bbs/lock_bbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/heartbeater"
 	_ "github.com/cloudfoundry/dropsonde/autowire"
-	"github.com/cloudfoundry/gunk/natsclientrunner"
+	"github.com/cloudfoundry/gunk/diegonats"
 	"github.com/cloudfoundry/gunk/timeprovider"
 	"github.com/cloudfoundry/storeadapter/etcdstoreadapter"
 	"github.com/cloudfoundry/storeadapter/workerpool"
-	"github.com/cloudfoundry/yagnats"
 	"github.com/nu7hatch/gouuid"
 	"github.com/pivotal-golang/lager"
 	"github.com/tedsuo/ifrit"
@@ -75,9 +74,9 @@ func main() {
 	bbs := initializeBbs(logger)
 	table := initializeRoutingTable()
 
-	var natsClient yagnats.NATSConn
+	natsClient := diegonats.NewClient()
 	var emitter *nats_emitter.NATSEmitter
-	natsClientRunner := natsclientrunner.New(*natsAddresses, *natsUsername, *natsPassword, logger, &natsClient)
+	natsClientRunner := diegonats.NewClientRunner(*natsAddresses, *natsUsername, *natsPassword, logger, natsClient)
 
 	watcher := ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
 		emitter = initializeNatsEmitter(natsClient, logger)
@@ -115,7 +114,7 @@ func main() {
 	logger.Info("exited")
 }
 
-func initializeNatsEmitter(natsClient yagnats.NATSConn, logger lager.Logger) *nats_emitter.NATSEmitter {
+func initializeNatsEmitter(natsClient diegonats.NATSClient, logger lager.Logger) *nats_emitter.NATSEmitter {
 	return nats_emitter.New(natsClient, logger)
 }
 

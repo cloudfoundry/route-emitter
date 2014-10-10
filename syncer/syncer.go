@@ -11,14 +11,14 @@ import (
 	"github.com/cloudfoundry-incubator/runtime-schema/bbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/cloudfoundry/gibson"
-	"github.com/cloudfoundry/yagnats"
+	"github.com/cloudfoundry/gunk/diegonats"
 	"github.com/nu7hatch/gouuid"
 	"github.com/pivotal-golang/lager"
 )
 
 type Syncer struct {
 	bbs               bbs.RouteEmitterBBS
-	natsClient        yagnats.NATSConn
+	natsClient        diegonats.NATSClient
 	logger            lager.Logger
 	table             routing_table.RoutingTableInterface
 	emitter           nats_emitter.NATSEmitterInterface
@@ -31,7 +31,7 @@ func NewSyncer(
 	table routing_table.RoutingTableInterface,
 	emitter nats_emitter.NATSEmitterInterface,
 	syncDuration time.Duration,
-	natsClient yagnats.NATSConn,
+	natsClient diegonats.NATSClient,
 	logger lager.Logger,
 ) *Syncer {
 	return &Syncer{

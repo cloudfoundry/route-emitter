@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cloudfoundry/gunk/natsrunner"
+	"github.com/cloudfoundry/gunk/diegonats"
 	"github.com/cloudfoundry/gunk/timeprovider"
 	"github.com/cloudfoundry/storeadapter"
 	"github.com/cloudfoundry/storeadapter/storerunner/etcdstorerunner"
@@ -29,7 +29,7 @@ var (
 )
 
 var etcdRunner *etcdstorerunner.ETCDClusterRunner
-var natsRunner *natsrunner.NATSRunner
+var natsRunner *diegonats.NATSRunner
 var store storeadapter.StoreAdapter
 var bbs *Bbs.BBS
 
@@ -63,7 +63,7 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 	natsPort = 4001 + GinkgoParallelNode()
 
 	etcdRunner = etcdstorerunner.NewETCDClusterRunner(etcdPort, 1)
-	natsRunner = natsrunner.NewNATSRunner(natsPort)
+	natsRunner = diegonats.NewRunner(natsPort)
 
 	store = etcdRunner.Adapter()
 

@@ -20,7 +20,7 @@ var _ = Describe("Route Emitter", func() {
 	listenForRoutes := func(subject string) <-chan gibson.RegistryMessage {
 		routes := make(chan gibson.RegistryMessage)
 
-		natsRunner.MessageBus.Subscribe(subject, func(msg *nats.Msg) {
+		natsRunner.Client.Subscribe(subject, func(msg *nats.Msg) {
 			defer GinkgoRecover()
 
 			var message gibson.RegistryMessage
@@ -47,7 +47,7 @@ var _ = Describe("Route Emitter", func() {
 		registeredRoutes = listenForRoutes("router.register")
 		unregisteredRoutes = listenForRoutes("router.unregister")
 
-		natsRunner.MessageBus.Subscribe("router.greet", func(msg *nats.Msg) {
+		natsRunner.Client.Subscribe("router.greet", func(msg *nats.Msg) {
 			defer GinkgoRecover()
 
 			greeting := gibson.RouterGreetingMessage{
@@ -57,7 +57,7 @@ var _ = Describe("Route Emitter", func() {
 			response, err := json.Marshal(greeting)
 			Ω(err).ShouldNot(HaveOccurred())
 
-			err = natsRunner.MessageBus.Publish(msg.Reply, response)
+			err = natsRunner.Client.Publish(msg.Reply, response)
 			Ω(err).ShouldNot(HaveOccurred())
 		})
 
