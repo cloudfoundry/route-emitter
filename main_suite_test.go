@@ -2,6 +2,7 @@ package main_test
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 	"testing"
 	"time"
@@ -14,6 +15,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gexec"
 	"github.com/pivotal-golang/lager/lagertest"
+	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/ifrit/ginkgomon"
 
 	Bbs "github.com/cloudfoundry-incubator/runtime-schema/bbs"
@@ -29,7 +31,8 @@ var (
 )
 
 var etcdRunner *etcdstorerunner.ETCDClusterRunner
-var natsRunner *diegonats.NATSRunner
+var gnatsdRunner ifrit.Process
+var natsClient diegonats.NATSClient
 var store storeadapter.StoreAdapter
 var bbs *Bbs.BBS
 
@@ -63,8 +66,6 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 	natsPort = 4001 + GinkgoParallelNode()
 
 	etcdRunner = etcdstorerunner.NewETCDClusterRunner(etcdPort, 1)
-	natsRunner = diegonats.NewRunner(natsPort)
-
 	store = etcdRunner.Adapter()
 
 	bbs = Bbs.NewBBS(store, timeprovider.NewTimeProvider(), lagertest.NewTestLogger("test"))
@@ -72,20 +73,18 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 
 var _ = BeforeEach(func() {
 	etcdRunner.Start()
-	natsRunner.Start()
+	gnatsdRunner, natsClient = diegonats.StartGnatsd(natsPort)
 })
 
 var _ = AfterEach(func() {
 	etcdRunner.Stop()
-	natsRunner.Stop()
+	gnatsdRunner.Signal(os.Interrupt)
+	Eventually(gnatsdRunner.Wait(), 5).Should(Receive())
 })
 
 var _ = SynchronizedAfterSuite(func() {
 	if etcdRunner != nil {
 		etcdRunner.Stop()
-	}
-	if natsRunner != nil {
-		natsRunner.Stop()
 	}
 }, func() {
 	gexec.CleanupBuildArtifacts()
