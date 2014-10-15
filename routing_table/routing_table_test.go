@@ -669,4 +669,28 @@ var _ = Describe("RoutingTable", func() {
 			})
 		})
 	})
+
+	Describe("RouteCount", func() {
+		It("returns 0 on a new routing table", func() {
+			Expect(table.RouteCount()).To(Equal(0))
+		})
+
+		It("returns 1 after adding a route", func() {
+			table.SetRoutes("fake-process-guid", "fake-route-url")
+			Expect(table.RouteCount()).To(Equal(1))
+		})
+
+		It("returns 2 after associating 2 urls with a process", func() {
+			table.SetRoutes("fake-process-guid", "fake-route-url-1", "fake-route-url-2")
+
+			Expect(table.RouteCount()).To(Equal(2))
+		})
+
+		It("returns 2 after associating 2 urls with a process", func() {
+			table.SetRoutes("fake-process-guid-a", "fake-route-url-a-1", "fake-route-url-a-2")
+			table.SetRoutes("fake-process-guid-b", "fake-route-url-b-1", "fake-route-url-b-2")
+
+			Expect(table.RouteCount()).To(Equal(4))
+		})
+	})
 })

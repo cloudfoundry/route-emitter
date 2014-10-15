@@ -6,6 +6,7 @@ type RoutingTableInterface interface {
 	Sync(routes RoutesByProcessGuid, containers ContainersByProcessGuid) MessagesToEmit
 	MessagesToEmit() MessagesToEmit
 
+	RouteCount() int
 	SetRoutes(processGuid string, routes ...string) MessagesToEmit
 	RemoveRoutes(processGuid string) MessagesToEmit
 	AddOrUpdateContainer(processGuid string, container Container) MessagesToEmit
@@ -21,6 +22,17 @@ func New() *RoutingTable {
 	return &RoutingTable{
 		entries: map[string]RoutingTableEntry{},
 	}
+}
+
+func (table *RoutingTable) RouteCount() int {
+	table.Lock()
+	defer table.Unlock()
+
+	count := 0
+	for _, entry := range table.entries {
+		count += len(entry.Routes)
+	}
+	return count
 }
 
 func (table *RoutingTable) Sync(routes RoutesByProcessGuid, containers ContainersByProcessGuid) MessagesToEmit {

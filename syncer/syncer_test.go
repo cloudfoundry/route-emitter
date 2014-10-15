@@ -13,6 +13,8 @@ import (
 	. "github.com/cloudfoundry-incubator/route-emitter/syncer"
 	"github.com/cloudfoundry-incubator/runtime-schema/bbs/fake_bbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
+	"github.com/cloudfoundry/dropsonde/autowire/metrics"
+	fake_metrics_sender "github.com/cloudfoundry/dropsonde/metric_sender/fake"
 	"github.com/cloudfoundry/gibson"
 	"github.com/cloudfoundry/gunk/diegonats"
 	"github.com/pivotal-golang/lager/lagertest"
@@ -24,17 +26,18 @@ import (
 
 var _ = Describe("Syncer", func() {
 	var (
-		bbs          *fake_bbs.FakeRouteEmitterBBS
-		natsClient   *diegonats.FakeNATSClient
-		emitter      *fake_nats_emitter.FakeNATSEmitter
-		table        *fake_routing_table.FakeRoutingTable
-		syncer       *Syncer
-		process      ifrit.Process
-		syncMessages routing_table.MessagesToEmit
-		emitMessages routing_table.MessagesToEmit
-		syncDuration time.Duration
+		bbs            *fake_bbs.FakeRouteEmitterBBS
+		natsClient     *diegonats.FakeNATSClient
+		emitter        *fake_nats_emitter.FakeNATSEmitter
+		table          *fake_routing_table.FakeRoutingTable
+		syncer         *Syncer
+		process        ifrit.Process
+		syncMessages   routing_table.MessagesToEmit
+		messagesToEmit routing_table.MessagesToEmit
+		syncDuration   time.Duration
 
 		routerStartMessages chan<- *nats.Msg
+		fakeMetricSender    *fake_metrics_sender.FakeMetricSender
 	)
 
 	BeforeEach(func() {
@@ -67,12 +70,12 @@ var _ = Describe("Syncer", func() {
 
 		dummyContainer = routing_table.Container{Host: "2.2.2.2", Port: 22}
 		dummyMessage = routing_table.RegistryMessageFor(dummyContainer, "baz.com")
-		emitMessages = routing_table.MessagesToEmit{
+		messagesToEmit = routing_table.MessagesToEmit{
 			RegistrationMessages: []gibson.RegistryMessage{dummyMessage},
 		}
 
 		table.SyncReturns(syncMessages)
-		table.MessagesToEmitReturns(emitMessages)
+		table.MessagesToEmitReturns(messagesToEmit)
 
 		//Set up some BBS data
 		bbs.GetRunningActualLRPsReturns([]models.ActualLRP{
@@ -96,6 +99,10 @@ var _ = Describe("Syncer", func() {
 				Routes:      []string{"route-1", "route-2"},
 			},
 		}, nil)
+
+		fakeMetricSender = fake_metrics_sender.NewFakeMetricSender()
+		metrics.Initialize(fakeMetricSender)
+		table.RouteCountReturns(123)
 	})
 
 	JustBeforeEach(func() {
@@ -120,7 +127,8 @@ var _ = Describe("Syncer", func() {
 			}))
 
 			Ω(emitter.EmitCallCount()).Should(Equal(1))
-			Ω(emitter.EmitArgsForCall(0)).Should(Equal(syncMessages))
+			emittedMessages, _, _ := emitter.EmitArgsForCall(0)
+			Ω(emittedMessages).Should(Equal(syncMessages))
 		})
 	})
 
@@ -143,19 +151,33 @@ var _ = Describe("Syncer", func() {
 
 			It("should emit routes with the frequency of the passed-in-interval", func() {
 				Eventually(emitter.EmitCallCount, 2).Should(Equal(2))
-				Ω(emitter.EmitArgsForCall(1)).Should(Equal(emitMessages))
+				emittedMessages, _, _ := emitter.EmitArgsForCall(1)
+				Ω(emittedMessages).Should(Equal(messagesToEmit))
 				t1 := time.Now()
 
 				Eventually(emitter.EmitCallCount, 2).Should(Equal(3))
-				Ω(emitter.EmitArgsForCall(2)).Should(Equal(emitMessages))
+				emittedMessages, _, _ = emitter.EmitArgsForCall(2)
+				Ω(emittedMessages).Should(Equal(messagesToEmit))
 				t2 := time.Now()
 
 				Ω(t2.Sub(t1)).Should(BeNumerically("~", 1*time.Second, 200*time.Millisecond))
 			})
 
+			It("passes a 'synced routes' counter to Emit", func() {
+				Eventually(emitter.EmitCallCount, 2).Should(Equal(2))
+				_, registerCounter, _ := emitter.EmitArgsForCall(1)
+				Expect(string(*registerCounter)).To(Equal("RoutesSynced"))
+			})
+
 			It("should only greet the router once", func() {
 				Eventually(greetings).Should(Receive())
 				Consistently(greetings, 1).ShouldNot(Receive())
+			})
+
+			It("sends a 'routes total' metric", func() {
+				Eventually(func() float64 {
+					return fakeMetricSender.GetValue("RoutesTotal").Value
+				}, 2).Should(BeEquivalentTo(123))
 			})
 		})
 
@@ -171,11 +193,13 @@ var _ = Describe("Syncer", func() {
 
 				//should now be emitting regularly at the specified interval
 				Eventually(emitter.EmitCallCount, 2).Should(Equal(2))
-				Ω(emitter.EmitArgsForCall(1)).Should(Equal(emitMessages))
+				emittedMessages, _, _ := emitter.EmitArgsForCall(1)
+				Ω(emittedMessages).Should(Equal(messagesToEmit))
 				t1 := time.Now()
 
 				Eventually(emitter.EmitCallCount, 2).Should(Equal(3))
-				Ω(emitter.EmitArgsForCall(2)).Should(Equal(emitMessages))
+				emittedMessages, _, _ = emitter.EmitArgsForCall(2)
+				Ω(emittedMessages).Should(Equal(messagesToEmit))
 				t2 := time.Now()
 
 				Ω(t2.Sub(t1)).Should(BeNumerically("~", 1*time.Second, 200*time.Millisecond))
@@ -199,14 +223,22 @@ var _ = Describe("Syncer", func() {
 
 				//first emit should be pretty quick, it is in response to the incoming heartbeat interval
 				Eventually(emitter.EmitCallCount, 0.2).Should(Equal(2))
-				Ω(emitter.EmitArgsForCall(1)).Should(Equal(emitMessages))
+				emittedMessages, _, _ := emitter.EmitArgsForCall(1)
+				Ω(emittedMessages).Should(Equal(messagesToEmit))
 				t1 := time.Now()
 
 				//subsequent emit should follow the interval
 				Eventually(emitter.EmitCallCount, 3).Should(Equal(3))
-				Ω(emitter.EmitArgsForCall(2)).Should(Equal(emitMessages))
+				emittedMessages, _, _ = emitter.EmitArgsForCall(2)
+				Ω(emittedMessages).Should(Equal(messagesToEmit))
 				t2 := time.Now()
 				Ω(t2.Sub(t1)).Should(BeNumerically("~", 2*time.Second, 200*time.Millisecond))
+			})
+
+			It("sends a 'routes total' metric", func() {
+				Eventually(func() float64 {
+					return fakeMetricSender.GetValue("RoutesTotal").Value
+				}, 2*time.Second).Should(BeEquivalentTo(123))
 			})
 		})
 
@@ -237,9 +269,25 @@ var _ = Describe("Syncer", func() {
 			Eventually(emitter.EmitCallCount).Should(Equal(3))
 			t2 := time.Now()
 
-			Ω(emitter.EmitArgsForCall(1)).Should(Equal(syncMessages))
-			Ω(emitter.EmitArgsForCall(2)).Should(Equal(syncMessages))
+			emittedMessages, _, _ := emitter.EmitArgsForCall(1)
+			Ω(emittedMessages).Should(Equal(syncMessages))
+
+			emittedMessages, _, _ = emitter.EmitArgsForCall(2)
+			Ω(emittedMessages).Should(Equal(syncMessages))
+
 			Ω(t2.Sub(t1)).Should(BeNumerically("~", 500*time.Millisecond, 100*time.Millisecond))
+		})
+
+		It("sends a 'routes total' metric", func() {
+			Eventually(func() float64 {
+				return fakeMetricSender.GetValue("RoutesTotal").Value
+			}).Should(BeEquivalentTo(123))
+		})
+
+		It("passes a 'synced routes' counter to Emit", func() {
+			Eventually(emitter.EmitCallCount).Should(Equal(1))
+			_, registerCounter, _ := emitter.EmitArgsForCall(0)
+			Expect(string(*registerCounter)).To(Equal("RoutesSynced"))
 		})
 
 		Context("when fetching actuals fails", func() {

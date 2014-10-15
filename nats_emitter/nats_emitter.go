@@ -4,13 +4,14 @@ import (
 	"encoding/json"
 
 	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
+	"github.com/cloudfoundry-incubator/runtime-schema/metric"
 	"github.com/cloudfoundry/gibson"
 	"github.com/cloudfoundry/gunk/diegonats"
 	"github.com/pivotal-golang/lager"
 )
 
 type NATSEmitterInterface interface {
-	Emit(messagesToEmit routing_table.MessagesToEmit) error
+	Emit(messagesToEmit routing_table.MessagesToEmit, registrationCounter, unregistrationCounter *metric.Counter) error
 }
 
 type NATSEmitter struct {
@@ -25,7 +26,7 @@ func New(natsClient diegonats.NATSClient, logger lager.Logger) *NATSEmitter {
 	}
 }
 
-func (n *NATSEmitter) Emit(messagesToEmit routing_table.MessagesToEmit) error {
+func (n *NATSEmitter) Emit(messagesToEmit routing_table.MessagesToEmit, registrationCounter, unregistrationCounter *metric.Counter) error {
 	errors := make(chan error)
 	for _, message := range messagesToEmit.RegistrationMessages {
 		go n.emit("router.register", message, errors)
@@ -33,6 +34,9 @@ func (n *NATSEmitter) Emit(messagesToEmit routing_table.MessagesToEmit) error {
 	for _, message := range messagesToEmit.UnregistrationMessages {
 		go n.emit("router.unregister", message, errors)
 	}
+
+	updateCounter(registrationCounter, messagesToEmit.RegistrationMessages)
+	updateCounter(unregistrationCounter, messagesToEmit.UnregistrationMessages)
 
 	var finalError error
 	for i := 0; i < len(messagesToEmit.RegistrationMessages)+len(messagesToEmit.UnregistrationMessages); i++ {
@@ -71,5 +75,15 @@ func (n *NATSEmitter) emit(subject string, message gibson.RegistryMessage, error
 			"subject": subject,
 		})
 		return
+	}
+}
+
+func updateCounter(counter *metric.Counter, messages []gibson.RegistryMessage) {
+	if counter != nil {
+		count := 0
+		for _, message := range messages {
+			count += len(message.URIs)
+		}
+		counter.Add(uint64(count))
 	}
 }

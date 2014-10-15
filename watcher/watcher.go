@@ -7,8 +7,14 @@ import (
 	"github.com/cloudfoundry-incubator/route-emitter/nats_emitter"
 	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
 	"github.com/cloudfoundry-incubator/runtime-schema/bbs"
+	"github.com/cloudfoundry-incubator/runtime-schema/metric"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/pivotal-golang/lager"
+)
+
+var (
+	routesRegistered   = metric.Counter("RoutesRegistered")
+	routesUnregistered = metric.Counter("RoutesUnregistered")
 )
 
 type Watcher struct {
@@ -114,7 +120,7 @@ func (watcher *Watcher) handleActualChange(change models.ActualLRPChange) {
 		messagesToEmit = watcher.table.AddOrUpdateContainer(change.After.ProcessGuid, container)
 	}
 
-	watcher.emitter.Emit(messagesToEmit)
+	watcher.emitter.Emit(messagesToEmit, &routesRegistered, &routesUnregistered)
 }
 
 func (watcher *Watcher) handleDesiredChange(change models.DesiredLRPChange) {
@@ -131,5 +137,5 @@ func (watcher *Watcher) handleDesiredChange(change models.DesiredLRPChange) {
 		messagesToEmit = watcher.table.SetRoutes(change.After.ProcessGuid, change.After.Routes...)
 	}
 
-	watcher.emitter.Emit(messagesToEmit)
+	watcher.emitter.Emit(messagesToEmit, &routesRegistered, &routesUnregistered)
 }
