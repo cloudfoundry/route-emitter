@@ -54,7 +54,7 @@ func (n *NATSEmitter) emit(subject string, message gibson.RegistryMessage, error
 		errors <- err
 	}()
 
-	n.logger.Info("emit", lager.Data{
+	n.logger.Debug("emit", lager.Data{
 		"subject": subject,
 		"message": message,
 	})
