@@ -2,11 +2,13 @@ package nats_emitter
 
 import (
 	"encoding/json"
+	"sync"
 
 	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
 	"github.com/cloudfoundry-incubator/runtime-schema/metric"
 	"github.com/cloudfoundry/gibson"
 	"github.com/cloudfoundry/gunk/diegonats"
+	"github.com/cloudfoundry/gunk/workpool"
 	"github.com/pivotal-golang/lager"
 )
 
@@ -16,66 +18,79 @@ type NATSEmitterInterface interface {
 
 type NATSEmitter struct {
 	natsClient diegonats.NATSClient
+	workPool   *workpool.WorkPool
 	logger     lager.Logger
 }
 
-func New(natsClient diegonats.NATSClient, logger lager.Logger) *NATSEmitter {
+func New(natsClient diegonats.NATSClient, workPool *workpool.WorkPool, logger lager.Logger) *NATSEmitter {
 	return &NATSEmitter{
 		natsClient: natsClient,
+		workPool:   workPool,
 		logger:     logger.Session("nats-emitter"),
 	}
 }
 
 func (n *NATSEmitter) Emit(messagesToEmit routing_table.MessagesToEmit, registrationCounter, unregistrationCounter *metric.Counter) error {
-	errors := make(chan error)
+	errors := make(chan error, 1)
+	var wg sync.WaitGroup
+	wg.Add(len(messagesToEmit.RegistrationMessages))
 	for _, message := range messagesToEmit.RegistrationMessages {
-		go n.emit("router.register", message, errors)
+		n.emit("router.register", message, &wg, errors)
 	}
+
+	wg.Add(len(messagesToEmit.UnregistrationMessages))
 	for _, message := range messagesToEmit.UnregistrationMessages {
-		go n.emit("router.unregister", message, errors)
+		n.emit("router.unregister", message, &wg, errors)
 	}
+
+	wg.Wait()
 
 	updateCounter(registrationCounter, messagesToEmit.RegistrationMessages)
 	updateCounter(unregistrationCounter, messagesToEmit.UnregistrationMessages)
 
-	var finalError error
-	for i := 0; i < len(messagesToEmit.RegistrationMessages)+len(messagesToEmit.UnregistrationMessages); i++ {
-		err := <-errors
-		if err != nil && finalError == nil {
-			finalError = err
-		}
+	select {
+	case finalError := <-errors:
+		return finalError
+	default:
 	}
-	return finalError
+
+	return nil
 }
 
-func (n *NATSEmitter) emit(subject string, message gibson.RegistryMessage, errors chan<- error) {
-	var err error
-	defer func() {
-		errors <- err
-	}()
+func (n *NATSEmitter) emit(subject string, message gibson.RegistryMessage, wg *sync.WaitGroup, errors chan error) {
+	n.workPool.Submit(func() {
+		var err error
+		defer func() {
+			if err != nil {
+				select {
+				case errors <- err:
+				default:
+				}
+			}
+			wg.Done()
+		}()
 
-	n.logger.Debug("emit", lager.Data{
-		"subject": subject,
-		"message": message,
+		n.logger.Debug("emit", lager.Data{
+			"subject": subject,
+			"message": message,
+		})
+
+		payload, err := json.Marshal(message)
+		if err != nil {
+			n.logger.Error("failed-to-marshal", err, lager.Data{
+				"message": message,
+				"subject": subject,
+			})
+		}
+
+		err = n.natsClient.Publish(subject, payload)
+		if err != nil {
+			n.logger.Error("failed-to-publish", err, lager.Data{
+				"message": message,
+				"subject": subject,
+			})
+		}
 	})
-
-	payload, err := json.Marshal(message)
-	if err != nil {
-		n.logger.Error("failed-to-marshal", err, lager.Data{
-			"message": message,
-			"subject": subject,
-		})
-		return
-	}
-
-	err = n.natsClient.Publish(subject, payload)
-	if err != nil {
-		n.logger.Error("failed-to-publish", err, lager.Data{
-			"message": message,
-			"subject": subject,
-		})
-		return
-	}
 }
 
 func updateCounter(counter *metric.Counter, messages []gibson.RegistryMessage) {

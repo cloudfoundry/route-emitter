@@ -11,6 +11,7 @@ import (
 	fake_metrics_sender "github.com/cloudfoundry/dropsonde/metric_sender/fake"
 	"github.com/cloudfoundry/gibson"
 	"github.com/cloudfoundry/gunk/diegonats"
+	"github.com/cloudfoundry/gunk/workpool"
 	"github.com/pivotal-golang/lager/lagertest"
 
 	. "github.com/onsi/ginkgo"
@@ -41,7 +42,8 @@ var _ = Describe("NatsEmitter", func() {
 	BeforeEach(func() {
 		natsClient = diegonats.NewFakeClient()
 		logger := lagertest.NewTestLogger("test")
-		emitter = New(natsClient, logger)
+		workPool := workpool.NewWorkPool(1)
+		emitter = New(natsClient, workPool, logger)
 		fakeMetricSender = fake_metrics_sender.NewFakeMetricSender()
 		metrics.Initialize(fakeMetricSender)
 	})

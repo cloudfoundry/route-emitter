@@ -18,8 +18,8 @@ import (
 	_ "github.com/cloudfoundry/dropsonde/autowire"
 	"github.com/cloudfoundry/gunk/diegonats"
 	"github.com/cloudfoundry/gunk/timeprovider"
+	"github.com/cloudfoundry/gunk/workpool"
 	"github.com/cloudfoundry/storeadapter/etcdstoreadapter"
-	"github.com/cloudfoundry/storeadapter/workerpool"
 	"github.com/nu7hatch/gouuid"
 	"github.com/pivotal-golang/lager"
 	"github.com/tedsuo/ifrit"
@@ -75,11 +75,10 @@ func main() {
 	table := initializeRoutingTable()
 
 	natsClient := diegonats.NewClient()
-	var emitter *nats_emitter.NATSEmitter
 	natsClientRunner := diegonats.NewClientRunner(*natsAddresses, *natsUsername, *natsPassword, logger, natsClient)
 
+	emitter := initializeNatsEmitter(natsClient, logger)
 	watcher := ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
-		emitter = initializeNatsEmitter(natsClient, logger)
 		return watcher.NewWatcher(bbs, table, emitter, logger).Run(signals, ready)
 	})
 
@@ -101,7 +100,7 @@ func main() {
 		{"syncer", syncer},
 	})
 
-	monitor := ifrit.Envoke(sigmon.New(group))
+	monitor := ifrit.Invoke(sigmon.New(group))
 
 	logger.Info("started")
 
@@ -115,7 +114,8 @@ func main() {
 }
 
 func initializeNatsEmitter(natsClient diegonats.NATSClient, logger lager.Logger) *nats_emitter.NATSEmitter {
-	return nats_emitter.New(natsClient, logger)
+	pool := workpool.New(10, 10, workpool.DefaultAround)
+	return nats_emitter.New(natsClient, pool, logger)
 }
 
 func initializeRoutingTable() *routing_table.RoutingTable {
@@ -125,7 +125,7 @@ func initializeRoutingTable() *routing_table.RoutingTable {
 func initializeBbs(logger lager.Logger) Bbs.RouteEmitterBBS {
 	etcdAdapter := etcdstoreadapter.NewETCDStoreAdapter(
 		strings.Split(*etcdCluster, ","),
-		workerpool.NewWorkerPool(10),
+		workpool.NewWorkPool(10),
 	)
 
 	err := etcdAdapter.Connect()
