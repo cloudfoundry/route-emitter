@@ -57,7 +57,7 @@ func createEmitterRunner() *ginkgomon.Runner {
 }
 
 var _ = SynchronizedBeforeSuite(func() []byte {
-	emitterPath, err := gexec.Build("github.com/cloudfoundry-incubator/route-emitter", "-race")
+	emitterPath, err := gexec.Build("github.com/cloudfoundry-incubator/route-emitter/cmd/route-emitter", "-race")
 	Ω(err).ShouldNot(HaveOccurred())
 	return []byte(emitterPath)
 }, func(builtEmitterPath []byte) {
