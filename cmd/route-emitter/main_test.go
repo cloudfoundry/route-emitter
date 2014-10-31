@@ -286,8 +286,10 @@ var _ = Describe("Route Emitter", func() {
 	})
 
 	Context("when the bbs has routes to emit in /desired and /actual", func() {
+		var lrp models.DesiredLRP
+
 		BeforeEach(func() {
-			err := bbs.DesireLRP(models.DesiredLRP{
+			lrp = models.DesiredLRP{
 				Domain:      "tests",
 				ProcessGuid: "guid1",
 				Routes:      []string{"route-1", "route-2"},
@@ -302,7 +304,8 @@ var _ = Describe("Route Emitter", func() {
 						},
 					},
 				},
-			})
+			}
+			err := bbs.DesireLRP(lrp)
 			Ω(err).ShouldNot(HaveOccurred())
 
 			err = bbs.ReportActualLRPAsRunning(models.ActualLRP{
@@ -333,18 +336,21 @@ var _ = Describe("Route Emitter", func() {
 
 			Context("and a route is added", func() {
 				BeforeEach(func() {
-					err := bbs.DesireLRP(models.DesiredLRP{
-						Domain:      "tests",
-						ProcessGuid: "guid1",
-						Routes:      []string{"route-1", "route-2", "route-3"},
-						Instances:   5,
-						Stack:       "some-stack",
-						MemoryMB:    1024,
-						DiskMB:      512,
-						Actions: []models.ExecutorAction{
-							models.ExecutorAction{
-								models.RunAction{
-									Path: "ls",
+					err := bbs.ChangeDesiredLRP(models.DesiredLRPChange{
+						Before: &lrp,
+						After: &models.DesiredLRP{
+							Domain:      "tests",
+							ProcessGuid: "guid1",
+							Routes:      []string{"route-1", "route-2", "route-3"},
+							Instances:   5,
+							Stack:       "some-stack",
+							MemoryMB:    1024,
+							DiskMB:      512,
+							Actions: []models.ExecutorAction{
+								models.ExecutorAction{
+									models.RunAction{
+										Path: "ls",
+									},
 								},
 							},
 						},
@@ -363,18 +369,21 @@ var _ = Describe("Route Emitter", func() {
 
 			Context("and a route is removed", func() {
 				BeforeEach(func() {
-					err := bbs.DesireLRP(models.DesiredLRP{
-						Domain:      "tests",
-						ProcessGuid: "guid1",
-						Routes:      []string{"route-2"},
-						Instances:   5,
-						Stack:       "some-stack",
-						MemoryMB:    1024,
-						DiskMB:      512,
-						Actions: []models.ExecutorAction{
-							models.ExecutorAction{
-								models.RunAction{
-									Path: "ls",
+					err := bbs.ChangeDesiredLRP(models.DesiredLRPChange{
+						Before: &lrp,
+						After: &models.DesiredLRP{
+							Domain:      "tests",
+							ProcessGuid: "guid1",
+							Routes:      []string{"route-2"},
+							Instances:   5,
+							Stack:       "some-stack",
+							MemoryMB:    1024,
+							DiskMB:      512,
+							Actions: []models.ExecutorAction{
+								models.ExecutorAction{
+									models.RunAction{
+										Path: "ls",
+									},
 								},
 							},
 						},
