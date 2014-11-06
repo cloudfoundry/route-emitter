@@ -15,7 +15,7 @@ import (
 	Bbs "github.com/cloudfoundry-incubator/runtime-schema/bbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/bbs/lock_bbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/heartbeater"
-	_ "github.com/cloudfoundry/dropsonde/autowire"
+	"github.com/cloudfoundry/dropsonde"
 	"github.com/cloudfoundry/gunk/diegonats"
 	"github.com/cloudfoundry/gunk/timeprovider"
 	"github.com/cloudfoundry/gunk/workpool"
@@ -64,6 +64,18 @@ var heartbeatInterval = flag.Duration(
 	"the interval between heartbeats to the lock",
 )
 
+var dropsondeOrigin = flag.String(
+	"dropsondeOrigin",
+	"route_emitter",
+	"Origin identifier for dropsonde-emitted metrics.",
+)
+
+var dropsondeDestination = flag.String(
+	"dropsondeDestination",
+	"localhost:3457",
+	"Destination for dropsonde-emitted metrics.",
+)
+
 func main() {
 	flag.Parse()
 
@@ -71,6 +83,7 @@ func main() {
 
 	cf_debug_server.Run()
 
+	initializeDropsonde(logger)
 	bbs := initializeBbs(logger)
 	table := initializeRoutingTable()
 
@@ -111,6 +124,13 @@ func main() {
 	}
 
 	logger.Info("exited")
+}
+
+func initializeDropsonde(logger lager.Logger) {
+	err := dropsonde.Initialize(*dropsondeOrigin, *dropsondeDestination)
+	if err != nil {
+		logger.Error("failed to initialize dropsonde: %v", err)
+	}
 }
 
 func initializeNatsEmitter(natsClient diegonats.NATSClient, logger lager.Logger) *nats_emitter.NATSEmitter {
