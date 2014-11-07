@@ -106,6 +106,7 @@ var _ = Describe("Route Emitter", func() {
 						ProcessGuid:  "guid1",
 						Index:        0,
 						InstanceGuid: "iguid1",
+						Domain:       "tests",
 
 						Host: "1.2.3.4",
 						Ports: []models.PortMapping{
@@ -145,7 +146,7 @@ var _ = Describe("Route Emitter", func() {
 				})
 				Ω(err).ShouldNot(HaveOccurred())
 
-				_, err = bbs.ReportActualLRPAsStarting("guid1", "iguid1", "executor-id", 0)
+				_, err = bbs.ReportActualLRPAsStarting("guid1", "iguid1", "executor-id", "some-domain", 0)
 				Ω(err).ShouldNot(HaveOccurred())
 			})
 
@@ -160,6 +161,7 @@ var _ = Describe("Route Emitter", func() {
 					ProcessGuid:  "guid1",
 					Index:        0,
 					InstanceGuid: "iguid1",
+					Domain:       "tests",
 
 					Host: "1.2.3.4",
 					Ports: []models.PortMapping{
@@ -312,6 +314,7 @@ var _ = Describe("Route Emitter", func() {
 				ProcessGuid:  "guid1",
 				Index:        0,
 				InstanceGuid: "iguid1",
+				Domain:       "tests",
 
 				Host: "1.2.3.4",
 				Ports: []models.PortMapping{
