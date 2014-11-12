@@ -89,11 +89,9 @@ var _ = Describe("Route Emitter", func() {
 					Stack:       "some-stack",
 					MemoryMB:    1024,
 					DiskMB:      512,
-					Actions: []models.ExecutorAction{
-						models.ExecutorAction{
-							models.RunAction{
-								Path: "ls",
-							},
+					Action: models.ExecutorAction{
+						models.RunAction{
+							Path: "ls",
 						},
 					},
 				})
@@ -136,11 +134,9 @@ var _ = Describe("Route Emitter", func() {
 					Stack:       "some-stack",
 					MemoryMB:    1024,
 					DiskMB:      512,
-					Actions: []models.ExecutorAction{
-						models.ExecutorAction{
-							models.RunAction{
-								Path: "ls",
-							},
+					Action: models.ExecutorAction{
+						models.RunAction{
+							Path: "ls",
 						},
 					},
 				})
@@ -182,11 +178,9 @@ var _ = Describe("Route Emitter", func() {
 						Stack:       "some-stack",
 						MemoryMB:    1024,
 						DiskMB:      512,
-						Actions: []models.ExecutorAction{
-							models.ExecutorAction{
-								models.RunAction{
-									Path: "ls",
-								},
+						Action: models.ExecutorAction{
+							models.RunAction{
+								Path: "ls",
 							},
 						},
 					})
@@ -299,11 +293,9 @@ var _ = Describe("Route Emitter", func() {
 				Stack:       "some-stack",
 				MemoryMB:    1024,
 				DiskMB:      512,
-				Actions: []models.ExecutorAction{
-					models.ExecutorAction{
-						models.RunAction{
-							Path: "ls",
-						},
+				Action: models.ExecutorAction{
+					models.RunAction{
+						Path: "ls",
 					},
 				},
 			}
@@ -349,11 +341,9 @@ var _ = Describe("Route Emitter", func() {
 							Stack:       "some-stack",
 							MemoryMB:    1024,
 							DiskMB:      512,
-							Actions: []models.ExecutorAction{
-								models.ExecutorAction{
-									models.RunAction{
-										Path: "ls",
-									},
+							Action: models.ExecutorAction{
+								models.RunAction{
+									Path: "ls",
 								},
 							},
 						},
@@ -382,11 +372,9 @@ var _ = Describe("Route Emitter", func() {
 							Stack:       "some-stack",
 							MemoryMB:    1024,
 							DiskMB:      512,
-							Actions: []models.ExecutorAction{
-								models.ExecutorAction{
-									models.RunAction{
-										Path: "ls",
-									},
+							Action: models.ExecutorAction{
+								models.RunAction{
+									Path: "ls",
 								},
 							},
 						},
