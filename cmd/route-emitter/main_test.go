@@ -110,7 +110,7 @@ var _ = Describe("Route Emitter", func() {
 						Ports: []models.PortMapping{
 							{ContainerPort: 8080, HostPort: 65100},
 						},
-					}, "executor-id")
+					}, "cell-id")
 					Ω(err).ShouldNot(HaveOccurred())
 				})
 
@@ -142,7 +142,7 @@ var _ = Describe("Route Emitter", func() {
 				})
 				Ω(err).ShouldNot(HaveOccurred())
 
-				_, err = bbs.ReportActualLRPAsStarting("guid1", "iguid1", "executor-id", "some-domain", 0)
+				_, err = bbs.ReportActualLRPAsStarting("guid1", "iguid1", "cell-id", "some-domain", 0)
 				Ω(err).ShouldNot(HaveOccurred())
 			})
 
@@ -163,7 +163,7 @@ var _ = Describe("Route Emitter", func() {
 					Ports: []models.PortMapping{
 						{ContainerPort: 8080, HostPort: 65100},
 					},
-				}, "executor-id")
+				}, "cell-id")
 				Ω(err).ShouldNot(HaveOccurred())
 			})
 
@@ -312,7 +312,7 @@ var _ = Describe("Route Emitter", func() {
 				Ports: []models.PortMapping{
 					{ContainerPort: 8080, HostPort: 65100},
 				},
-			}, "executor-id")
+			}, "cell-id")
 			Ω(err).ShouldNot(HaveOccurred())
 		})
 
