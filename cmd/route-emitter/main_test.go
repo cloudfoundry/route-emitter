@@ -89,10 +89,8 @@ var _ = Describe("Route Emitter", func() {
 					Stack:       "some-stack",
 					MemoryMB:    1024,
 					DiskMB:      512,
-					Action: models.ExecutorAction{
-						models.RunAction{
-							Path: "ls",
-						},
+					Action: &models.RunAction{
+						Path: "ls",
 					},
 				})
 				Ω(err).ShouldNot(HaveOccurred())
@@ -134,10 +132,8 @@ var _ = Describe("Route Emitter", func() {
 					Stack:       "some-stack",
 					MemoryMB:    1024,
 					DiskMB:      512,
-					Action: models.ExecutorAction{
-						models.RunAction{
-							Path: "ls",
-						},
+					Action: &models.RunAction{
+						Path: "ls",
 					},
 				})
 				Ω(err).ShouldNot(HaveOccurred())
@@ -178,10 +174,8 @@ var _ = Describe("Route Emitter", func() {
 						Stack:       "some-stack",
 						MemoryMB:    1024,
 						DiskMB:      512,
-						Action: models.ExecutorAction{
-							models.RunAction{
-								Path: "ls",
-							},
+						Action: &models.RunAction{
+							Path: "ls",
 						},
 					})
 					Ω(err).ShouldNot(HaveOccurred())
@@ -293,10 +287,8 @@ var _ = Describe("Route Emitter", func() {
 				Stack:       "some-stack",
 				MemoryMB:    1024,
 				DiskMB:      512,
-				Action: models.ExecutorAction{
-					models.RunAction{
-						Path: "ls",
-					},
+				Action: &models.RunAction{
+					Path: "ls",
 				},
 			}
 			err := bbs.DesireLRP(lrp)
@@ -341,10 +333,8 @@ var _ = Describe("Route Emitter", func() {
 							Stack:       "some-stack",
 							MemoryMB:    1024,
 							DiskMB:      512,
-							Action: models.ExecutorAction{
-								models.RunAction{
-									Path: "ls",
-								},
+							Action: &models.RunAction{
+								Path: "ls",
 							},
 						},
 					})
@@ -372,10 +362,8 @@ var _ = Describe("Route Emitter", func() {
 							Stack:       "some-stack",
 							MemoryMB:    1024,
 							DiskMB:      512,
-							Action: models.ExecutorAction{
-								models.RunAction{
-									Path: "ls",
-								},
+							Action: &models.RunAction{
+								Path: "ls",
 							},
 						},
 					})

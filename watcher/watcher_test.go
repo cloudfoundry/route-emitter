@@ -77,10 +77,8 @@ var _ = Describe("Watcher", func() {
 				desiredChange := models.DesiredLRPChange{
 					Before: nil,
 					After: &models.DesiredLRP{
-						Action: models.ExecutorAction{
-							models.RunAction{
-								Path: "ls",
-							},
+						Action: &models.RunAction{
+							Path: "ls",
 						},
 						Domain:      "tests",
 						ProcessGuid: "pg",
@@ -123,10 +121,8 @@ var _ = Describe("Watcher", func() {
 			BeforeEach(func() {
 				desiredChange := models.DesiredLRPChange{
 					Before: &models.DesiredLRP{
-						Action: models.ExecutorAction{
-							models.RunAction{
-								Path: "ls",
-							},
+						Action: &models.RunAction{
+							Path: "ls",
 						},
 						Domain:      "tests",
 						ProcessGuid: "pg",
@@ -164,10 +160,8 @@ var _ = Describe("Watcher", func() {
 				desiredChange := models.DesiredLRPChange{
 					Before: nil,
 					After: &models.DesiredLRP{
-						Action: models.ExecutorAction{
-							models.RunAction{
-								Path: "ls",
-							},
+						Action: &models.RunAction{
+							Path: "ls",
 						},
 						Domain:      "tests",
 						ProcessGuid: "pg",
