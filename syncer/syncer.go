@@ -127,13 +127,13 @@ func (syncer *Syncer) emit() {
 }
 
 func (syncer *Syncer) syncAndEmit() {
-	allRunningActuals, err := syncer.bbs.GetRunningActualLRPs()
+	allRunningActuals, err := syncer.bbs.RunningActualLRPs()
 	if err != nil {
 		syncer.logger.Error("failed-to-get-actual", err)
 		return
 	}
 
-	allDesired, err := syncer.bbs.GetAllDesiredLRPs()
+	allDesired, err := syncer.bbs.DesiredLRPs()
 	if err != nil {
 		syncer.logger.Error("failed-to-get-desired", err)
 		return

@@ -78,7 +78,7 @@ var _ = Describe("Syncer", func() {
 		table.MessagesToEmitReturns(messagesToEmit)
 
 		//Set up some BBS data
-		bbs.GetRunningActualLRPsReturns([]models.ActualLRP{
+		bbs.RunningActualLRPsReturns([]models.ActualLRP{
 			{
 				ProcessGuid:  "process-guid-1",
 				Index:        0,
@@ -93,7 +93,7 @@ var _ = Describe("Syncer", func() {
 			},
 		}, nil)
 
-		bbs.GetAllDesiredLRPsReturns([]models.DesiredLRP{
+		bbs.DesiredLRPsReturns([]models.DesiredLRP{
 			{
 				ProcessGuid: "process-guid-1",
 				Routes:      []string{"route-1", "route-2"},
@@ -295,7 +295,7 @@ var _ = Describe("Syncer", func() {
 				lock := &sync.Mutex{}
 				calls := 0
 
-				bbs.GetRunningActualLRPsStub = func() ([]models.ActualLRP, error) {
+				bbs.RunningActualLRPsStub = func() ([]models.ActualLRP, error) {
 					lock.Lock()
 					defer lock.Unlock()
 					if calls == 0 {
@@ -322,7 +322,7 @@ var _ = Describe("Syncer", func() {
 			BeforeEach(func() {
 				lock := &sync.Mutex{}
 				calls := 0
-				bbs.GetAllDesiredLRPsStub = func() ([]models.DesiredLRP, error) {
+				bbs.DesiredLRPsStub = func() ([]models.DesiredLRP, error) {
 					lock.Lock()
 					defer lock.Unlock()
 					if calls == 0 {
