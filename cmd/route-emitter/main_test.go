@@ -98,17 +98,18 @@ var _ = Describe("Route Emitter", func() {
 
 			Context("and an endpoint comes up", func() {
 				BeforeEach(func() {
-					err := bbs.ReportActualLRPAsRunning(models.ActualLRP{
+					_, err := bbs.StartActualLRP(models.ActualLRP{
 						ProcessGuid:  "guid1",
 						Index:        0,
 						InstanceGuid: "iguid1",
 						Domain:       "tests",
+						CellID:       "cell-id",
 
 						Host: "1.2.3.4",
 						Ports: []models.PortMapping{
 							{ContainerPort: 8080, HostPort: 65100},
 						},
-					}, "cell-id")
+					})
 					Ω(err).ShouldNot(HaveOccurred())
 				})
 
@@ -138,7 +139,13 @@ var _ = Describe("Route Emitter", func() {
 				})
 				Ω(err).ShouldNot(HaveOccurred())
 
-				_, err = bbs.ReportActualLRPAsStarting("guid1", "iguid1", "cell-id", "some-domain", 0)
+				a := models.NewActualLRP(
+					"guid1", "iguid1", "cell-id", "some-domain", 0,
+					models.ActualLRPStateInvalid)
+
+				_, err = bbs.CreateActualLRP(a)
+				Ω(err).ShouldNot(HaveOccurred())
+				_, err = bbs.ClaimActualLRP(a)
 				Ω(err).ShouldNot(HaveOccurred())
 			})
 
@@ -149,17 +156,18 @@ var _ = Describe("Route Emitter", func() {
 
 		Context("and an endpoint comes up", func() {
 			BeforeEach(func() {
-				err := bbs.ReportActualLRPAsRunning(models.ActualLRP{
+				_, err := bbs.StartActualLRP(models.ActualLRP{
 					ProcessGuid:  "guid1",
 					Index:        0,
 					InstanceGuid: "iguid1",
 					Domain:       "tests",
+					CellID:       "cell-id",
 
 					Host: "1.2.3.4",
 					Ports: []models.PortMapping{
 						{ContainerPort: 8080, HostPort: 65100},
 					},
-				}, "cell-id")
+				})
 				Ω(err).ShouldNot(HaveOccurred())
 			})
 
@@ -294,17 +302,18 @@ var _ = Describe("Route Emitter", func() {
 			err := bbs.DesireLRP(lrp)
 			Ω(err).ShouldNot(HaveOccurred())
 
-			err = bbs.ReportActualLRPAsRunning(models.ActualLRP{
+			_, err = bbs.StartActualLRP(models.ActualLRP{
 				ProcessGuid:  "guid1",
 				Index:        0,
 				InstanceGuid: "iguid1",
 				Domain:       "tests",
+				CellID:       "cell-id",
 
 				Host: "1.2.3.4",
 				Ports: []models.PortMapping{
 					{ContainerPort: 8080, HostPort: 65100},
 				},
-			}, "cell-id")
+			})
 			Ω(err).ShouldNot(HaveOccurred())
 		})
 
