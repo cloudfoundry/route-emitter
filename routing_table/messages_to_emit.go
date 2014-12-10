@@ -1,10 +1,8 @@
 package routing_table
 
-import "github.com/cloudfoundry/gibson"
-
 type MessagesToEmit struct {
-	RegistrationMessages   []gibson.RegistryMessage
-	UnregistrationMessages []gibson.RegistryMessage
+	RegistrationMessages   []RegistryMessage
+	UnregistrationMessages []RegistryMessage
 }
 
 func (m MessagesToEmit) merge(o MessagesToEmit) MessagesToEmit {
@@ -14,8 +12,8 @@ func (m MessagesToEmit) merge(o MessagesToEmit) MessagesToEmit {
 	}
 }
 
-func RegistryMessageFor(container Container, routes ...string) gibson.RegistryMessage {
-	return gibson.RegistryMessage{
+func RegistryMessageFor(container Container, routes ...string) RegistryMessage {
+	return RegistryMessage{
 		URIs: routes,
 		Host: container.Host,
 		Port: container.Port,

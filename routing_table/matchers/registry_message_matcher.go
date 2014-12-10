@@ -5,24 +5,24 @@ import (
 	"reflect"
 	"sort"
 
-	"github.com/cloudfoundry/gibson"
+	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
 	"github.com/onsi/gomega/format"
 )
 
-func MatchRegistryMessage(message gibson.RegistryMessage) *registryMessageMatcher {
+func MatchRegistryMessage(message routing_table.RegistryMessage) *registryMessageMatcher {
 	return &registryMessageMatcher{
 		expected: message,
 	}
 }
 
 type registryMessageMatcher struct {
-	expected gibson.RegistryMessage
+	expected routing_table.RegistryMessage
 }
 
 func (m *registryMessageMatcher) Match(a interface{}) (success bool, err error) {
-	actual, ok := a.(gibson.RegistryMessage)
+	actual, ok := a.(routing_table.RegistryMessage)
 	if !ok {
-		return false, fmt.Errorf("%s is not a gibson.RegistryMessage", format.Object(actual, 1))
+		return false, fmt.Errorf("%s is not a routing_table.RegistryMessage", format.Object(actual, 1))
 	}
 
 	sort.Sort(sort.StringSlice(m.expected.URIs))

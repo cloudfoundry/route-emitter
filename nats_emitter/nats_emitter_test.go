@@ -9,7 +9,6 @@ import (
 	"github.com/cloudfoundry-incubator/runtime-schema/metric"
 	fake_metrics_sender "github.com/cloudfoundry/dropsonde/metric_sender/fake"
 	"github.com/cloudfoundry/dropsonde/metrics"
-	"github.com/cloudfoundry/gibson"
 	"github.com/cloudfoundry/gunk/diegonats"
 	"github.com/cloudfoundry/gunk/workpool"
 	"github.com/pivotal-golang/lager/lagertest"
@@ -29,11 +28,11 @@ var _ = Describe("NatsEmitter", func() {
 	var fakeMetricSender *fake_metrics_sender.FakeMetricSender
 
 	messagesToEmit := routing_table.MessagesToEmit{
-		RegistrationMessages: []gibson.RegistryMessage{
+		RegistrationMessages: []routing_table.RegistryMessage{
 			{URIs: []string{"foo.com", "bar.com"}, Host: "1.1.1.1", Port: 11},
 			{URIs: []string{"baz.com"}, Host: "2.2.2.2", Port: 22},
 		},
-		UnregistrationMessages: []gibson.RegistryMessage{
+		UnregistrationMessages: []routing_table.RegistryMessage{
 			{URIs: []string{"wibble.com"}, Host: "1.1.1.1", Port: 11},
 			{URIs: []string{"baz.com"}, Host: "3.3.3.3", Port: 33},
 		},

@@ -2,7 +2,7 @@ package routing_table
 
 type Container struct {
 	Host string
-	Port int
+	Port uint16
 }
 
 type RoutingTableEntry struct {

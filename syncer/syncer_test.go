@@ -15,7 +15,6 @@ import (
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	fake_metrics_sender "github.com/cloudfoundry/dropsonde/metric_sender/fake"
 	"github.com/cloudfoundry/dropsonde/metrics"
-	"github.com/cloudfoundry/gibson"
 	"github.com/cloudfoundry/gunk/diegonats"
 	"github.com/pivotal-golang/lager/lagertest"
 	"github.com/tedsuo/ifrit"
@@ -65,13 +64,13 @@ var _ = Describe("Syncer", func() {
 		dummyContainer := routing_table.Container{Host: "1.1.1.1", Port: 11}
 		dummyMessage := routing_table.RegistryMessageFor(dummyContainer, "foo.com", "bar.com")
 		syncMessages = routing_table.MessagesToEmit{
-			RegistrationMessages: []gibson.RegistryMessage{dummyMessage},
+			RegistrationMessages: []routing_table.RegistryMessage{dummyMessage},
 		}
 
 		dummyContainer = routing_table.Container{Host: "2.2.2.2", Port: 22}
 		dummyMessage = routing_table.RegistryMessageFor(dummyContainer, "baz.com")
 		messagesToEmit = routing_table.MessagesToEmit{
-			RegistrationMessages: []gibson.RegistryMessage{dummyMessage},
+			RegistrationMessages: []routing_table.RegistryMessage{dummyMessage},
 		}
 
 		table.SyncReturns(syncMessages)

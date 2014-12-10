@@ -6,7 +6,6 @@ import (
 
 	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
 	"github.com/cloudfoundry-incubator/runtime-schema/metric"
-	"github.com/cloudfoundry/gibson"
 	"github.com/cloudfoundry/gunk/diegonats"
 	"github.com/cloudfoundry/gunk/workpool"
 	"github.com/pivotal-golang/lager"
@@ -57,7 +56,7 @@ func (n *NATSEmitter) Emit(messagesToEmit routing_table.MessagesToEmit, registra
 	return nil
 }
 
-func (n *NATSEmitter) emit(subject string, message gibson.RegistryMessage, wg *sync.WaitGroup, errors chan error) {
+func (n *NATSEmitter) emit(subject string, message routing_table.RegistryMessage, wg *sync.WaitGroup, errors chan error) {
 	n.workPool.Submit(func() {
 		var err error
 		defer func() {
@@ -93,7 +92,7 @@ func (n *NATSEmitter) emit(subject string, message gibson.RegistryMessage, wg *s
 	})
 }
 
-func updateCounter(counter *metric.Counter, messages []gibson.RegistryMessage) {
+func updateCounter(counter *metric.Counter, messages []routing_table.RegistryMessage) {
 	if counter != nil {
 		count := 0
 		for _, message := range messages {

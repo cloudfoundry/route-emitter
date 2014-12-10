@@ -3,7 +3,6 @@ package routing_table_test
 import (
 	. "github.com/cloudfoundry-incubator/route-emitter/routing_table"
 	. "github.com/cloudfoundry-incubator/route-emitter/routing_table/matchers"
-	"github.com/cloudfoundry/gibson"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -39,7 +38,7 @@ var _ = Describe("RoutingTable", func() {
 
 				It("should emit registrations for each pairing", func() {
 					expected := MessagesToEmit{
-						RegistrationMessages: []gibson.RegistryMessage{
+						RegistrationMessages: []RegistryMessage{
 							RegistryMessageFor(container1, route1, route2),
 							RegistryMessageFor(container2, route1, route2),
 						},
@@ -70,7 +69,7 @@ var _ = Describe("RoutingTable", func() {
 
 					It("should emit registrations for each pairing", func() {
 						expected := MessagesToEmit{
-							RegistrationMessages: []gibson.RegistryMessage{
+							RegistrationMessages: []RegistryMessage{
 								RegistryMessageFor(container1, route1),
 							},
 						}
@@ -114,7 +113,7 @@ var _ = Describe("RoutingTable", func() {
 
 					It("should emit registrations for each pairing", func() {
 						expected := MessagesToEmit{
-							RegistrationMessages: []gibson.RegistryMessage{
+							RegistrationMessages: []RegistryMessage{
 								RegistryMessageFor(container1, route1),
 							},
 						}
@@ -155,7 +154,7 @@ var _ = Describe("RoutingTable", func() {
 
 				It("should emit all registrations and no unregisration", func() {
 					expected := MessagesToEmit{
-						RegistrationMessages: []gibson.RegistryMessage{
+						RegistrationMessages: []RegistryMessage{
 							RegistryMessageFor(container1, route1, route2),
 							RegistryMessageFor(container2, route1, route2),
 						},
@@ -174,7 +173,7 @@ var _ = Describe("RoutingTable", func() {
 
 				It("should emit all registrations and no unregisration", func() {
 					expected := MessagesToEmit{
-						RegistrationMessages: []gibson.RegistryMessage{
+						RegistrationMessages: []RegistryMessage{
 							RegistryMessageFor(container1, route1, route2, route3),
 							RegistryMessageFor(container2, route1, route2, route3),
 						},
@@ -193,7 +192,7 @@ var _ = Describe("RoutingTable", func() {
 
 				It("should emit all registrations and no unregisration", func() {
 					expected := MessagesToEmit{
-						RegistrationMessages: []gibson.RegistryMessage{
+						RegistrationMessages: []RegistryMessage{
 							RegistryMessageFor(container1, route1, route2),
 							RegistryMessageFor(container2, route1, route2),
 							RegistryMessageFor(container3, route1, route2),
@@ -213,7 +212,7 @@ var _ = Describe("RoutingTable", func() {
 
 				It("should emit all registrations and no unregisration", func() {
 					expected := MessagesToEmit{
-						RegistrationMessages: []gibson.RegistryMessage{
+						RegistrationMessages: []RegistryMessage{
 							RegistryMessageFor(container1, route1, route2, route3),
 							RegistryMessageFor(container2, route1, route2, route3),
 							RegistryMessageFor(container3, route1, route2, route3),
@@ -233,11 +232,11 @@ var _ = Describe("RoutingTable", func() {
 
 				It("should emit all registrations and the relevant unregisrations", func() {
 					expected := MessagesToEmit{
-						RegistrationMessages: []gibson.RegistryMessage{
+						RegistrationMessages: []RegistryMessage{
 							RegistryMessageFor(container1, route1),
 							RegistryMessageFor(container2, route1),
 						},
-						UnregistrationMessages: []gibson.RegistryMessage{
+						UnregistrationMessages: []RegistryMessage{
 							RegistryMessageFor(container1, route2),
 							RegistryMessageFor(container2, route2),
 						},
@@ -256,10 +255,10 @@ var _ = Describe("RoutingTable", func() {
 
 				It("should emit all registrations and the relevant unregisrations", func() {
 					expected := MessagesToEmit{
-						RegistrationMessages: []gibson.RegistryMessage{
+						RegistrationMessages: []RegistryMessage{
 							RegistryMessageFor(container1, route1, route2),
 						},
-						UnregistrationMessages: []gibson.RegistryMessage{
+						UnregistrationMessages: []RegistryMessage{
 							RegistryMessageFor(container2, route1, route2),
 						},
 					}
@@ -277,10 +276,10 @@ var _ = Describe("RoutingTable", func() {
 
 				It("should emit all registrations and the relevant unregisrations", func() {
 					expected := MessagesToEmit{
-						RegistrationMessages: []gibson.RegistryMessage{
+						RegistrationMessages: []RegistryMessage{
 							RegistryMessageFor(container1, route1),
 						},
-						UnregistrationMessages: []gibson.RegistryMessage{
+						UnregistrationMessages: []RegistryMessage{
 							RegistryMessageFor(container1, route2),
 							RegistryMessageFor(container2, route1, route2),
 						},
@@ -299,10 +298,10 @@ var _ = Describe("RoutingTable", func() {
 
 				It("should emit all registrations and the relevant unregisrations", func() {
 					expected := MessagesToEmit{
-						RegistrationMessages: []gibson.RegistryMessage{
+						RegistrationMessages: []RegistryMessage{
 							RegistryMessageFor(container1, route1, route2, route3),
 						},
-						UnregistrationMessages: []gibson.RegistryMessage{
+						UnregistrationMessages: []RegistryMessage{
 							RegistryMessageFor(container2, route1, route2),
 						},
 					}
@@ -320,12 +319,12 @@ var _ = Describe("RoutingTable", func() {
 
 				It("should emit all registrations and the relevant unregisrations", func() {
 					expected := MessagesToEmit{
-						RegistrationMessages: []gibson.RegistryMessage{
+						RegistrationMessages: []RegistryMessage{
 							RegistryMessageFor(container1, route1),
 							RegistryMessageFor(container2, route1),
 							RegistryMessageFor(container3, route1),
 						},
-						UnregistrationMessages: []gibson.RegistryMessage{
+						UnregistrationMessages: []RegistryMessage{
 							RegistryMessageFor(container1, route2),
 							RegistryMessageFor(container2, route2),
 						},
@@ -344,7 +343,7 @@ var _ = Describe("RoutingTable", func() {
 
 				It("should unregister the missing guids", func() {
 					expected := MessagesToEmit{
-						UnregistrationMessages: []gibson.RegistryMessage{
+						UnregistrationMessages: []RegistryMessage{
 							RegistryMessageFor(container1, route1, route2),
 							RegistryMessageFor(container2, route1, route2),
 						},
@@ -446,7 +445,7 @@ var _ = Describe("RoutingTable", func() {
 						messagesToEmit = table.SetRoutes(pg, route1, route2, route3)
 
 						expected := MessagesToEmit{
-							RegistrationMessages: []gibson.RegistryMessage{
+							RegistrationMessages: []RegistryMessage{
 								RegistryMessageFor(container1, route1, route2, route3),
 								RegistryMessageFor(container2, route1, route2, route3),
 							},
@@ -460,11 +459,11 @@ var _ = Describe("RoutingTable", func() {
 						messagesToEmit = table.SetRoutes(pg, route1)
 
 						expected := MessagesToEmit{
-							RegistrationMessages: []gibson.RegistryMessage{
+							RegistrationMessages: []RegistryMessage{
 								RegistryMessageFor(container1, route1),
 								RegistryMessageFor(container2, route1),
 							},
-							UnregistrationMessages: []gibson.RegistryMessage{
+							UnregistrationMessages: []RegistryMessage{
 								RegistryMessageFor(container1, route2),
 								RegistryMessageFor(container2, route2),
 							},
@@ -478,11 +477,11 @@ var _ = Describe("RoutingTable", func() {
 						messagesToEmit = table.SetRoutes(pg, route1, route3)
 
 						expected := MessagesToEmit{
-							RegistrationMessages: []gibson.RegistryMessage{
+							RegistrationMessages: []RegistryMessage{
 								RegistryMessageFor(container1, route1, route3),
 								RegistryMessageFor(container2, route1, route3),
 							},
-							UnregistrationMessages: []gibson.RegistryMessage{
+							UnregistrationMessages: []RegistryMessage{
 								RegistryMessageFor(container1, route2),
 								RegistryMessageFor(container2, route2),
 							},
@@ -497,7 +496,7 @@ var _ = Describe("RoutingTable", func() {
 					messagesToEmit = table.RemoveRoutes(pg)
 
 					expected := MessagesToEmit{
-						UnregistrationMessages: []gibson.RegistryMessage{
+						UnregistrationMessages: []RegistryMessage{
 							RegistryMessageFor(container1, route1, route2),
 							RegistryMessageFor(container2, route1, route2),
 						},
@@ -519,7 +518,7 @@ var _ = Describe("RoutingTable", func() {
 						messagesToEmit = table.AddOrUpdateContainer(pg, container3)
 
 						expected := MessagesToEmit{
-							RegistrationMessages: []gibson.RegistryMessage{
+							RegistrationMessages: []RegistryMessage{
 								RegistryMessageFor(container3, route1, route2),
 							},
 						}
@@ -533,7 +532,7 @@ var _ = Describe("RoutingTable", func() {
 					messagesToEmit = table.RemoveContainer(pg, container2)
 
 					expected := MessagesToEmit{
-						UnregistrationMessages: []gibson.RegistryMessage{
+						UnregistrationMessages: []RegistryMessage{
 							RegistryMessageFor(container2, route1, route2),
 						},
 					}
@@ -566,7 +565,7 @@ var _ = Describe("RoutingTable", func() {
 					messagesToEmit = table.AddOrUpdateContainer(pg, container1)
 
 					expected := MessagesToEmit{
-						RegistrationMessages: []gibson.RegistryMessage{
+						RegistrationMessages: []RegistryMessage{
 							RegistryMessageFor(container1, route1, route2),
 						},
 					}
@@ -586,7 +585,7 @@ var _ = Describe("RoutingTable", func() {
 					messagesToEmit = table.SetRoutes(pg, route1, route2)
 
 					expected := MessagesToEmit{
-						RegistrationMessages: []gibson.RegistryMessage{
+						RegistrationMessages: []RegistryMessage{
 							RegistryMessageFor(container1, route1, route2),
 							RegistryMessageFor(container2, route1, route2),
 						},
@@ -660,7 +659,7 @@ var _ = Describe("RoutingTable", func() {
 				messagesToEmit = table.MessagesToEmit()
 
 				expected := MessagesToEmit{
-					RegistrationMessages: []gibson.RegistryMessage{
+					RegistrationMessages: []RegistryMessage{
 						RegistryMessageFor(container1, route1, route2),
 						RegistryMessageFor(container2, route1, route2),
 					},

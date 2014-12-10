@@ -7,7 +7,6 @@ import (
 
 	"github.com/cloudfoundry-incubator/runtime-schema/bbs/fake_bbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
-	"github.com/cloudfoundry/gibson"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/pivotal-golang/lager/lagertest"
@@ -44,7 +43,7 @@ var _ = Describe("Watcher", func() {
 		dummyContainer := routing_table.Container{Host: "1.1.1.1", Port: 11}
 		dummyMessage := routing_table.RegistryMessageFor(dummyContainer, "foo.com", "bar.com")
 		dummyMessagesToEmit = routing_table.MessagesToEmit{
-			RegistrationMessages: []gibson.RegistryMessage{dummyMessage},
+			RegistrationMessages: []routing_table.RegistryMessage{dummyMessage},
 		}
 
 		desiredChChChChanges := make(chan models.DesiredLRPChange)

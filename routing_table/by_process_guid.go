@@ -39,6 +39,6 @@ func ContainerFromActual(actual models.ActualLRP) (Container, error) {
 
 	return Container{
 		Host: actual.Host,
-		Port: int(actual.Ports[0].HostPort),
+		Port: uint16(actual.Ports[0].HostPort),
 	}, nil
 }

@@ -11,7 +11,6 @@ import (
 	"github.com/cloudfoundry-incubator/runtime-schema/bbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/metric"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
-	"github.com/cloudfoundry/gibson"
 	"github.com/cloudfoundry/gunk/diegonats"
 	uuid "github.com/nu7hatch/gouuid"
 	"github.com/pivotal-golang/lager"
@@ -153,10 +152,10 @@ func (syncer *Syncer) syncAndEmit() {
 }
 
 func (syncer *Syncer) register(desired models.DesiredLRP, actual models.ActualLRP) error {
-	message := gibson.RegistryMessage{
+	message := routing_table.RegistryMessage{
 		URIs: desired.Routes,
 		Host: actual.Host,
-		Port: int(actual.Ports[0].HostPort),
+		Port: uint16(actual.Ports[0].HostPort),
 	}
 
 	payload, _ := json.Marshal(message)
@@ -188,7 +187,7 @@ func (syncer *Syncer) greetRouter(replyUUID string) error {
 }
 
 func (syncer *Syncer) gotRouterHeartbeatInterval(msg *nats.Msg) {
-	var response gibson.RouterGreetingMessage
+	var response routing_table.RouterGreetingMessage
 
 	err := json.Unmarshal(msg.Data, &response)
 	if err != nil {

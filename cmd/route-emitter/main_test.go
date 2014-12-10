@@ -6,9 +6,9 @@ import (
 	"time"
 
 	"github.com/apcera/nats"
+	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
 	. "github.com/cloudfoundry-incubator/route-emitter/routing_table/matchers"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
-	"github.com/cloudfoundry/gibson"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gbytes"
@@ -17,13 +17,13 @@ import (
 )
 
 var _ = Describe("Route Emitter", func() {
-	listenForRoutes := func(subject string) <-chan gibson.RegistryMessage {
-		routes := make(chan gibson.RegistryMessage)
+	listenForRoutes := func(subject string) <-chan routing_table.RegistryMessage {
+		routes := make(chan routing_table.RegistryMessage)
 
 		natsClient.Subscribe(subject, func(msg *nats.Msg) {
 			defer GinkgoRecover()
 
-			var message gibson.RegistryMessage
+			var message routing_table.RegistryMessage
 			err := json.Unmarshal(msg.Data, &message)
 			Ω(err).ShouldNot(HaveOccurred())
 
@@ -37,8 +37,8 @@ var _ = Describe("Route Emitter", func() {
 		runner  *ginkgomon.Runner
 		emitter ifrit.Process
 
-		registeredRoutes   <-chan gibson.RegistryMessage
-		unregisteredRoutes <-chan gibson.RegistryMessage
+		registeredRoutes   <-chan routing_table.RegistryMessage
+		unregisteredRoutes <-chan routing_table.RegistryMessage
 	)
 
 	BeforeEach(func() {
@@ -50,7 +50,7 @@ var _ = Describe("Route Emitter", func() {
 		natsClient.Subscribe("router.greet", func(msg *nats.Msg) {
 			defer GinkgoRecover()
 
-			greeting := gibson.RouterGreetingMessage{
+			greeting := routing_table.RouterGreetingMessage{
 				MinimumRegisterInterval: 2,
 			}
 
@@ -114,7 +114,7 @@ var _ = Describe("Route Emitter", func() {
 				})
 
 				It("emits its routes immediately", func() {
-					Eventually(registeredRoutes).Should(Receive(MatchRegistryMessage(gibson.RegistryMessage{
+					Eventually(registeredRoutes).Should(Receive(MatchRegistryMessage(routing_table.RegistryMessage{
 						URIs: []string{"route-1", "route-2"},
 						Host: "1.2.3.4",
 						Port: 65100,
@@ -190,7 +190,7 @@ var _ = Describe("Route Emitter", func() {
 				})
 
 				It("emits its routes immediately", func() {
-					Eventually(registeredRoutes).Should(Receive(MatchRegistryMessage(gibson.RegistryMessage{
+					Eventually(registeredRoutes).Should(Receive(MatchRegistryMessage(routing_table.RegistryMessage{
 						URIs: []string{"route-1", "route-2"},
 						Host: "1.2.3.4",
 						Port: 65100,
@@ -198,11 +198,11 @@ var _ = Describe("Route Emitter", func() {
 				})
 
 				It("repeats the route message at the interval given by the router", func() {
-					var msg1 gibson.RegistryMessage
+					var msg1 routing_table.RegistryMessage
 					Eventually(registeredRoutes).Should(Receive(&msg1))
 					t1 := time.Now()
 
-					var msg2 gibson.RegistryMessage
+					var msg2 routing_table.RegistryMessage
 					Eventually(registeredRoutes, 5).Should(Receive(&msg2))
 					t2 := time.Now()
 
@@ -211,8 +211,8 @@ var _ = Describe("Route Emitter", func() {
 				})
 
 				Context("when etcd goes away", func() {
-					var msg1 gibson.RegistryMessage
-					var msg2 gibson.RegistryMessage
+					var msg1 routing_table.RegistryMessage
+					var msg2 routing_table.RegistryMessage
 
 					BeforeEach(func() {
 						// ensure it's seen the route at least once
@@ -323,7 +323,7 @@ var _ = Describe("Route Emitter", func() {
 			})
 
 			It("immediately emits all routes", func() {
-				Eventually(registeredRoutes).Should(Receive(MatchRegistryMessage(gibson.RegistryMessage{
+				Eventually(registeredRoutes).Should(Receive(MatchRegistryMessage(routing_table.RegistryMessage{
 					URIs: []string{"route-1", "route-2"},
 					Host: "1.2.3.4",
 					Port: 65100,
@@ -351,7 +351,7 @@ var _ = Describe("Route Emitter", func() {
 				})
 
 				It("immediately emits router.register", func() {
-					Eventually(registeredRoutes).Should(Receive(MatchRegistryMessage(gibson.RegistryMessage{
+					Eventually(registeredRoutes).Should(Receive(MatchRegistryMessage(routing_table.RegistryMessage{
 						URIs: []string{"route-1", "route-2", "route-3"},
 						Host: "1.2.3.4",
 						Port: 65100,
@@ -380,7 +380,7 @@ var _ = Describe("Route Emitter", func() {
 				})
 
 				It("immediately emits router.unregister", func() {
-					Eventually(unregisteredRoutes).Should(Receive(MatchRegistryMessage(gibson.RegistryMessage{
+					Eventually(unregisteredRoutes).Should(Receive(MatchRegistryMessage(routing_table.RegistryMessage{
 						URIs: []string{"route-1"},
 						Host: "1.2.3.4",
 						Port: 65100,

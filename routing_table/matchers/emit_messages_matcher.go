@@ -6,7 +6,6 @@ import (
 	"sort"
 
 	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
-	"github.com/cloudfoundry/gibson"
 	"github.com/onsi/gomega/format"
 )
 
@@ -39,13 +38,13 @@ func (m *messagesToEmitMatcher) NegatedFailureMessage(actual interface{}) (messa
 	return format.Message(actual, "not to match", m.expected)
 }
 
-func (m *messagesToEmitMatcher) matchArrs(actual, expected []gibson.RegistryMessage) bool {
+func (m *messagesToEmitMatcher) matchArrs(actual, expected []routing_table.RegistryMessage) bool {
 	if len(actual) != len(expected) {
 		return false
 	}
 
-	fixedActual := []gibson.RegistryMessage{}
-	fixedExpected := []gibson.RegistryMessage{}
+	fixedActual := []routing_table.RegistryMessage{}
+	fixedExpected := []routing_table.RegistryMessage{}
 
 	for _, message := range actual {
 		sort.Sort(sort.StringSlice(message.URIs))
@@ -69,7 +68,7 @@ func (m *messagesToEmitMatcher) matchArrs(actual, expected []gibson.RegistryMess
 	return true
 }
 
-type ByMessage []gibson.RegistryMessage
+type ByMessage []routing_table.RegistryMessage
 
 func (a ByMessage) Len() int           { return len(a) }
 func (a ByMessage) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
