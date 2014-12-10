@@ -18,9 +18,9 @@ var _ = Describe("RoutingTable", func() {
 	route1 := "foo.com"
 	route2 := "bar.com"
 	route3 := "baz.com"
-	container1 := Container{"1.1.1.1", 11}
-	container2 := Container{"2.2.2.2", 22}
-	container3 := Container{"3.3.3.3", 33}
+	container1 := Container{"ig-1", "1.1.1.1", 11}
+	container2 := Container{"ig-2", "2.2.2.2", 22}
+	container3 := Container{"ig-3", "3.3.3.3", 33}
 	logGuid := "some-log-guid"
 
 	BeforeEach(func() {
@@ -40,8 +40,12 @@ var _ = Describe("RoutingTable", func() {
 				It("should emit registrations for each pairing", func() {
 					expected := MessagesToEmit{
 						RegistrationMessages: []RegistryMessage{
-							RegistryMessageFor(container1, Routes{URIs: []string{route1, route2}, LogGuid: logGuid}),
-							RegistryMessageFor(container2, Routes{URIs: []string{route1, route2}, LogGuid: logGuid}),
+							// do not use the RegistryMessageFor helper here; if the helper
+							// is borked the tests hide it.
+							//
+							// we still use it for convenience in later tests.
+							{URIs: []string{route1, route2}, Host: "1.1.1.1", Port: 11, App: logGuid, PrivateInstanceId: "ig-1"},
+							{URIs: []string{route1, route2}, Host: "2.2.2.2", Port: 22, App: logGuid, PrivateInstanceId: "ig-2"},
 						},
 					}
 					Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))

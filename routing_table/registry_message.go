@@ -16,6 +16,8 @@ func RegistryMessageFor(container Container, routes Routes) RegistryMessage {
 		Port: container.Port,
 
 		App: routes.LogGuid,
+
+		PrivateInstanceId: container.InstanceGuid,
 	}
 }
 

@@ -63,13 +63,13 @@ var _ = Describe("Syncer", func() {
 
 		//what follows is fake data to distinguish between
 		//the "sync" and "emit" codepaths
-		dummyContainer := routing_table.Container{Host: "1.1.1.1", Port: 11}
+		dummyContainer := routing_table.Container{InstanceGuid: "instance-guid-1", Host: "1.1.1.1", Port: 11}
 		dummyMessage := routing_table.RegistryMessageFor(dummyContainer, routing_table.Routes{URIs: []string{"foo.com", "bar.com"}, LogGuid: logGuid})
 		syncMessages = routing_table.MessagesToEmit{
 			RegistrationMessages: []routing_table.RegistryMessage{dummyMessage},
 		}
 
-		dummyContainer = routing_table.Container{Host: "2.2.2.2", Port: 22}
+		dummyContainer = routing_table.Container{InstanceGuid: "instance-guid-2", Host: "2.2.2.2", Port: 22}
 		dummyMessage = routing_table.RegistryMessageFor(dummyContainer, routing_table.Routes{URIs: []string{"baz.com"}, LogGuid: logGuid})
 		messagesToEmit = routing_table.MessagesToEmit{
 			RegistrationMessages: []routing_table.RegistryMessage{dummyMessage},
@@ -129,7 +129,7 @@ var _ = Describe("Syncer", func() {
 				LogGuid: logGuid,
 			}))
 			Ω(containers["process-guid-1"]).Should(Equal([]routing_table.Container{
-				{Host: "1.2.3.4", Port: 1234},
+				{InstanceGuid: "instance-guid-1", Host: "1.2.3.4", Port: 1234},
 			}))
 
 			Ω(emitter.EmitCallCount()).Should(Equal(1))

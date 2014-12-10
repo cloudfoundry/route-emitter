@@ -42,7 +42,7 @@ var _ = Describe("Watcher", func() {
 		emitter = &fake_nats_emitter.FakeNATSEmitter{}
 		logger := lagertest.NewTestLogger("test")
 
-		dummyContainer := routing_table.Container{Host: "1.1.1.1", Port: 11}
+		dummyContainer := routing_table.Container{InstanceGuid: "instance-guid", Host: "1.1.1.1", Port: 11}
 		dummyMessage := routing_table.RegistryMessageFor(dummyContainer, routing_table.Routes{URIs: []string{"foo.com", "bar.com"}, LogGuid: logGuid})
 		dummyMessagesToEmit = routing_table.MessagesToEmit{
 			RegistrationMessages: []routing_table.RegistryMessage{dummyMessage},
@@ -192,9 +192,10 @@ var _ = Describe("Watcher", func() {
 				actualChange := models.ActualLRPChange{
 					Before: nil,
 					After: &models.ActualLRP{
-						ProcessGuid: "pg",
-						Host:        "1.1.1.1",
-						State:       models.ActualLRPStateRunning,
+						ProcessGuid:  "pg",
+						InstanceGuid: "instance-guid",
+						Host:         "1.1.1.1",
+						State:        models.ActualLRPStateRunning,
 						Ports: []models.PortMapping{
 							{ContainerPort: 8080, HostPort: 11},
 						},
@@ -210,7 +211,7 @@ var _ = Describe("Watcher", func() {
 				Eventually(table.AddOrUpdateContainerCallCount).Should(Equal(1))
 				processGuid, container := table.AddOrUpdateContainerArgsForCall(0)
 				Ω(processGuid).Should(Equal("pg"))
-				Ω(container).Should(Equal(routing_table.Container{Host: "1.1.1.1", Port: 11}))
+				Ω(container).Should(Equal(routing_table.Container{InstanceGuid: "instance-guid", Host: "1.1.1.1", Port: 11}))
 			})
 
 			It("should emit whatever the table tells it to emit", func() {
@@ -243,9 +244,10 @@ var _ = Describe("Watcher", func() {
 				actualChange := models.ActualLRPChange{
 					Before: nil,
 					After: &models.ActualLRP{
-						ProcessGuid: "pg",
-						Host:        "1.1.1.1",
-						State:       models.ActualLRPStateRunning,
+						ProcessGuid:  "pg",
+						InstanceGuid: "instance-guid",
+						Host:         "1.1.1.1",
+						State:        models.ActualLRPStateRunning,
 						Ports: []models.PortMapping{
 							{ContainerPort: 8080, HostPort: 11},
 						},
@@ -273,9 +275,10 @@ var _ = Describe("Watcher", func() {
 			BeforeEach(func() {
 				actualChange := models.ActualLRPChange{
 					Before: &models.ActualLRP{
-						ProcessGuid: "pg",
-						Host:        "1.1.1.1",
-						State:       models.ActualLRPStateRunning,
+						ProcessGuid:  "pg",
+						InstanceGuid: "instance-guid",
+						Host:         "1.1.1.1",
+						State:        models.ActualLRPStateRunning,
 						Ports: []models.PortMapping{
 							{ContainerPort: 8080, HostPort: 11},
 						},
@@ -292,7 +295,7 @@ var _ = Describe("Watcher", func() {
 				Eventually(table.RemoveContainerCallCount).Should(Equal(1))
 				processGuid, container := table.RemoveContainerArgsForCall(0)
 				Ω(processGuid).Should(Equal("pg"))
-				Ω(container).Should(Equal(routing_table.Container{Host: "1.1.1.1", Port: 11}))
+				Ω(container).Should(Equal(routing_table.Container{InstanceGuid: "instance-guid", Host: "1.1.1.1", Port: 11}))
 			})
 
 			It("should emit whatever the table tells it to emit", func() {

@@ -89,6 +89,7 @@ var _ = Describe("Route Emitter", func() {
 					Stack:       "some-stack",
 					MemoryMB:    1024,
 					DiskMB:      512,
+					LogGuid:     "some-log-guid",
 					Action: &models.RunAction{
 						Path: "ls",
 					},
@@ -115,9 +116,11 @@ var _ = Describe("Route Emitter", func() {
 
 				It("emits its routes immediately", func() {
 					Eventually(registeredRoutes).Should(Receive(MatchRegistryMessage(routing_table.RegistryMessage{
-						URIs: []string{"route-1", "route-2"},
-						Host: "1.2.3.4",
-						Port: 65100,
+						URIs:              []string{"route-1", "route-2"},
+						Host:              "1.2.3.4",
+						Port:              65100,
+						App:               "some-log-guid",
+						PrivateInstanceId: "iguid1",
 					})))
 				})
 			})
@@ -182,6 +185,7 @@ var _ = Describe("Route Emitter", func() {
 						Stack:       "some-stack",
 						MemoryMB:    1024,
 						DiskMB:      512,
+						LogGuid:     "some-log-guid",
 						Action: &models.RunAction{
 							Path: "ls",
 						},
@@ -191,9 +195,11 @@ var _ = Describe("Route Emitter", func() {
 
 				It("emits its routes immediately", func() {
 					Eventually(registeredRoutes).Should(Receive(MatchRegistryMessage(routing_table.RegistryMessage{
-						URIs: []string{"route-1", "route-2"},
-						Host: "1.2.3.4",
-						Port: 65100,
+						URIs:              []string{"route-1", "route-2"},
+						Host:              "1.2.3.4",
+						Port:              65100,
+						App:               "some-log-guid",
+						PrivateInstanceId: "iguid1",
 					})))
 				})
 
@@ -295,6 +301,7 @@ var _ = Describe("Route Emitter", func() {
 				Stack:       "some-stack",
 				MemoryMB:    1024,
 				DiskMB:      512,
+				LogGuid:     "some-log-guid",
 				Action: &models.RunAction{
 					Path: "ls",
 				},
@@ -324,9 +331,11 @@ var _ = Describe("Route Emitter", func() {
 
 			It("immediately emits all routes", func() {
 				Eventually(registeredRoutes).Should(Receive(MatchRegistryMessage(routing_table.RegistryMessage{
-					URIs: []string{"route-1", "route-2"},
-					Host: "1.2.3.4",
-					Port: 65100,
+					URIs:              []string{"route-1", "route-2"},
+					Host:              "1.2.3.4",
+					Port:              65100,
+					App:               "some-log-guid",
+					PrivateInstanceId: "iguid1",
 				})))
 			})
 
@@ -342,6 +351,7 @@ var _ = Describe("Route Emitter", func() {
 							Stack:       "some-stack",
 							MemoryMB:    1024,
 							DiskMB:      512,
+							LogGuid:     "some-log-guid",
 							Action: &models.RunAction{
 								Path: "ls",
 							},
@@ -352,9 +362,11 @@ var _ = Describe("Route Emitter", func() {
 
 				It("immediately emits router.register", func() {
 					Eventually(registeredRoutes).Should(Receive(MatchRegistryMessage(routing_table.RegistryMessage{
-						URIs: []string{"route-1", "route-2", "route-3"},
-						Host: "1.2.3.4",
-						Port: 65100,
+						URIs:              []string{"route-1", "route-2", "route-3"},
+						Host:              "1.2.3.4",
+						Port:              65100,
+						App:               "some-log-guid",
+						PrivateInstanceId: "iguid1",
 					})))
 				})
 			})
@@ -371,6 +383,7 @@ var _ = Describe("Route Emitter", func() {
 							Stack:       "some-stack",
 							MemoryMB:    1024,
 							DiskMB:      512,
+							LogGuid:     "some-log-guid",
 							Action: &models.RunAction{
 								Path: "ls",
 							},
@@ -381,9 +394,11 @@ var _ = Describe("Route Emitter", func() {
 
 				It("immediately emits router.unregister", func() {
 					Eventually(unregisteredRoutes).Should(Receive(MatchRegistryMessage(routing_table.RegistryMessage{
-						URIs: []string{"route-1"},
-						Host: "1.2.3.4",
-						Port: 65100,
+						URIs:              []string{"route-1"},
+						Host:              "1.2.3.4",
+						Port:              65100,
+						App:               "some-log-guid",
+						PrivateInstanceId: "iguid1",
 					})))
 				})
 			})

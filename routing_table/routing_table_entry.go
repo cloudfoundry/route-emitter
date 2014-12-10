@@ -1,8 +1,9 @@
 package routing_table
 
 type Container struct {
-	Host string
-	Port uint16
+	InstanceGuid string
+	Host         string
+	Port         uint16
 }
 
 type Routes struct {
