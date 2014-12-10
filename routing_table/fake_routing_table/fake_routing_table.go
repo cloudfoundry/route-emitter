@@ -20,20 +20,20 @@ type FakeRoutingTable struct {
 	MessagesToEmitStub        func() routing_table.MessagesToEmit
 	messagesToEmitMutex       sync.RWMutex
 	messagesToEmitArgsForCall []struct{}
-	messagesToEmitReturns     struct {
+	messagesToEmitReturns struct {
 		result1 routing_table.MessagesToEmit
 	}
 	RouteCountStub        func() int
 	routeCountMutex       sync.RWMutex
 	routeCountArgsForCall []struct{}
-	routeCountReturns     struct {
+	routeCountReturns struct {
 		result1 int
 	}
-	SetRoutesStub        func(processGuid string, routes ...string) routing_table.MessagesToEmit
+	SetRoutesStub        func(processGuid string, routes routing_table.Routes) routing_table.MessagesToEmit
 	setRoutesMutex       sync.RWMutex
 	setRoutesArgsForCall []struct {
 		processGuid string
-		routes      []string
+		routes      routing_table.Routes
 	}
 	setRoutesReturns struct {
 		result1 routing_table.MessagesToEmit
@@ -147,15 +147,15 @@ func (fake *FakeRoutingTable) RouteCountReturns(result1 int) {
 	}{result1}
 }
 
-func (fake *FakeRoutingTable) SetRoutes(processGuid string, routes ...string) routing_table.MessagesToEmit {
+func (fake *FakeRoutingTable) SetRoutes(processGuid string, routes routing_table.Routes) routing_table.MessagesToEmit {
 	fake.setRoutesMutex.Lock()
 	fake.setRoutesArgsForCall = append(fake.setRoutesArgsForCall, struct {
 		processGuid string
-		routes      []string
+		routes      routing_table.Routes
 	}{processGuid, routes})
 	fake.setRoutesMutex.Unlock()
 	if fake.SetRoutesStub != nil {
-		return fake.SetRoutesStub(processGuid, routes...)
+		return fake.SetRoutesStub(processGuid, routes)
 	} else {
 		return fake.setRoutesReturns.result1
 	}
@@ -167,7 +167,7 @@ func (fake *FakeRoutingTable) SetRoutesCallCount() int {
 	return len(fake.setRoutesArgsForCall)
 }
 
-func (fake *FakeRoutingTable) SetRoutesArgsForCall(i int) (string, []string) {
+func (fake *FakeRoutingTable) SetRoutesArgsForCall(i int) (string, routing_table.Routes) {
 	fake.setRoutesMutex.RLock()
 	defer fake.setRoutesMutex.RUnlock()
 	return fake.setRoutesArgsForCall[i].processGuid, fake.setRoutesArgsForCall[i].routes
@@ -278,4 +278,4 @@ func (fake *FakeRoutingTable) RemoveContainerReturns(result1 routing_table.Messa
 	}{result1}
 }
 
-var _ routing_table.RoutingTableInterface = new(FakeRoutingTable)
+var _ routing_table.RoutingTable = new(FakeRoutingTable)

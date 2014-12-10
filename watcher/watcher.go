@@ -19,14 +19,14 @@ var (
 
 type Watcher struct {
 	bbs     bbs.RouteEmitterBBS
-	table   routing_table.RoutingTableInterface
+	table   routing_table.RoutingTable
 	emitter nats_emitter.NATSEmitterInterface
 	logger  lager.Logger
 }
 
 func NewWatcher(
 	bbs bbs.RouteEmitterBBS,
-	table routing_table.RoutingTableInterface,
+	table routing_table.RoutingTable,
 	emitter nats_emitter.NATSEmitterInterface,
 	logger lager.Logger,
 ) *Watcher {
@@ -134,7 +134,10 @@ func (watcher *Watcher) handleDesiredChange(change models.DesiredLRPChange) {
 			messagesToEmit = watcher.table.RemoveRoutes(change.Before.ProcessGuid)
 		}
 	} else {
-		messagesToEmit = watcher.table.SetRoutes(change.After.ProcessGuid, change.After.Routes...)
+		messagesToEmit = watcher.table.SetRoutes(change.After.ProcessGuid, routing_table.Routes{
+			URIs:    change.After.Routes,
+			LogGuid: change.After.LogGuid,
+		})
 	}
 
 	watcher.emitter.Emit(messagesToEmit, &routesRegistered, &routesUnregistered)

@@ -12,13 +12,15 @@ var _ = Describe("ByProcessGuid", func() {
 	Describe("RoutesByProcessGuidFromDesireds", func() {
 		It("should build a map of routes", func() {
 			routes := RoutesByProcessGuidFromDesireds([]models.DesiredLRP{
-				{Domain: "tests", ProcessGuid: "abc", Routes: []string{"foo.com", "bar.com"}},
-				{Domain: "tests", ProcessGuid: "def", Routes: []string{"baz.com"}},
+				{Domain: "tests", ProcessGuid: "abc", Routes: []string{"foo.com", "bar.com"}, LogGuid: "abc-guid"},
+				{Domain: "tests", ProcessGuid: "def", Routes: []string{"baz.com"}, LogGuid: "def-guid"},
 			})
 
 			Ω(routes).Should(HaveLen(2))
-			Ω(routes["abc"]).Should(Equal([]string{"foo.com", "bar.com"}))
-			Ω(routes["def"]).Should(Equal([]string{"baz.com"}))
+			Ω(routes["abc"].URIs).Should(Equal([]string{"foo.com", "bar.com"}))
+			Ω(routes["def"].URIs).Should(Equal([]string{"baz.com"}))
+			Ω(routes["abc"].LogGuid).Should(Equal("abc-guid"))
+			Ω(routes["def"].LogGuid).Should(Equal("def-guid"))
 		})
 	})
 

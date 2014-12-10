@@ -6,13 +6,16 @@ import (
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 )
 
-type RoutesByProcessGuid map[string][]string
+type RoutesByProcessGuid map[string]Routes
 type ContainersByProcessGuid map[string][]Container
 
 func RoutesByProcessGuidFromDesireds(desireds []models.DesiredLRP) RoutesByProcessGuid {
 	routes := RoutesByProcessGuid{}
 	for _, desired := range desireds {
-		routes[desired.ProcessGuid] = desired.Routes
+		routes[desired.ProcessGuid] = Routes{
+			URIs:    desired.Routes,
+			LogGuid: desired.LogGuid,
+		}
 	}
 
 	return routes

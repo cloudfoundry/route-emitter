@@ -11,11 +11,3 @@ func (m MessagesToEmit) merge(o MessagesToEmit) MessagesToEmit {
 		UnregistrationMessages: append(m.UnregistrationMessages, o.UnregistrationMessages...),
 	}
 }
-
-func RegistryMessageFor(container Container, routes ...string) RegistryMessage {
-	return RegistryMessage{
-		URIs: routes,
-		Host: container.Host,
-		Port: container.Port,
-	}
-}

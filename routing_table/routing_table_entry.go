@@ -5,9 +5,15 @@ type Container struct {
 	Port uint16
 }
 
+type Routes struct {
+	URIs    []string
+	LogGuid string
+}
+
 type RoutingTableEntry struct {
-	Routes     map[string]struct{}
+	URIs       map[string]struct{}
 	Containers map[Container]struct{}
+	LogGuid    string
 }
 
 func (entry RoutingTableEntry) hasContainer(container Container) bool {
@@ -15,19 +21,20 @@ func (entry RoutingTableEntry) hasContainer(container Container) bool {
 	return ok
 }
 
-func (entry RoutingTableEntry) hasRoute(route string) bool {
-	_, ok := entry.Routes[route]
+func (entry RoutingTableEntry) hasURI(uri string) bool {
+	_, ok := entry.URIs[uri]
 	return ok
 }
 
 func (entry RoutingTableEntry) copy() RoutingTableEntry {
 	clone := RoutingTableEntry{
-		Routes:     map[string]struct{}{},
+		URIs:       map[string]struct{}{},
 		Containers: map[Container]struct{}{},
+		LogGuid:    entry.LogGuid,
 	}
 
-	for k, v := range entry.Routes {
-		clone.Routes[k] = v
+	for k, v := range entry.URIs {
+		clone.URIs[k] = v
 	}
 
 	for k, v := range entry.Containers {
@@ -37,14 +44,19 @@ func (entry RoutingTableEntry) copy() RoutingTableEntry {
 	return clone
 }
 
-func (entry RoutingTableEntry) allRoutes() []string {
-	routes := make([]string, len(entry.Routes))
+func (entry RoutingTableEntry) routes() Routes {
+	uris := make([]string, len(entry.URIs))
+
 	i := 0
-	for route := range entry.Routes {
-		routes[i] = route
+	for uri := range entry.URIs {
+		uris[i] = uri
 		i++
 	}
-	return routes
+
+	return Routes{
+		URIs:    uris,
+		LogGuid: entry.LogGuid,
+	}
 }
 
 func routesAsMap(routes []string) map[string]struct{} {

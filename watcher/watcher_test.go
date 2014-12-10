@@ -18,6 +18,8 @@ import (
 	. "github.com/cloudfoundry-incubator/route-emitter/watcher"
 )
 
+const logGuid = "some-log-guid"
+
 var _ = Describe("Watcher", func() {
 	var (
 		bbs                 *fake_bbs.FakeRouteEmitterBBS
@@ -41,7 +43,7 @@ var _ = Describe("Watcher", func() {
 		logger := lagertest.NewTestLogger("test")
 
 		dummyContainer := routing_table.Container{Host: "1.1.1.1", Port: 11}
-		dummyMessage := routing_table.RegistryMessageFor(dummyContainer, "foo.com", "bar.com")
+		dummyMessage := routing_table.RegistryMessageFor(dummyContainer, routing_table.Routes{URIs: []string{"foo.com", "bar.com"}, LogGuid: logGuid})
 		dummyMessagesToEmit = routing_table.MessagesToEmit{
 			RegistrationMessages: []routing_table.RegistryMessage{dummyMessage},
 		}
@@ -82,6 +84,7 @@ var _ = Describe("Watcher", func() {
 						Domain:      "tests",
 						ProcessGuid: "pg",
 						Routes:      []string{"route-1", "route-2"},
+						LogGuid:     logGuid,
 					},
 				}
 
@@ -94,7 +97,7 @@ var _ = Describe("Watcher", func() {
 				Eventually(table.SetRoutesCallCount).Should(Equal(1))
 				processGuid, routes := table.SetRoutesArgsForCall(0)
 				Ω(processGuid).Should(Equal("pg"))
-				Ω(routes).Should(Equal([]string{"route-1", "route-2"}))
+				Ω(routes).Should(Equal(routing_table.Routes{URIs: []string{"route-1", "route-2"}, LogGuid: logGuid}))
 			})
 
 			It("passes a 'routes registered' counter to Emit", func() {

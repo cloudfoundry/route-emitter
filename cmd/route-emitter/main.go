@@ -138,7 +138,7 @@ func initializeNatsEmitter(natsClient diegonats.NATSClient, logger lager.Logger)
 	return nats_emitter.New(natsClient, pool, logger)
 }
 
-func initializeRoutingTable() *routing_table.RoutingTable {
+func initializeRoutingTable() routing_table.RoutingTable {
 	return routing_table.New()
 }
 

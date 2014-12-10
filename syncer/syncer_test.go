@@ -23,6 +23,8 @@ import (
 	. "github.com/onsi/gomega"
 )
 
+const logGuid = "some-log-guid"
+
 var _ = Describe("Syncer", func() {
 	var (
 		bbs            *fake_bbs.FakeRouteEmitterBBS
@@ -62,13 +64,13 @@ var _ = Describe("Syncer", func() {
 		//what follows is fake data to distinguish between
 		//the "sync" and "emit" codepaths
 		dummyContainer := routing_table.Container{Host: "1.1.1.1", Port: 11}
-		dummyMessage := routing_table.RegistryMessageFor(dummyContainer, "foo.com", "bar.com")
+		dummyMessage := routing_table.RegistryMessageFor(dummyContainer, routing_table.Routes{URIs: []string{"foo.com", "bar.com"}, LogGuid: logGuid})
 		syncMessages = routing_table.MessagesToEmit{
 			RegistrationMessages: []routing_table.RegistryMessage{dummyMessage},
 		}
 
 		dummyContainer = routing_table.Container{Host: "2.2.2.2", Port: 22}
-		dummyMessage = routing_table.RegistryMessageFor(dummyContainer, "baz.com")
+		dummyMessage = routing_table.RegistryMessageFor(dummyContainer, routing_table.Routes{URIs: []string{"baz.com"}, LogGuid: logGuid})
 		messagesToEmit = routing_table.MessagesToEmit{
 			RegistrationMessages: []routing_table.RegistryMessage{dummyMessage},
 		}
@@ -96,6 +98,7 @@ var _ = Describe("Syncer", func() {
 			{
 				ProcessGuid: "process-guid-1",
 				Routes:      []string{"route-1", "route-2"},
+				LogGuid:     logGuid,
 			},
 		}, nil)
 
@@ -119,8 +122,12 @@ var _ = Describe("Syncer", func() {
 	Describe("on startup", func() {
 		It("should sync the table", func() {
 			Ω(table.SyncCallCount()).Should(Equal(1))
+
 			routes, containers := table.SyncArgsForCall(0)
-			Ω(routes["process-guid-1"]).Should(Equal([]string{"route-1", "route-2"}))
+			Ω(routes["process-guid-1"]).Should(Equal(routing_table.Routes{
+				URIs:    []string{"route-1", "route-2"},
+				LogGuid: logGuid,
+			}))
 			Ω(containers["process-guid-1"]).Should(Equal([]routing_table.Container{
 				{Host: "1.2.3.4", Port: 1234},
 			}))

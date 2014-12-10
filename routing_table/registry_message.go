@@ -9,6 +9,16 @@ type RegistryMessage struct {
 	PrivateInstanceId string `json:"private_instance_id,omitempty"`
 }
 
+func RegistryMessageFor(container Container, routes Routes) RegistryMessage {
+	return RegistryMessage{
+		URIs: routes.URIs,
+		Host: container.Host,
+		Port: container.Port,
+
+		App: routes.LogGuid,
+	}
+}
+
 type RouterGreetingMessage struct {
 	MinimumRegisterInterval int `json:"minimumRegisterIntervalInSeconds"`
 }
