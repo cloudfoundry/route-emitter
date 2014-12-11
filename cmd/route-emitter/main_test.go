@@ -142,9 +142,7 @@ var _ = Describe("Route Emitter", func() {
 				})
 				Ω(err).ShouldNot(HaveOccurred())
 
-				a := models.NewActualLRP(
-					"guid1", "iguid1", "cell-id", "some-domain", 0,
-					models.ActualLRPStateInvalid)
+				a := models.NewActualLRP("guid1", "iguid1", "cell-id", "some-domain", 0, "")
 
 				_, err = bbs.CreateActualLRP(a)
 				Ω(err).ShouldNot(HaveOccurred())
