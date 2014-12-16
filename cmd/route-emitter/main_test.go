@@ -11,6 +11,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gbytes"
+	"github.com/pivotal-golang/lager/lagertest"
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/ifrit/ginkgomon"
 )
@@ -38,16 +39,22 @@ var _ = Describe("Route Emitter", func() {
 		registeredRoutes   <-chan routing_table.RegistryMessage
 		unregisteredRoutes <-chan routing_table.RegistryMessage
 
-		desiredLRP   models.DesiredLRP
+		processGuid string
+		domain      string
+		desiredLRP  models.DesiredLRP
+
 		lrpKey       models.ActualLRPKey
 		containerKey models.ActualLRPContainerKey
 		netInfo      models.ActualLRPNetInfo
 	)
 
 	BeforeEach(func() {
+		processGuid = "guid1"
+		domain = "tests"
+
 		desiredLRP = models.DesiredLRP{
-			Domain:      "tests",
-			ProcessGuid: "guid1",
+			Domain:      domain,
+			ProcessGuid: processGuid,
 			Routes:      []string{"route-1", "route-2"},
 			Instances:   5,
 			Stack:       "some-stack",
@@ -59,7 +66,7 @@ var _ = Describe("Route Emitter", func() {
 			},
 		}
 
-		lrpKey = models.NewActualLRPKey(desiredLRP.ProcessGuid, 0, desiredLRP.Domain)
+		lrpKey = models.NewActualLRPKey(processGuid, 0, domain)
 		containerKey = models.NewActualLRPContainerKey("iguid1", "cell-id")
 		netInfo = models.NewActualLRPNetInfo("1.2.3.4", []models.PortMapping{
 			{ContainerPort: 8080, HostPort: 65100},
@@ -119,8 +126,12 @@ var _ = Describe("Route Emitter", func() {
 
 			Context("and an instance is claimed", func() {
 				BeforeEach(func() {
-					_, err := bbs.CreateActualLRP(lrpKey)
+					err := bbs.DesireLRP(desiredLRP)
 					Ω(err).ShouldNot(HaveOccurred())
+
+					_, err = bbs.CreateActualLRP(desiredLRP, 0, lagertest.NewTestLogger("test"))
+					Ω(err).ShouldNot(HaveOccurred())
+
 					_, err = bbs.ClaimActualLRP(lrpKey, containerKey)
 					Ω(err).ShouldNot(HaveOccurred())
 				})
