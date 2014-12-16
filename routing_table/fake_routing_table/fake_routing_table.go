@@ -20,13 +20,13 @@ type FakeRoutingTable struct {
 	MessagesToEmitStub        func() routing_table.MessagesToEmit
 	messagesToEmitMutex       sync.RWMutex
 	messagesToEmitArgsForCall []struct{}
-	messagesToEmitReturns struct {
+	messagesToEmitReturns     struct {
 		result1 routing_table.MessagesToEmit
 	}
 	RouteCountStub        func() int
 	routeCountMutex       sync.RWMutex
 	routeCountArgsForCall []struct{}
-	routeCountReturns struct {
+	routeCountReturns     struct {
 		result1 int
 	}
 	SetRoutesStub        func(processGuid string, routes routing_table.Routes) routing_table.MessagesToEmit

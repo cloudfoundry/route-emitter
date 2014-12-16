@@ -2,7 +2,6 @@ package main_test
 
 import (
 	"encoding/json"
-	"os"
 	"time"
 
 	"github.com/apcera/nats"
@@ -15,6 +14,8 @@ import (
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/ifrit/ginkgomon"
 )
+
+const emitterInterruptTimeout = 5 * time.Second
 
 var _ = Describe("Route Emitter", func() {
 	listenForRoutes := func(subject string) <-chan routing_table.RegistryMessage {
@@ -34,15 +35,35 @@ var _ = Describe("Route Emitter", func() {
 	}
 
 	var (
-		runner  *ginkgomon.Runner
-		emitter ifrit.Process
-
 		registeredRoutes   <-chan routing_table.RegistryMessage
 		unregisteredRoutes <-chan routing_table.RegistryMessage
+
+		desiredLRP   models.DesiredLRP
+		lrpKey       models.ActualLRPKey
+		containerKey models.ActualLRPContainerKey
+		netInfo      models.ActualLRPNetInfo
 	)
 
 	BeforeEach(func() {
-		emitter = nil
+		desiredLRP = models.DesiredLRP{
+			Domain:      "tests",
+			ProcessGuid: "guid1",
+			Routes:      []string{"route-1", "route-2"},
+			Instances:   5,
+			Stack:       "some-stack",
+			MemoryMB:    1024,
+			DiskMB:      512,
+			LogGuid:     "some-log-guid",
+			Action: &models.RunAction{
+				Path: "ls",
+			},
+		}
+
+		lrpKey = models.NewActualLRPKey(desiredLRP.ProcessGuid, 0, desiredLRP.Domain)
+		containerKey = models.NewActualLRPContainerKey("iguid1", "cell-id")
+		netInfo = models.NewActualLRPNetInfo("1.2.3.4", []models.PortMapping{
+			{ContainerPort: 8080, HostPort: 65100},
+		})
 
 		registeredRoutes = listenForRoutes("router.register")
 		unregisteredRoutes = listenForRoutes("router.unregister")
@@ -60,144 +81,76 @@ var _ = Describe("Route Emitter", func() {
 			err = natsClient.Publish(msg.Reply, response)
 			Ω(err).ShouldNot(HaveOccurred())
 		})
-
-		runner = createEmitterRunner()
-	})
-
-	AfterEach(func() {
-		if emitter != nil {
-			Ω(emitter.Wait()).ShouldNot(Receive(), "Runner should not have exploded!")
-		}
-
-		emitter.Signal(os.Interrupt)
-
-		Eventually(emitter.Wait(), 5*time.Second).Should(Receive())
 	})
 
 	Context("when the emitter is running", func() {
+		var emitter ifrit.Process
+
 		BeforeEach(func() {
-			emitter = ginkgomon.Invoke(runner)
+			emitter = ginkgomon.Invoke(createEmitterRunner())
 		})
 
-		Context("and routes are desired", func() {
+		AfterEach(func() {
+			ginkgomon.Interrupt(emitter, emitterInterruptTimeout)
+		})
+
+		Context("and an lrp with routes is desired", func() {
 			BeforeEach(func() {
-				err := bbs.DesireLRP(models.DesiredLRP{
-					Domain:      "tests",
-					ProcessGuid: "guid1",
-					Routes:      []string{"route-1", "route-2"},
-					Instances:   5,
-					Stack:       "some-stack",
-					MemoryMB:    1024,
-					DiskMB:      512,
-					LogGuid:     "some-log-guid",
-					Action: &models.RunAction{
-						Path: "ls",
-					},
-				})
+				err := bbs.DesireLRP(desiredLRP)
 				Ω(err).ShouldNot(HaveOccurred())
 			})
 
-			Context("and an endpoint comes up", func() {
+			Context("and an instance starts", func() {
 				BeforeEach(func() {
-					_, err := bbs.StartActualLRP(models.ActualLRP{
-						ProcessGuid:  "guid1",
-						Index:        0,
-						InstanceGuid: "iguid1",
-						Domain:       "tests",
-						CellID:       "cell-id",
-
-						Host: "1.2.3.4",
-						Ports: []models.PortMapping{
-							{ContainerPort: 8080, HostPort: 65100},
-						},
-					})
+					_, err := bbs.StartActualLRP(lrpKey, containerKey, netInfo)
 					Ω(err).ShouldNot(HaveOccurred())
 				})
 
 				It("emits its routes immediately", func() {
 					Eventually(registeredRoutes).Should(Receive(MatchRegistryMessage(routing_table.RegistryMessage{
-						URIs:              []string{"route-1", "route-2"},
-						Host:              "1.2.3.4",
-						Port:              65100,
-						App:               "some-log-guid",
-						PrivateInstanceId: "iguid1",
+						URIs:              desiredLRP.Routes,
+						Host:              netInfo.Host,
+						Port:              uint16(netInfo.Ports[0].HostPort),
+						App:               desiredLRP.LogGuid,
+						PrivateInstanceId: containerKey.InstanceGuid,
 					})))
 				})
 			})
-		})
 
-		Context("and an instance starts running", func() {
-			BeforeEach(func() {
-				err := bbs.DesireLRP(models.DesiredLRP{
-					Domain:      "tests",
-					ProcessGuid: "guid1",
-					Routes:      []string{"route-1", "route-2"},
-					Instances:   5,
-					Stack:       "some-stack",
-					MemoryMB:    1024,
-					DiskMB:      512,
-					Action: &models.RunAction{
-						Path: "ls",
-					},
+			Context("and an instance is claimed", func() {
+				BeforeEach(func() {
+					_, err := bbs.CreateActualLRP(lrpKey)
+					Ω(err).ShouldNot(HaveOccurred())
+					_, err = bbs.ClaimActualLRP(lrpKey, containerKey)
+					Ω(err).ShouldNot(HaveOccurred())
 				})
-				Ω(err).ShouldNot(HaveOccurred())
 
-				a := models.NewActualLRP("guid1", "iguid1", "cell-id", "some-domain", 0, "")
-
-				_, err = bbs.CreateActualLRP(a)
-				Ω(err).ShouldNot(HaveOccurred())
-				_, err = bbs.ClaimActualLRP(a)
-				Ω(err).ShouldNot(HaveOccurred())
-			})
-
-			It("does not emit routes", func() {
-				Consistently(registeredRoutes).ShouldNot(Receive())
+				It("does not emit routes", func() {
+					Consistently(registeredRoutes).ShouldNot(Receive())
+				})
 			})
 		})
 
-		Context("and an endpoint comes up", func() {
+		Context("an actual lrp starts without a routed desried lrp", func() {
 			BeforeEach(func() {
-				_, err := bbs.StartActualLRP(models.ActualLRP{
-					ProcessGuid:  "guid1",
-					Index:        0,
-					InstanceGuid: "iguid1",
-					Domain:       "tests",
-					CellID:       "cell-id",
-
-					Host: "1.2.3.4",
-					Ports: []models.PortMapping{
-						{ContainerPort: 8080, HostPort: 65100},
-					},
-				})
+				_, err := bbs.StartActualLRP(lrpKey, containerKey, netInfo)
 				Ω(err).ShouldNot(HaveOccurred())
 			})
 
 			Context("and a route is desired", func() {
 				BeforeEach(func() {
 					time.Sleep(100 * time.Millisecond)
-					err := bbs.DesireLRP(models.DesiredLRP{
-						Domain:      "tests",
-						ProcessGuid: "guid1",
-						Routes:      []string{"route-1", "route-2"},
-						Instances:   5,
-						Stack:       "some-stack",
-						MemoryMB:    1024,
-						DiskMB:      512,
-						LogGuid:     "some-log-guid",
-						Action: &models.RunAction{
-							Path: "ls",
-						},
-					})
+					err := bbs.DesireLRP(desiredLRP)
 					Ω(err).ShouldNot(HaveOccurred())
 				})
 
 				It("emits its routes immediately", func() {
 					Eventually(registeredRoutes).Should(Receive(MatchRegistryMessage(routing_table.RegistryMessage{
-						URIs:              []string{"route-1", "route-2"},
-						Host:              "1.2.3.4",
-						Port:              65100,
-						App:               "some-log-guid",
-						PrivateInstanceId: "iguid1",
+						URIs:              desiredLRP.Routes,
+						Host:              netInfo.Host,
+						Port:              uint16(netInfo.Ports[0].HostPort),
+						App:               desiredLRP.LogGuid,
+						PrivateInstanceId: containerKey.InstanceGuid,
 					})))
 				})
 
@@ -247,13 +200,8 @@ var _ = Describe("Route Emitter", func() {
 			})
 
 			AfterEach(func() {
-				if secondEmitter != nil {
-					Ω(secondEmitter.Wait()).ShouldNot(Receive(), "Runner should not have exploded!")
-				}
-
-				secondEmitter.Signal(os.Interrupt)
-
-				Eventually(secondEmitter.Wait(), 5*time.Second).Should(Receive())
+				Ω(secondEmitter.Wait()).ShouldNot(Receive(), "Runner should not have exploded!")
+				ginkgomon.Interrupt(secondEmitter, emitterInterruptTimeout)
 			})
 
 			Describe("the second emitter", func() {
@@ -264,8 +212,7 @@ var _ = Describe("Route Emitter", func() {
 
 			Context("and the first emitter goes away", func() {
 				BeforeEach(func() {
-					emitter.Signal(os.Interrupt)
-					Eventually(emitter.Wait(), 5*time.Second).Should(Receive())
+					ginkgomon.Interrupt(emitter, emitterInterruptTimeout)
 				})
 
 				Describe("the second emitter", func() {
@@ -288,43 +235,23 @@ var _ = Describe("Route Emitter", func() {
 	})
 
 	Context("when the bbs has routes to emit in /desired and /actual", func() {
-		var lrp models.DesiredLRP
+		var emitter ifrit.Process
 
 		BeforeEach(func() {
-			lrp = models.DesiredLRP{
-				Domain:      "tests",
-				ProcessGuid: "guid1",
-				Routes:      []string{"route-1", "route-2"},
-				Instances:   5,
-				Stack:       "some-stack",
-				MemoryMB:    1024,
-				DiskMB:      512,
-				LogGuid:     "some-log-guid",
-				Action: &models.RunAction{
-					Path: "ls",
-				},
-			}
-			err := bbs.DesireLRP(lrp)
+			err := bbs.DesireLRP(desiredLRP)
 			Ω(err).ShouldNot(HaveOccurred())
 
-			_, err = bbs.StartActualLRP(models.ActualLRP{
-				ProcessGuid:  "guid1",
-				Index:        0,
-				InstanceGuid: "iguid1",
-				Domain:       "tests",
-				CellID:       "cell-id",
-
-				Host: "1.2.3.4",
-				Ports: []models.PortMapping{
-					{ContainerPort: 8080, HostPort: 65100},
-				},
-			})
+			_, err = bbs.StartActualLRP(lrpKey, containerKey, netInfo)
 			Ω(err).ShouldNot(HaveOccurred())
 		})
 
 		Context("and the emitter is started", func() {
 			BeforeEach(func() {
-				emitter = ginkgomon.Invoke(runner)
+				emitter = ginkgomon.Invoke(createEmitterRunner())
+			})
+
+			AfterEach(func() {
+				ginkgomon.Interrupt(emitter, emitterInterruptTimeout)
 			})
 
 			It("immediately emits all routes", func() {
@@ -338,22 +265,14 @@ var _ = Describe("Route Emitter", func() {
 			})
 
 			Context("and a route is added", func() {
+				var changedDesiredLRP models.DesiredLRP
+
 				BeforeEach(func() {
+					changedDesiredLRP = desiredLRP
+					changedDesiredLRP.Routes = []string{"route-1", "route-2", "route-3"}
 					err := bbs.ChangeDesiredLRP(models.DesiredLRPChange{
-						Before: &lrp,
-						After: &models.DesiredLRP{
-							Domain:      "tests",
-							ProcessGuid: "guid1",
-							Routes:      []string{"route-1", "route-2", "route-3"},
-							Instances:   5,
-							Stack:       "some-stack",
-							MemoryMB:    1024,
-							DiskMB:      512,
-							LogGuid:     "some-log-guid",
-							Action: &models.RunAction{
-								Path: "ls",
-							},
-						},
+						Before: &desiredLRP,
+						After:  &changedDesiredLRP,
 					})
 					Ω(err).ShouldNot(HaveOccurred())
 				})
@@ -370,22 +289,14 @@ var _ = Describe("Route Emitter", func() {
 			})
 
 			Context("and a route is removed", func() {
+				var changedDesiredLRP models.DesiredLRP
+
 				BeforeEach(func() {
+					changedDesiredLRP = desiredLRP
+					changedDesiredLRP.Routes = []string{"route-2"}
 					err := bbs.ChangeDesiredLRP(models.DesiredLRPChange{
-						Before: &lrp,
-						After: &models.DesiredLRP{
-							Domain:      "tests",
-							ProcessGuid: "guid1",
-							Routes:      []string{"route-2"},
-							Instances:   5,
-							Stack:       "some-stack",
-							MemoryMB:    1024,
-							DiskMB:      512,
-							LogGuid:     "some-log-guid",
-							Action: &models.RunAction{
-								Path: "ls",
-							},
-						},
+						Before: &desiredLRP,
+						After:  &changedDesiredLRP,
 					})
 					Ω(err).ShouldNot(HaveOccurred())
 				})

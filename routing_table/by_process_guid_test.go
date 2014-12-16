@@ -26,11 +26,13 @@ var _ = Describe("ByProcessGuid", func() {
 
 	Describe("ContainersByProcessGuidFromActuals", func() {
 		It("should build a map of containers, ignoring those without ports", func() {
+			lrpKey1 := models.NewActualLRPKey("abc", 1, "domain")
+			lrpKey2 := models.NewActualLRPKey("def", 1, "domain")
 			containers := ContainersByProcessGuidFromActuals([]models.ActualLRP{
-				{ProcessGuid: "abc", Host: "1.1.1.1", Ports: []models.PortMapping{{HostPort: 11}}},
-				{ProcessGuid: "abc", Host: "2.2.2.2", Ports: []models.PortMapping{{HostPort: 22}}},
-				{ProcessGuid: "def", Host: "3.3.3.3", Ports: []models.PortMapping{{HostPort: 33}}},
-				{ProcessGuid: "def", Host: "4.4.4.4"},
+				{ActualLRPKey: lrpKey1, ActualLRPNetInfo: models.NewActualLRPNetInfo("1.1.1.1", []models.PortMapping{{HostPort: 11}})},
+				{ActualLRPKey: lrpKey1, ActualLRPNetInfo: models.NewActualLRPNetInfo("2.2.2.2", []models.PortMapping{{HostPort: 22}})},
+				{ActualLRPKey: lrpKey2, ActualLRPNetInfo: models.NewActualLRPNetInfo("3.3.3.3", []models.PortMapping{{HostPort: 33}})},
+				{ActualLRPKey: lrpKey2, ActualLRPNetInfo: models.NewActualLRPNetInfo("4.4.4.4", nil)},
 			})
 
 			Ω(containers).Should(HaveLen(2))

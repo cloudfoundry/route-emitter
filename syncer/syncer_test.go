@@ -26,6 +26,12 @@ import (
 const logGuid = "some-log-guid"
 
 var _ = Describe("Syncer", func() {
+	const (
+		processGuid  = "process-guid-1"
+		instanceGuid = "instance-guid-1"
+		lrpHost      = "1.2.3.4"
+	)
+
 	var (
 		bbs            *fake_bbs.FakeRouteEmitterBBS
 		natsClient     *diegonats.FakeNATSClient
@@ -36,6 +42,9 @@ var _ = Describe("Syncer", func() {
 		syncMessages   routing_table.MessagesToEmit
 		messagesToEmit routing_table.MessagesToEmit
 		syncDuration   time.Duration
+
+		lrpPorts  []models.PortMapping
+		lrpRoutes []string
 
 		routerStartMessages chan<- *nats.Msg
 		fakeMetricSender    *fake_metrics_sender.FakeMetricSender
@@ -79,25 +88,24 @@ var _ = Describe("Syncer", func() {
 		table.MessagesToEmitReturns(messagesToEmit)
 
 		//Set up some BBS data
+		lrpRoutes = []string{"route-1", "route-2"}
+		lrpPorts = []models.PortMapping{{HostPort: 1234, ContainerPort: 5678}}
+		lrpKey := models.NewActualLRPKey(processGuid, 1, "domain")
+		containerKey := models.NewActualLRPContainerKey(instanceGuid, "cell-id")
+		netInfo := models.NewActualLRPNetInfo(lrpHost, lrpPorts)
 		bbs.RunningActualLRPsReturns([]models.ActualLRP{
 			{
-				ProcessGuid:  "process-guid-1",
-				Index:        0,
-				InstanceGuid: "instance-guid-1",
-				Host:         "1.2.3.4",
-				Ports: []models.PortMapping{
-					{
-						HostPort:      1234,
-						ContainerPort: 5678,
-					},
-				},
+				ActualLRPKey:          lrpKey,
+				ActualLRPContainerKey: containerKey,
+				ActualLRPNetInfo:      netInfo,
+				State:                 models.ActualLRPStateRunning,
 			},
 		}, nil)
 
 		bbs.DesiredLRPsReturns([]models.DesiredLRP{
 			{
-				ProcessGuid: "process-guid-1",
-				Routes:      []string{"route-1", "route-2"},
+				ProcessGuid: processGuid,
+				Routes:      lrpRoutes,
 				LogGuid:     logGuid,
 			},
 		}, nil)
@@ -124,12 +132,12 @@ var _ = Describe("Syncer", func() {
 			Ω(table.SyncCallCount()).Should(Equal(1))
 
 			routes, containers := table.SyncArgsForCall(0)
-			Ω(routes["process-guid-1"]).Should(Equal(routing_table.Routes{
-				URIs:    []string{"route-1", "route-2"},
+			Ω(routes[processGuid]).Should(Equal(routing_table.Routes{
+				URIs:    lrpRoutes,
 				LogGuid: logGuid,
 			}))
-			Ω(containers["process-guid-1"]).Should(Equal([]routing_table.Container{
-				{InstanceGuid: "instance-guid-1", Host: "1.2.3.4", Port: 1234},
+			Ω(containers[processGuid]).Should(Equal([]routing_table.Container{
+				{InstanceGuid: instanceGuid, Host: lrpHost, Port: uint16(lrpPorts[0].HostPort)},
 			}))
 
 			Ω(emitter.EmitCallCount()).Should(Equal(1))

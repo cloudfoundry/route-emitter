@@ -21,6 +21,14 @@ import (
 const logGuid = "some-log-guid"
 
 var _ = Describe("Watcher", func() {
+	const (
+		expectedProcessGuid  = "process-guid"
+		expectedInstanceGuid = "instance-guid"
+		expectedHost         = "1.1.1.1"
+		expectedExternalPort = 11000
+	)
+	var expectedRoutes = []string{"route-1", "route-2"}
+
 	var (
 		bbs                 *fake_bbs.FakeRouteEmitterBBS
 		table               *fake_routing_table.FakeRoutingTable
@@ -73,19 +81,25 @@ var _ = Describe("Watcher", func() {
 	})
 
 	Describe("Desired LRP changes", func() {
+		var desiredLRP models.DesiredLRP
+
+		BeforeEach(func() {
+			desiredLRP = models.DesiredLRP{
+				Action: &models.RunAction{
+					Path: "ls",
+				},
+				Domain:      "tests",
+				ProcessGuid: expectedProcessGuid,
+				Routes:      expectedRoutes,
+				LogGuid:     logGuid,
+			}
+		})
+
 		Context("when a create/update (includes an after) change arrives", func() {
 			BeforeEach(func() {
 				desiredChange := models.DesiredLRPChange{
 					Before: nil,
-					After: &models.DesiredLRP{
-						Action: &models.RunAction{
-							Path: "ls",
-						},
-						Domain:      "tests",
-						ProcessGuid: "pg",
-						Routes:      []string{"route-1", "route-2"},
-						LogGuid:     logGuid,
-					},
+					After:  &desiredLRP,
 				}
 
 				table.SetRoutesReturns(dummyMessagesToEmit)
@@ -96,8 +110,8 @@ var _ = Describe("Watcher", func() {
 			It("should set the routes on the table", func() {
 				Eventually(table.SetRoutesCallCount).Should(Equal(1))
 				processGuid, routes := table.SetRoutesArgsForCall(0)
-				Ω(processGuid).Should(Equal("pg"))
-				Ω(routes).Should(Equal(routing_table.Routes{URIs: []string{"route-1", "route-2"}, LogGuid: logGuid}))
+				Ω(processGuid).Should(Equal(expectedProcessGuid))
+				Ω(routes).Should(Equal(routing_table.Routes{URIs: expectedRoutes, LogGuid: logGuid}))
 			})
 
 			It("passes a 'routes registered' counter to Emit", func() {
@@ -122,15 +136,8 @@ var _ = Describe("Watcher", func() {
 		Context("when the change is a delete (no after)", func() {
 			BeforeEach(func() {
 				desiredChange := models.DesiredLRPChange{
-					Before: &models.DesiredLRP{
-						Action: &models.RunAction{
-							Path: "ls",
-						},
-						Domain:      "tests",
-						ProcessGuid: "pg",
-						Routes:      []string{"route-1"},
-					},
-					After: nil,
+					Before: &desiredLRP,
+					After:  nil,
 				}
 
 				table.RemoveRoutesReturns(dummyMessagesToEmit)
@@ -141,7 +148,7 @@ var _ = Describe("Watcher", func() {
 			It("should remove the routes from the table", func() {
 				Eventually(table.RemoveRoutesCallCount).Should(Equal(1))
 				processGuid := table.RemoveRoutesArgsForCall(0)
-				Ω(processGuid).Should(Equal("pg"))
+				Ω(processGuid).Should(Equal(expectedProcessGuid))
 			})
 
 			It("should emit whatever the table tells it to emit", func() {
@@ -161,14 +168,7 @@ var _ = Describe("Watcher", func() {
 
 				desiredChange := models.DesiredLRPChange{
 					Before: nil,
-					After: &models.DesiredLRP{
-						Action: &models.RunAction{
-							Path: "ls",
-						},
-						Domain:      "tests",
-						ProcessGuid: "pg",
-						Routes:      []string{"route-1", "route-2"},
-					},
+					After:  &desiredLRP,
 				}
 
 				desiredLRPChanges <- desiredChange
@@ -187,19 +187,23 @@ var _ = Describe("Watcher", func() {
 	})
 
 	Describe("Actual LRP changes", func() {
+		var actualLRP models.ActualLRP
+
+		BeforeEach(func() {
+			actualLRP = models.ActualLRP{
+				ActualLRPKey:          models.NewActualLRPKey(expectedProcessGuid, 1, "domain"),
+				ActualLRPContainerKey: models.NewActualLRPContainerKey(expectedInstanceGuid, "cell-id"),
+				ActualLRPNetInfo: models.NewActualLRPNetInfo(expectedHost, []models.PortMapping{
+					{ContainerPort: 8080, HostPort: expectedExternalPort},
+				}),
+				State: models.ActualLRPStateRunning,
+			}
+		})
 		Context("when a create/update (includes an after) change arrives", func() {
 			BeforeEach(func() {
 				actualChange := models.ActualLRPChange{
 					Before: nil,
-					After: &models.ActualLRP{
-						ProcessGuid:  "pg",
-						InstanceGuid: "instance-guid",
-						Host:         "1.1.1.1",
-						State:        models.ActualLRPStateRunning,
-						Ports: []models.PortMapping{
-							{ContainerPort: 8080, HostPort: 11},
-						},
-					},
+					After:  &actualLRP,
 				}
 
 				table.AddOrUpdateContainerReturns(dummyMessagesToEmit)
@@ -210,8 +214,12 @@ var _ = Describe("Watcher", func() {
 			It("should add/update the container on the table", func() {
 				Eventually(table.AddOrUpdateContainerCallCount).Should(Equal(1))
 				processGuid, container := table.AddOrUpdateContainerArgsForCall(0)
-				Ω(processGuid).Should(Equal("pg"))
-				Ω(container).Should(Equal(routing_table.Container{InstanceGuid: "instance-guid", Host: "1.1.1.1", Port: 11}))
+				Ω(processGuid).Should(Equal(expectedProcessGuid))
+				Ω(container).Should(Equal(routing_table.Container{
+					InstanceGuid: expectedInstanceGuid,
+					Host:         expectedHost,
+					Port:         expectedExternalPort,
+				}))
 			})
 
 			It("should emit whatever the table tells it to emit", func() {
@@ -243,15 +251,7 @@ var _ = Describe("Watcher", func() {
 
 				actualChange := models.ActualLRPChange{
 					Before: nil,
-					After: &models.ActualLRP{
-						ProcessGuid:  "pg",
-						InstanceGuid: "instance-guid",
-						Host:         "1.1.1.1",
-						State:        models.ActualLRPStateRunning,
-						Ports: []models.PortMapping{
-							{ContainerPort: 8080, HostPort: 11},
-						},
-					},
+					After:  &actualLRP,
 				}
 
 				table.AddOrUpdateContainerReturns(dummyMessagesToEmit)
@@ -274,16 +274,8 @@ var _ = Describe("Watcher", func() {
 		Context("when the change is a delete (no after)", func() {
 			BeforeEach(func() {
 				actualChange := models.ActualLRPChange{
-					Before: &models.ActualLRP{
-						ProcessGuid:  "pg",
-						InstanceGuid: "instance-guid",
-						Host:         "1.1.1.1",
-						State:        models.ActualLRPStateRunning,
-						Ports: []models.PortMapping{
-							{ContainerPort: 8080, HostPort: 11},
-						},
-					},
-					After: nil,
+					Before: &actualLRP,
+					After:  nil,
 				}
 
 				table.RemoveContainerReturns(dummyMessagesToEmit)
@@ -294,8 +286,12 @@ var _ = Describe("Watcher", func() {
 			It("should remove the container from the table", func() {
 				Eventually(table.RemoveContainerCallCount).Should(Equal(1))
 				processGuid, container := table.RemoveContainerArgsForCall(0)
-				Ω(processGuid).Should(Equal("pg"))
-				Ω(container).Should(Equal(routing_table.Container{InstanceGuid: "instance-guid", Host: "1.1.1.1", Port: 11}))
+				Ω(processGuid).Should(Equal(expectedProcessGuid))
+				Ω(container).Should(Equal(routing_table.Container{
+					InstanceGuid: expectedInstanceGuid,
+					Host:         expectedHost,
+					Port:         expectedExternalPort,
+				}))
 			})
 
 			It("should emit whatever the table tells it to emit", func() {
