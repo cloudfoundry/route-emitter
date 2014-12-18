@@ -35,6 +35,7 @@ var gnatsdRunner ifrit.Process
 var natsClient diegonats.NATSClient
 var store storeadapter.StoreAdapter
 var bbs *Bbs.BBS
+var logger *lagertest.TestLogger
 
 func TestRouteEmitter(t *testing.T) {
 	RegisterFailHandler(Fail)
@@ -67,8 +68,9 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 
 	etcdRunner = etcdstorerunner.NewETCDClusterRunner(etcdPort, 1)
 	store = etcdRunner.Adapter()
+	logger = lagertest.NewTestLogger("test")
 
-	bbs = Bbs.NewBBS(store, timeprovider.NewTimeProvider(), lagertest.NewTestLogger("test"))
+	bbs = Bbs.NewBBS(store, timeprovider.NewTimeProvider(), logger)
 })
 
 var _ = BeforeEach(func() {

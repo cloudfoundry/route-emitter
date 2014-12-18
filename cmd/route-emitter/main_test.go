@@ -109,7 +109,7 @@ var _ = Describe("Route Emitter", func() {
 
 			Context("and an instance starts", func() {
 				BeforeEach(func() {
-					err := bbs.StartActualLRP(lrpKey, containerKey, netInfo)
+					err := bbs.StartActualLRP(lrpKey, containerKey, netInfo, logger)
 					Ω(err).ShouldNot(HaveOccurred())
 				})
 
@@ -132,7 +132,7 @@ var _ = Describe("Route Emitter", func() {
 					err = bbs.CreateActualLRP(desiredLRP, 0, lagertest.NewTestLogger("test"))
 					Ω(err).ShouldNot(HaveOccurred())
 
-					err = bbs.ClaimActualLRP(lrpKey, containerKey)
+					err = bbs.ClaimActualLRP(lrpKey, containerKey, logger)
 					Ω(err).ShouldNot(HaveOccurred())
 				})
 
@@ -144,7 +144,7 @@ var _ = Describe("Route Emitter", func() {
 
 		Context("an actual lrp starts without a routed desried lrp", func() {
 			BeforeEach(func() {
-				err := bbs.StartActualLRP(lrpKey, containerKey, netInfo)
+				err := bbs.StartActualLRP(lrpKey, containerKey, netInfo, logger)
 				Ω(err).ShouldNot(HaveOccurred())
 			})
 
@@ -252,7 +252,7 @@ var _ = Describe("Route Emitter", func() {
 			err := bbs.DesireLRP(desiredLRP)
 			Ω(err).ShouldNot(HaveOccurred())
 
-			err = bbs.StartActualLRP(lrpKey, containerKey, netInfo)
+			err = bbs.StartActualLRP(lrpKey, containerKey, netInfo, logger)
 			Ω(err).ShouldNot(HaveOccurred())
 		})
 
