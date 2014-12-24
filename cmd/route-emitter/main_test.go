@@ -11,7 +11,6 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gbytes"
-	"github.com/pivotal-golang/lager/lagertest"
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/ifrit/ginkgomon"
 )
@@ -127,9 +126,6 @@ var _ = Describe("Route Emitter", func() {
 			Context("and an instance is claimed", func() {
 				BeforeEach(func() {
 					err := bbs.DesireLRP(desiredLRP)
-					Ω(err).ShouldNot(HaveOccurred())
-
-					err = bbs.CreateActualLRP(desiredLRP, 0, lagertest.NewTestLogger("test"))
 					Ω(err).ShouldNot(HaveOccurred())
 
 					err = bbs.ClaimActualLRP(lrpKey, containerKey, logger)
