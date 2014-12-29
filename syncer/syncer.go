@@ -154,7 +154,7 @@ func (syncer *Syncer) syncAndEmit() {
 func (syncer *Syncer) register(desired models.DesiredLRP, actual models.ActualLRP) error {
 	message := routing_table.RegistryMessage{
 		URIs: desired.Routes,
-		Host: actual.Host,
+		Host: actual.Address,
 		Port: uint16(actual.Ports[0].HostPort),
 	}
 

@@ -115,7 +115,7 @@ var _ = Describe("Route Emitter", func() {
 				It("emits its routes immediately", func() {
 					Eventually(registeredRoutes).Should(Receive(MatchRegistryMessage(routing_table.RegistryMessage{
 						URIs:              desiredLRP.Routes,
-						Host:              netInfo.Host,
+						Host:              netInfo.Address,
 						Port:              uint16(netInfo.Ports[0].HostPort),
 						App:               desiredLRP.LogGuid,
 						PrivateInstanceId: containerKey.InstanceGuid,
@@ -154,7 +154,7 @@ var _ = Describe("Route Emitter", func() {
 				It("emits its routes immediately", func() {
 					Eventually(registeredRoutes).Should(Receive(MatchRegistryMessage(routing_table.RegistryMessage{
 						URIs:              desiredLRP.Routes,
-						Host:              netInfo.Host,
+						Host:              netInfo.Address,
 						Port:              uint16(netInfo.Ports[0].HostPort),
 						App:               desiredLRP.LogGuid,
 						PrivateInstanceId: containerKey.InstanceGuid,
