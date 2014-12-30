@@ -96,7 +96,7 @@ func (table *routingTable) AddOrUpdateContainer(processGuid string, container Co
 	defer table.Unlock()
 
 	newEntry := table.entries[processGuid].copy()
-	newEntry.Containers[container] = struct{}{}
+	newEntry.Containers[container.InstanceGuid] = container
 
 	return table.updateEntry(processGuid, newEntry)
 }
@@ -106,7 +106,7 @@ func (table *routingTable) RemoveContainer(processGuid string, container Contain
 	defer table.Unlock()
 
 	newEntry := table.entries[processGuid].copy()
-	delete(newEntry.Containers, container)
+	delete(newEntry.Containers, container.InstanceGuid)
 
 	return table.updateEntry(processGuid, newEntry)
 }
@@ -149,7 +149,7 @@ func registrationsFor(entry RoutingTableEntry) MessagesToEmit {
 		return messagesToEmit
 	}
 
-	for container := range entry.Containers {
+	for _, container := range entry.Containers {
 		message := RegistryMessageFor(container, entry.routes())
 		messagesToEmit.RegistrationMessages = append(messagesToEmit.RegistrationMessages, message)
 	}
@@ -170,7 +170,7 @@ func registrationsForTransition(existingEntry RoutingTableEntry, newEntry Routin
 	}
 
 	//otherwise only register *new* containers
-	for container := range newEntry.Containers {
+	for _, container := range newEntry.Containers {
 		if !existingEntry.hasContainer(container) {
 			message := RegistryMessageFor(container, newEntry.routes())
 			messagesToEmit.RegistrationMessages = append(messagesToEmit.RegistrationMessages, message)
@@ -189,7 +189,7 @@ func unregistrationsForTransition(existingEntry RoutingTableEntry, newEntry Rout
 	}
 
 	containersThatAreStillPresent := []Container{}
-	for container := range existingEntry.Containers {
+	for _, container := range existingEntry.Containers {
 		if newEntry.hasContainer(container) {
 			containersThatAreStillPresent = append(containersThatAreStillPresent, container)
 		} else {

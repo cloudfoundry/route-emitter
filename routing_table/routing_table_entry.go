@@ -13,12 +13,12 @@ type Routes struct {
 
 type RoutingTableEntry struct {
 	URIs       map[string]struct{}
-	Containers map[Container]struct{}
+	Containers map[string]Container
 	LogGuid    string
 }
 
 func (entry RoutingTableEntry) hasContainer(container Container) bool {
-	_, ok := entry.Containers[container]
+	_, ok := entry.Containers[container.InstanceGuid]
 	return ok
 }
 
@@ -30,7 +30,7 @@ func (entry RoutingTableEntry) hasURI(uri string) bool {
 func (entry RoutingTableEntry) copy() RoutingTableEntry {
 	clone := RoutingTableEntry{
 		URIs:       map[string]struct{}{},
-		Containers: map[Container]struct{}{},
+		Containers: map[string]Container{},
 		LogGuid:    entry.LogGuid,
 	}
 
@@ -68,10 +68,10 @@ func routesAsMap(routes []string) map[string]struct{} {
 	return routesMap
 }
 
-func containersAsMap(containers []Container) map[Container]struct{} {
-	containersMap := map[Container]struct{}{}
+func containersAsMap(containers []Container) map[string]Container {
+	containersMap := map[string]Container{}
 	for _, container := range containers {
-		containersMap[container] = struct{}{}
+		containersMap[container.InstanceGuid] = container
 	}
 	return containersMap
 }
