@@ -8,6 +8,7 @@ import (
 
 	"github.com/cloudfoundry-incubator/cf-debug-server"
 	"github.com/cloudfoundry-incubator/cf-lager"
+	"github.com/cloudfoundry-incubator/cf_http"
 	"github.com/cloudfoundry-incubator/receptor"
 	"github.com/cloudfoundry-incubator/route-emitter/nats_emitter"
 	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
@@ -71,6 +72,12 @@ var heartbeatInterval = flag.Duration(
 	"the interval between heartbeats to the lock",
 )
 
+var communicationTimeout = flag.Duration(
+	"communicationTimeout",
+	10*time.Second,
+	"Timeout applied to all HTTP requests.",
+)
+
 const (
 	dropsondeDestination = "localhost:3457"
 	dropsondeOrigin      = "route_emitter"
@@ -80,6 +87,8 @@ func main() {
 	cf_debug_server.AddFlags(flag.CommandLine)
 	cf_lager.AddFlags(flag.CommandLine)
 	flag.Parse()
+
+	cf_http.Initialize(*communicationTimeout)
 
 	logger := cf_lager.New("route-emitter")
 
