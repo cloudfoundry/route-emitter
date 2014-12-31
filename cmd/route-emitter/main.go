@@ -64,16 +64,9 @@ var heartbeatInterval = flag.Duration(
 	"the interval between heartbeats to the lock",
 )
 
-var dropsondeOrigin = flag.String(
-	"dropsondeOrigin",
-	"route_emitter",
-	"Origin identifier for dropsonde-emitted metrics.",
-)
-
-var dropsondeDestination = flag.String(
-	"dropsondeDestination",
-	"localhost:3457",
-	"Destination for dropsonde-emitted metrics.",
+const (
+	dropsondeDestination = "localhost:3457"
+	dropsondeOrigin      = "route_emitter"
 )
 
 func main() {
@@ -127,7 +120,7 @@ func main() {
 }
 
 func initializeDropsonde(logger lager.Logger) {
-	err := dropsonde.Initialize(*dropsondeDestination, *dropsondeOrigin)
+	err := dropsonde.Initialize(dropsondeDestination, dropsondeOrigin)
 	if err != nil {
 		logger.Error("failed to initialize dropsonde: %v", err)
 	}
