@@ -70,11 +70,10 @@ const (
 )
 
 func main() {
+	cf_debug_server.AddFlags(flag.CommandLine)
 	flag.Parse()
 
 	logger := cf_lager.New("route-emitter")
-
-	cf_debug_server.Run()
 
 	initializeDropsonde(logger)
 	bbs := initializeBbs(logger)
@@ -99,12 +98,20 @@ func main() {
 
 	heartbeat := bbs.NewRouteEmitterLock(uuid.String(), *heartbeatInterval)
 
-	group := grouper.NewOrdered(os.Interrupt, grouper.Members{
+	members := grouper.Members{
 		{"heartbeater", restart.OnError(heartbeat, heartbeater.ErrStoreUnavailable)},
 		{"nats-client", natsClientRunner},
 		{"watcher", watcher},
 		{"syncer", syncer},
-	})
+	}
+
+	if dbgAddr := cf_debug_server.DebugAddress(flag.CommandLine); dbgAddr != "" {
+		members = append(grouper.Members{
+			{"debug-server", cf_debug_server.Runner(dbgAddr)},
+		}, members...)
+	}
+
+	group := grouper.NewOrdered(os.Interrupt, members)
 
 	monitor := ifrit.Invoke(sigmon.New(group))
 
