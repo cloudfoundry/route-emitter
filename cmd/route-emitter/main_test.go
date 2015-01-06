@@ -272,15 +272,9 @@ var _ = Describe("Route Emitter", func() {
 			})
 
 			Context("and a route is added", func() {
-				var changedDesiredLRP models.DesiredLRP
-
 				BeforeEach(func() {
-					changedDesiredLRP = desiredLRP
-					changedDesiredLRP.Routes = []string{"route-1", "route-2", "route-3"}
-					err := bbs.ChangeDesiredLRP(models.DesiredLRPChange{
-						Before: &desiredLRP,
-						After:  &changedDesiredLRP,
-					})
+					desiredLRP.Routes = []string{"route-1", "route-2", "route-3"}
+					err := bbs.DesireLRP(logger, desiredLRP)
 					Ω(err).ShouldNot(HaveOccurred())
 				})
 
@@ -296,15 +290,9 @@ var _ = Describe("Route Emitter", func() {
 			})
 
 			Context("and a route is removed", func() {
-				var changedDesiredLRP models.DesiredLRP
-
 				BeforeEach(func() {
-					changedDesiredLRP = desiredLRP
-					changedDesiredLRP.Routes = []string{"route-2"}
-					err := bbs.ChangeDesiredLRP(models.DesiredLRPChange{
-						Before: &desiredLRP,
-						After:  &changedDesiredLRP,
-					})
+					desiredLRP.Routes = []string{"route-2"}
+					err := bbs.DesireLRP(logger, desiredLRP)
 					Ω(err).ShouldNot(HaveOccurred())
 				})
 
