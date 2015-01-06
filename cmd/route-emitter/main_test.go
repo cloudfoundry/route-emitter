@@ -102,7 +102,7 @@ var _ = Describe("Route Emitter", func() {
 
 		Context("and an lrp with routes is desired", func() {
 			BeforeEach(func() {
-				err := bbs.DesireLRP(desiredLRP)
+				err := bbs.DesireLRP(logger, desiredLRP)
 				Ω(err).ShouldNot(HaveOccurred())
 			})
 
@@ -125,7 +125,7 @@ var _ = Describe("Route Emitter", func() {
 
 			Context("and an instance is claimed", func() {
 				BeforeEach(func() {
-					err := bbs.DesireLRP(desiredLRP)
+					err := bbs.DesireLRP(logger, desiredLRP)
 					Ω(err).ShouldNot(HaveOccurred())
 
 					err = bbs.ClaimActualLRP(lrpKey, containerKey, logger)
@@ -147,7 +147,7 @@ var _ = Describe("Route Emitter", func() {
 			Context("and a route is desired", func() {
 				BeforeEach(func() {
 					time.Sleep(100 * time.Millisecond)
-					err := bbs.DesireLRP(desiredLRP)
+					err := bbs.DesireLRP(logger, desiredLRP)
 					Ω(err).ShouldNot(HaveOccurred())
 				})
 
@@ -245,7 +245,7 @@ var _ = Describe("Route Emitter", func() {
 		var emitter ifrit.Process
 
 		BeforeEach(func() {
-			err := bbs.DesireLRP(desiredLRP)
+			err := bbs.DesireLRP(logger, desiredLRP)
 			Ω(err).ShouldNot(HaveOccurred())
 
 			err = bbs.StartActualLRP(lrpKey, containerKey, netInfo, logger)
