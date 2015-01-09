@@ -37,11 +37,13 @@ var _ = Describe("Watcher", func() {
 		process             ifrit.Process
 		dummyMessagesToEmit routing_table.MessagesToEmit
 
-		desiredLRPChanges chan<- models.DesiredLRPChange
-		desiredLRPErrors  chan<- error
+		desiredLRPCreateOrUpdates chan models.DesiredLRP
+		desiredLRPDeletes         chan models.DesiredLRP
+		desiredLRPErrors          chan error
 
-		actualLRPChanges chan<- models.ActualLRPChange
-		actualLRPErrors  chan<- error
+		actualLRPCreateOrUpdates chan models.ActualLRP
+		actualLRPDeletes         chan models.ActualLRP
+		actualLRPErrors          chan error
 	)
 
 	BeforeEach(func() {
@@ -56,20 +58,16 @@ var _ = Describe("Watcher", func() {
 			RegistrationMessages: []routing_table.RegistryMessage{dummyMessage},
 		}
 
-		desiredChChChChanges := make(chan models.DesiredLRPChange)
-		desiredChChChErrors := make(chan error)
+		desiredLRPCreateOrUpdates = make(chan models.DesiredLRP)
+		desiredLRPDeletes = make(chan models.DesiredLRP)
+		desiredLRPErrors = make(chan error)
 
-		actualChChChChanges := make(chan models.ActualLRPChange)
-		actualChChChErrors := make(chan error)
+		actualLRPCreateOrUpdates = make(chan models.ActualLRP)
+		actualLRPDeletes = make(chan models.ActualLRP)
+		actualLRPErrors = make(chan error)
 
-		desiredLRPChanges = desiredChChChChanges
-		desiredLRPErrors = desiredChChChErrors
-
-		actualLRPChanges = actualChChChChanges
-		actualLRPErrors = actualChChChErrors
-
-		bbs.WatchForDesiredLRPChangesReturns(desiredChChChChanges, nil, desiredChChChErrors)
-		bbs.WatchForActualLRPChangesReturns(actualChChChChanges, nil, actualChChChErrors)
+		bbs.WatchForDesiredLRPChangesReturns(desiredLRPCreateOrUpdates, desiredLRPDeletes, desiredLRPErrors)
+		bbs.WatchForActualLRPChangesReturns(actualLRPCreateOrUpdates, actualLRPDeletes, actualLRPErrors)
 
 		watcher = NewWatcher(bbs, table, emitter, logger)
 		process = ifrit.Envoke(watcher)
@@ -97,14 +95,9 @@ var _ = Describe("Watcher", func() {
 
 		Context("when a create/update (includes an after) change arrives", func() {
 			BeforeEach(func() {
-				desiredChange := models.DesiredLRPChange{
-					Before: nil,
-					After:  &desiredLRP,
-				}
-
 				table.SetRoutesReturns(dummyMessagesToEmit)
 
-				desiredLRPChanges <- desiredChange
+				desiredLRPCreateOrUpdates <- desiredLRP
 			})
 
 			It("should set the routes on the table", func() {
@@ -135,14 +128,9 @@ var _ = Describe("Watcher", func() {
 
 		Context("when the change is a delete (no after)", func() {
 			BeforeEach(func() {
-				desiredChange := models.DesiredLRPChange{
-					Before: &desiredLRP,
-					After:  nil,
-				}
-
 				table.RemoveRoutesReturns(dummyMessagesToEmit)
 
-				desiredLRPChanges <- desiredChange
+				desiredLRPDeletes <- desiredLRP
 			})
 
 			It("should remove the routes from the table", func() {
@@ -166,12 +154,7 @@ var _ = Describe("Watcher", func() {
 
 				desiredLRPErrors <- errors.New("bbs watch failed")
 
-				desiredChange := models.DesiredLRPChange{
-					Before: nil,
-					After:  &desiredLRP,
-				}
-
-				desiredLRPChanges <- desiredChange
+				desiredLRPCreateOrUpdates <- desiredLRP
 			})
 
 			It("should retry after 3 seconds", func() {
@@ -201,14 +184,9 @@ var _ = Describe("Watcher", func() {
 		})
 		Context("when a create/update (includes an after) change arrives", func() {
 			BeforeEach(func() {
-				actualChange := models.ActualLRPChange{
-					Before: nil,
-					After:  &actualLRP,
-				}
-
 				table.AddOrUpdateContainerReturns(dummyMessagesToEmit)
 
-				actualLRPChanges <- actualChange
+				actualLRPCreateOrUpdates <- actualLRP
 			})
 
 			It("should add/update the container on the table", func() {
@@ -249,14 +227,9 @@ var _ = Describe("Watcher", func() {
 
 				actualLRPErrors <- errors.New("bbs watch failed")
 
-				actualChange := models.ActualLRPChange{
-					Before: nil,
-					After:  &actualLRP,
-				}
-
 				table.AddOrUpdateContainerReturns(dummyMessagesToEmit)
 
-				actualLRPChanges <- actualChange
+				actualLRPCreateOrUpdates <- actualLRP
 			})
 
 			It("should retry after 3 seconds", func() {
@@ -273,14 +246,9 @@ var _ = Describe("Watcher", func() {
 
 		Context("when the change is a delete (no after)", func() {
 			BeforeEach(func() {
-				actualChange := models.ActualLRPChange{
-					Before: &actualLRP,
-					After:  nil,
-				}
-
 				table.RemoveContainerReturns(dummyMessagesToEmit)
 
-				actualLRPChanges <- actualChange
+				actualLRPDeletes <- actualLRP
 			})
 
 			It("should remove the container from the table", func() {
