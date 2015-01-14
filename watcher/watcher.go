@@ -2,11 +2,12 @@ package watcher
 
 import (
 	"os"
-	"time"
+	"sync"
 
+	"github.com/cloudfoundry-incubator/receptor"
+	"github.com/cloudfoundry-incubator/receptor/serialization"
 	"github.com/cloudfoundry-incubator/route-emitter/nats_emitter"
 	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
-	"github.com/cloudfoundry-incubator/runtime-schema/bbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/metric"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/pivotal-golang/lager"
@@ -18,96 +19,63 @@ var (
 )
 
 type Watcher struct {
-	bbs     bbs.RouteEmitterBBS
-	table   routing_table.RoutingTable
-	emitter nats_emitter.NATSEmitterInterface
-	logger  lager.Logger
+	receptorClient receptor.Client
+	table          routing_table.RoutingTable
+	emitter        nats_emitter.NATSEmitterInterface
+	logger         lager.Logger
 }
 
 func NewWatcher(
-	bbs bbs.RouteEmitterBBS,
+	receptorClient receptor.Client,
 	table routing_table.RoutingTable,
 	emitter nats_emitter.NATSEmitterInterface,
 	logger lager.Logger,
 ) *Watcher {
 	return &Watcher{
-		bbs:     bbs,
-		table:   table,
-		emitter: emitter,
-		logger:  logger.Session("watcher"),
+		receptorClient: receptorClient,
+		table:          table,
+		emitter:        emitter,
+		logger:         logger.Session("watcher"),
 	}
 }
 
 func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
-	desiredLRPCreateOrUpdates, desiredLRPDeletes, desiredErrors := watcher.bbs.WatchForDesiredLRPChanges(watcher.logger)
-	actualLRPCreateOrUpdates, actualLRPDeletes, actualErrors := watcher.bbs.WatchForActualLRPChanges(watcher.logger)
+	watcher.logger.Info("starting")
+
+	eventSource, err := watcher.receptorClient.SubscribeToEvents()
+	if err != nil {
+		return err
+	}
 
 	close(ready)
+	watcher.logger.Info("started")
+	defer watcher.logger.Info("finished")
 
-	var reWatchActual <-chan time.Time
-	var reWatchDesired <-chan time.Time
+	eventChan := make(chan receptor.Event)
+	errChan := make(chan error)
+
+	lock := sync.Mutex{}
 
 	for {
+		go func() {
+			lock.Lock()
+			event, err := eventSource.Next()
+			lock.Unlock()
+
+			if err != nil {
+				errChan <- err
+			} else if event != nil {
+				eventChan <- event
+			}
+		}()
+
 		select {
-		case desiredCreateOrUpdate, ok := <-desiredLRPCreateOrUpdates:
-			if !ok {
-				desiredLRPCreateOrUpdates = nil
-				desiredLRPDeletes = nil
-				break
-			}
+		case event := <-eventChan:
+			watcher.logger.Info("handling-event", lager.Data{"event": event})
+			watcher.handleEvent(event)
 
-			watcher.handleDesiredCreateOrUpdate(desiredCreateOrUpdate)
-
-		case desiredDelete, ok := <-desiredLRPDeletes:
-			if !ok {
-				desiredLRPCreateOrUpdates = nil
-				desiredLRPDeletes = nil
-				break
-			}
-
-			watcher.handleDesiredDelete(desiredDelete)
-
-		case actualCreateOrUpdate, ok := <-actualLRPCreateOrUpdates:
-			if !ok {
-				actualLRPCreateOrUpdates = nil
-				actualLRPDeletes = nil
-				break
-			}
-
-			watcher.handleActualCreateOrUpdate(actualCreateOrUpdate)
-
-		case actualDelete, ok := <-actualLRPDeletes:
-			if !ok {
-				actualLRPCreateOrUpdates = nil
-				actualLRPDeletes = nil
-				break
-			}
-
-			watcher.handleActualDelete(actualDelete)
-
-		case err := <-desiredErrors:
-			watcher.logger.Error("desired-watch-failed", err)
-
-			reWatchDesired = time.After(3 * time.Second)
-			desiredLRPCreateOrUpdates = nil
-			desiredLRPDeletes = nil
-			desiredErrors = nil
-
-		case err := <-actualErrors:
-			watcher.logger.Error("actual-watch-failed", err)
-
-			reWatchActual = time.After(3 * time.Second)
-			actualLRPCreateOrUpdates = nil
-			actualLRPDeletes = nil
-			actualErrors = nil
-
-		case <-reWatchDesired:
-			desiredLRPCreateOrUpdates, desiredLRPDeletes, desiredErrors = watcher.bbs.WatchForDesiredLRPChanges(watcher.logger)
-			reWatchDesired = nil
-
-		case <-reWatchActual:
-			actualLRPCreateOrUpdates, actualLRPDeletes, actualErrors = watcher.bbs.WatchForActualLRPChanges(watcher.logger)
-			reWatchActual = nil
+		case err := <-errChan:
+			watcher.logger.Error("failed-getting-next-event", err)
 
 		case <-signals:
 			watcher.logger.Info("stopping")
@@ -118,10 +86,45 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 	return nil
 }
 
-func (watcher *Watcher) handleActualCreateOrUpdate(actualLRP models.ActualLRP) {
-	watcher.logger.Info("handling-actual-change", lager.Data{
-		"actual-lrp": actualLRP,
+func (watcher *Watcher) handleEvent(event receptor.Event) {
+	switch event := event.(type) {
+	case receptor.DesiredLRPChangedEvent:
+		watcher.handleDesiredCreateOrUpdate(serialization.DesiredLRPFromResponse(event.DesiredLRPResponse))
+	case receptor.DesiredLRPRemovedEvent:
+		watcher.handleDesiredDelete(serialization.DesiredLRPFromResponse(event.DesiredLRPResponse))
+	case receptor.ActualLRPChangedEvent:
+		watcher.handleActualCreateOrUpdate(serialization.ActualLRPFromResponse(event.ActualLRPResponse))
+	case receptor.ActualLRPRemovedEvent:
+		watcher.handleActualDelete(serialization.ActualLRPFromResponse(event.ActualLRPResponse))
+	default:
+		watcher.logger.Info("did-not-handle-unrecognizable-event", lager.Data{"event-type": event.EventType()})
+	}
+}
+
+func (watcher *Watcher) handleDesiredCreateOrUpdate(desiredLRP models.DesiredLRP) {
+	watcher.logger.Debug("handling-desired-create-or-update", lager.Data{"desired-lrp": desiredLRP})
+	defer watcher.logger.Debug("done-handling-desired-create-or-update")
+
+	messagesToEmit := watcher.table.SetRoutes(desiredLRP.ProcessGuid, routing_table.Routes{
+		URIs:    desiredLRP.Routes,
+		LogGuid: desiredLRP.LogGuid,
 	})
+
+	watcher.emitter.Emit(messagesToEmit, &routesRegistered, &routesUnregistered)
+}
+
+func (watcher *Watcher) handleDesiredDelete(desiredLRP models.DesiredLRP) {
+	watcher.logger.Debug("handling-desired-delete", lager.Data{"desired-lrp": desiredLRP})
+	defer watcher.logger.Debug("done-handling-desired-delete")
+
+	messagesToEmit := watcher.table.RemoveRoutes(desiredLRP.ProcessGuid)
+
+	watcher.emitter.Emit(messagesToEmit, &routesRegistered, &routesUnregistered)
+}
+
+func (watcher *Watcher) handleActualCreateOrUpdate(actualLRP models.ActualLRP) {
+	watcher.logger.Debug("handling-actual-create-or-update", lager.Data{"actual-lrp": actualLRP})
+	defer watcher.logger.Debug("done-handling-actual-create-or-update")
 
 	container, err := routing_table.ContainerFromActual(actualLRP)
 	if err != nil {
@@ -134,9 +137,8 @@ func (watcher *Watcher) handleActualCreateOrUpdate(actualLRP models.ActualLRP) {
 }
 
 func (watcher *Watcher) handleActualDelete(actualLRP models.ActualLRP) {
-	watcher.logger.Info("handling-actual-delete", lager.Data{
-		"actual-lrp": actualLRP,
-	})
+	watcher.logger.Debug("handling-actual-delete", lager.Data{"actual-lrp": actualLRP})
+	defer watcher.logger.Debug("done-handling-actual-delete")
 
 	container, err := routing_table.ContainerFromActual(actualLRP)
 	if err != nil {
@@ -144,28 +146,5 @@ func (watcher *Watcher) handleActualDelete(actualLRP models.ActualLRP) {
 	}
 
 	messagesToEmit := watcher.table.RemoveContainer(actualLRP.ProcessGuid, container)
-	watcher.emitter.Emit(messagesToEmit, &routesRegistered, &routesUnregistered)
-}
-
-func (watcher *Watcher) handleDesiredCreateOrUpdate(desiredLRP models.DesiredLRP) {
-	watcher.logger.Info("handling-desired-create-or-update", lager.Data{
-		"desired-lrp": desiredLRP,
-	})
-
-	messagesToEmit := watcher.table.SetRoutes(desiredLRP.ProcessGuid, routing_table.Routes{
-		URIs:    desiredLRP.Routes,
-		LogGuid: desiredLRP.LogGuid,
-	})
-
-	watcher.emitter.Emit(messagesToEmit, &routesRegistered, &routesUnregistered)
-}
-
-func (watcher *Watcher) handleDesiredDelete(desiredLRP models.DesiredLRP) {
-	watcher.logger.Info("handling-desired-delete", lager.Data{
-		"desired-lrp": desiredLRP,
-	})
-
-	messagesToEmit := watcher.table.RemoveRoutes(desiredLRP.ProcessGuid)
-
 	watcher.emitter.Emit(messagesToEmit, &routesRegistered, &routesUnregistered)
 }

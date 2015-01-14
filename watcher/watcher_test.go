@@ -1,11 +1,11 @@
 package watcher_test
 
 import (
-	"errors"
 	"os"
-	"time"
 
-	"github.com/cloudfoundry-incubator/runtime-schema/bbs/fake_bbs"
+	"github.com/cloudfoundry-incubator/receptor"
+	"github.com/cloudfoundry-incubator/receptor/fake_receptor"
+	"github.com/cloudfoundry-incubator/receptor/serialization"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -30,24 +30,19 @@ var _ = Describe("Watcher", func() {
 	var expectedRoutes = []string{"route-1", "route-2"}
 
 	var (
-		bbs                 *fake_bbs.FakeRouteEmitterBBS
-		table               *fake_routing_table.FakeRoutingTable
-		emitter             *fake_nats_emitter.FakeNATSEmitter
-		watcher             *Watcher
-		process             ifrit.Process
+		receptorClient *fake_receptor.FakeClient
+		table          *fake_routing_table.FakeRoutingTable
+		emitter        *fake_nats_emitter.FakeNATSEmitter
+
 		dummyMessagesToEmit routing_table.MessagesToEmit
 
-		desiredLRPCreateOrUpdates chan models.DesiredLRP
-		desiredLRPDeletes         chan models.DesiredLRP
-		desiredLRPErrors          chan error
+		watcher *Watcher
 
-		actualLRPCreateOrUpdates chan models.ActualLRP
-		actualLRPDeletes         chan models.ActualLRP
-		actualLRPErrors          chan error
+		process ifrit.Process
 	)
 
 	BeforeEach(func() {
-		bbs = new(fake_bbs.FakeRouteEmitterBBS)
+		receptorClient = new(fake_receptor.FakeClient)
 		table = &fake_routing_table.FakeRoutingTable{}
 		emitter = &fake_nats_emitter.FakeNATSEmitter{}
 		logger := lagertest.NewTestLogger("test")
@@ -58,18 +53,10 @@ var _ = Describe("Watcher", func() {
 			RegistrationMessages: []routing_table.RegistryMessage{dummyMessage},
 		}
 
-		desiredLRPCreateOrUpdates = make(chan models.DesiredLRP)
-		desiredLRPDeletes = make(chan models.DesiredLRP)
-		desiredLRPErrors = make(chan error)
+		watcher = NewWatcher(receptorClient, table, emitter, logger)
+	})
 
-		actualLRPCreateOrUpdates = make(chan models.ActualLRP)
-		actualLRPDeletes = make(chan models.ActualLRP)
-		actualLRPErrors = make(chan error)
-
-		bbs.WatchForDesiredLRPChangesReturns(desiredLRPCreateOrUpdates, desiredLRPDeletes, desiredLRPErrors)
-		bbs.WatchForActualLRPChangesReturns(actualLRPCreateOrUpdates, actualLRPDeletes, actualLRPErrors)
-
-		watcher = NewWatcher(bbs, table, emitter, logger)
+	JustBeforeEach(func() {
 		process = ifrit.Envoke(watcher)
 	})
 
@@ -79,25 +66,30 @@ var _ = Describe("Watcher", func() {
 	})
 
 	Describe("Desired LRP changes", func() {
-		var desiredLRP models.DesiredLRP
-
-		BeforeEach(func() {
-			desiredLRP = models.DesiredLRP{
-				Action: &models.RunAction{
-					Path: "ls",
-				},
-				Domain:      "tests",
-				ProcessGuid: expectedProcessGuid,
-				Routes:      expectedRoutes,
-				LogGuid:     logGuid,
-			}
-		})
-
-		Context("when a create/update (includes an after) change arrives", func() {
+		Context("when a create/update event occurs", func() {
 			BeforeEach(func() {
 				table.SetRoutesReturns(dummyMessagesToEmit)
 
-				desiredLRPCreateOrUpdates <- desiredLRP
+				eventSource := new(fake_receptor.FakeEventSource)
+				receptorClient.SubscribeToEventsReturns(eventSource, nil)
+
+				desiredLRP := models.DesiredLRP{
+					Action: &models.RunAction{
+						Path: "ls",
+					},
+					Domain:      "tests",
+					ProcessGuid: expectedProcessGuid,
+					Routes:      expectedRoutes,
+					LogGuid:     logGuid,
+				}
+
+				eventSource.NextStub = func() (receptor.Event, error) {
+					if eventSource.NextCallCount() == 1 {
+						return receptor.NewDesiredLRPChangedEvent(serialization.DesiredLRPToResponse(desiredLRP)), nil
+					} else {
+						return nil, nil
+					}
+				}
 			})
 
 			It("should set the routes on the table", func() {
@@ -126,11 +118,30 @@ var _ = Describe("Watcher", func() {
 			})
 		})
 
-		Context("when the change is a delete (no after)", func() {
+		Context("when a delete event occurs", func() {
 			BeforeEach(func() {
 				table.RemoveRoutesReturns(dummyMessagesToEmit)
 
-				desiredLRPDeletes <- desiredLRP
+				eventSource := new(fake_receptor.FakeEventSource)
+				receptorClient.SubscribeToEventsReturns(eventSource, nil)
+
+				desiredLRP := models.DesiredLRP{
+					Action: &models.RunAction{
+						Path: "ls",
+					},
+					Domain:      "tests",
+					ProcessGuid: expectedProcessGuid,
+					Routes:      expectedRoutes,
+					LogGuid:     logGuid,
+				}
+
+				eventSource.NextStub = func() (receptor.Event, error) {
+					if eventSource.NextCallCount() == 1 {
+						return receptor.NewDesiredLRPRemovedEvent(serialization.DesiredLRPToResponse(desiredLRP)), nil
+					} else {
+						return nil, nil
+					}
+				}
 			})
 
 			It("should remove the routes from the table", func() {
@@ -145,48 +156,32 @@ var _ = Describe("Watcher", func() {
 				Ω(messagesToEmit).Should(Equal(dummyMessagesToEmit))
 			})
 		})
-
-		Context("when watching for change fails", func() {
-			var errorTime time.Time
-
-			BeforeEach(func() {
-				errorTime = time.Now()
-
-				desiredLRPErrors <- errors.New("bbs watch failed")
-
-				desiredLRPCreateOrUpdates <- desiredLRP
-			})
-
-			It("should retry after 3 seconds", func() {
-				Eventually(table.SetRoutesCallCount, 5).Should(Equal(1))
-				Ω(time.Since(errorTime)).Should(BeNumerically("~", 3*time.Second, 200*time.Millisecond))
-			})
-
-			It("should be possible to SIGINT the route emitter", func() {
-				process.Signal(os.Interrupt)
-				Eventually(process.Wait()).Should(Receive())
-			})
-		})
 	})
 
 	Describe("Actual LRP changes", func() {
-		var actualLRP models.ActualLRP
-
-		BeforeEach(func() {
-			actualLRP = models.ActualLRP{
-				ActualLRPKey:          models.NewActualLRPKey(expectedProcessGuid, 1, "domain"),
-				ActualLRPContainerKey: models.NewActualLRPContainerKey(expectedInstanceGuid, "cell-id"),
-				ActualLRPNetInfo: models.NewActualLRPNetInfo(expectedHost, []models.PortMapping{
-					{ContainerPort: 8080, HostPort: expectedExternalPort},
-				}),
-				State: models.ActualLRPStateRunning,
-			}
-		})
-		Context("when a create/update (includes an after) change arrives", func() {
+		Context("when a create/update event occurs", func() {
 			BeforeEach(func() {
 				table.AddOrUpdateContainerReturns(dummyMessagesToEmit)
 
-				actualLRPCreateOrUpdates <- actualLRP
+				eventSource := new(fake_receptor.FakeEventSource)
+				receptorClient.SubscribeToEventsReturns(eventSource, nil)
+
+				actualLRP := models.ActualLRP{
+					ActualLRPKey:          models.NewActualLRPKey(expectedProcessGuid, 1, "domain"),
+					ActualLRPContainerKey: models.NewActualLRPContainerKey(expectedInstanceGuid, "cell-id"),
+					ActualLRPNetInfo: models.NewActualLRPNetInfo(expectedHost, []models.PortMapping{
+						{ContainerPort: 8080, HostPort: expectedExternalPort},
+					}),
+					State: models.ActualLRPStateRunning,
+				}
+
+				eventSource.NextStub = func() (receptor.Event, error) {
+					if eventSource.NextCallCount() == 1 {
+						return receptor.NewActualLRPChangedEvent(serialization.ActualLRPToResponse(actualLRP)), nil
+					} else {
+						return nil, nil
+					}
+				}
 			})
 
 			It("should add/update the container on the table", func() {
@@ -219,36 +214,29 @@ var _ = Describe("Watcher", func() {
 			})
 		})
 
-		Context("when watching for change fails", func() {
-			var errorTime time.Time
-
-			BeforeEach(func() {
-				errorTime = time.Now()
-
-				actualLRPErrors <- errors.New("bbs watch failed")
-
-				table.AddOrUpdateContainerReturns(dummyMessagesToEmit)
-
-				actualLRPCreateOrUpdates <- actualLRP
-			})
-
-			It("should retry after 3 seconds", func() {
-				Eventually(emitter.EmitCallCount, 5).Should(Equal(1))
-				Ω(time.Since(errorTime)).Should(BeNumerically("~", 3*time.Second, 200*time.Millisecond))
-			})
-
-			It("should be possible to SIGINT the route emitter", func() {
-				process.Signal(os.Interrupt)
-				Eventually(process.Wait()).Should(Receive())
-			})
-
-		})
-
-		Context("when the change is a delete (no after)", func() {
+		Context("when a delete event occurs", func() {
 			BeforeEach(func() {
 				table.RemoveContainerReturns(dummyMessagesToEmit)
 
-				actualLRPDeletes <- actualLRP
+				eventSource := new(fake_receptor.FakeEventSource)
+				receptorClient.SubscribeToEventsReturns(eventSource, nil)
+
+				actualLRP := models.ActualLRP{
+					ActualLRPKey:          models.NewActualLRPKey(expectedProcessGuid, 1, "domain"),
+					ActualLRPContainerKey: models.NewActualLRPContainerKey(expectedInstanceGuid, "cell-id"),
+					ActualLRPNetInfo: models.NewActualLRPNetInfo(expectedHost, []models.PortMapping{
+						{ContainerPort: 8080, HostPort: expectedExternalPort},
+					}),
+					State: models.ActualLRPStateRunning,
+				}
+
+				eventSource.NextStub = func() (receptor.Event, error) {
+					if eventSource.NextCallCount() == 1 {
+						return receptor.NewActualLRPRemovedEvent(serialization.ActualLRPToResponse(actualLRP)), nil
+					} else {
+						return nil, nil
+					}
+				}
 			})
 
 			It("should remove the container from the table", func() {
@@ -269,4 +257,41 @@ var _ = Describe("Watcher", func() {
 			})
 		})
 	})
+
+	Describe("Unrecognized events", func() {
+		BeforeEach(func() {
+			eventSource := new(fake_receptor.FakeEventSource)
+			receptorClient.SubscribeToEventsReturns(eventSource, nil)
+
+			eventSource.NextStub = func() (receptor.Event, error) {
+				if eventSource.NextCallCount() == 1 {
+					return unrecognizedEvent{}, nil
+				} else {
+					return nil, nil
+				}
+			}
+		})
+
+		It("does not emit any messages", func() {
+			Consistently(emitter.EmitCallCount).Should(BeZero())
+		})
+	})
+
+	Describe("interrupting the process", func() {
+		BeforeEach(func() {
+			eventSource := new(fake_receptor.FakeEventSource)
+			receptorClient.SubscribeToEventsReturns(eventSource, nil)
+		})
+
+		It("should be possible to SIGINT the route emitter", func() {
+			process.Signal(os.Interrupt)
+			Eventually(process.Wait()).Should(Receive())
+		})
+	})
 })
+
+type unrecognizedEvent struct{}
+
+func (u unrecognizedEvent) EventType() receptor.EventType {
+	return "unrecognized-event"
+}

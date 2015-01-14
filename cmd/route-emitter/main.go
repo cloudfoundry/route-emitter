@@ -8,6 +8,7 @@ import (
 
 	"github.com/cloudfoundry-incubator/cf-debug-server"
 	"github.com/cloudfoundry-incubator/cf-lager"
+	"github.com/cloudfoundry-incubator/receptor"
 	"github.com/cloudfoundry-incubator/route-emitter/nats_emitter"
 	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
 	"github.com/cloudfoundry-incubator/route-emitter/syncer"
@@ -32,6 +33,12 @@ var etcdCluster = flag.String(
 	"etcdCluster",
 	"http://127.0.0.1:4001",
 	"comma-separated list of etcd addresses (http://ip:port)",
+)
+
+var diegoAPIURL = flag.String(
+	"diegoAPIURL",
+	"",
+	"URL of diego API",
 )
 
 var natsAddresses = flag.String(
@@ -79,13 +86,14 @@ func main() {
 	initializeDropsonde(logger)
 	bbs := initializeBbs(logger)
 	table := initializeRoutingTable()
+	receptorClient := receptor.NewClient(*diegoAPIURL)
 
 	natsClient := diegonats.NewClient()
 	natsClientRunner := diegonats.NewClientRunner(*natsAddresses, *natsUsername, *natsPassword, logger, natsClient)
 
 	emitter := initializeNatsEmitter(natsClient, logger)
 	watcher := ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
-		return watcher.NewWatcher(bbs, table, emitter, logger).Run(signals, ready)
+		return watcher.NewWatcher(receptorClient, table, emitter, logger).Run(signals, ready)
 	})
 
 	syncer := ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
