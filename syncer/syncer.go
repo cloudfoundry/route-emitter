@@ -52,6 +52,7 @@ func NewSyncer(
 }
 
 func (syncer *Syncer) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
+	syncer.logger.Info("starting")
 	replyUuid, err := uuid.NewV4()
 	if err != nil {
 		return err
@@ -64,6 +65,7 @@ func (syncer *Syncer) Run(signals <-chan os.Signal, ready chan<- struct{}) error
 
 	syncer.syncAndEmit()
 	close(ready)
+	syncer.logger.Info("started")
 
 	var heartbeatInterval time.Duration
 	retryGreetingTicker := time.NewTicker(time.Second)
@@ -117,6 +119,7 @@ GREET_LOOP:
 func (syncer *Syncer) emit() {
 	messagesToEmit := syncer.table.MessagesToEmit()
 
+	syncer.logger.Info("emitting-messages", lager.Data{"messages": messagesToEmit})
 	err := syncer.emitter.Emit(messagesToEmit, &routesSynced, nil)
 	if err != nil {
 		syncer.logger.Error("failed-to-emit-routes", err)
@@ -143,6 +146,7 @@ func (syncer *Syncer) syncAndEmit() {
 		routing_table.ContainersByProcessGuidFromActuals(allRunningActuals),
 	)
 
+	syncer.logger.Info("emitting-routes-after-syncing", lager.Data{"routes": routesToEmit})
 	err = syncer.emitter.Emit(routesToEmit, &routesSynced, nil)
 	if err != nil {
 		syncer.logger.Error("failed-to-emit-synced", err)

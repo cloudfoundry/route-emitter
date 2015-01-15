@@ -44,6 +44,7 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 
 	eventSource, err := watcher.receptorClient.SubscribeToEvents()
 	if err != nil {
+		watcher.logger.Error("failed-subscribing-to-events", err)
 		return err
 	}
 
