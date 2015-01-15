@@ -9,6 +9,7 @@ install:
   - curl -L https://github.com/coreos/etcd/releases/download/v0.4.6/etcd-v0.4.6-linux-amd64.tar.gz | tar zxf - -C /tmp
   - mv /tmp/etcd-v0.4.6-linux-amd64/etcd $HOME/gopath/bin
   - go get github.com/apcera/gnatsd
+  - go get github.com/cloudfoundry-incubator/receptor/cmd/receptor # for building receptor in the main suite
 
 before_script:
   - export PATH=$HOME/gopath/bin:$PATH
