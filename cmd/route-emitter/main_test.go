@@ -125,10 +125,7 @@ var _ = Describe("Route Emitter", func() {
 
 			Context("and an instance is claimed", func() {
 				BeforeEach(func() {
-					err := bbs.DesireLRP(logger, desiredLRP)
-					Ω(err).ShouldNot(HaveOccurred())
-
-					err = bbs.ClaimActualLRP(lrpKey, containerKey, logger)
+					err := bbs.ClaimActualLRP(lrpKey, containerKey, logger)
 					Ω(err).ShouldNot(HaveOccurred())
 				})
 
@@ -273,8 +270,12 @@ var _ = Describe("Route Emitter", func() {
 
 			Context("and a route is added", func() {
 				BeforeEach(func() {
-					desiredLRP.Routes = []string{"route-1", "route-2", "route-3"}
-					err := bbs.DesireLRP(logger, desiredLRP)
+					updateRequest := models.DesiredLRPUpdate{
+						Routes:     []string{"route-1", "route-2", "route-3"},
+						Instances:  &desiredLRP.Instances,
+						Annotation: &desiredLRP.Annotation,
+					}
+					err := bbs.UpdateDesiredLRP(logger, processGuid, updateRequest)
 					Ω(err).ShouldNot(HaveOccurred())
 				})
 
@@ -291,8 +292,12 @@ var _ = Describe("Route Emitter", func() {
 
 			Context("and a route is removed", func() {
 				BeforeEach(func() {
-					desiredLRP.Routes = []string{"route-2"}
-					err := bbs.DesireLRP(logger, desiredLRP)
+					updateRequest := models.DesiredLRPUpdate{
+						Routes:     []string{"route-2"},
+						Instances:  &desiredLRP.Instances,
+						Annotation: &desiredLRP.Annotation,
+					}
+					err := bbs.UpdateDesiredLRP(logger, processGuid, updateRequest)
 					Ω(err).ShouldNot(HaveOccurred())
 				})
 
