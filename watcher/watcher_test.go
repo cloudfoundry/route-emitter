@@ -1,6 +1,7 @@
 package watcher_test
 
 import (
+	"errors"
 	"os"
 
 	"github.com/cloudfoundry-incubator/receptor"
@@ -274,6 +275,37 @@ var _ = Describe("Watcher", func() {
 
 		It("does not emit any messages", func() {
 			Consistently(emitter.EmitCallCount).Should(BeZero())
+		})
+	})
+
+	Context("when the event source returns an error", func() {
+		var subscribeErr, nextErr error
+
+		BeforeEach(func() {
+			subscribeErr = errors.New("subscribe-error")
+			nextErr = errors.New("next-error")
+
+			eventSource := new(fake_receptor.FakeEventSource)
+			receptorClient.SubscribeToEventsStub = func() (receptor.EventSource, error) {
+				if receptorClient.SubscribeToEventsCallCount() == 1 {
+					return eventSource, nil
+				}
+				return nil, subscribeErr
+			}
+
+			eventSource.NextStub = func() (receptor.Event, error) {
+				return nil, nextErr
+			}
+		})
+
+		It("re-subscribes", func() {
+			Eventually(receptorClient.SubscribeToEventsCallCount).Should(Equal(2))
+		})
+
+		Context("when re-subscribing fails", func() {
+			It("returns an error", func() {
+				Eventually(process.Wait()).Should(Receive(Equal(subscribeErr)))
+			})
 		})
 	})
 
