@@ -2,7 +2,6 @@ package watcher
 
 import (
 	"os"
-	"sync"
 
 	"github.com/cloudfoundry-incubator/receptor"
 	"github.com/cloudfoundry-incubator/receptor/serialization"
@@ -54,14 +53,20 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 
 	eventChan := make(chan receptor.Event)
 	errChan := make(chan error)
-
-	lock := sync.Mutex{}
+	resubscribeErrChan := make(chan error)
 
 	for {
 		go func() {
-			lock.Lock()
+			if eventSource == nil {
+				var resubscribeErr error
+				eventSource, resubscribeErr = watcher.receptorClient.SubscribeToEvents()
+				if resubscribeErr != nil {
+					resubscribeErrChan <- resubscribeErr
+					return
+				}
+			}
+
 			event, err := eventSource.Next()
-			lock.Unlock()
 
 			if err != nil {
 				errChan <- err
@@ -71,20 +76,32 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 		}()
 
 		select {
+		case resubscribeErr := <-resubscribeErrChan:
+			watcher.logger.Error("failed-resubscribing-to-events", resubscribeErr)
+			if eventSource != nil {
+				err := eventSource.Close()
+				if err != nil {
+					watcher.logger.Debug("failed-closing-event-source", lager.Data{"error-msg": err.Error()})
+				}
+			}
+			return resubscribeErr
+
 		case event := <-eventChan:
 			watcher.logger.Info("handling-event", lager.Data{"event": event})
 			watcher.handleEvent(event)
 
 		case err := <-errChan:
 			watcher.logger.Error("failed-getting-next-event", err)
-			eventSource, err = watcher.receptorClient.SubscribeToEvents()
-			if err != nil {
-				watcher.logger.Error("failed-resubscribing-to-events", err)
-				return err
-			}
+			eventSource = nil
 
 		case <-signals:
 			watcher.logger.Info("stopping")
+			if eventSource != nil {
+				err := eventSource.Close()
+				if err != nil {
+					watcher.logger.Debug("failed-closing-event-source", lager.Data{"error-msg": err.Error()})
+				}
+			}
 			return nil
 		}
 	}
