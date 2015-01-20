@@ -7,11 +7,13 @@ import (
 	"time"
 
 	"github.com/apcera/nats"
+	"github.com/cloudfoundry-incubator/receptor"
+	"github.com/cloudfoundry-incubator/receptor/fake_receptor"
+	"github.com/cloudfoundry-incubator/receptor/serialization"
 	"github.com/cloudfoundry-incubator/route-emitter/nats_emitter/fake_nats_emitter"
 	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
 	"github.com/cloudfoundry-incubator/route-emitter/routing_table/fake_routing_table"
 	. "github.com/cloudfoundry-incubator/route-emitter/syncer"
-	"github.com/cloudfoundry-incubator/runtime-schema/bbs/fake_bbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	fake_metrics_sender "github.com/cloudfoundry/dropsonde/metric_sender/fake"
 	"github.com/cloudfoundry/dropsonde/metrics"
@@ -33,7 +35,7 @@ var _ = Describe("Syncer", func() {
 	)
 
 	var (
-		bbs            *fake_bbs.FakeRouteEmitterBBS
+		receptorClient *fake_receptor.FakeClient
 		natsClient     *diegonats.FakeNATSClient
 		emitter        *fake_nats_emitter.FakeNATSEmitter
 		table          *fake_routing_table.FakeRoutingTable
@@ -51,7 +53,7 @@ var _ = Describe("Syncer", func() {
 	)
 
 	BeforeEach(func() {
-		bbs = new(fake_bbs.FakeRouteEmitterBBS)
+		receptorClient = new(fake_receptor.FakeClient)
 		natsClient = diegonats.NewFakeClient()
 		emitter = &fake_nats_emitter.FakeNATSEmitter{}
 		table = &fake_routing_table.FakeRoutingTable{}
@@ -93,21 +95,25 @@ var _ = Describe("Syncer", func() {
 		lrpKey := models.NewActualLRPKey(processGuid, 1, "domain")
 		containerKey := models.NewActualLRPContainerKey(instanceGuid, "cell-id")
 		netInfo := models.NewActualLRPNetInfo(lrpHost, lrpPorts)
-		bbs.RunningActualLRPsReturns([]models.ActualLRP{
-			{
+		receptorClient.ActualLRPsReturns([]receptor.ActualLRPResponse{
+			serialization.ActualLRPToResponse(models.ActualLRP{
 				ActualLRPKey:          lrpKey,
 				ActualLRPContainerKey: containerKey,
 				ActualLRPNetInfo:      netInfo,
 				State:                 models.ActualLRPStateRunning,
-			},
+			}),
+			serialization.ActualLRPToResponse(models.ActualLRP{
+				ActualLRPKey: lrpKey,
+				State:        models.ActualLRPStateUnclaimed,
+			}),
 		}, nil)
 
-		bbs.DesiredLRPsReturns([]models.DesiredLRP{
-			{
+		receptorClient.DesiredLRPsReturns([]receptor.DesiredLRPResponse{
+			serialization.DesiredLRPToResponse(models.DesiredLRP{
 				ProcessGuid: processGuid,
 				Routes:      lrpRoutes,
 				LogGuid:     logGuid,
-			},
+			}),
 		}, nil)
 
 		fakeMetricSender = fake_metrics_sender.NewFakeMetricSender()
@@ -117,7 +123,7 @@ var _ = Describe("Syncer", func() {
 
 	JustBeforeEach(func() {
 		logger := lagertest.NewTestLogger("test")
-		syncer = NewSyncer(bbs, table, emitter, syncDuration, natsClient, logger)
+		syncer = NewSyncer(receptorClient, table, emitter, syncDuration, natsClient, logger)
 		process = ifrit.Envoke(syncer)
 	})
 
@@ -309,7 +315,7 @@ var _ = Describe("Syncer", func() {
 				lock := &sync.Mutex{}
 				calls := 0
 
-				bbs.RunningActualLRPsStub = func() ([]models.ActualLRP, error) {
+				receptorClient.ActualLRPsStub = func() ([]receptor.ActualLRPResponse, error) {
 					lock.Lock()
 					defer lock.Unlock()
 					if calls == 0 {
@@ -317,7 +323,7 @@ var _ = Describe("Syncer", func() {
 						return nil, errors.New("bam")
 					}
 
-					return []models.ActualLRP{}, nil
+					return []receptor.ActualLRPResponse{}, nil
 				}
 			})
 
@@ -336,7 +342,7 @@ var _ = Describe("Syncer", func() {
 			BeforeEach(func() {
 				lock := &sync.Mutex{}
 				calls := 0
-				bbs.DesiredLRPsStub = func() ([]models.DesiredLRP, error) {
+				receptorClient.DesiredLRPsStub = func() ([]receptor.DesiredLRPResponse, error) {
 					lock.Lock()
 					defer lock.Unlock()
 					if calls == 0 {
@@ -344,7 +350,7 @@ var _ = Describe("Syncer", func() {
 						return nil, errors.New("bam")
 					}
 
-					return []models.DesiredLRP{}, nil
+					return []receptor.DesiredLRPResponse{}, nil
 				}
 			})
 

@@ -97,7 +97,7 @@ func main() {
 	})
 
 	syncer := ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
-		return syncer.NewSyncer(bbs, table, emitter, *syncInterval, natsClient, logger).Run(signals, ready)
+		return syncer.NewSyncer(receptorClient, table, emitter, *syncInterval, natsClient, logger).Run(signals, ready)
 	})
 
 	uuid, err := uuid.NewV4()

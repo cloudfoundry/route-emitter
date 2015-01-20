@@ -6,9 +6,10 @@ import (
 	"time"
 
 	"github.com/apcera/nats"
+	"github.com/cloudfoundry-incubator/receptor"
+	"github.com/cloudfoundry-incubator/receptor/serialization"
 	"github.com/cloudfoundry-incubator/route-emitter/nats_emitter"
 	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
-	"github.com/cloudfoundry-incubator/runtime-schema/bbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/metric"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/cloudfoundry/gunk/diegonats"
@@ -22,7 +23,7 @@ var (
 )
 
 type Syncer struct {
-	bbs               bbs.RouteEmitterBBS
+	receptorClient    receptor.Client
 	natsClient        diegonats.NATSClient
 	logger            lager.Logger
 	table             routing_table.RoutingTable
@@ -32,7 +33,7 @@ type Syncer struct {
 }
 
 func NewSyncer(
-	bbs bbs.RouteEmitterBBS,
+	receptorClient receptor.Client,
 	table routing_table.RoutingTable,
 	emitter nats_emitter.NATSEmitterInterface,
 	syncDuration time.Duration,
@@ -40,11 +41,11 @@ func NewSyncer(
 	logger lager.Logger,
 ) *Syncer {
 	return &Syncer{
-		bbs:        bbs,
-		table:      table,
-		emitter:    emitter,
-		natsClient: natsClient,
-		logger:     logger.Session("syncer"),
+		receptorClient: receptorClient,
+		table:          table,
+		emitter:        emitter,
+		natsClient:     natsClient,
+		logger:         logger.Session("syncer"),
 
 		syncDuration:      syncDuration,
 		heartbeatInterval: make(chan time.Duration),
@@ -129,21 +130,33 @@ func (syncer *Syncer) emit() {
 }
 
 func (syncer *Syncer) syncAndEmit() {
-	allRunningActuals, err := syncer.bbs.RunningActualLRPs()
+	actualLRPResponses, err := syncer.receptorClient.ActualLRPs()
 	if err != nil {
 		syncer.logger.Error("failed-to-get-actual", err)
 		return
 	}
 
-	allDesired, err := syncer.bbs.DesiredLRPs()
+	desiredLRPResponses, err := syncer.receptorClient.DesiredLRPs()
 	if err != nil {
 		syncer.logger.Error("failed-to-get-desired", err)
 		return
 	}
 
+	runningActualLRPs := make([]models.ActualLRP, 0, len(actualLRPResponses))
+	for _, actualLRPResponse := range actualLRPResponses {
+		if actualLRPResponse.State == receptor.ActualLRPStateRunning {
+			runningActualLRPs = append(runningActualLRPs, serialization.ActualLRPFromResponse(actualLRPResponse))
+		}
+	}
+
+	desiredLRPs := make([]models.DesiredLRP, 0, len(desiredLRPResponses))
+	for _, desiredLRPResponse := range desiredLRPResponses {
+		desiredLRPs = append(desiredLRPs, serialization.DesiredLRPFromResponse(desiredLRPResponse))
+	}
+
 	routesToEmit := syncer.table.Sync(
-		routing_table.RoutesByProcessGuidFromDesireds(allDesired),
-		routing_table.ContainersByProcessGuidFromActuals(allRunningActuals),
+		routing_table.RoutesByProcessGuidFromDesireds(desiredLRPs),
+		routing_table.ContainersByProcessGuidFromActuals(runningActualLRPs),
 	)
 
 	syncer.logger.Info("emitting-routes-after-syncing", lager.Data{"routes": routesToEmit})
