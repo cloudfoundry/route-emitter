@@ -111,12 +111,16 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 
 func (watcher *Watcher) handleEvent(event receptor.Event) {
 	switch event := event.(type) {
-	case receptor.DesiredLRPChangedEvent:
+	case receptor.DesiredLRPCreatedEvent:
 		watcher.handleDesiredCreateOrUpdate(serialization.DesiredLRPFromResponse(event.DesiredLRPResponse))
+	case receptor.DesiredLRPChangedEvent:
+		watcher.handleDesiredCreateOrUpdate(serialization.DesiredLRPFromResponse(event.After))
 	case receptor.DesiredLRPRemovedEvent:
 		watcher.handleDesiredDelete(serialization.DesiredLRPFromResponse(event.DesiredLRPResponse))
+	case receptor.ActualLRPCreatedEvent:
+		watcher.handleActualCreate(serialization.ActualLRPFromResponse(event.ActualLRPResponse))
 	case receptor.ActualLRPChangedEvent:
-		watcher.handleActualCreateOrUpdate(serialization.ActualLRPFromResponse(event.ActualLRPResponse))
+		watcher.handleActualUpdate(serialization.ActualLRPFromResponse(event.Before), serialization.ActualLRPFromResponse(event.After))
 	case receptor.ActualLRPRemovedEvent:
 		watcher.handleActualDelete(serialization.ActualLRPFromResponse(event.ActualLRPResponse))
 	default:
@@ -145,10 +149,37 @@ func (watcher *Watcher) handleDesiredDelete(desiredLRP models.DesiredLRP) {
 	watcher.emitter.Emit(messagesToEmit, &routesRegistered, &routesUnregistered)
 }
 
-func (watcher *Watcher) handleActualCreateOrUpdate(actualLRP models.ActualLRP) {
-	watcher.logger.Debug("handling-actual-create-or-update", lager.Data{"actual-lrp": actualLRP})
-	defer watcher.logger.Debug("done-handling-actual-create-or-update")
+func (watcher *Watcher) handleActualCreate(actualLRP models.ActualLRP) {
+	watcher.logger.Debug("handling-actual-create", lager.Data{"actual-lrp": actualLRP})
+	defer watcher.logger.Debug("done-handling-actual-create")
 
+	if actualLRP.State == models.ActualLRPStateRunning {
+		watcher.addOrUpdateAndEmit(actualLRP)
+	} else {
+		watcher.removeAndEmit(actualLRP)
+	}
+}
+
+func (watcher *Watcher) handleActualUpdate(before, after models.ActualLRP) {
+	watcher.logger.Debug("handling-actual-update", lager.Data{"before": before, "after": after})
+	defer watcher.logger.Debug("done-handling-actual-update")
+
+	switch {
+	case after.State == models.ActualLRPStateRunning:
+		watcher.addOrUpdateAndEmit(after)
+	case after.State != models.ActualLRPStateRunning && before.State == models.ActualLRPStateRunning:
+		watcher.removeAndEmit(before)
+	}
+}
+
+func (watcher *Watcher) handleActualDelete(actualLRP models.ActualLRP) {
+	watcher.logger.Debug("handling-actual-delete", lager.Data{"actual-lrp": actualLRP})
+	defer watcher.logger.Debug("done-handling-actual-delete")
+
+	watcher.removeAndEmit(actualLRP)
+}
+
+func (watcher *Watcher) addOrUpdateAndEmit(actualLRP models.ActualLRP) {
 	container, err := routing_table.ContainerFromActual(actualLRP)
 	if err != nil {
 		watcher.logger.Error("failed-to-extract-container-from-actual", err)
@@ -159,12 +190,10 @@ func (watcher *Watcher) handleActualCreateOrUpdate(actualLRP models.ActualLRP) {
 	watcher.emitter.Emit(messagesToEmit, &routesRegistered, &routesUnregistered)
 }
 
-func (watcher *Watcher) handleActualDelete(actualLRP models.ActualLRP) {
-	watcher.logger.Debug("handling-actual-delete", lager.Data{"actual-lrp": actualLRP})
-	defer watcher.logger.Debug("done-handling-actual-delete")
-
+func (watcher *Watcher) removeAndEmit(actualLRP models.ActualLRP) {
 	container, err := routing_table.ContainerFromActual(actualLRP)
 	if err != nil {
+		watcher.logger.Error("failed-to-extract-container-from-actual", err)
 		return
 	}
 
