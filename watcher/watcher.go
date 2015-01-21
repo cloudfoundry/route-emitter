@@ -81,13 +81,16 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 			if eventSource != nil {
 				err := eventSource.Close()
 				if err != nil {
-					watcher.logger.Debug("failed-closing-event-source", lager.Data{"error-msg": err.Error()})
+					watcher.logger.Error("failed-closing-event-source", err)
 				}
 			}
 			return resubscribeErr
 
 		case event := <-eventChan:
-			watcher.logger.Info("handling-event", lager.Data{"event": event})
+			watcher.logger.Info("handling-event", lager.Data{
+				"type": event.EventType(),
+			})
+
 			watcher.handleEvent(event)
 
 		case err := <-errChan:
@@ -99,7 +102,7 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 			if eventSource != nil {
 				err := eventSource.Close()
 				if err != nil {
-					watcher.logger.Debug("failed-closing-event-source", lager.Data{"error-msg": err.Error()})
+					watcher.logger.Error("failed-closing-event-source", err)
 				}
 			}
 			return nil
@@ -129,7 +132,7 @@ func (watcher *Watcher) handleEvent(event receptor.Event) {
 }
 
 func (watcher *Watcher) handleDesiredCreateOrUpdate(desiredLRP models.DesiredLRP) {
-	watcher.logger.Debug("handling-desired-create-or-update", lager.Data{"desired-lrp": desiredLRP})
+	watcher.logger.Debug("handling-desired-create-or-update", desiredLRPData(desiredLRP))
 	defer watcher.logger.Debug("done-handling-desired-create-or-update")
 
 	messagesToEmit := watcher.table.SetRoutes(desiredLRP.ProcessGuid, routing_table.Routes{
@@ -141,7 +144,7 @@ func (watcher *Watcher) handleDesiredCreateOrUpdate(desiredLRP models.DesiredLRP
 }
 
 func (watcher *Watcher) handleDesiredDelete(desiredLRP models.DesiredLRP) {
-	watcher.logger.Debug("handling-desired-delete", lager.Data{"desired-lrp": desiredLRP})
+	watcher.logger.Debug("handling-desired-delete", desiredLRPData(desiredLRP))
 	defer watcher.logger.Debug("done-handling-desired-delete")
 
 	messagesToEmit := watcher.table.RemoveRoutes(desiredLRP.ProcessGuid)
@@ -150,7 +153,7 @@ func (watcher *Watcher) handleDesiredDelete(desiredLRP models.DesiredLRP) {
 }
 
 func (watcher *Watcher) handleActualCreate(actualLRP models.ActualLRP) {
-	watcher.logger.Debug("handling-actual-create", lager.Data{"actual-lrp": actualLRP})
+	watcher.logger.Debug("handling-actual-create", actualLRPData(actualLRP))
 	defer watcher.logger.Debug("done-handling-actual-create")
 
 	if actualLRP.State == models.ActualLRPStateRunning {
@@ -161,7 +164,7 @@ func (watcher *Watcher) handleActualCreate(actualLRP models.ActualLRP) {
 }
 
 func (watcher *Watcher) handleActualUpdate(before, after models.ActualLRP) {
-	watcher.logger.Debug("handling-actual-update", lager.Data{"before": before, "after": after})
+	watcher.logger.Debug("handling-actual-update", lager.Data{"before": actualLRPData(before), "after": actualLRPData(after)})
 	defer watcher.logger.Debug("done-handling-actual-update")
 
 	switch {
@@ -173,7 +176,7 @@ func (watcher *Watcher) handleActualUpdate(before, after models.ActualLRP) {
 }
 
 func (watcher *Watcher) handleActualDelete(actualLRP models.ActualLRP) {
-	watcher.logger.Debug("handling-actual-delete", lager.Data{"actual-lrp": actualLRP})
+	watcher.logger.Debug("handling-actual-delete", actualLRPData(actualLRP))
 	defer watcher.logger.Debug("done-handling-actual-delete")
 
 	watcher.removeAndEmit(actualLRP)
@@ -199,4 +202,21 @@ func (watcher *Watcher) removeAndEmit(actualLRP models.ActualLRP) {
 
 	messagesToEmit := watcher.table.RemoveContainer(actualLRP.ProcessGuid, container)
 	watcher.emitter.Emit(messagesToEmit, &routesRegistered, &routesUnregistered)
+}
+
+func desiredLRPData(lrp models.DesiredLRP) lager.Data {
+	return lager.Data{
+		"process-guid": lrp.ProcessGuid,
+		"routes":       lrp.Routes,
+		"ports":        lrp.Ports,
+	}
+}
+
+func actualLRPData(lrp models.ActualLRP) lager.Data {
+	return lager.Data{
+		"process-guid":  lrp.ActualLRPKey.ProcessGuid,
+		"index":         lrp.ActualLRPKey.Index,
+		"container-key": lrp.ActualLRPContainerKey,
+		"net-info":      lrp.ActualLRPNetInfo,
+	}
 }
