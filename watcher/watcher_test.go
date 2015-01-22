@@ -468,45 +468,75 @@ var _ = Describe("Watcher", func() {
 		})
 
 		Context("when a delete event occurs", func() {
-			BeforeEach(func() {
-				table.RemoveContainerReturns(dummyMessagesToEmit)
+			Context("when the actual is in the RUNNING state", func() {
+				BeforeEach(func() {
+					table.RemoveContainerReturns(dummyMessagesToEmit)
 
-				eventSource := new(fake_receptor.FakeEventSource)
-				receptorClient.SubscribeToEventsReturns(eventSource, nil)
+					eventSource := new(fake_receptor.FakeEventSource)
+					receptorClient.SubscribeToEventsReturns(eventSource, nil)
 
-				actualLRP := models.ActualLRP{
-					ActualLRPKey:          models.NewActualLRPKey(expectedProcessGuid, 1, "domain"),
-					ActualLRPContainerKey: models.NewActualLRPContainerKey(expectedInstanceGuid, "cell-id"),
-					ActualLRPNetInfo: models.NewActualLRPNetInfo(expectedHost, []models.PortMapping{
-						{ContainerPort: 8080, HostPort: expectedExternalPort},
-					}),
-					State: models.ActualLRPStateRunning,
-				}
-
-				eventSource.NextStub = func() (receptor.Event, error) {
-					if eventSource.NextCallCount() == 1 {
-						return receptor.NewActualLRPRemovedEvent(serialization.ActualLRPToResponse(actualLRP)), nil
-					} else {
-						return nil, nil
+					actualLRP := models.ActualLRP{
+						ActualLRPKey:          models.NewActualLRPKey(expectedProcessGuid, 1, "domain"),
+						ActualLRPContainerKey: models.NewActualLRPContainerKey(expectedInstanceGuid, "cell-id"),
+						ActualLRPNetInfo: models.NewActualLRPNetInfo(expectedHost, []models.PortMapping{
+							{ContainerPort: 8080, HostPort: expectedExternalPort},
+						}),
+						State: models.ActualLRPStateRunning,
 					}
-				}
+
+					eventSource.NextStub = func() (receptor.Event, error) {
+						if eventSource.NextCallCount() == 1 {
+							return receptor.NewActualLRPRemovedEvent(serialization.ActualLRPToResponse(actualLRP)), nil
+						} else {
+							return nil, nil
+						}
+					}
+				})
+
+				It("should remove the container from the table", func() {
+					Eventually(table.RemoveContainerCallCount).Should(Equal(1))
+					processGuid, container := table.RemoveContainerArgsForCall(0)
+					Ω(processGuid).Should(Equal(expectedProcessGuid))
+					Ω(container).Should(Equal(routing_table.Container{
+						InstanceGuid: expectedInstanceGuid,
+						Host:         expectedHost,
+						Port:         expectedExternalPort,
+					}))
+				})
+
+				It("should emit whatever the table tells it to emit", func() {
+					Eventually(emitter.EmitCallCount).Should(Equal(1))
+					messagesToEmit, _, _ := emitter.EmitArgsForCall(0)
+					Ω(messagesToEmit).Should(Equal(dummyMessagesToEmit))
+				})
 			})
 
-			It("should remove the container from the table", func() {
-				Eventually(table.RemoveContainerCallCount).Should(Equal(1))
-				processGuid, container := table.RemoveContainerArgsForCall(0)
-				Ω(processGuid).Should(Equal(expectedProcessGuid))
-				Ω(container).Should(Equal(routing_table.Container{
-					InstanceGuid: expectedInstanceGuid,
-					Host:         expectedHost,
-					Port:         expectedExternalPort,
-				}))
-			})
+			Context("when the actual is not in the RUNNING state", func() {
+				BeforeEach(func() {
+					eventSource := new(fake_receptor.FakeEventSource)
+					receptorClient.SubscribeToEventsReturns(eventSource, nil)
 
-			It("should emit whatever the table tells it to emit", func() {
-				Eventually(emitter.EmitCallCount).Should(Equal(1))
-				messagesToEmit, _, _ := emitter.EmitArgsForCall(0)
-				Ω(messagesToEmit).Should(Equal(dummyMessagesToEmit))
+					actualLRP := models.ActualLRP{
+						ActualLRPKey: models.NewActualLRPKey(expectedProcessGuid, 1, "domain"),
+						State:        models.ActualLRPStateCrashed,
+					}
+
+					eventSource.NextStub = func() (receptor.Event, error) {
+						if eventSource.NextCallCount() == 1 {
+							return receptor.NewActualLRPRemovedEvent(serialization.ActualLRPToResponse(actualLRP)), nil
+						} else {
+							return nil, nil
+						}
+					}
+				})
+
+				It("doesn't remove the container from the table", func() {
+					Consistently(table.RemoveContainerCallCount).Should(Equal(0))
+				})
+
+				It("doesn't emit", func() {
+					Consistently(emitter.EmitCallCount).Should(Equal(0))
+				})
 			})
 		})
 	})

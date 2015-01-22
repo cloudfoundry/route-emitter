@@ -177,7 +177,9 @@ func (watcher *Watcher) handleActualDelete(actualLRP models.ActualLRP) {
 	watcher.logger.Debug("handling-actual-delete", actualLRPData(actualLRP))
 	defer watcher.logger.Debug("done-handling-actual-delete")
 
-	watcher.removeAndEmit(actualLRP)
+	if actualLRP.State == models.ActualLRPStateRunning {
+		watcher.removeAndEmit(actualLRP)
+	}
 }
 
 func (watcher *Watcher) addOrUpdateAndEmit(actualLRP models.ActualLRP) {
