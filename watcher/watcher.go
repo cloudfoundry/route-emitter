@@ -158,8 +158,6 @@ func (watcher *Watcher) handleActualCreate(actualLRP models.ActualLRP) {
 
 	if actualLRP.State == models.ActualLRPStateRunning {
 		watcher.addOrUpdateAndEmit(actualLRP)
-	} else {
-		watcher.removeAndEmit(actualLRP)
 	}
 }
 
