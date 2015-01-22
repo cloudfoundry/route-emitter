@@ -278,6 +278,38 @@ var _ = Describe("Watcher", func() {
 					Expect(string(*unregisterCounter)).To(Equal("RoutesUnregistered"))
 				})
 			})
+
+			Context("when the resulting LRP is not in the RUNNING state", func() {
+				BeforeEach(func() {
+					eventSource := new(fake_receptor.FakeEventSource)
+					receptorClient.SubscribeToEventsReturns(eventSource, nil)
+
+					actualLRP := models.ActualLRP{
+						ActualLRPKey:          models.NewActualLRPKey(expectedProcessGuid, 1, "domain"),
+						ActualLRPContainerKey: models.NewActualLRPContainerKey(expectedInstanceGuid, "cell-id"),
+						ActualLRPNetInfo: models.NewActualLRPNetInfo(expectedHost, []models.PortMapping{
+							{ContainerPort: 8080, HostPort: expectedExternalPort},
+						}),
+						State: models.ActualLRPStateUnclaimed,
+					}
+
+					eventSource.NextStub = func() (receptor.Event, error) {
+						if eventSource.NextCallCount() == 1 {
+							return receptor.NewActualLRPCreatedEvent(serialization.ActualLRPToResponse(actualLRP)), nil
+						} else {
+							return nil, nil
+						}
+					}
+				})
+
+				It("doesn't add/update the container on the table", func() {
+					Consistently(table.AddOrUpdateContainerCallCount).Should(Equal(0))
+				})
+
+				It("doesn't emit", func() {
+					Eventually(emitter.EmitCallCount).Should(Equal(0))
+				})
+			})
 		})
 
 		Context("when a change event occurs", func() {
