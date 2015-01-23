@@ -136,21 +136,30 @@ var _ = Describe("Route Emitter", func() {
 		})
 
 		Context("an actual lrp starts without a routed desried lrp", func() {
+			var routes = []string{"route-1", "route-2"}
+
 			BeforeEach(func() {
-				err := bbs.StartActualLRP(lrpKey, containerKey, netInfo, logger)
+				desiredLRP.Routes = nil
+				err := bbs.DesireLRP(logger, desiredLRP)
+				Ω(err).ShouldNot(HaveOccurred())
+
+				err = bbs.StartActualLRP(lrpKey, containerKey, netInfo, logger)
 				Ω(err).ShouldNot(HaveOccurred())
 			})
 
 			Context("and a route is desired", func() {
 				BeforeEach(func() {
 					time.Sleep(100 * time.Millisecond)
-					err := bbs.DesireLRP(logger, desiredLRP)
+					update := models.DesiredLRPUpdate{
+						Routes: routes,
+					}
+					err := bbs.UpdateDesiredLRP(logger, desiredLRP.ProcessGuid, update)
 					Ω(err).ShouldNot(HaveOccurred())
 				})
 
 				It("emits its routes immediately", func() {
 					Eventually(registeredRoutes).Should(Receive(MatchRegistryMessage(routing_table.RegistryMessage{
-						URIs:              desiredLRP.Routes,
+						URIs:              routes,
 						Host:              netInfo.Address,
 						Port:              uint16(netInfo.Ports[0].HostPort),
 						App:               desiredLRP.LogGuid,
