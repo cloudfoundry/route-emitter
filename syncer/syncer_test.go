@@ -272,6 +272,10 @@ var _ = Describe("Syncer", func() {
 
 	Describe("syncing", func() {
 		BeforeEach(func() {
+			receptorClient.ActualLRPsStub = func() ([]receptor.ActualLRPResponse, error) {
+				time.Sleep(100 * time.Millisecond)
+				return nil, nil
+			}
 			syncDuration = 500 * time.Millisecond
 		})
 
@@ -296,6 +300,12 @@ var _ = Describe("Syncer", func() {
 			Ω(emittedMessages).Should(Equal(syncMessages))
 
 			Ω(t2.Sub(t1)).Should(BeNumerically("~", 500*time.Millisecond, 100*time.Millisecond))
+		})
+
+		It("should emit the sync duration", func() {
+			Eventually(func() float64 {
+				return fakeMetricSender.GetValue("RouteEmitterSyncDuration").Value
+			}, 10*time.Second).Should(BeNumerically(">=", 100*time.Millisecond))
 		})
 
 		It("sends a 'routes total' metric", func() {

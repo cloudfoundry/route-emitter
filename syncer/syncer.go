@@ -18,8 +18,9 @@ import (
 )
 
 var (
-	routesTotal  = metric.Metric("RoutesTotal")
-	routesSynced = metric.Counter("RoutesSynced")
+	routesTotal       = metric.Metric("RoutesTotal")
+	routesSynced      = metric.Counter("RoutesSynced")
+	routeSyncDuration = metric.Duration("RouteEmitterSyncDuration")
 )
 
 type Syncer struct {
@@ -130,6 +131,12 @@ func (syncer *Syncer) emit() {
 }
 
 func (syncer *Syncer) syncAndEmit() {
+	before := time.Now()
+	defer func() {
+		after := time.Now()
+		routeSyncDuration.Send(after.Sub(before))
+	}()
+
 	actualLRPResponses, err := syncer.receptorClient.ActualLRPs()
 	if err != nil {
 		syncer.logger.Error("failed-to-get-actual", err)
