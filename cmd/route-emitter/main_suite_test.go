@@ -22,7 +22,6 @@ import (
 
 	"github.com/cloudfoundry-incubator/receptor/cmd/receptor/testrunner"
 	Bbs "github.com/cloudfoundry-incubator/runtime-schema/bbs"
-	"github.com/cloudfoundry-incubator/runtime-schema/models"
 )
 
 const heartbeatInterval = 1 * time.Second
@@ -98,7 +97,7 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 	store = etcdRunner.Adapter()
 
 	logger = lagertest.NewTestLogger("test")
-	bbs = Bbs.NewBBS(store, clock.NewClock(), models.NewDefaultRestartCalculator(), logger)
+	bbs = Bbs.NewBBS(store, clock.NewClock(), logger)
 })
 
 var _ = BeforeEach(func() {
