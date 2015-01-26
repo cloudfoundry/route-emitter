@@ -19,10 +19,10 @@ import (
 	"github.com/cloudfoundry-incubator/runtime-schema/heartbeater"
 	"github.com/cloudfoundry/dropsonde"
 	"github.com/cloudfoundry/gunk/diegonats"
-	"github.com/cloudfoundry/gunk/timeprovider"
 	"github.com/cloudfoundry/gunk/workpool"
 	"github.com/cloudfoundry/storeadapter/etcdstoreadapter"
 	"github.com/nu7hatch/gouuid"
+	"github.com/pivotal-golang/clock"
 	"github.com/pivotal-golang/lager"
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/ifrit/grouper"
@@ -171,5 +171,5 @@ func initializeBbs(logger lager.Logger) Bbs.RouteEmitterBBS {
 		logger.Fatal("failed-to-connect-to-etcd", err)
 	}
 
-	return Bbs.NewRouteEmitterBBS(etcdAdapter, timeprovider.NewTimeProvider(), logger)
+	return Bbs.NewRouteEmitterBBS(etcdAdapter, clock.NewClock(), logger)
 }

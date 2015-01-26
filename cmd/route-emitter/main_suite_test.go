@@ -10,12 +10,12 @@ import (
 	"time"
 
 	"github.com/cloudfoundry/gunk/diegonats"
-	"github.com/cloudfoundry/gunk/timeprovider"
 	"github.com/cloudfoundry/storeadapter"
 	"github.com/cloudfoundry/storeadapter/storerunner/etcdstorerunner"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gexec"
+	"github.com/pivotal-golang/clock"
 	"github.com/pivotal-golang/lager/lagertest"
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/ifrit/ginkgomon"
@@ -98,7 +98,7 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 	store = etcdRunner.Adapter()
 
 	logger = lagertest.NewTestLogger("test")
-	bbs = Bbs.NewBBS(store, timeprovider.NewTimeProvider(), models.NewDefaultRestartCalculator(), logger)
+	bbs = Bbs.NewBBS(store, clock.NewClock(), models.NewDefaultRestartCalculator(), logger)
 })
 
 var _ = BeforeEach(func() {
