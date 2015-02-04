@@ -9,12 +9,10 @@ import (
 	"github.com/apcera/nats"
 	"github.com/cloudfoundry-incubator/receptor"
 	"github.com/cloudfoundry-incubator/receptor/fake_receptor"
-	"github.com/cloudfoundry-incubator/receptor/serialization"
 	"github.com/cloudfoundry-incubator/route-emitter/nats_emitter/fake_nats_emitter"
 	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
 	"github.com/cloudfoundry-incubator/route-emitter/routing_table/fake_routing_table"
 	. "github.com/cloudfoundry-incubator/route-emitter/syncer"
-	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	fake_metrics_sender "github.com/cloudfoundry/dropsonde/metric_sender/fake"
 	"github.com/cloudfoundry/dropsonde/metrics"
 	"github.com/cloudfoundry/gunk/diegonats"
@@ -45,8 +43,8 @@ var _ = Describe("Syncer", func() {
 		messagesToEmit routing_table.MessagesToEmit
 		syncDuration   time.Duration
 
-		lrpPorts  []models.PortMapping
-		lrpRoutes []string
+		desiredResponse receptor.DesiredLRPResponse
+		actualResponses []receptor.ActualLRPResponse
 
 		routerStartMessages chan<- *nats.Msg
 		fakeMetricSender    *fake_metrics_sender.FakeMetricSender
@@ -89,32 +87,40 @@ var _ = Describe("Syncer", func() {
 		table.SyncReturns(syncMessages)
 		table.MessagesToEmitReturns(messagesToEmit)
 
-		//Set up some BBS data
-		lrpRoutes = []string{"route-1", "route-2"}
-		lrpPorts = []models.PortMapping{{HostPort: 1234, ContainerPort: 5678}}
-		lrpKey := models.NewActualLRPKey(processGuid, 1, "domain")
-		containerKey := models.NewActualLRPContainerKey(instanceGuid, "cell-id")
-		netInfo := models.NewActualLRPNetInfo(lrpHost, lrpPorts)
-		receptorClient.ActualLRPsReturns([]receptor.ActualLRPResponse{
-			serialization.ActualLRPToResponse(models.ActualLRP{
-				ActualLRPKey:          lrpKey,
-				ActualLRPContainerKey: containerKey,
-				ActualLRPNetInfo:      netInfo,
-				State:                 models.ActualLRPStateRunning,
-			}),
-			serialization.ActualLRPToResponse(models.ActualLRP{
-				ActualLRPKey: lrpKey,
-				State:        models.ActualLRPStateUnclaimed,
-			}),
-		}, nil)
+		desiredResponse = receptor.DesiredLRPResponse{
+			ProcessGuid: processGuid,
+			Routes: &receptor.RoutingInfo{
+				CFRoutes: []receptor.CFRoute{
+					{
+						Port:      8080,
+						Hostnames: []string{"route-1", "route-2"},
+					},
+				},
+			},
+			LogGuid: logGuid,
+		}
 
-		receptorClient.DesiredLRPsReturns([]receptor.DesiredLRPResponse{
-			serialization.DesiredLRPToResponse(models.DesiredLRP{
-				ProcessGuid: processGuid,
-				Routes:      lrpRoutes,
-				LogGuid:     logGuid,
-			}),
-		}, nil)
+		actualResponses = []receptor.ActualLRPResponse{
+			{
+				ProcessGuid:  processGuid,
+				InstanceGuid: instanceGuid,
+				CellID:       "cell-id",
+				Domain:       "domain",
+				Index:        1,
+				Address:      lrpHost,
+				Ports: []receptor.PortMapping{
+					{HostPort: 1234, ContainerPort: 5678},
+				},
+				State: receptor.ActualLRPStateRunning,
+			},
+			{
+				Index: 0,
+				State: receptor.ActualLRPStateUnclaimed,
+			},
+		}
+
+		receptorClient.DesiredLRPsReturns([]receptor.DesiredLRPResponse{desiredResponse}, nil)
+		receptorClient.ActualLRPsReturns(actualResponses, nil)
 
 		fakeMetricSender = fake_metrics_sender.NewFakeMetricSender()
 		metrics.Initialize(fakeMetricSender)
@@ -139,13 +145,12 @@ var _ = Describe("Syncer", func() {
 
 			routes, containers := table.SyncArgsForCall(0)
 			Ω(routes[processGuid]).Should(Equal(routing_table.Routes{
-				URIs:    lrpRoutes,
+				URIs:    []string{"route-1", "route-2"},
 				LogGuid: logGuid,
 			}))
 			Ω(containers[processGuid]).Should(Equal([]routing_table.Container{
-				{InstanceGuid: instanceGuid, Host: lrpHost, Port: uint16(lrpPorts[0].HostPort)},
+				{InstanceGuid: instanceGuid, Host: lrpHost, Port: 1234},
 			}))
-
 			Ω(emitter.EmitCallCount()).Should(Equal(1))
 			emittedMessages, _, _ := emitter.EmitArgsForCall(0)
 			Ω(emittedMessages).Should(Equal(syncMessages))

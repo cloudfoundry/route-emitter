@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/apcera/nats"
+	"github.com/cloudfoundry-incubator/receptor"
 	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
 	. "github.com/cloudfoundry-incubator/route-emitter/routing_table/matchers"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
@@ -45,16 +46,25 @@ var _ = Describe("Route Emitter", func() {
 		lrpKey       models.ActualLRPKey
 		containerKey models.ActualLRPContainerKey
 		netInfo      models.ActualLRPNetInfo
+
+		hostnames     []string
+		containerPort uint16
+		routes        map[string]*json.RawMessage
 	)
 
 	BeforeEach(func() {
 		processGuid = "guid1"
 		domain = "tests"
 
+		hostnames = []string{"route-1", "route-2"}
+		containerPort = 8080
+		routes = newRoutes(hostnames, containerPort)
+
 		desiredLRP = models.DesiredLRP{
 			Domain:      domain,
 			ProcessGuid: processGuid,
-			Routes:      []string{"route-1", "route-2"},
+			Ports:       []uint16{containerPort},
+			Routes:      routes,
 			Instances:   5,
 			Stack:       "some-stack",
 			MemoryMB:    1024,
@@ -114,7 +124,7 @@ var _ = Describe("Route Emitter", func() {
 
 				It("emits its routes immediately", func() {
 					Eventually(registeredRoutes).Should(Receive(MatchRegistryMessage(routing_table.RegistryMessage{
-						URIs:              desiredLRP.Routes,
+						URIs:              hostnames,
 						Host:              netInfo.Address,
 						Port:              uint16(netInfo.Ports[0].HostPort),
 						App:               desiredLRP.LogGuid,
@@ -136,8 +146,6 @@ var _ = Describe("Route Emitter", func() {
 		})
 
 		Context("an actual lrp starts without a routed desried lrp", func() {
-			var routes = []string{"route-1", "route-2"}
-
 			BeforeEach(func() {
 				desiredLRP.Routes = nil
 				err := bbs.DesireLRP(logger, desiredLRP)
@@ -159,7 +167,7 @@ var _ = Describe("Route Emitter", func() {
 
 				It("emits its routes immediately", func() {
 					Eventually(registeredRoutes).Should(Receive(MatchRegistryMessage(routing_table.RegistryMessage{
-						URIs:              routes,
+						URIs:              hostnames,
 						Host:              netInfo.Address,
 						Port:              uint16(netInfo.Ports[0].HostPort),
 						App:               desiredLRP.LogGuid,
@@ -279,8 +287,10 @@ var _ = Describe("Route Emitter", func() {
 
 			Context("and a route is added", func() {
 				BeforeEach(func() {
+					hostnames = []string{"route-1", "route-2", "route-3"}
+
 					updateRequest := models.DesiredLRPUpdate{
-						Routes:     []string{"route-1", "route-2", "route-3"},
+						Routes:     newRoutes(hostnames, containerPort),
 						Instances:  &desiredLRP.Instances,
 						Annotation: &desiredLRP.Annotation,
 					}
@@ -290,7 +300,7 @@ var _ = Describe("Route Emitter", func() {
 
 				It("immediately emits router.register", func() {
 					Eventually(registeredRoutes).Should(Receive(MatchRegistryMessage(routing_table.RegistryMessage{
-						URIs:              []string{"route-1", "route-2", "route-3"},
+						URIs:              hostnames,
 						Host:              "1.2.3.4",
 						Port:              65100,
 						App:               "some-log-guid",
@@ -302,7 +312,7 @@ var _ = Describe("Route Emitter", func() {
 			Context("and a route is removed", func() {
 				BeforeEach(func() {
 					updateRequest := models.DesiredLRPUpdate{
-						Routes:     []string{"route-2"},
+						Routes:     newRoutes([]string{"route-2"}, containerPort),
 						Instances:  &desiredLRP.Instances,
 						Annotation: &desiredLRP.Annotation,
 					}
@@ -323,3 +333,22 @@ var _ = Describe("Route Emitter", func() {
 		})
 	})
 })
+
+func newRoutes(hosts []string, port uint16) map[string]*json.RawMessage {
+	cfRoutes := receptor.CFRoutes{
+		{Hostnames: hosts, Port: port},
+	}
+
+	cfRoutesJson, err := json.Marshal(cfRoutes)
+	Ω(err).ShouldNot(HaveOccurred())
+
+	cfRoutesMessage := &json.RawMessage{}
+	err = cfRoutesMessage.UnmarshalJSON(cfRoutesJson)
+	Ω(err).ShouldNot(HaveOccurred())
+
+	routes := map[string]*json.RawMessage{
+		receptor.CFRouter: cfRoutesMessage,
+	}
+
+	return routes
+}

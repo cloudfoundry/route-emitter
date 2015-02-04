@@ -1,8 +1,8 @@
 package routing_table_test
 
 import (
+	"github.com/cloudfoundry-incubator/receptor"
 	. "github.com/cloudfoundry-incubator/route-emitter/routing_table"
-	"github.com/cloudfoundry-incubator/runtime-schema/models"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -11,9 +11,12 @@ import (
 var _ = Describe("ByProcessGuid", func() {
 	Describe("RoutesByProcessGuidFromDesireds", func() {
 		It("should build a map of routes", func() {
-			routes := RoutesByProcessGuidFromDesireds([]models.DesiredLRP{
-				{Domain: "tests", ProcessGuid: "abc", Routes: []string{"foo.com", "bar.com"}, LogGuid: "abc-guid"},
-				{Domain: "tests", ProcessGuid: "def", Routes: []string{"baz.com"}, LogGuid: "def-guid"},
+			abcRoutes := receptor.RoutingInfo{CFRoutes: []receptor.CFRoute{{Hostnames: []string{"foo.com", "bar.com"}, Port: 8080}}}
+			defRoutes := receptor.RoutingInfo{CFRoutes: []receptor.CFRoute{{Hostnames: []string{"baz.com"}, Port: 8080}}}
+
+			routes := RoutesByProcessGuidFromDesireds([]receptor.DesiredLRPResponse{
+				{Domain: "tests", ProcessGuid: "abc", Routes: &abcRoutes, LogGuid: "abc-guid"},
+				{Domain: "tests", ProcessGuid: "def", Routes: &defRoutes, LogGuid: "def-guid"},
 			})
 
 			Ω(routes).Should(HaveLen(2))
@@ -26,13 +29,11 @@ var _ = Describe("ByProcessGuid", func() {
 
 	Describe("ContainersByProcessGuidFromActuals", func() {
 		It("should build a map of containers, ignoring those without ports", func() {
-			lrpKey1 := models.NewActualLRPKey("abc", 1, "domain")
-			lrpKey2 := models.NewActualLRPKey("def", 1, "domain")
-			containers := ContainersByProcessGuidFromActuals([]models.ActualLRP{
-				{ActualLRPKey: lrpKey1, ActualLRPNetInfo: models.NewActualLRPNetInfo("1.1.1.1", []models.PortMapping{{HostPort: 11}})},
-				{ActualLRPKey: lrpKey1, ActualLRPNetInfo: models.NewActualLRPNetInfo("2.2.2.2", []models.PortMapping{{HostPort: 22}})},
-				{ActualLRPKey: lrpKey2, ActualLRPNetInfo: models.NewActualLRPNetInfo("3.3.3.3", []models.PortMapping{{HostPort: 33}})},
-				{ActualLRPKey: lrpKey2, ActualLRPNetInfo: models.NewActualLRPNetInfo("4.4.4.4", nil)},
+			containers := ContainersByProcessGuidFromActuals([]receptor.ActualLRPResponse{
+				{ProcessGuid: "abc", Index: 1, Domain: "domain", Address: "1.1.1.1", Ports: []receptor.PortMapping{{HostPort: 11}}},
+				{ProcessGuid: "abc", Index: 1, Domain: "domain", Address: "2.2.2.2", Ports: []receptor.PortMapping{{HostPort: 22}}},
+				{ProcessGuid: "def", Index: 1, Domain: "domain", Address: "3.3.3.3", Ports: []receptor.PortMapping{{HostPort: 33}}},
+				{ProcessGuid: "def", Index: 1, Domain: "domain", Address: "4.4.4.4", Ports: nil},
 			})
 
 			Ω(containers).Should(HaveLen(2))

@@ -7,11 +7,9 @@ import (
 
 	"github.com/apcera/nats"
 	"github.com/cloudfoundry-incubator/receptor"
-	"github.com/cloudfoundry-incubator/receptor/serialization"
 	"github.com/cloudfoundry-incubator/route-emitter/nats_emitter"
 	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
 	"github.com/cloudfoundry-incubator/runtime-schema/metric"
-	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/cloudfoundry/gunk/diegonats"
 	uuid "github.com/nu7hatch/gouuid"
 	"github.com/pivotal-golang/lager"
@@ -149,16 +147,16 @@ func (syncer *Syncer) syncAndEmit() {
 		return
 	}
 
-	runningActualLRPs := make([]models.ActualLRP, 0, len(actualLRPResponses))
+	runningActualLRPs := make([]receptor.ActualLRPResponse, 0, len(actualLRPResponses))
 	for _, actualLRPResponse := range actualLRPResponses {
 		if actualLRPResponse.State == receptor.ActualLRPStateRunning {
-			runningActualLRPs = append(runningActualLRPs, serialization.ActualLRPFromResponse(actualLRPResponse))
+			runningActualLRPs = append(runningActualLRPs, actualLRPResponse)
 		}
 	}
 
-	desiredLRPs := make([]models.DesiredLRP, 0, len(desiredLRPResponses))
+	desiredLRPs := make([]receptor.DesiredLRPResponse, 0, len(desiredLRPResponses))
 	for _, desiredLRPResponse := range desiredLRPResponses {
-		desiredLRPs = append(desiredLRPs, serialization.DesiredLRPFromResponse(desiredLRPResponse))
+		desiredLRPs = append(desiredLRPs, desiredLRPResponse)
 	}
 
 	routesToEmit := syncer.table.Sync(
@@ -175,9 +173,9 @@ func (syncer *Syncer) syncAndEmit() {
 	routesTotal.Send(syncer.table.RouteCount())
 }
 
-func (syncer *Syncer) register(desired models.DesiredLRP, actual models.ActualLRP) error {
+func (syncer *Syncer) register(desired receptor.DesiredLRPResponse, actual receptor.ActualLRPResponse) error {
 	message := routing_table.RegistryMessage{
-		URIs: desired.Routes,
+		URIs: desired.Routes.CFRoutes[0].Hostnames,
 		Host: actual.Address,
 		Port: uint16(actual.Ports[0].HostPort),
 	}

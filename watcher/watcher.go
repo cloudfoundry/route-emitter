@@ -4,11 +4,9 @@ import (
 	"os"
 
 	"github.com/cloudfoundry-incubator/receptor"
-	"github.com/cloudfoundry-incubator/receptor/serialization"
 	"github.com/cloudfoundry-incubator/route-emitter/nats_emitter"
 	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
 	"github.com/cloudfoundry-incubator/runtime-schema/metric"
-	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	"github.com/pivotal-golang/lager"
 )
 
@@ -115,35 +113,42 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 func (watcher *Watcher) handleEvent(event receptor.Event) {
 	switch event := event.(type) {
 	case receptor.DesiredLRPCreatedEvent:
-		watcher.handleDesiredCreateOrUpdate(serialization.DesiredLRPFromResponse(event.DesiredLRPResponse))
+		watcher.handleDesiredCreateOrUpdate(event.DesiredLRPResponse)
 	case receptor.DesiredLRPChangedEvent:
-		watcher.handleDesiredCreateOrUpdate(serialization.DesiredLRPFromResponse(event.After))
+		watcher.handleDesiredCreateOrUpdate(event.After)
 	case receptor.DesiredLRPRemovedEvent:
-		watcher.handleDesiredDelete(serialization.DesiredLRPFromResponse(event.DesiredLRPResponse))
+		watcher.handleDesiredDelete(event.DesiredLRPResponse)
 	case receptor.ActualLRPCreatedEvent:
-		watcher.handleActualCreate(serialization.ActualLRPFromResponse(event.ActualLRPResponse))
+		watcher.handleActualCreate(event.ActualLRPResponse)
 	case receptor.ActualLRPChangedEvent:
-		watcher.handleActualUpdate(serialization.ActualLRPFromResponse(event.Before), serialization.ActualLRPFromResponse(event.After))
+		watcher.handleActualUpdate(event.Before, event.After)
 	case receptor.ActualLRPRemovedEvent:
-		watcher.handleActualDelete(serialization.ActualLRPFromResponse(event.ActualLRPResponse))
+		watcher.handleActualDelete(event.ActualLRPResponse)
 	default:
 		watcher.logger.Info("did-not-handle-unrecognizable-event", lager.Data{"event-type": event.EventType()})
 	}
 }
 
-func (watcher *Watcher) handleDesiredCreateOrUpdate(desiredLRP models.DesiredLRP) {
-	watcher.logger.Debug("handling-desired-create-or-update", desiredLRPData(desiredLRP))
-	defer watcher.logger.Debug("done-handling-desired-create-or-update")
+func (watcher *Watcher) handleDesiredCreateOrUpdate(desiredLRP receptor.DesiredLRPResponse) {
+	watcher.logger.Info("handling-desired-create-or-update", desiredLRPData(desiredLRP))
+	defer watcher.logger.Info("done-handling-desired-create-or-update")
+
+	var hostnames []string
+
+	desiredRoutes := desiredLRP.Routes
+	if desiredRoutes != nil && len(desiredRoutes.CFRoutes) > 0 {
+		hostnames = desiredRoutes.CFRoutes[0].Hostnames
+	}
 
 	messagesToEmit := watcher.table.SetRoutes(desiredLRP.ProcessGuid, routing_table.Routes{
-		URIs:    desiredLRP.Routes,
+		URIs:    hostnames,
 		LogGuid: desiredLRP.LogGuid,
 	})
 
 	watcher.emitter.Emit(messagesToEmit, &routesRegistered, &routesUnregistered)
 }
 
-func (watcher *Watcher) handleDesiredDelete(desiredLRP models.DesiredLRP) {
+func (watcher *Watcher) handleDesiredDelete(desiredLRP receptor.DesiredLRPResponse) {
 	watcher.logger.Debug("handling-desired-delete", desiredLRPData(desiredLRP))
 	defer watcher.logger.Debug("done-handling-desired-delete")
 
@@ -152,37 +157,37 @@ func (watcher *Watcher) handleDesiredDelete(desiredLRP models.DesiredLRP) {
 	watcher.emitter.Emit(messagesToEmit, &routesRegistered, &routesUnregistered)
 }
 
-func (watcher *Watcher) handleActualCreate(actualLRP models.ActualLRP) {
+func (watcher *Watcher) handleActualCreate(actualLRP receptor.ActualLRPResponse) {
 	watcher.logger.Debug("handling-actual-create", actualLRPData(actualLRP))
 	defer watcher.logger.Debug("done-handling-actual-create")
 
-	if actualLRP.State == models.ActualLRPStateRunning {
+	if actualLRP.State == receptor.ActualLRPStateRunning {
 		watcher.addOrUpdateAndEmit(actualLRP)
 	}
 }
 
-func (watcher *Watcher) handleActualUpdate(before, after models.ActualLRP) {
+func (watcher *Watcher) handleActualUpdate(before, after receptor.ActualLRPResponse) {
 	watcher.logger.Debug("handling-actual-update", lager.Data{"before": actualLRPData(before), "after": actualLRPData(after)})
 	defer watcher.logger.Debug("done-handling-actual-update")
 
 	switch {
-	case after.State == models.ActualLRPStateRunning:
+	case after.State == receptor.ActualLRPStateRunning:
 		watcher.addOrUpdateAndEmit(after)
-	case after.State != models.ActualLRPStateRunning && before.State == models.ActualLRPStateRunning:
+	case after.State != receptor.ActualLRPStateRunning && before.State == receptor.ActualLRPStateRunning:
 		watcher.removeAndEmit(before)
 	}
 }
 
-func (watcher *Watcher) handleActualDelete(actualLRP models.ActualLRP) {
+func (watcher *Watcher) handleActualDelete(actualLRP receptor.ActualLRPResponse) {
 	watcher.logger.Debug("handling-actual-delete", actualLRPData(actualLRP))
 	defer watcher.logger.Debug("done-handling-actual-delete")
 
-	if actualLRP.State == models.ActualLRPStateRunning {
+	if actualLRP.State == receptor.ActualLRPStateRunning {
 		watcher.removeAndEmit(actualLRP)
 	}
 }
 
-func (watcher *Watcher) addOrUpdateAndEmit(actualLRP models.ActualLRP) {
+func (watcher *Watcher) addOrUpdateAndEmit(actualLRP receptor.ActualLRPResponse) {
 	container, err := routing_table.ContainerFromActual(actualLRP)
 	if err != nil {
 		watcher.logger.Error("failed-to-extract-container-from-actual", err)
@@ -193,7 +198,7 @@ func (watcher *Watcher) addOrUpdateAndEmit(actualLRP models.ActualLRP) {
 	watcher.emitter.Emit(messagesToEmit, &routesRegistered, &routesUnregistered)
 }
 
-func (watcher *Watcher) removeAndEmit(actualLRP models.ActualLRP) {
+func (watcher *Watcher) removeAndEmit(actualLRP receptor.ActualLRPResponse) {
 	container, err := routing_table.ContainerFromActual(actualLRP)
 	if err != nil {
 		watcher.logger.Error("failed-to-extract-container-from-actual", err)
@@ -204,7 +209,7 @@ func (watcher *Watcher) removeAndEmit(actualLRP models.ActualLRP) {
 	watcher.emitter.Emit(messagesToEmit, &routesRegistered, &routesUnregistered)
 }
 
-func desiredLRPData(lrp models.DesiredLRP) lager.Data {
+func desiredLRPData(lrp receptor.DesiredLRPResponse) lager.Data {
 	return lager.Data{
 		"process-guid": lrp.ProcessGuid,
 		"routes":       lrp.Routes,
@@ -212,11 +217,14 @@ func desiredLRPData(lrp models.DesiredLRP) lager.Data {
 	}
 }
 
-func actualLRPData(lrp models.ActualLRP) lager.Data {
+func actualLRPData(lrp receptor.ActualLRPResponse) lager.Data {
 	return lager.Data{
-		"process-guid":  lrp.ActualLRPKey.ProcessGuid,
-		"index":         lrp.ActualLRPKey.Index,
-		"container-key": lrp.ActualLRPContainerKey,
-		"net-info":      lrp.ActualLRPNetInfo,
+		"process-guid":  lrp.ProcessGuid,
+		"index":         lrp.Index,
+		"domain":        lrp.Domain,
+		"instance-guid": lrp.InstanceGuid,
+		"cell-id":       lrp.CellID,
+		"address":       lrp.Address,
+		"ports":         lrp.Ports,
 	}
 }

@@ -6,7 +6,6 @@ import (
 
 	"github.com/cloudfoundry-incubator/receptor"
 	"github.com/cloudfoundry-incubator/receptor/fake_receptor"
-	"github.com/cloudfoundry-incubator/receptor/serialization"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -23,10 +22,11 @@ const logGuid = "some-log-guid"
 
 var _ = Describe("Watcher", func() {
 	const (
-		expectedProcessGuid  = "process-guid"
-		expectedInstanceGuid = "instance-guid"
-		expectedHost         = "1.1.1.1"
-		expectedExternalPort = 11000
+		expectedProcessGuid   = "process-guid"
+		expectedInstanceGuid  = "instance-guid"
+		expectedHost          = "1.1.1.1"
+		expectedExternalPort  = 11000
+		expectedContainerPort = uint16(11)
 	)
 	var expectedRoutes = []string{"route-1", "route-2"}
 
@@ -48,7 +48,7 @@ var _ = Describe("Watcher", func() {
 		emitter = &fake_nats_emitter.FakeNATSEmitter{}
 		logger := lagertest.NewTestLogger("test")
 
-		dummyContainer := routing_table.Container{InstanceGuid: "instance-guid", Host: "1.1.1.1", Port: 11}
+		dummyContainer := routing_table.Container{InstanceGuid: expectedInstanceGuid, Host: expectedHost, Port: expectedContainerPort}
 		dummyMessage := routing_table.RegistryMessageFor(dummyContainer, routing_table.Routes{URIs: []string{"foo.com", "bar.com"}, LogGuid: logGuid})
 		dummyMessagesToEmit = routing_table.MessagesToEmit{
 			RegistrationMessages: []routing_table.RegistryMessage{dummyMessage},
@@ -58,7 +58,7 @@ var _ = Describe("Watcher", func() {
 	})
 
 	JustBeforeEach(func() {
-		process = ifrit.Envoke(watcher)
+		process = ifrit.Invoke(watcher)
 	})
 
 	AfterEach(func() {
@@ -74,19 +74,19 @@ var _ = Describe("Watcher", func() {
 				eventSource := new(fake_receptor.FakeEventSource)
 				receptorClient.SubscribeToEventsReturns(eventSource, nil)
 
-				desiredLRP := models.DesiredLRP{
+				desiredLRP := receptor.DesiredLRPResponse{
 					Action: &models.RunAction{
 						Path: "ls",
 					},
 					Domain:      "tests",
 					ProcessGuid: expectedProcessGuid,
-					Routes:      expectedRoutes,
+					Routes:      routingInfo(expectedRoutes, expectedContainerPort),
 					LogGuid:     logGuid,
 				}
 
 				eventSource.NextStub = func() (receptor.Event, error) {
 					if eventSource.NextCallCount() == 1 {
-						return receptor.NewDesiredLRPCreatedEvent(serialization.DesiredLRPToResponse(desiredLRP)), nil
+						return receptor.NewDesiredLRPCreatedEvent(desiredLRP), nil
 					} else {
 						return nil, nil
 					}
@@ -126,7 +126,7 @@ var _ = Describe("Watcher", func() {
 				eventSource := new(fake_receptor.FakeEventSource)
 				receptorClient.SubscribeToEventsReturns(eventSource, nil)
 
-				originalDesiredLRP := models.DesiredLRP{
+				originalDesiredLRP := receptor.DesiredLRPResponse{
 					Action: &models.RunAction{
 						Path: "ls",
 					},
@@ -134,21 +134,21 @@ var _ = Describe("Watcher", func() {
 					ProcessGuid: expectedProcessGuid,
 					LogGuid:     logGuid,
 				}
-				changedDesiredLRP := models.DesiredLRP{
+				changedDesiredLRP := receptor.DesiredLRPResponse{
 					Action: &models.RunAction{
 						Path: "ls",
 					},
 					Domain:      "tests",
 					ProcessGuid: expectedProcessGuid,
-					Routes:      expectedRoutes,
+					Routes:      routingInfo(expectedRoutes, expectedContainerPort),
 					LogGuid:     logGuid,
 				}
 
 				eventSource.NextStub = func() (receptor.Event, error) {
 					if eventSource.NextCallCount() == 1 {
 						return receptor.NewDesiredLRPChangedEvent(
-							serialization.DesiredLRPToResponse(originalDesiredLRP),
-							serialization.DesiredLRPToResponse(changedDesiredLRP),
+							originalDesiredLRP,
+							changedDesiredLRP,
 						), nil
 					} else {
 						return nil, nil
@@ -189,19 +189,19 @@ var _ = Describe("Watcher", func() {
 				eventSource := new(fake_receptor.FakeEventSource)
 				receptorClient.SubscribeToEventsReturns(eventSource, nil)
 
-				desiredLRP := models.DesiredLRP{
+				desiredLRP := receptor.DesiredLRPResponse{
 					Action: &models.RunAction{
 						Path: "ls",
 					},
 					Domain:      "tests",
 					ProcessGuid: expectedProcessGuid,
-					Routes:      expectedRoutes,
+					Routes:      routingInfo(expectedRoutes, expectedContainerPort),
 					LogGuid:     logGuid,
 				}
 
 				eventSource.NextStub = func() (receptor.Event, error) {
 					if eventSource.NextCallCount() == 1 {
-						return receptor.NewDesiredLRPRemovedEvent(serialization.DesiredLRPToResponse(desiredLRP)), nil
+						return receptor.NewDesiredLRPRemovedEvent(desiredLRP), nil
 					} else {
 						return nil, nil
 					}
@@ -231,18 +231,22 @@ var _ = Describe("Watcher", func() {
 					eventSource := new(fake_receptor.FakeEventSource)
 					receptorClient.SubscribeToEventsReturns(eventSource, nil)
 
-					actualLRP := models.ActualLRP{
-						ActualLRPKey:          models.NewActualLRPKey(expectedProcessGuid, 1, "domain"),
-						ActualLRPContainerKey: models.NewActualLRPContainerKey(expectedInstanceGuid, "cell-id"),
-						ActualLRPNetInfo: models.NewActualLRPNetInfo(expectedHost, []models.PortMapping{
+					actualLRP := receptor.ActualLRPResponse{
+						ProcessGuid:  expectedProcessGuid,
+						Index:        1,
+						Domain:       "domain",
+						InstanceGuid: expectedInstanceGuid,
+						CellID:       "cell-id",
+						Address:      expectedHost,
+						Ports: []receptor.PortMapping{
 							{ContainerPort: 8080, HostPort: expectedExternalPort},
-						}),
-						State: models.ActualLRPStateRunning,
+						},
+						State: receptor.ActualLRPStateRunning,
 					}
 
 					eventSource.NextStub = func() (receptor.Event, error) {
 						if eventSource.NextCallCount() == 1 {
-							return receptor.NewActualLRPCreatedEvent(serialization.ActualLRPToResponse(actualLRP)), nil
+							return receptor.NewActualLRPCreatedEvent(actualLRP), nil
 						} else {
 							return nil, nil
 						}
@@ -284,18 +288,22 @@ var _ = Describe("Watcher", func() {
 					eventSource := new(fake_receptor.FakeEventSource)
 					receptorClient.SubscribeToEventsReturns(eventSource, nil)
 
-					actualLRP := models.ActualLRP{
-						ActualLRPKey:          models.NewActualLRPKey(expectedProcessGuid, 1, "domain"),
-						ActualLRPContainerKey: models.NewActualLRPContainerKey(expectedInstanceGuid, "cell-id"),
-						ActualLRPNetInfo: models.NewActualLRPNetInfo(expectedHost, []models.PortMapping{
+					actualLRP := receptor.ActualLRPResponse{
+						ProcessGuid:  expectedProcessGuid,
+						Index:        1,
+						Domain:       "domain",
+						InstanceGuid: expectedInstanceGuid,
+						CellID:       "cell-id",
+						Address:      expectedHost,
+						Ports: []receptor.PortMapping{
 							{ContainerPort: 8080, HostPort: expectedExternalPort},
-						}),
-						State: models.ActualLRPStateUnclaimed,
+						},
+						State: receptor.ActualLRPStateUnclaimed,
 					}
 
 					eventSource.NextStub = func() (receptor.Event, error) {
 						if eventSource.NextCallCount() == 1 {
-							return receptor.NewActualLRPCreatedEvent(serialization.ActualLRPToResponse(actualLRP)), nil
+							return receptor.NewActualLRPCreatedEvent(actualLRP), nil
 						} else {
 							return nil, nil
 						}
@@ -320,26 +328,30 @@ var _ = Describe("Watcher", func() {
 					eventSource := new(fake_receptor.FakeEventSource)
 					receptorClient.SubscribeToEventsReturns(eventSource, nil)
 
-					beforeActualLRP := models.ActualLRP{
-						ActualLRPKey:          models.NewActualLRPKey(expectedProcessGuid, 1, "domain"),
-						ActualLRPContainerKey: models.NewActualLRPContainerKey(expectedInstanceGuid, "cell-id"),
-						State: models.ActualLRPStateClaimed,
+					beforeActualLRP := receptor.ActualLRPResponse{
+						ProcessGuid:  expectedProcessGuid,
+						Index:        1,
+						Domain:       "domain",
+						InstanceGuid: expectedInstanceGuid,
+						CellID:       "cell-id",
+						State:        receptor.ActualLRPStateClaimed,
 					}
-					afterActualLRP := models.ActualLRP{
-						ActualLRPKey:          models.NewActualLRPKey(expectedProcessGuid, 1, "domain"),
-						ActualLRPContainerKey: models.NewActualLRPContainerKey(expectedInstanceGuid, "cell-id"),
-						ActualLRPNetInfo: models.NewActualLRPNetInfo(expectedHost, []models.PortMapping{
+					afterActualLRP := receptor.ActualLRPResponse{
+						ProcessGuid:  expectedProcessGuid,
+						Index:        1,
+						Domain:       "domain",
+						InstanceGuid: expectedInstanceGuid,
+						CellID:       "cell-id",
+						Address:      expectedHost,
+						Ports: []receptor.PortMapping{
 							{ContainerPort: 8080, HostPort: expectedExternalPort},
-						}),
-						State: models.ActualLRPStateRunning,
+						},
+						State: receptor.ActualLRPStateRunning,
 					}
 
 					eventSource.NextStub = func() (receptor.Event, error) {
 						if eventSource.NextCallCount() == 1 {
-							return receptor.NewActualLRPChangedEvent(
-								serialization.ActualLRPToResponse(beforeActualLRP),
-								serialization.ActualLRPToResponse(afterActualLRP),
-							), nil
+							return receptor.NewActualLRPChangedEvent(beforeActualLRP, afterActualLRP), nil
 						} else {
 							return nil, nil
 						}
@@ -383,25 +395,28 @@ var _ = Describe("Watcher", func() {
 					eventSource := new(fake_receptor.FakeEventSource)
 					receptorClient.SubscribeToEventsReturns(eventSource, nil)
 
-					beforeActualLRP := models.ActualLRP{
-						ActualLRPKey:          models.NewActualLRPKey(expectedProcessGuid, 1, "domain"),
-						ActualLRPContainerKey: models.NewActualLRPContainerKey(expectedInstanceGuid, "cell-id"),
-						ActualLRPNetInfo: models.NewActualLRPNetInfo(expectedHost, []models.PortMapping{
+					beforeActualLRP := receptor.ActualLRPResponse{
+						ProcessGuid:  expectedProcessGuid,
+						Index:        1,
+						Domain:       "domain",
+						InstanceGuid: expectedInstanceGuid,
+						CellID:       "cell-id",
+						Address:      expectedHost,
+						Ports: []receptor.PortMapping{
 							{ContainerPort: 8080, HostPort: expectedExternalPort},
-						}),
-						State: models.ActualLRPStateRunning,
+						},
+						State: receptor.ActualLRPStateRunning,
 					}
-					afterActualLRP := models.ActualLRP{
-						ActualLRPKey: models.NewActualLRPKey(expectedProcessGuid, 1, "domain"),
-						State:        models.ActualLRPStateUnclaimed,
+					afterActualLRP := receptor.ActualLRPResponse{
+						ProcessGuid: expectedProcessGuid,
+						Index:       1,
+						Domain:      "domain",
+						State:       receptor.ActualLRPStateUnclaimed,
 					}
 
 					eventSource.NextStub = func() (receptor.Event, error) {
 						if eventSource.NextCallCount() == 1 {
-							return receptor.NewActualLRPChangedEvent(
-								serialization.ActualLRPToResponse(beforeActualLRP),
-								serialization.ActualLRPToResponse(afterActualLRP),
-							), nil
+							return receptor.NewActualLRPChangedEvent(beforeActualLRP, afterActualLRP), nil
 						} else {
 							return nil, nil
 						}
@@ -431,22 +446,24 @@ var _ = Describe("Watcher", func() {
 					eventSource := new(fake_receptor.FakeEventSource)
 					receptorClient.SubscribeToEventsReturns(eventSource, nil)
 
-					beforeActualLRP := models.ActualLRP{
-						ActualLRPKey: models.NewActualLRPKey(expectedProcessGuid, 1, "domain"),
-						State:        models.ActualLRPStateUnclaimed,
+					beforeActualLRP := receptor.ActualLRPResponse{
+						ProcessGuid: expectedProcessGuid,
+						Index:       1,
+						Domain:      "domain",
+						State:       receptor.ActualLRPStateUnclaimed,
 					}
-					afterActualLRP := models.ActualLRP{
-						ActualLRPKey:          models.NewActualLRPKey(expectedProcessGuid, 1, "domain"),
-						ActualLRPContainerKey: models.NewActualLRPContainerKey(expectedInstanceGuid, "cell-id"),
-						State: models.ActualLRPStateClaimed,
+					afterActualLRP := receptor.ActualLRPResponse{
+						ProcessGuid:  expectedProcessGuid,
+						Index:        1,
+						Domain:       "domain",
+						InstanceGuid: expectedInstanceGuid,
+						CellID:       "cell-id",
+						State:        receptor.ActualLRPStateClaimed,
 					}
 
 					eventSource.NextStub = func() (receptor.Event, error) {
 						if eventSource.NextCallCount() == 1 {
-							return receptor.NewActualLRPChangedEvent(
-								serialization.ActualLRPToResponse(beforeActualLRP),
-								serialization.ActualLRPToResponse(afterActualLRP),
-							), nil
+							return receptor.NewActualLRPChangedEvent(beforeActualLRP, afterActualLRP), nil
 						} else {
 							return nil, nil
 						}
@@ -475,18 +492,22 @@ var _ = Describe("Watcher", func() {
 					eventSource := new(fake_receptor.FakeEventSource)
 					receptorClient.SubscribeToEventsReturns(eventSource, nil)
 
-					actualLRP := models.ActualLRP{
-						ActualLRPKey:          models.NewActualLRPKey(expectedProcessGuid, 1, "domain"),
-						ActualLRPContainerKey: models.NewActualLRPContainerKey(expectedInstanceGuid, "cell-id"),
-						ActualLRPNetInfo: models.NewActualLRPNetInfo(expectedHost, []models.PortMapping{
+					actualLRP := receptor.ActualLRPResponse{
+						ProcessGuid:  expectedProcessGuid,
+						Index:        1,
+						Domain:       "domain",
+						InstanceGuid: expectedInstanceGuid,
+						CellID:       "cell-id",
+						Address:      expectedHost,
+						Ports: []receptor.PortMapping{
 							{ContainerPort: 8080, HostPort: expectedExternalPort},
-						}),
-						State: models.ActualLRPStateRunning,
+						},
+						State: receptor.ActualLRPStateRunning,
 					}
 
 					eventSource.NextStub = func() (receptor.Event, error) {
 						if eventSource.NextCallCount() == 1 {
-							return receptor.NewActualLRPRemovedEvent(serialization.ActualLRPToResponse(actualLRP)), nil
+							return receptor.NewActualLRPRemovedEvent(actualLRP), nil
 						} else {
 							return nil, nil
 						}
@@ -516,14 +537,16 @@ var _ = Describe("Watcher", func() {
 					eventSource := new(fake_receptor.FakeEventSource)
 					receptorClient.SubscribeToEventsReturns(eventSource, nil)
 
-					actualLRP := models.ActualLRP{
-						ActualLRPKey: models.NewActualLRPKey(expectedProcessGuid, 1, "domain"),
-						State:        models.ActualLRPStateCrashed,
+					actualLRP := receptor.ActualLRPResponse{
+						ProcessGuid: expectedProcessGuid,
+						Index:       1,
+						Domain:      "domain",
+						State:       receptor.ActualLRPStateCrashed,
 					}
 
 					eventSource.NextStub = func() (receptor.Event, error) {
 						if eventSource.NextCallCount() == 1 {
-							return receptor.NewActualLRPRemovedEvent(serialization.ActualLRPToResponse(actualLRP)), nil
+							return receptor.NewActualLRPRemovedEvent(actualLRP), nil
 						} else {
 							return nil, nil
 						}
@@ -608,4 +631,12 @@ type unrecognizedEvent struct{}
 
 func (u unrecognizedEvent) EventType() receptor.EventType {
 	return "unrecognized-event"
+}
+
+func routingInfo(hosts []string, port uint16) *receptor.RoutingInfo {
+	return &receptor.RoutingInfo{
+		CFRoutes: []receptor.CFRoute{
+			{Hostnames: hosts, Port: port},
+		},
+	}
 }
