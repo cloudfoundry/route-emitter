@@ -26,6 +26,16 @@ var _ = Describe("ByProcessGuid", func() {
 			Ω(routes["abc"].LogGuid).Should(Equal("abc-guid"))
 			Ω(routes["def"].LogGuid).Should(Equal("def-guid"))
 		})
+
+		Context("when the routing info is nil", func() {
+			It("should return an empty hostname list", func() {
+				routes := RoutesByProcessGuidFromDesireds([]receptor.DesiredLRPResponse{
+					{Domain: "tests", ProcessGuid: "abc", Routes: nil, LogGuid: "abc-guid"},
+				})
+				Ω(routes).Should(HaveLen(1))
+				Ω(routes["abc"].URIs).Should(BeNil())
+			})
+		})
 	})
 
 	Describe("ContainersByProcessGuidFromActuals", func() {
