@@ -3,6 +3,7 @@ package routing_table_test
 import (
 	"github.com/cloudfoundry-incubator/receptor"
 	. "github.com/cloudfoundry-incubator/route-emitter/routing_table"
+	"github.com/cloudfoundry-incubator/runtime-schema/cc_messages"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -11,12 +12,12 @@ import (
 var _ = Describe("ByProcessGuid", func() {
 	Describe("RoutesByProcessGuidFromDesireds", func() {
 		It("should build a map of routes", func() {
-			abcRoutes := receptor.RoutingInfo{CFRoutes: []receptor.CFRoute{{Hostnames: []string{"foo.com", "bar.com"}, Port: 8080}}}
-			defRoutes := receptor.RoutingInfo{CFRoutes: []receptor.CFRoute{{Hostnames: []string{"baz.com"}, Port: 8080}}}
+			abcRoutes := cc_messages.NewRoutingInfo([]string{"foo.com", "bar.com"}, 8080)
+			defRoutes := cc_messages.NewRoutingInfo([]string{"baz.com"}, 8080)
 
 			routes := RoutesByProcessGuidFromDesireds([]receptor.DesiredLRPResponse{
-				{Domain: "tests", ProcessGuid: "abc", Routes: &abcRoutes, LogGuid: "abc-guid"},
-				{Domain: "tests", ProcessGuid: "def", Routes: &defRoutes, LogGuid: "def-guid"},
+				{Domain: "tests", ProcessGuid: "abc", Routes: abcRoutes, LogGuid: "abc-guid"},
+				{Domain: "tests", ProcessGuid: "def", Routes: defRoutes, LogGuid: "def-guid"},
 			})
 
 			Ω(routes).Should(HaveLen(2))

@@ -6,6 +6,7 @@ import (
 
 	"github.com/cloudfoundry-incubator/receptor"
 	"github.com/cloudfoundry-incubator/receptor/fake_receptor"
+	"github.com/cloudfoundry-incubator/runtime-schema/cc_messages"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -80,7 +81,7 @@ var _ = Describe("Watcher", func() {
 					},
 					Domain:      "tests",
 					ProcessGuid: expectedProcessGuid,
-					Routes:      routingInfo(expectedRoutes, expectedContainerPort),
+					Routes:      cc_messages.NewRoutingInfo(expectedRoutes, expectedContainerPort),
 					LogGuid:     logGuid,
 				}
 
@@ -140,7 +141,7 @@ var _ = Describe("Watcher", func() {
 					},
 					Domain:      "tests",
 					ProcessGuid: expectedProcessGuid,
-					Routes:      routingInfo(expectedRoutes, expectedContainerPort),
+					Routes:      cc_messages.NewRoutingInfo(expectedRoutes, expectedContainerPort),
 					LogGuid:     logGuid,
 				}
 
@@ -195,7 +196,7 @@ var _ = Describe("Watcher", func() {
 					},
 					Domain:      "tests",
 					ProcessGuid: expectedProcessGuid,
-					Routes:      routingInfo(expectedRoutes, expectedContainerPort),
+					Routes:      cc_messages.NewRoutingInfo(expectedRoutes, expectedContainerPort),
 					LogGuid:     logGuid,
 				}
 
@@ -631,12 +632,4 @@ type unrecognizedEvent struct{}
 
 func (u unrecognizedEvent) EventType() receptor.EventType {
 	return "unrecognized-event"
-}
-
-func routingInfo(hosts []string, port uint16) *receptor.RoutingInfo {
-	return &receptor.RoutingInfo{
-		CFRoutes: []receptor.CFRoute{
-			{Hostnames: hosts, Port: port},
-		},
-	}
 }
