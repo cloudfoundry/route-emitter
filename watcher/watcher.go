@@ -139,21 +139,24 @@ func (watcher *Watcher) handleDesiredCreateOrUpdate(desiredLRP receptor.DesiredL
 		hostnames = routes[0].Hostnames
 	}
 
-	messagesToEmit := watcher.table.SetRoutes(desiredLRP.ProcessGuid, routing_table.Routes{
-		URIs:    hostnames,
-		LogGuid: desiredLRP.LogGuid,
-	})
-
-	watcher.emitter.Emit(messagesToEmit, &routesRegistered, &routesUnregistered)
+	for _, key := range routing_table.RoutingKeysFromDesired(desiredLRP) {
+		messagesToEmit := watcher.table.SetRoutes(key, routing_table.Routes{
+			URIs:    hostnames,
+			LogGuid: desiredLRP.LogGuid,
+		})
+		watcher.emitter.Emit(messagesToEmit, &routesRegistered, &routesUnregistered)
+	}
 }
 
 func (watcher *Watcher) handleDesiredDelete(desiredLRP receptor.DesiredLRPResponse) {
 	watcher.logger.Debug("handling-desired-delete", desiredLRPData(desiredLRP))
 	defer watcher.logger.Debug("done-handling-desired-delete")
 
-	messagesToEmit := watcher.table.RemoveRoutes(desiredLRP.ProcessGuid)
+	for _, key := range routing_table.RoutingKeysFromDesired(desiredLRP) {
+		messagesToEmit := watcher.table.RemoveRoutes(key)
 
-	watcher.emitter.Emit(messagesToEmit, &routesRegistered, &routesUnregistered)
+		watcher.emitter.Emit(messagesToEmit, &routesRegistered, &routesUnregistered)
+	}
 }
 
 func (watcher *Watcher) handleActualCreate(actualLRP receptor.ActualLRPResponse) {
@@ -188,26 +191,36 @@ func (watcher *Watcher) handleActualDelete(actualLRP receptor.ActualLRPResponse)
 
 func (watcher *Watcher) addOrUpdateAndEmit(actualLRP receptor.ActualLRPResponse) {
 	endpoints, err := routing_table.EndpointsFromActual(actualLRP)
-	endpoint := endpoints[0]
 	if err != nil {
 		watcher.logger.Error("failed-to-extract-endpoint-from-actual", err)
 		return
 	}
 
-	messagesToEmit := watcher.table.AddOrUpdateEndpoint(actualLRP.ProcessGuid, endpoint)
-	watcher.emitter.Emit(messagesToEmit, &routesRegistered, &routesUnregistered)
+	for _, key := range routing_table.RoutingKeysFromActual(actualLRP) {
+		for _, endpoint := range endpoints {
+			if key.ContainerPort == endpoint.ContainerPort {
+				messagesToEmit := watcher.table.AddOrUpdateEndpoint(key, endpoint)
+				watcher.emitter.Emit(messagesToEmit, &routesRegistered, &routesUnregistered)
+			}
+		}
+	}
 }
 
 func (watcher *Watcher) removeAndEmit(actualLRP receptor.ActualLRPResponse) {
 	endpoints, err := routing_table.EndpointsFromActual(actualLRP)
-	endpoint := endpoints[0]
 	if err != nil {
 		watcher.logger.Error("failed-to-extract-endpoint-from-actual", err)
 		return
 	}
 
-	messagesToEmit := watcher.table.RemoveEndpoint(actualLRP.ProcessGuid, endpoint)
-	watcher.emitter.Emit(messagesToEmit, &routesRegistered, &routesUnregistered)
+	for _, key := range routing_table.RoutingKeysFromActual(actualLRP) {
+		for _, endpoint := range endpoints {
+			if key.ContainerPort == endpoint.ContainerPort {
+				messagesToEmit := watcher.table.RemoveEndpoint(key, endpoint)
+				watcher.emitter.Emit(messagesToEmit, &routesRegistered, &routesUnregistered)
+			}
+		}
+	}
 }
 
 func desiredLRPData(lrp receptor.DesiredLRPResponse) lager.Data {

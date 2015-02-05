@@ -90,10 +90,9 @@ var _ = Describe("Syncer", func() {
 
 		desiredResponse = receptor.DesiredLRPResponse{
 			ProcessGuid: processGuid,
-			Routes: cfroutes.CFRoutes{
-				{Hostnames: []string{"route-1", "route-2"}, Port: 8080},
-			}.RoutingInfo(),
-			LogGuid: logGuid,
+			Ports:       []uint16{8080},
+			Routes:      cfroutes.CFRoutes{{Hostnames: []string{"route-1", "route-2"}, Port: 8080}}.RoutingInfo(),
+			LogGuid:     logGuid,
 		}
 
 		actualResponses = []receptor.ActualLRPResponse{
@@ -105,7 +104,7 @@ var _ = Describe("Syncer", func() {
 				Index:        1,
 				Address:      lrpHost,
 				Ports: []receptor.PortMapping{
-					{HostPort: 1234, ContainerPort: 5678},
+					{HostPort: 1234, ContainerPort: 8080},
 				},
 				State: receptor.ActualLRPStateRunning,
 			},
@@ -139,13 +138,15 @@ var _ = Describe("Syncer", func() {
 		It("should sync the table", func() {
 			Ω(table.SyncCallCount()).Should(Equal(1))
 
+			key := routing_table.RoutingKey{ProcessGuid: processGuid, ContainerPort: 8080}
+
 			routes, endpoints := table.SyncArgsForCall(0)
-			Ω(routes[processGuid]).Should(Equal(routing_table.Routes{
+			Ω(routes[key]).Should(Equal(routing_table.Routes{
 				URIs:    []string{"route-1", "route-2"},
 				LogGuid: logGuid,
 			}))
-			Ω(endpoints[processGuid]).Should(Equal([]routing_table.Endpoint{
-				{InstanceGuid: instanceGuid, Host: lrpHost, Port: 1234, ContainerPort: 5678},
+			Ω(endpoints[key]).Should(Equal([]routing_table.Endpoint{
+				{InstanceGuid: instanceGuid, Host: lrpHost, Port: 1234, ContainerPort: 8080},
 			}))
 			Ω(emitter.EmitCallCount()).Should(Equal(1))
 			emittedMessages, _, _ := emitter.EmitArgsForCall(0)

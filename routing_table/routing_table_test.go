@@ -15,6 +15,7 @@ var _ = Describe("RoutingTable", func() {
 	)
 
 	pg := "some-process-guid"
+	key := RoutingKey{ProcessGuid: pg, ContainerPort: 8080}
 	route1 := "foo.com"
 	route2 := "bar.com"
 	route3 := "baz.com"
@@ -32,8 +33,8 @@ var _ = Describe("RoutingTable", func() {
 			Context("when the process guid has both routes and endpoints", func() {
 				BeforeEach(func() {
 					messagesToEmit = table.Sync(
-						RoutesByProcessGuid{pg: Routes{URIs: []string{route1, route2}, LogGuid: logGuid}},
-						EndpointsByProcessGuid{pg: {endpoint1, endpoint2}},
+						RoutesByRoutingKey{key: Routes{URIs: []string{route1, route2}, LogGuid: logGuid}},
+						EndpointsByRoutingKey{key: {endpoint1, endpoint2}},
 					)
 				})
 
@@ -55,8 +56,8 @@ var _ = Describe("RoutingTable", func() {
 			Context("when the process only has routes", func() {
 				BeforeEach(func() {
 					messagesToEmit = table.Sync(
-						RoutesByProcessGuid{pg: Routes{URIs: []string{route1}, LogGuid: logGuid}},
-						EndpointsByProcessGuid{},
+						RoutesByRoutingKey{key: Routes{URIs: []string{route1}, LogGuid: logGuid}},
+						EndpointsByRoutingKey{},
 					)
 				})
 
@@ -67,8 +68,8 @@ var _ = Describe("RoutingTable", func() {
 				Context("when the endpoints subsequently arrive", func() {
 					BeforeEach(func() {
 						messagesToEmit = table.Sync(
-							RoutesByProcessGuid{pg: Routes{URIs: []string{route1}, LogGuid: logGuid}},
-							EndpointsByProcessGuid{pg: {endpoint1}},
+							RoutesByRoutingKey{key: Routes{URIs: []string{route1}, LogGuid: logGuid}},
+							EndpointsByRoutingKey{key: {endpoint1}},
 						)
 					})
 
@@ -85,8 +86,8 @@ var _ = Describe("RoutingTable", func() {
 				Context("when the process guid subsequently disappears", func() {
 					BeforeEach(func() {
 						messagesToEmit = table.Sync(
-							RoutesByProcessGuid{},
-							EndpointsByProcessGuid{},
+							RoutesByRoutingKey{},
+							EndpointsByRoutingKey{},
 						)
 					})
 
@@ -99,8 +100,8 @@ var _ = Describe("RoutingTable", func() {
 			Context("when the process only has endpoints", func() {
 				BeforeEach(func() {
 					messagesToEmit = table.Sync(
-						RoutesByProcessGuid{},
-						EndpointsByProcessGuid{pg: {endpoint1}},
+						RoutesByRoutingKey{},
+						EndpointsByRoutingKey{key: {endpoint1}},
 					)
 				})
 
@@ -111,8 +112,8 @@ var _ = Describe("RoutingTable", func() {
 				Context("when the routes subsequently arrive", func() {
 					BeforeEach(func() {
 						messagesToEmit = table.Sync(
-							RoutesByProcessGuid{pg: Routes{URIs: []string{route1}, LogGuid: logGuid}},
-							EndpointsByProcessGuid{pg: {endpoint1}},
+							RoutesByRoutingKey{key: Routes{URIs: []string{route1}, LogGuid: logGuid}},
+							EndpointsByRoutingKey{key: {endpoint1}},
 						)
 					})
 
@@ -129,8 +130,8 @@ var _ = Describe("RoutingTable", func() {
 				Context("when the process guid subsequently disappears", func() {
 					BeforeEach(func() {
 						messagesToEmit = table.Sync(
-							RoutesByProcessGuid{},
-							EndpointsByProcessGuid{},
+							RoutesByRoutingKey{},
+							EndpointsByRoutingKey{},
 						)
 					})
 
@@ -144,16 +145,16 @@ var _ = Describe("RoutingTable", func() {
 		Context("when there is an existing process guid", func() {
 			BeforeEach(func() {
 				table.Sync(
-					RoutesByProcessGuid{pg: Routes{URIs: []string{route1, route2}, LogGuid: logGuid}},
-					EndpointsByProcessGuid{pg: {endpoint1, endpoint2}},
+					RoutesByRoutingKey{key: Routes{URIs: []string{route1, route2}, LogGuid: logGuid}},
+					EndpointsByRoutingKey{key: {endpoint1, endpoint2}},
 				)
 			})
 
 			Context("when nothing changes", func() {
 				BeforeEach(func() {
 					messagesToEmit = table.Sync(
-						RoutesByProcessGuid{pg: Routes{URIs: []string{route1, route2}, LogGuid: logGuid}},
-						EndpointsByProcessGuid{pg: {endpoint1, endpoint2}},
+						RoutesByRoutingKey{key: Routes{URIs: []string{route1, route2}, LogGuid: logGuid}},
+						EndpointsByRoutingKey{key: {endpoint1, endpoint2}},
 					)
 				})
 
@@ -171,8 +172,8 @@ var _ = Describe("RoutingTable", func() {
 			Context("when the process guid gets new routes", func() {
 				BeforeEach(func() {
 					messagesToEmit = table.Sync(
-						RoutesByProcessGuid{pg: Routes{URIs: []string{route1, route2, route3}, LogGuid: logGuid}},
-						EndpointsByProcessGuid{pg: {endpoint1, endpoint2}},
+						RoutesByRoutingKey{key: Routes{URIs: []string{route1, route2, route3}, LogGuid: logGuid}},
+						EndpointsByRoutingKey{key: {endpoint1, endpoint2}},
 					)
 				})
 
@@ -190,8 +191,8 @@ var _ = Describe("RoutingTable", func() {
 			Context("when the process guid gets new endpoints", func() {
 				BeforeEach(func() {
 					messagesToEmit = table.Sync(
-						RoutesByProcessGuid{pg: Routes{URIs: []string{route1, route2}, LogGuid: logGuid}},
-						EndpointsByProcessGuid{pg: {endpoint1, endpoint2, endpoint3}},
+						RoutesByRoutingKey{key: Routes{URIs: []string{route1, route2}, LogGuid: logGuid}},
+						EndpointsByRoutingKey{key: {endpoint1, endpoint2, endpoint3}},
 					)
 				})
 
@@ -210,8 +211,8 @@ var _ = Describe("RoutingTable", func() {
 			Context("when the process guid gets new routes and endpoints", func() {
 				BeforeEach(func() {
 					messagesToEmit = table.Sync(
-						RoutesByProcessGuid{pg: Routes{URIs: []string{route1, route2, route3}, LogGuid: logGuid}},
-						EndpointsByProcessGuid{pg: {endpoint1, endpoint2, endpoint3}},
+						RoutesByRoutingKey{key: Routes{URIs: []string{route1, route2, route3}, LogGuid: logGuid}},
+						EndpointsByRoutingKey{key: {endpoint1, endpoint2, endpoint3}},
 					)
 				})
 
@@ -230,8 +231,8 @@ var _ = Describe("RoutingTable", func() {
 			Context("when the process guid loses routes", func() {
 				BeforeEach(func() {
 					messagesToEmit = table.Sync(
-						RoutesByProcessGuid{pg: Routes{URIs: []string{route1}, LogGuid: logGuid}},
-						EndpointsByProcessGuid{pg: {endpoint1, endpoint2}},
+						RoutesByRoutingKey{key: Routes{URIs: []string{route1}, LogGuid: logGuid}},
+						EndpointsByRoutingKey{key: {endpoint1, endpoint2}},
 					)
 				})
 
@@ -253,8 +254,8 @@ var _ = Describe("RoutingTable", func() {
 			Context("when the process guid loses endpoints", func() {
 				BeforeEach(func() {
 					messagesToEmit = table.Sync(
-						RoutesByProcessGuid{pg: Routes{URIs: []string{route1, route2}, LogGuid: logGuid}},
-						EndpointsByProcessGuid{pg: {endpoint1}},
+						RoutesByRoutingKey{key: Routes{URIs: []string{route1, route2}, LogGuid: logGuid}},
+						EndpointsByRoutingKey{key: {endpoint1}},
 					)
 				})
 
@@ -274,8 +275,8 @@ var _ = Describe("RoutingTable", func() {
 			Context("when the process guid loses both routes and endpoints", func() {
 				BeforeEach(func() {
 					messagesToEmit = table.Sync(
-						RoutesByProcessGuid{pg: Routes{URIs: []string{route1}, LogGuid: logGuid}},
-						EndpointsByProcessGuid{pg: {endpoint1}},
+						RoutesByRoutingKey{key: Routes{URIs: []string{route1}, LogGuid: logGuid}},
+						EndpointsByRoutingKey{key: {endpoint1}},
 					)
 				})
 
@@ -296,8 +297,8 @@ var _ = Describe("RoutingTable", func() {
 			Context("when the process guid gains routes but loses endpoints", func() {
 				BeforeEach(func() {
 					messagesToEmit = table.Sync(
-						RoutesByProcessGuid{pg: Routes{URIs: []string{route1, route2, route3}, LogGuid: logGuid}},
-						EndpointsByProcessGuid{pg: {endpoint1}},
+						RoutesByRoutingKey{key: Routes{URIs: []string{route1, route2, route3}, LogGuid: logGuid}},
+						EndpointsByRoutingKey{key: {endpoint1}},
 					)
 				})
 
@@ -317,8 +318,8 @@ var _ = Describe("RoutingTable", func() {
 			Context("when the process guid loses routes but gains endpoints", func() {
 				BeforeEach(func() {
 					messagesToEmit = table.Sync(
-						RoutesByProcessGuid{pg: Routes{URIs: []string{route1}, LogGuid: logGuid}},
-						EndpointsByProcessGuid{pg: {endpoint1, endpoint2, endpoint3}},
+						RoutesByRoutingKey{key: Routes{URIs: []string{route1}, LogGuid: logGuid}},
+						EndpointsByRoutingKey{key: {endpoint1, endpoint2, endpoint3}},
 					)
 				})
 
@@ -341,8 +342,8 @@ var _ = Describe("RoutingTable", func() {
 			Context("when the process guid disappears entirely", func() {
 				BeforeEach(func() {
 					messagesToEmit = table.Sync(
-						RoutesByProcessGuid{},
-						EndpointsByProcessGuid{},
+						RoutesByRoutingKey{},
+						EndpointsByRoutingKey{},
 					)
 				})
 
@@ -362,13 +363,13 @@ var _ = Describe("RoutingTable", func() {
 					BeforeEach(func() {
 						//override previous set up
 						table.Sync(
-							RoutesByProcessGuid{},
-							EndpointsByProcessGuid{pg: {endpoint1, endpoint2}},
+							RoutesByRoutingKey{},
+							EndpointsByRoutingKey{key: {endpoint1, endpoint2}},
 						)
 
 						messagesToEmit = table.Sync(
-							RoutesByProcessGuid{pg: {}},
-							EndpointsByProcessGuid{pg: {endpoint1}},
+							RoutesByRoutingKey{key: {}},
+							EndpointsByRoutingKey{key: {endpoint1}},
 						)
 					})
 
@@ -381,13 +382,13 @@ var _ = Describe("RoutingTable", func() {
 					BeforeEach(func() {
 						//override previous set up
 						table.Sync(
-							RoutesByProcessGuid{pg: Routes{URIs: []string{route1, route2}, LogGuid: logGuid}},
-							EndpointsByProcessGuid{},
+							RoutesByRoutingKey{key: Routes{URIs: []string{route1, route2}, LogGuid: logGuid}},
+							EndpointsByRoutingKey{},
 						)
 
 						messagesToEmit = table.Sync(
-							RoutesByProcessGuid{pg: Routes{URIs: []string{route1}, LogGuid: logGuid}},
-							EndpointsByProcessGuid{},
+							RoutesByRoutingKey{key: Routes{URIs: []string{route1}, LogGuid: logGuid}},
+							EndpointsByRoutingKey{},
 						)
 					})
 
@@ -403,28 +404,28 @@ var _ = Describe("RoutingTable", func() {
 		Context("when the table is empty", func() {
 			Context("When setting routes", func() {
 				It("should not emit anything", func() {
-					messagesToEmit = table.SetRoutes(pg, Routes{URIs: []string{route1, route2}, LogGuid: logGuid})
+					messagesToEmit = table.SetRoutes(key, Routes{URIs: []string{route1, route2}, LogGuid: logGuid})
 					Ω(messagesToEmit).Should(BeZero())
 				})
 			})
 
 			Context("when removing routes", func() {
 				It("should not emit anything", func() {
-					messagesToEmit = table.RemoveRoutes(pg)
+					messagesToEmit = table.RemoveRoutes(key)
 					Ω(messagesToEmit).Should(BeZero())
 				})
 			})
 
 			Context("when adding/updating endpoints", func() {
 				It("should not emit anything", func() {
-					messagesToEmit = table.AddOrUpdateEndpoint(pg, endpoint1)
+					messagesToEmit = table.AddOrUpdateEndpoint(key, endpoint1)
 					Ω(messagesToEmit).Should(BeZero())
 				})
 			})
 
 			Context("when removing endpoints", func() {
 				It("should not emit anything", func() {
-					messagesToEmit = table.RemoveEndpoint(pg, endpoint1)
+					messagesToEmit = table.RemoveEndpoint(key, endpoint1)
 					Ω(messagesToEmit).Should(BeZero())
 				})
 			})
@@ -432,22 +433,22 @@ var _ = Describe("RoutingTable", func() {
 
 		Context("when there are both endpoints and routes in the table", func() {
 			BeforeEach(func() {
-				table.SetRoutes(pg, Routes{URIs: []string{route1, route2}, LogGuid: logGuid})
-				table.AddOrUpdateEndpoint(pg, endpoint1)
-				table.AddOrUpdateEndpoint(pg, endpoint2)
+				table.SetRoutes(key, Routes{URIs: []string{route1, route2}, LogGuid: logGuid})
+				table.AddOrUpdateEndpoint(key, endpoint1)
+				table.AddOrUpdateEndpoint(key, endpoint2)
 			})
 
 			Context("When setting routes", func() {
 				Context("when the routes do not change", func() {
 					It("should emit nothing", func() {
-						messagesToEmit = table.SetRoutes(pg, Routes{URIs: []string{route1, route2}, LogGuid: logGuid})
+						messagesToEmit = table.SetRoutes(key, Routes{URIs: []string{route1, route2}, LogGuid: logGuid})
 						Ω(messagesToEmit).Should(BeZero())
 					})
 				})
 
 				Context("when routes are added", func() {
 					It("should emit registrations", func() {
-						messagesToEmit = table.SetRoutes(pg, Routes{URIs: []string{route1, route2, route3}, LogGuid: logGuid})
+						messagesToEmit = table.SetRoutes(key, Routes{URIs: []string{route1, route2, route3}, LogGuid: logGuid})
 
 						expected := MessagesToEmit{
 							RegistrationMessages: []RegistryMessage{
@@ -461,7 +462,7 @@ var _ = Describe("RoutingTable", func() {
 
 				Context("when routes are removed", func() {
 					It("should emit unregistrations and registrations", func() {
-						messagesToEmit = table.SetRoutes(pg, Routes{URIs: []string{route1}, LogGuid: logGuid})
+						messagesToEmit = table.SetRoutes(key, Routes{URIs: []string{route1}, LogGuid: logGuid})
 
 						expected := MessagesToEmit{
 							RegistrationMessages: []RegistryMessage{
@@ -479,7 +480,7 @@ var _ = Describe("RoutingTable", func() {
 
 				Context("when routes are added and removed", func() {
 					It("should emit registrations and unregistrations", func() {
-						messagesToEmit = table.SetRoutes(pg, Routes{URIs: []string{route1, route3}, LogGuid: logGuid})
+						messagesToEmit = table.SetRoutes(key, Routes{URIs: []string{route1, route3}, LogGuid: logGuid})
 
 						expected := MessagesToEmit{
 							RegistrationMessages: []RegistryMessage{
@@ -498,7 +499,7 @@ var _ = Describe("RoutingTable", func() {
 
 			Context("when removing routes", func() {
 				It("should emit unregistrations", func() {
-					messagesToEmit = table.RemoveRoutes(pg)
+					messagesToEmit = table.RemoveRoutes(key)
 
 					expected := MessagesToEmit{
 						UnregistrationMessages: []RegistryMessage{
@@ -513,14 +514,14 @@ var _ = Describe("RoutingTable", func() {
 			Context("when adding/updating endpoints", func() {
 				Context("when the endpoint already exists", func() {
 					It("should emit nothing", func() {
-						messagesToEmit = table.AddOrUpdateEndpoint(pg, endpoint1)
+						messagesToEmit = table.AddOrUpdateEndpoint(key, endpoint1)
 						Ω(messagesToEmit).Should(BeZero())
 					})
 				})
 
 				Context("when the endpoint does not already exist", func() {
 					It("should emit registrations", func() {
-						messagesToEmit = table.AddOrUpdateEndpoint(pg, endpoint3)
+						messagesToEmit = table.AddOrUpdateEndpoint(key, endpoint3)
 
 						expected := MessagesToEmit{
 							RegistrationMessages: []RegistryMessage{
@@ -534,7 +535,7 @@ var _ = Describe("RoutingTable", func() {
 
 			Context("when removing endpoints", func() {
 				It("should emit unregistrations", func() {
-					messagesToEmit = table.RemoveEndpoint(pg, endpoint2)
+					messagesToEmit = table.RemoveEndpoint(key, endpoint2)
 
 					expected := MessagesToEmit{
 						UnregistrationMessages: []RegistryMessage{
@@ -548,26 +549,26 @@ var _ = Describe("RoutingTable", func() {
 
 		Context("when there are only routes in the table", func() {
 			BeforeEach(func() {
-				table.SetRoutes(pg, Routes{URIs: []string{route1, route2}, LogGuid: logGuid})
+				table.SetRoutes(key, Routes{URIs: []string{route1, route2}, LogGuid: logGuid})
 			})
 
 			Context("When setting routes", func() {
 				It("should emit nothing", func() {
-					messagesToEmit = table.SetRoutes(pg, Routes{URIs: []string{route1, route3}, LogGuid: logGuid})
+					messagesToEmit = table.SetRoutes(key, Routes{URIs: []string{route1, route3}, LogGuid: logGuid})
 					Ω(messagesToEmit).Should(BeZero())
 				})
 			})
 
 			Context("when removing routes", func() {
 				It("should emit nothing", func() {
-					messagesToEmit = table.RemoveRoutes(pg)
+					messagesToEmit = table.RemoveRoutes(key)
 					Ω(messagesToEmit).Should(BeZero())
 				})
 			})
 
 			Context("when adding/updating endpoints", func() {
 				It("should emit registrations", func() {
-					messagesToEmit = table.AddOrUpdateEndpoint(pg, endpoint1)
+					messagesToEmit = table.AddOrUpdateEndpoint(key, endpoint1)
 
 					expected := MessagesToEmit{
 						RegistrationMessages: []RegistryMessage{
@@ -581,13 +582,13 @@ var _ = Describe("RoutingTable", func() {
 
 		Context("when there are only endpoints in the table", func() {
 			BeforeEach(func() {
-				table.AddOrUpdateEndpoint(pg, endpoint1)
-				table.AddOrUpdateEndpoint(pg, endpoint2)
+				table.AddOrUpdateEndpoint(key, endpoint1)
+				table.AddOrUpdateEndpoint(key, endpoint2)
 			})
 
 			Context("When setting routes", func() {
 				It("should emit registrations", func() {
-					messagesToEmit = table.SetRoutes(pg, Routes{URIs: []string{route1, route2}, LogGuid: logGuid})
+					messagesToEmit = table.SetRoutes(key, Routes{URIs: []string{route1, route2}, LogGuid: logGuid})
 
 					expected := MessagesToEmit{
 						RegistrationMessages: []RegistryMessage{
@@ -601,21 +602,21 @@ var _ = Describe("RoutingTable", func() {
 
 			Context("when removing routes", func() {
 				It("should emit nothing", func() {
-					messagesToEmit = table.RemoveRoutes(pg)
+					messagesToEmit = table.RemoveRoutes(key)
 					Ω(messagesToEmit).Should(BeZero())
 				})
 			})
 
 			Context("when adding/updating endpoints", func() {
 				It("should emit nothing", func() {
-					messagesToEmit = table.AddOrUpdateEndpoint(pg, endpoint2)
+					messagesToEmit = table.AddOrUpdateEndpoint(key, endpoint2)
 					Ω(messagesToEmit).Should(BeZero())
 				})
 			})
 
 			Context("when removing endpoints", func() {
 				It("should emit nothing", func() {
-					messagesToEmit = table.RemoveEndpoint(pg, endpoint1)
+					messagesToEmit = table.RemoveEndpoint(key, endpoint1)
 					Ω(messagesToEmit).Should(BeZero())
 				})
 			})
@@ -632,7 +633,7 @@ var _ = Describe("RoutingTable", func() {
 
 		Context("when the table has routes but no endpoints", func() {
 			BeforeEach(func() {
-				table.SetRoutes(pg, Routes{URIs: []string{route1, route2}, LogGuid: logGuid})
+				table.SetRoutes(key, Routes{URIs: []string{route1, route2}, LogGuid: logGuid})
 			})
 
 			It("should be empty", func() {
@@ -643,8 +644,8 @@ var _ = Describe("RoutingTable", func() {
 
 		Context("when the table has endpoints but no routes", func() {
 			BeforeEach(func() {
-				table.AddOrUpdateEndpoint(pg, endpoint1)
-				table.AddOrUpdateEndpoint(pg, endpoint2)
+				table.AddOrUpdateEndpoint(key, endpoint1)
+				table.AddOrUpdateEndpoint(key, endpoint2)
 			})
 
 			It("should be empty", func() {
@@ -655,9 +656,9 @@ var _ = Describe("RoutingTable", func() {
 
 		Context("when the table has routes and endpoints", func() {
 			BeforeEach(func() {
-				table.SetRoutes(pg, Routes{URIs: []string{route1, route2}, LogGuid: logGuid})
-				table.AddOrUpdateEndpoint(pg, endpoint1)
-				table.AddOrUpdateEndpoint(pg, endpoint2)
+				table.SetRoutes(key, Routes{URIs: []string{route1, route2}, LogGuid: logGuid})
+				table.AddOrUpdateEndpoint(key, endpoint1)
+				table.AddOrUpdateEndpoint(key, endpoint2)
 			})
 
 			It("should emit the registrations", func() {
@@ -680,19 +681,19 @@ var _ = Describe("RoutingTable", func() {
 		})
 
 		It("returns 1 after adding a route", func() {
-			table.SetRoutes("fake-process-guid", Routes{URIs: []string{"fake-route-url"}, LogGuid: logGuid})
+			table.SetRoutes(RoutingKey{ProcessGuid: "fake-process-guid"}, Routes{URIs: []string{"fake-route-url"}, LogGuid: logGuid})
 			Expect(table.RouteCount()).To(Equal(1))
 		})
 
 		It("returns 2 after associating 2 urls with a process", func() {
-			table.SetRoutes("fake-process-guid", Routes{URIs: []string{"fake-route-url-1", "fake-route-url-2"}, LogGuid: logGuid})
+			table.SetRoutes(RoutingKey{ProcessGuid: "fake-process-guid"}, Routes{URIs: []string{"fake-route-url-1", "fake-route-url-2"}, LogGuid: logGuid})
 
 			Expect(table.RouteCount()).To(Equal(2))
 		})
 
 		It("returns 2 after associating 2 urls with a process", func() {
-			table.SetRoutes("fake-process-guid-a", Routes{URIs: []string{"fake-route-url-a-1", "fake-route-url-a-2"}, LogGuid: logGuid})
-			table.SetRoutes("fake-process-guid-b", Routes{URIs: []string{"fake-route-url-b-1", "fake-route-url-b-2"}, LogGuid: logGuid})
+			table.SetRoutes(RoutingKey{ProcessGuid: "fake-process-guid-a"}, Routes{URIs: []string{"fake-route-url-a-1", "fake-route-url-a-2"}, LogGuid: logGuid})
+			table.SetRoutes(RoutingKey{ProcessGuid: "fake-process-guid-b"}, Routes{URIs: []string{"fake-route-url-b-1", "fake-route-url-b-2"}, LogGuid: logGuid})
 
 			Expect(table.RouteCount()).To(Equal(4))
 		})

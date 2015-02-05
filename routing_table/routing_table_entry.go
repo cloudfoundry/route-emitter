@@ -1,9 +1,9 @@
 package routing_table
 
 type Endpoint struct {
-	InstanceGuid string
-	Host         string
-	Port         uint16
+	InstanceGuid  string
+	Host          string
+	Port          uint16
 	ContainerPort uint16
 }
 
@@ -16,6 +16,11 @@ type RoutingTableEntry struct {
 	URIs      map[string]struct{}
 	Endpoints map[string]Endpoint
 	LogGuid   string
+}
+
+type RoutingKey struct {
+	ProcessGuid   string
+	ContainerPort uint16
 }
 
 func (entry RoutingTableEntry) hasEndpoint(endpoint Endpoint) bool {

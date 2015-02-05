@@ -23,13 +23,17 @@ const logGuid = "some-log-guid"
 
 var _ = Describe("Watcher", func() {
 	const (
-		expectedProcessGuid  = "process-guid"
-		expectedInstanceGuid = "instance-guid"
-		expectedHost         = "1.1.1.1"
-		expectedExternalPort = 11000
-		expectedEndpointPort = uint16(11)
+		expectedProcessGuid   = "process-guid"
+		expectedInstanceGuid  = "instance-guid"
+		expectedHost          = "1.1.1.1"
+		expectedExternalPort  = 11000
+		expectedContainerPort = uint16(11)
 	)
 	var expectedRoutes = []string{"route-1", "route-2"}
+	var expectedRoutingKey = routing_table.RoutingKey{
+		ProcessGuid:   expectedProcessGuid,
+		ContainerPort: expectedContainerPort,
+	}
 
 	var (
 		receptorClient *fake_receptor.FakeClient
@@ -49,7 +53,7 @@ var _ = Describe("Watcher", func() {
 		emitter = &fake_nats_emitter.FakeNATSEmitter{}
 		logger := lagertest.NewTestLogger("test")
 
-		dummyEndpoint := routing_table.Endpoint{InstanceGuid: expectedInstanceGuid, Host: expectedHost, Port: expectedEndpointPort}
+		dummyEndpoint := routing_table.Endpoint{InstanceGuid: expectedInstanceGuid, Host: expectedHost, Port: expectedContainerPort}
 		dummyMessage := routing_table.RegistryMessageFor(dummyEndpoint, routing_table.Routes{URIs: []string{"foo.com", "bar.com"}, LogGuid: logGuid})
 		dummyMessagesToEmit = routing_table.MessagesToEmit{
 			RegistrationMessages: []routing_table.RegistryMessage{dummyMessage},
@@ -81,7 +85,8 @@ var _ = Describe("Watcher", func() {
 					},
 					Domain:      "tests",
 					ProcessGuid: expectedProcessGuid,
-					Routes:      cfroutes.CFRoutes{{Hostnames: expectedRoutes, Port: expectedEndpointPort}}.RoutingInfo(),
+					Ports:       []uint16{expectedContainerPort},
+					Routes:      cfroutes.CFRoutes{{Hostnames: expectedRoutes, Port: expectedContainerPort}}.RoutingInfo(),
 					LogGuid:     logGuid,
 				}
 
@@ -96,8 +101,8 @@ var _ = Describe("Watcher", func() {
 
 			It("should set the routes on the table", func() {
 				Eventually(table.SetRoutesCallCount).Should(Equal(1))
-				processGuid, routes := table.SetRoutesArgsForCall(0)
-				Ω(processGuid).Should(Equal(expectedProcessGuid))
+				key, routes := table.SetRoutesArgsForCall(0)
+				Ω(key).Should(Equal(expectedRoutingKey))
 				Ω(routes).Should(Equal(routing_table.Routes{URIs: expectedRoutes, LogGuid: logGuid}))
 			})
 
@@ -134,6 +139,7 @@ var _ = Describe("Watcher", func() {
 					Domain:      "tests",
 					ProcessGuid: expectedProcessGuid,
 					LogGuid:     logGuid,
+					Ports:       []uint16{expectedContainerPort},
 				}
 				changedDesiredLRP := receptor.DesiredLRPResponse{
 					Action: &models.RunAction{
@@ -141,8 +147,9 @@ var _ = Describe("Watcher", func() {
 					},
 					Domain:      "tests",
 					ProcessGuid: expectedProcessGuid,
-					Routes:      cfroutes.CFRoutes{{Hostnames: expectedRoutes, Port: expectedEndpointPort}}.RoutingInfo(),
 					LogGuid:     logGuid,
+					Ports:       []uint16{expectedContainerPort},
+					Routes:      cfroutes.CFRoutes{{Hostnames: expectedRoutes, Port: expectedContainerPort}}.RoutingInfo(),
 				}
 
 				eventSource.NextStub = func() (receptor.Event, error) {
@@ -159,8 +166,8 @@ var _ = Describe("Watcher", func() {
 
 			It("should set the routes on the table", func() {
 				Eventually(table.SetRoutesCallCount).Should(Equal(1))
-				processGuid, routes := table.SetRoutesArgsForCall(0)
-				Ω(processGuid).Should(Equal(expectedProcessGuid))
+				key, routes := table.SetRoutesArgsForCall(0)
+				Ω(key).Should(Equal(expectedRoutingKey))
 				Ω(routes).Should(Equal(routing_table.Routes{URIs: expectedRoutes, LogGuid: logGuid}))
 			})
 
@@ -196,7 +203,8 @@ var _ = Describe("Watcher", func() {
 					},
 					Domain:      "tests",
 					ProcessGuid: expectedProcessGuid,
-					Routes:      cfroutes.CFRoutes{{Hostnames: expectedRoutes, Port: expectedEndpointPort}}.RoutingInfo(),
+					Ports:       []uint16{expectedContainerPort},
+					Routes:      cfroutes.CFRoutes{{Hostnames: expectedRoutes, Port: expectedContainerPort}}.RoutingInfo(),
 					LogGuid:     logGuid,
 				}
 
@@ -211,8 +219,8 @@ var _ = Describe("Watcher", func() {
 
 			It("should remove the routes from the table", func() {
 				Eventually(table.RemoveRoutesCallCount).Should(Equal(1))
-				processGuid := table.RemoveRoutesArgsForCall(0)
-				Ω(processGuid).Should(Equal(expectedProcessGuid))
+				key := table.RemoveRoutesArgsForCall(0)
+				Ω(key).Should(Equal(expectedRoutingKey))
 			})
 
 			It("should emit whatever the table tells it to emit", func() {
@@ -240,7 +248,7 @@ var _ = Describe("Watcher", func() {
 						CellID:       "cell-id",
 						Address:      expectedHost,
 						Ports: []receptor.PortMapping{
-							{ContainerPort: 8080, HostPort: expectedExternalPort},
+							{ContainerPort: expectedContainerPort, HostPort: expectedExternalPort},
 						},
 						State: receptor.ActualLRPStateRunning,
 					}
@@ -256,13 +264,13 @@ var _ = Describe("Watcher", func() {
 
 				It("should add/update the endpoint on the table", func() {
 					Eventually(table.AddOrUpdateEndpointCallCount).Should(Equal(1))
-					processGuid, endpoint := table.AddOrUpdateEndpointArgsForCall(0)
-					Ω(processGuid).Should(Equal(expectedProcessGuid))
+					key, endpoint := table.AddOrUpdateEndpointArgsForCall(0)
+					Ω(key).Should(Equal(expectedRoutingKey))
 					Ω(endpoint).Should(Equal(routing_table.Endpoint{
 						InstanceGuid:  expectedInstanceGuid,
 						Host:          expectedHost,
 						Port:          expectedExternalPort,
-						ContainerPort: 8080,
+						ContainerPort: expectedContainerPort,
 					}))
 				})
 
@@ -298,7 +306,7 @@ var _ = Describe("Watcher", func() {
 						CellID:       "cell-id",
 						Address:      expectedHost,
 						Ports: []receptor.PortMapping{
-							{ContainerPort: 8080, HostPort: expectedExternalPort},
+							{ContainerPort: expectedContainerPort, HostPort: expectedExternalPort},
 						},
 						State: receptor.ActualLRPStateUnclaimed,
 					}
@@ -346,7 +354,7 @@ var _ = Describe("Watcher", func() {
 						CellID:       "cell-id",
 						Address:      expectedHost,
 						Ports: []receptor.PortMapping{
-							{ContainerPort: 8080, HostPort: expectedExternalPort},
+							{ContainerPort: expectedContainerPort, HostPort: expectedExternalPort},
 						},
 						State: receptor.ActualLRPStateRunning,
 					}
@@ -362,13 +370,13 @@ var _ = Describe("Watcher", func() {
 
 				It("should add/update the endpoint on the table", func() {
 					Eventually(table.AddOrUpdateEndpointCallCount).Should(Equal(1))
-					processGuid, endpoint := table.AddOrUpdateEndpointArgsForCall(0)
-					Ω(processGuid).Should(Equal(expectedProcessGuid))
+					key, endpoint := table.AddOrUpdateEndpointArgsForCall(0)
+					Ω(key).Should(Equal(expectedRoutingKey))
 					Ω(endpoint).Should(Equal(routing_table.Endpoint{
 						InstanceGuid:  expectedInstanceGuid,
 						Host:          expectedHost,
 						Port:          expectedExternalPort,
-						ContainerPort: 8080,
+						ContainerPort: expectedContainerPort,
 					}))
 				})
 
@@ -406,7 +414,7 @@ var _ = Describe("Watcher", func() {
 						CellID:       "cell-id",
 						Address:      expectedHost,
 						Ports: []receptor.PortMapping{
-							{ContainerPort: 8080, HostPort: expectedExternalPort},
+							{ContainerPort: expectedContainerPort, HostPort: expectedExternalPort},
 						},
 						State: receptor.ActualLRPStateRunning,
 					}
@@ -428,13 +436,13 @@ var _ = Describe("Watcher", func() {
 
 				It("should remove the endpoint from the table", func() {
 					Eventually(table.RemoveEndpointCallCount).Should(Equal(1))
-					processGuid, endpoint := table.RemoveEndpointArgsForCall(0)
-					Ω(processGuid).Should(Equal(expectedProcessGuid))
+					key, endpoint := table.RemoveEndpointArgsForCall(0)
+					Ω(key).Should(Equal(expectedRoutingKey))
 					Ω(endpoint).Should(Equal(routing_table.Endpoint{
 						InstanceGuid:  expectedInstanceGuid,
 						Host:          expectedHost,
 						Port:          expectedExternalPort,
-						ContainerPort: 8080,
+						ContainerPort: expectedContainerPort,
 					}))
 				})
 
@@ -504,7 +512,7 @@ var _ = Describe("Watcher", func() {
 						CellID:       "cell-id",
 						Address:      expectedHost,
 						Ports: []receptor.PortMapping{
-							{ContainerPort: 8080, HostPort: expectedExternalPort},
+							{ContainerPort: expectedContainerPort, HostPort: expectedExternalPort},
 						},
 						State: receptor.ActualLRPStateRunning,
 					}
@@ -520,13 +528,13 @@ var _ = Describe("Watcher", func() {
 
 				It("should remove the endpoint from the table", func() {
 					Eventually(table.RemoveEndpointCallCount).Should(Equal(1))
-					processGuid, endpoint := table.RemoveEndpointArgsForCall(0)
-					Ω(processGuid).Should(Equal(expectedProcessGuid))
+					key, endpoint := table.RemoveEndpointArgsForCall(0)
+					Ω(key).Should(Equal(expectedRoutingKey))
 					Ω(endpoint).Should(Equal(routing_table.Endpoint{
 						InstanceGuid:  expectedInstanceGuid,
 						Host:          expectedHost,
 						Port:          expectedExternalPort,
-						ContainerPort: 8080,
+						ContainerPort: expectedContainerPort,
 					}))
 				})
 

@@ -4,24 +4,24 @@ import "sync"
 
 //go:generate counterfeiter -o fake_routing_table/fake_routing_table.go . RoutingTable
 type RoutingTable interface {
-	Sync(routes RoutesByProcessGuid, endpoints EndpointsByProcessGuid) MessagesToEmit
+	Sync(routes RoutesByRoutingKey, endpoints EndpointsByRoutingKey) MessagesToEmit
 	MessagesToEmit() MessagesToEmit
 
 	RouteCount() int
-	SetRoutes(processGuid string, routes Routes) MessagesToEmit
-	RemoveRoutes(processGuid string) MessagesToEmit
-	AddOrUpdateEndpoint(processGuid string, endpoint Endpoint) MessagesToEmit
-	RemoveEndpoint(processGuid string, endpoint Endpoint) MessagesToEmit
+	SetRoutes(key RoutingKey, routes Routes) MessagesToEmit
+	RemoveRoutes(key RoutingKey) MessagesToEmit
+	AddOrUpdateEndpoint(key RoutingKey, endpoint Endpoint) MessagesToEmit
+	RemoveEndpoint(key RoutingKey, endpoint Endpoint) MessagesToEmit
 }
 
 type routingTable struct {
-	entries map[string]RoutingTableEntry
+	entries map[RoutingKey]RoutingTableEntry
 	sync.Mutex
 }
 
 func New() RoutingTable {
 	return &routingTable{
-		entries: map[string]RoutingTableEntry{},
+		entries: map[RoutingKey]RoutingTableEntry{},
 	}
 }
 
@@ -37,8 +37,8 @@ func (table *routingTable) RouteCount() int {
 	return count
 }
 
-func (table *routingTable) Sync(routes RoutesByProcessGuid, endpoints EndpointsByProcessGuid) MessagesToEmit {
-	newEntries := combineByProcessGuid(routes, endpoints)
+func (table *routingTable) Sync(routes RoutesByRoutingKey, endpoints EndpointsByRoutingKey) MessagesToEmit {
+	newEntries := combineByRoutingKey(routes, endpoints)
 
 	table.Lock()
 	defer table.Unlock()
@@ -50,8 +50,8 @@ func (table *routingTable) Sync(routes RoutesByProcessGuid, endpoints EndpointsB
 		messagesToEmit = messagesToEmit.merge(registrationsFor(newEntry))
 	}
 
-	for processGuid, existingEntry := range table.entries {
-		newEntry := newEntries[processGuid]
+	for key, existingEntry := range table.entries {
+		newEntry := newEntries[key]
 		messagesToEmit = messagesToEmit.merge(unregistrationsForTransition(existingEntry, newEntry))
 	}
 
@@ -71,74 +71,74 @@ func (table *routingTable) MessagesToEmit() MessagesToEmit {
 	return messagesToEmit
 }
 
-func (table *routingTable) SetRoutes(processGuid string, routes Routes) MessagesToEmit {
+func (table *routingTable) SetRoutes(key RoutingKey, routes Routes) MessagesToEmit {
 	table.Lock()
 	defer table.Unlock()
 
-	newEntry := table.entries[processGuid].copy()
+	newEntry := table.entries[key].copy()
 	newEntry.URIs = routesAsMap(routes.URIs)
 	newEntry.LogGuid = routes.LogGuid
 
-	return table.updateEntry(processGuid, newEntry)
+	return table.updateEntry(key, newEntry)
 }
 
-func (table *routingTable) RemoveRoutes(processGuid string) MessagesToEmit {
+func (table *routingTable) RemoveRoutes(key RoutingKey) MessagesToEmit {
 	table.Lock()
 	defer table.Unlock()
 
-	newEntry := table.entries[processGuid].copy()
+	newEntry := table.entries[key].copy()
 	newEntry.URIs = routesAsMap([]string{})
 
-	return table.updateEntry(processGuid, newEntry)
+	return table.updateEntry(key, newEntry)
 }
 
-func (table *routingTable) AddOrUpdateEndpoint(processGuid string, endpoint Endpoint) MessagesToEmit {
+func (table *routingTable) AddOrUpdateEndpoint(key RoutingKey, endpoint Endpoint) MessagesToEmit {
 	table.Lock()
 	defer table.Unlock()
 
-	newEntry := table.entries[processGuid].copy()
+	newEntry := table.entries[key].copy()
 	newEntry.Endpoints[endpoint.InstanceGuid] = endpoint
 
-	return table.updateEntry(processGuid, newEntry)
+	return table.updateEntry(key, newEntry)
 }
 
-func (table *routingTable) RemoveEndpoint(processGuid string, endpoint Endpoint) MessagesToEmit {
+func (table *routingTable) RemoveEndpoint(key RoutingKey, endpoint Endpoint) MessagesToEmit {
 	table.Lock()
 	defer table.Unlock()
 
-	newEntry := table.entries[processGuid].copy()
+	newEntry := table.entries[key].copy()
 	delete(newEntry.Endpoints, endpoint.InstanceGuid)
 
-	return table.updateEntry(processGuid, newEntry)
+	return table.updateEntry(key, newEntry)
 }
 
-func (table *routingTable) updateEntry(processGuid string, newEntry RoutingTableEntry) MessagesToEmit {
-	existingEntry := table.entries[processGuid]
+func (table *routingTable) updateEntry(key RoutingKey, newEntry RoutingTableEntry) MessagesToEmit {
+	existingEntry := table.entries[key]
 
 	messagesToEmit := registrationsForTransition(existingEntry, newEntry)
 	messagesToEmit = messagesToEmit.merge(unregistrationsForTransition(existingEntry, newEntry))
 
-	table.entries[processGuid] = newEntry
+	table.entries[key] = newEntry
 	return messagesToEmit
 }
 
-func combineByProcessGuid(routes RoutesByProcessGuid, endpoints EndpointsByProcessGuid) map[string]RoutingTableEntry {
-	entries := map[string]RoutingTableEntry{}
+func combineByRoutingKey(routes RoutesByRoutingKey, endpoints EndpointsByRoutingKey) map[RoutingKey]RoutingTableEntry {
+	entries := map[RoutingKey]RoutingTableEntry{}
 
-	for processGuid, entry := range routes {
-		entries[processGuid] = RoutingTableEntry{
+	for key, entry := range routes {
+		entries[key] = RoutingTableEntry{
 			URIs:    routesAsMap(entry.URIs),
 			LogGuid: entry.LogGuid,
 		}
 	}
 
-	for processGuid, endpoints := range endpoints {
-		entry, ok := entries[processGuid]
+	for key, endpoints := range endpoints {
+		entry, ok := entries[key]
 		if !ok {
 			entry = RoutingTableEntry{}
 		}
 		entry.Endpoints = endpointsAsMap(endpoints)
-		entries[processGuid] = entry
+		entries[key] = entry
 	}
 
 	return entries
