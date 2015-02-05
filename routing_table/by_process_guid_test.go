@@ -2,6 +2,7 @@ package routing_table_test
 
 import (
 	"github.com/cloudfoundry-incubator/receptor"
+	"github.com/cloudfoundry-incubator/route-emitter/cfroutes"
 	. "github.com/cloudfoundry-incubator/route-emitter/routing_table"
 
 	. "github.com/onsi/ginkgo"
@@ -11,10 +12,10 @@ import (
 var _ = Describe("ByProcessGuid", func() {
 	Describe("RoutesByProcessGuidFromDesireds", func() {
 		It("should build a map of routes", func() {
-			abcRoutes := receptor.CFRoutes{
+			abcRoutes := cfroutes.CFRoutes{
 				{Hostnames: []string{"foo.com", "bar.com"}, Port: 8080},
 			}.RoutingInfo()
-			defRoutes := receptor.CFRoutes{
+			defRoutes := cfroutes.CFRoutes{
 				{Hostnames: []string{"baz.com"}, Port: 8080},
 			}.RoutingInfo()
 

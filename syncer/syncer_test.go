@@ -9,6 +9,7 @@ import (
 	"github.com/apcera/nats"
 	"github.com/cloudfoundry-incubator/receptor"
 	"github.com/cloudfoundry-incubator/receptor/fake_receptor"
+	"github.com/cloudfoundry-incubator/route-emitter/cfroutes"
 	"github.com/cloudfoundry-incubator/route-emitter/nats_emitter/fake_nats_emitter"
 	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
 	"github.com/cloudfoundry-incubator/route-emitter/routing_table/fake_routing_table"
@@ -89,7 +90,7 @@ var _ = Describe("Syncer", func() {
 
 		desiredResponse = receptor.DesiredLRPResponse{
 			ProcessGuid: processGuid,
-			Routes: receptor.CFRoutes{
+			Routes: cfroutes.CFRoutes{
 				{Hostnames: []string{"route-1", "route-2"}, Port: 8080},
 			}.RoutingInfo(),
 			LogGuid: logGuid,

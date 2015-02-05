@@ -4,6 +4,7 @@ import (
 	"errors"
 
 	"github.com/cloudfoundry-incubator/receptor"
+	"github.com/cloudfoundry-incubator/route-emitter/cfroutes"
 )
 
 type RoutesByProcessGuid map[string]Routes
@@ -12,7 +13,7 @@ type ContainersByProcessGuid map[string][]Container
 func RoutesByProcessGuidFromDesireds(desireds []receptor.DesiredLRPResponse) RoutesByProcessGuid {
 	routesByProcessGuid := RoutesByProcessGuid{}
 	for _, desired := range desireds {
-		routes, err := receptor.CFRoutesFromRoutingInfo(desired.Routes)
+		routes, err := cfroutes.CFRoutesFromRoutingInfo(desired.Routes)
 		if err == nil && len(routes) > 0 {
 			routesByProcessGuid[desired.ProcessGuid] = Routes{
 				URIs:    routes[0].Hostnames,

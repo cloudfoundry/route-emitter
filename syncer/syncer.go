@@ -7,6 +7,7 @@ import (
 
 	"github.com/apcera/nats"
 	"github.com/cloudfoundry-incubator/receptor"
+	"github.com/cloudfoundry-incubator/route-emitter/cfroutes"
 	"github.com/cloudfoundry-incubator/route-emitter/nats_emitter"
 	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
 	"github.com/cloudfoundry-incubator/runtime-schema/metric"
@@ -174,7 +175,7 @@ func (syncer *Syncer) syncAndEmit() {
 }
 
 func (syncer *Syncer) register(desired receptor.DesiredLRPResponse, actual receptor.ActualLRPResponse) error {
-	routes, err := receptor.CFRoutesFromRoutingInfo(desired.Routes)
+	routes, err := cfroutes.CFRoutesFromRoutingInfo(desired.Routes)
 	if err != nil || len(routes) == 0 {
 		return err
 	}

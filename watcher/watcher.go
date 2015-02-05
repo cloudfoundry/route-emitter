@@ -4,6 +4,7 @@ import (
 	"os"
 
 	"github.com/cloudfoundry-incubator/receptor"
+	"github.com/cloudfoundry-incubator/route-emitter/cfroutes"
 	"github.com/cloudfoundry-incubator/route-emitter/nats_emitter"
 	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
 	"github.com/cloudfoundry-incubator/runtime-schema/metric"
@@ -133,7 +134,7 @@ func (watcher *Watcher) handleDesiredCreateOrUpdate(desiredLRP receptor.DesiredL
 
 	var hostnames []string
 
-	routes, err := receptor.CFRoutesFromRoutingInfo(desiredLRP.Routes)
+	routes, err := cfroutes.CFRoutesFromRoutingInfo(desiredLRP.Routes)
 	if err == nil && len(routes) > 0 {
 		hostnames = routes[0].Hostnames
 	}

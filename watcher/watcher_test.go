@@ -12,6 +12,7 @@ import (
 	"github.com/pivotal-golang/lager/lagertest"
 	"github.com/tedsuo/ifrit"
 
+	"github.com/cloudfoundry-incubator/route-emitter/cfroutes"
 	"github.com/cloudfoundry-incubator/route-emitter/nats_emitter/fake_nats_emitter"
 	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
 	"github.com/cloudfoundry-incubator/route-emitter/routing_table/fake_routing_table"
@@ -80,7 +81,7 @@ var _ = Describe("Watcher", func() {
 					},
 					Domain:      "tests",
 					ProcessGuid: expectedProcessGuid,
-					Routes:      receptor.CFRoutes{{Hostnames: expectedRoutes, Port: expectedContainerPort}}.RoutingInfo(),
+					Routes:      cfroutes.CFRoutes{{Hostnames: expectedRoutes, Port: expectedContainerPort}}.RoutingInfo(),
 					LogGuid:     logGuid,
 				}
 
@@ -140,7 +141,7 @@ var _ = Describe("Watcher", func() {
 					},
 					Domain:      "tests",
 					ProcessGuid: expectedProcessGuid,
-					Routes:      receptor.CFRoutes{{Hostnames: expectedRoutes, Port: expectedContainerPort}}.RoutingInfo(),
+					Routes:      cfroutes.CFRoutes{{Hostnames: expectedRoutes, Port: expectedContainerPort}}.RoutingInfo(),
 					LogGuid:     logGuid,
 				}
 
@@ -195,7 +196,7 @@ var _ = Describe("Watcher", func() {
 					},
 					Domain:      "tests",
 					ProcessGuid: expectedProcessGuid,
-					Routes:      receptor.CFRoutes{{Hostnames: expectedRoutes, Port: expectedContainerPort}}.RoutingInfo(),
+					Routes:      cfroutes.CFRoutes{{Hostnames: expectedRoutes, Port: expectedContainerPort}}.RoutingInfo(),
 					LogGuid:     logGuid,
 				}
 
