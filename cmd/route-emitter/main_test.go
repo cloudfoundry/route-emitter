@@ -335,7 +335,7 @@ var _ = Describe("Route Emitter", func() {
 })
 
 func newRoutes(hosts []string, port uint16) map[string]*json.RawMessage {
-	routingInfo := *receptor.CFRoutes{
+	routingInfo := receptor.CFRoutes{
 		{Hostnames: hosts, Port: port},
 	}.RoutingInfo()
 
