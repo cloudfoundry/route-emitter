@@ -8,7 +8,7 @@ import (
 )
 
 type RoutesByProcessGuid map[string]Routes
-type ContainersByProcessGuid map[string][]Container
+type EndpointsByProcessGuid map[string][]Endpoint
 
 func RoutesByProcessGuidFromDesireds(desireds []receptor.DesiredLRPResponse) RoutesByProcessGuid {
 	routesByProcessGuid := RoutesByProcessGuid{}
@@ -25,26 +25,26 @@ func RoutesByProcessGuidFromDesireds(desireds []receptor.DesiredLRPResponse) Rou
 	return routesByProcessGuid
 }
 
-func ContainersByProcessGuidFromActuals(actuals []receptor.ActualLRPResponse) ContainersByProcessGuid {
-	containers := ContainersByProcessGuid{}
+func EndpointsByProcessGuidFromActuals(actuals []receptor.ActualLRPResponse) EndpointsByProcessGuid {
+	endpoints := EndpointsByProcessGuid{}
 	for _, actual := range actuals {
-		container, err := ContainerFromActual(actual)
+		endpoint, err := EndpointFromActual(actual)
 		if err != nil {
 			continue
 		}
 
-		containers[actual.ProcessGuid] = append(containers[actual.ProcessGuid], container)
+		endpoints[actual.ProcessGuid] = append(endpoints[actual.ProcessGuid], endpoint)
 	}
 
-	return containers
+	return endpoints
 }
 
-func ContainerFromActual(actual receptor.ActualLRPResponse) (Container, error) {
+func EndpointFromActual(actual receptor.ActualLRPResponse) (Endpoint, error) {
 	if len(actual.Ports) == 0 {
-		return Container{}, errors.New("missing ports")
+		return Endpoint{}, errors.New("missing ports")
 	}
 
-	return Container{
+	return Endpoint{
 		InstanceGuid: actual.InstanceGuid,
 		Host:         actual.Address,
 		Port:         uint16(actual.Ports[0].HostPort),

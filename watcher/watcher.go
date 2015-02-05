@@ -187,24 +187,24 @@ func (watcher *Watcher) handleActualDelete(actualLRP receptor.ActualLRPResponse)
 }
 
 func (watcher *Watcher) addOrUpdateAndEmit(actualLRP receptor.ActualLRPResponse) {
-	container, err := routing_table.ContainerFromActual(actualLRP)
+	endpoint, err := routing_table.EndpointFromActual(actualLRP)
 	if err != nil {
-		watcher.logger.Error("failed-to-extract-container-from-actual", err)
+		watcher.logger.Error("failed-to-extract-endpoint-from-actual", err)
 		return
 	}
 
-	messagesToEmit := watcher.table.AddOrUpdateContainer(actualLRP.ProcessGuid, container)
+	messagesToEmit := watcher.table.AddOrUpdateEndpoint(actualLRP.ProcessGuid, endpoint)
 	watcher.emitter.Emit(messagesToEmit, &routesRegistered, &routesUnregistered)
 }
 
 func (watcher *Watcher) removeAndEmit(actualLRP receptor.ActualLRPResponse) {
-	container, err := routing_table.ContainerFromActual(actualLRP)
+	endpoint, err := routing_table.EndpointFromActual(actualLRP)
 	if err != nil {
-		watcher.logger.Error("failed-to-extract-container-from-actual", err)
+		watcher.logger.Error("failed-to-extract-endpoint-from-actual", err)
 		return
 	}
 
-	messagesToEmit := watcher.table.RemoveContainer(actualLRP.ProcessGuid, container)
+	messagesToEmit := watcher.table.RemoveEndpoint(actualLRP.ProcessGuid, endpoint)
 	watcher.emitter.Emit(messagesToEmit, &routesRegistered, &routesUnregistered)
 }
 

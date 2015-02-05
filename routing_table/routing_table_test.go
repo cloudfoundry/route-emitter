@@ -18,9 +18,9 @@ var _ = Describe("RoutingTable", func() {
 	route1 := "foo.com"
 	route2 := "bar.com"
 	route3 := "baz.com"
-	container1 := Container{"ig-1", "1.1.1.1", 11}
-	container2 := Container{"ig-2", "2.2.2.2", 22}
-	container3 := Container{"ig-3", "3.3.3.3", 33}
+	endpoint1 := Endpoint{InstanceGuid: "ig-1", Host: "1.1.1.1", Port: 11}
+	endpoint2 := Endpoint{InstanceGuid: "ig-2", Host: "2.2.2.2", Port: 22}
+	endpoint3 := Endpoint{InstanceGuid: "ig-3", Host: "3.3.3.3", Port: 33}
 	logGuid := "some-log-guid"
 
 	BeforeEach(func() {
@@ -29,11 +29,11 @@ var _ = Describe("RoutingTable", func() {
 
 	Describe("When syncing", func() {
 		Context("when a new process guid arrives", func() {
-			Context("when the process guid has both routes and containers", func() {
+			Context("when the process guid has both routes and endpoints", func() {
 				BeforeEach(func() {
 					messagesToEmit = table.Sync(
 						RoutesByProcessGuid{pg: Routes{URIs: []string{route1, route2}, LogGuid: logGuid}},
-						ContainersByProcessGuid{pg: {container1, container2}},
+						EndpointsByProcessGuid{pg: {endpoint1, endpoint2}},
 					)
 				})
 
@@ -56,7 +56,7 @@ var _ = Describe("RoutingTable", func() {
 				BeforeEach(func() {
 					messagesToEmit = table.Sync(
 						RoutesByProcessGuid{pg: Routes{URIs: []string{route1}, LogGuid: logGuid}},
-						ContainersByProcessGuid{},
+						EndpointsByProcessGuid{},
 					)
 				})
 
@@ -64,18 +64,18 @@ var _ = Describe("RoutingTable", func() {
 					Ω(messagesToEmit).Should(BeZero())
 				})
 
-				Context("when the containers subsequently arrive", func() {
+				Context("when the endpoints subsequently arrive", func() {
 					BeforeEach(func() {
 						messagesToEmit = table.Sync(
 							RoutesByProcessGuid{pg: Routes{URIs: []string{route1}, LogGuid: logGuid}},
-							ContainersByProcessGuid{pg: {container1}},
+							EndpointsByProcessGuid{pg: {endpoint1}},
 						)
 					})
 
 					It("should emit registrations for each pairing", func() {
 						expected := MessagesToEmit{
 							RegistrationMessages: []RegistryMessage{
-								RegistryMessageFor(container1, Routes{URIs: []string{route1}, LogGuid: logGuid}),
+								RegistryMessageFor(endpoint1, Routes{URIs: []string{route1}, LogGuid: logGuid}),
 							},
 						}
 						Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
@@ -86,7 +86,7 @@ var _ = Describe("RoutingTable", func() {
 					BeforeEach(func() {
 						messagesToEmit = table.Sync(
 							RoutesByProcessGuid{},
-							ContainersByProcessGuid{},
+							EndpointsByProcessGuid{},
 						)
 					})
 
@@ -96,11 +96,11 @@ var _ = Describe("RoutingTable", func() {
 				})
 			})
 
-			Context("when the process only has containers", func() {
+			Context("when the process only has endpoints", func() {
 				BeforeEach(func() {
 					messagesToEmit = table.Sync(
 						RoutesByProcessGuid{},
-						ContainersByProcessGuid{pg: {container1}},
+						EndpointsByProcessGuid{pg: {endpoint1}},
 					)
 				})
 
@@ -112,14 +112,14 @@ var _ = Describe("RoutingTable", func() {
 					BeforeEach(func() {
 						messagesToEmit = table.Sync(
 							RoutesByProcessGuid{pg: Routes{URIs: []string{route1}, LogGuid: logGuid}},
-							ContainersByProcessGuid{pg: {container1}},
+							EndpointsByProcessGuid{pg: {endpoint1}},
 						)
 					})
 
 					It("should emit registrations for each pairing", func() {
 						expected := MessagesToEmit{
 							RegistrationMessages: []RegistryMessage{
-								RegistryMessageFor(container1, Routes{URIs: []string{route1}, LogGuid: logGuid}),
+								RegistryMessageFor(endpoint1, Routes{URIs: []string{route1}, LogGuid: logGuid}),
 							},
 						}
 						Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
@@ -130,7 +130,7 @@ var _ = Describe("RoutingTable", func() {
 					BeforeEach(func() {
 						messagesToEmit = table.Sync(
 							RoutesByProcessGuid{},
-							ContainersByProcessGuid{},
+							EndpointsByProcessGuid{},
 						)
 					})
 
@@ -145,7 +145,7 @@ var _ = Describe("RoutingTable", func() {
 			BeforeEach(func() {
 				table.Sync(
 					RoutesByProcessGuid{pg: Routes{URIs: []string{route1, route2}, LogGuid: logGuid}},
-					ContainersByProcessGuid{pg: {container1, container2}},
+					EndpointsByProcessGuid{pg: {endpoint1, endpoint2}},
 				)
 			})
 
@@ -153,15 +153,15 @@ var _ = Describe("RoutingTable", func() {
 				BeforeEach(func() {
 					messagesToEmit = table.Sync(
 						RoutesByProcessGuid{pg: Routes{URIs: []string{route1, route2}, LogGuid: logGuid}},
-						ContainersByProcessGuid{pg: {container1, container2}},
+						EndpointsByProcessGuid{pg: {endpoint1, endpoint2}},
 					)
 				})
 
 				It("should emit all registrations and no unregisration", func() {
 					expected := MessagesToEmit{
 						RegistrationMessages: []RegistryMessage{
-							RegistryMessageFor(container1, Routes{URIs: []string{route1, route2}, LogGuid: logGuid}),
-							RegistryMessageFor(container2, Routes{URIs: []string{route1, route2}, LogGuid: logGuid}),
+							RegistryMessageFor(endpoint1, Routes{URIs: []string{route1, route2}, LogGuid: logGuid}),
+							RegistryMessageFor(endpoint2, Routes{URIs: []string{route1, route2}, LogGuid: logGuid}),
 						},
 					}
 					Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
@@ -172,55 +172,55 @@ var _ = Describe("RoutingTable", func() {
 				BeforeEach(func() {
 					messagesToEmit = table.Sync(
 						RoutesByProcessGuid{pg: Routes{URIs: []string{route1, route2, route3}, LogGuid: logGuid}},
-						ContainersByProcessGuid{pg: {container1, container2}},
+						EndpointsByProcessGuid{pg: {endpoint1, endpoint2}},
 					)
 				})
 
 				It("should emit all registrations and no unregisration", func() {
 					expected := MessagesToEmit{
 						RegistrationMessages: []RegistryMessage{
-							RegistryMessageFor(container1, Routes{URIs: []string{route1, route2, route3}, LogGuid: logGuid}),
-							RegistryMessageFor(container2, Routes{URIs: []string{route1, route2, route3}, LogGuid: logGuid}),
+							RegistryMessageFor(endpoint1, Routes{URIs: []string{route1, route2, route3}, LogGuid: logGuid}),
+							RegistryMessageFor(endpoint2, Routes{URIs: []string{route1, route2, route3}, LogGuid: logGuid}),
 						},
 					}
 					Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
 				})
 			})
 
-			Context("when the process guid gets new containers", func() {
+			Context("when the process guid gets new endpoints", func() {
 				BeforeEach(func() {
 					messagesToEmit = table.Sync(
 						RoutesByProcessGuid{pg: Routes{URIs: []string{route1, route2}, LogGuid: logGuid}},
-						ContainersByProcessGuid{pg: {container1, container2, container3}},
+						EndpointsByProcessGuid{pg: {endpoint1, endpoint2, endpoint3}},
 					)
 				})
 
 				It("should emit all registrations and no unregisration", func() {
 					expected := MessagesToEmit{
 						RegistrationMessages: []RegistryMessage{
-							RegistryMessageFor(container1, Routes{URIs: []string{route1, route2}, LogGuid: logGuid}),
-							RegistryMessageFor(container2, Routes{URIs: []string{route1, route2}, LogGuid: logGuid}),
-							RegistryMessageFor(container3, Routes{URIs: []string{route1, route2}, LogGuid: logGuid}),
+							RegistryMessageFor(endpoint1, Routes{URIs: []string{route1, route2}, LogGuid: logGuid}),
+							RegistryMessageFor(endpoint2, Routes{URIs: []string{route1, route2}, LogGuid: logGuid}),
+							RegistryMessageFor(endpoint3, Routes{URIs: []string{route1, route2}, LogGuid: logGuid}),
 						},
 					}
 					Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
 				})
 			})
 
-			Context("when the process guid gets new routes and containers", func() {
+			Context("when the process guid gets new routes and endpoints", func() {
 				BeforeEach(func() {
 					messagesToEmit = table.Sync(
 						RoutesByProcessGuid{pg: Routes{URIs: []string{route1, route2, route3}, LogGuid: logGuid}},
-						ContainersByProcessGuid{pg: {container1, container2, container3}},
+						EndpointsByProcessGuid{pg: {endpoint1, endpoint2, endpoint3}},
 					)
 				})
 
 				It("should emit all registrations and no unregisration", func() {
 					expected := MessagesToEmit{
 						RegistrationMessages: []RegistryMessage{
-							RegistryMessageFor(container1, Routes{URIs: []string{route1, route2, route3}, LogGuid: logGuid}),
-							RegistryMessageFor(container2, Routes{URIs: []string{route1, route2, route3}, LogGuid: logGuid}),
-							RegistryMessageFor(container3, Routes{URIs: []string{route1, route2, route3}, LogGuid: logGuid}),
+							RegistryMessageFor(endpoint1, Routes{URIs: []string{route1, route2, route3}, LogGuid: logGuid}),
+							RegistryMessageFor(endpoint2, Routes{URIs: []string{route1, route2, route3}, LogGuid: logGuid}),
+							RegistryMessageFor(endpoint3, Routes{URIs: []string{route1, route2, route3}, LogGuid: logGuid}),
 						},
 					}
 					Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
@@ -231,107 +231,107 @@ var _ = Describe("RoutingTable", func() {
 				BeforeEach(func() {
 					messagesToEmit = table.Sync(
 						RoutesByProcessGuid{pg: Routes{URIs: []string{route1}, LogGuid: logGuid}},
-						ContainersByProcessGuid{pg: {container1, container2}},
+						EndpointsByProcessGuid{pg: {endpoint1, endpoint2}},
 					)
 				})
 
 				It("should emit all registrations and the relevant unregisrations", func() {
 					expected := MessagesToEmit{
 						RegistrationMessages: []RegistryMessage{
-							RegistryMessageFor(container1, Routes{URIs: []string{route1}, LogGuid: logGuid}),
-							RegistryMessageFor(container2, Routes{URIs: []string{route1}, LogGuid: logGuid}),
+							RegistryMessageFor(endpoint1, Routes{URIs: []string{route1}, LogGuid: logGuid}),
+							RegistryMessageFor(endpoint2, Routes{URIs: []string{route1}, LogGuid: logGuid}),
 						},
 						UnregistrationMessages: []RegistryMessage{
-							RegistryMessageFor(container1, Routes{URIs: []string{route2}, LogGuid: logGuid}),
-							RegistryMessageFor(container2, Routes{URIs: []string{route2}, LogGuid: logGuid}),
+							RegistryMessageFor(endpoint1, Routes{URIs: []string{route2}, LogGuid: logGuid}),
+							RegistryMessageFor(endpoint2, Routes{URIs: []string{route2}, LogGuid: logGuid}),
 						},
 					}
 					Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
 				})
 			})
 
-			Context("when the process guid loses containers", func() {
+			Context("when the process guid loses endpoints", func() {
 				BeforeEach(func() {
 					messagesToEmit = table.Sync(
 						RoutesByProcessGuid{pg: Routes{URIs: []string{route1, route2}, LogGuid: logGuid}},
-						ContainersByProcessGuid{pg: {container1}},
+						EndpointsByProcessGuid{pg: {endpoint1}},
 					)
 				})
 
 				It("should emit all registrations and the relevant unregisrations", func() {
 					expected := MessagesToEmit{
 						RegistrationMessages: []RegistryMessage{
-							RegistryMessageFor(container1, Routes{URIs: []string{route1, route2}, LogGuid: logGuid}),
+							RegistryMessageFor(endpoint1, Routes{URIs: []string{route1, route2}, LogGuid: logGuid}),
 						},
 						UnregistrationMessages: []RegistryMessage{
-							RegistryMessageFor(container2, Routes{URIs: []string{route1, route2}, LogGuid: logGuid}),
+							RegistryMessageFor(endpoint2, Routes{URIs: []string{route1, route2}, LogGuid: logGuid}),
 						},
 					}
 					Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
 				})
 			})
 
-			Context("when the process guid loses both routes and containers", func() {
+			Context("when the process guid loses both routes and endpoints", func() {
 				BeforeEach(func() {
 					messagesToEmit = table.Sync(
 						RoutesByProcessGuid{pg: Routes{URIs: []string{route1}, LogGuid: logGuid}},
-						ContainersByProcessGuid{pg: {container1}},
+						EndpointsByProcessGuid{pg: {endpoint1}},
 					)
 				})
 
 				It("should emit all registrations and the relevant unregisrations", func() {
 					expected := MessagesToEmit{
 						RegistrationMessages: []RegistryMessage{
-							RegistryMessageFor(container1, Routes{URIs: []string{route1}, LogGuid: logGuid}),
+							RegistryMessageFor(endpoint1, Routes{URIs: []string{route1}, LogGuid: logGuid}),
 						},
 						UnregistrationMessages: []RegistryMessage{
-							RegistryMessageFor(container1, Routes{URIs: []string{route2}, LogGuid: logGuid}),
-							RegistryMessageFor(container2, Routes{URIs: []string{route1, route2}, LogGuid: logGuid}),
+							RegistryMessageFor(endpoint1, Routes{URIs: []string{route2}, LogGuid: logGuid}),
+							RegistryMessageFor(endpoint2, Routes{URIs: []string{route1, route2}, LogGuid: logGuid}),
 						},
 					}
 					Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
 				})
 			})
 
-			Context("when the process guid gains routes but loses containers", func() {
+			Context("when the process guid gains routes but loses endpoints", func() {
 				BeforeEach(func() {
 					messagesToEmit = table.Sync(
 						RoutesByProcessGuid{pg: Routes{URIs: []string{route1, route2, route3}, LogGuid: logGuid}},
-						ContainersByProcessGuid{pg: {container1}},
+						EndpointsByProcessGuid{pg: {endpoint1}},
 					)
 				})
 
 				It("should emit all registrations and the relevant unregisrations", func() {
 					expected := MessagesToEmit{
 						RegistrationMessages: []RegistryMessage{
-							RegistryMessageFor(container1, Routes{URIs: []string{route1, route2, route3}, LogGuid: logGuid}),
+							RegistryMessageFor(endpoint1, Routes{URIs: []string{route1, route2, route3}, LogGuid: logGuid}),
 						},
 						UnregistrationMessages: []RegistryMessage{
-							RegistryMessageFor(container2, Routes{URIs: []string{route1, route2}, LogGuid: logGuid}),
+							RegistryMessageFor(endpoint2, Routes{URIs: []string{route1, route2}, LogGuid: logGuid}),
 						},
 					}
 					Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
 				})
 			})
 
-			Context("when the process guid loses routes but gains containers", func() {
+			Context("when the process guid loses routes but gains endpoints", func() {
 				BeforeEach(func() {
 					messagesToEmit = table.Sync(
 						RoutesByProcessGuid{pg: Routes{URIs: []string{route1}, LogGuid: logGuid}},
-						ContainersByProcessGuid{pg: {container1, container2, container3}},
+						EndpointsByProcessGuid{pg: {endpoint1, endpoint2, endpoint3}},
 					)
 				})
 
 				It("should emit all registrations and the relevant unregisrations", func() {
 					expected := MessagesToEmit{
 						RegistrationMessages: []RegistryMessage{
-							RegistryMessageFor(container1, Routes{URIs: []string{route1}, LogGuid: logGuid}),
-							RegistryMessageFor(container2, Routes{URIs: []string{route1}, LogGuid: logGuid}),
-							RegistryMessageFor(container3, Routes{URIs: []string{route1}, LogGuid: logGuid}),
+							RegistryMessageFor(endpoint1, Routes{URIs: []string{route1}, LogGuid: logGuid}),
+							RegistryMessageFor(endpoint2, Routes{URIs: []string{route1}, LogGuid: logGuid}),
+							RegistryMessageFor(endpoint3, Routes{URIs: []string{route1}, LogGuid: logGuid}),
 						},
 						UnregistrationMessages: []RegistryMessage{
-							RegistryMessageFor(container1, Routes{URIs: []string{route2}, LogGuid: logGuid}),
-							RegistryMessageFor(container2, Routes{URIs: []string{route2}, LogGuid: logGuid}),
+							RegistryMessageFor(endpoint1, Routes{URIs: []string{route2}, LogGuid: logGuid}),
+							RegistryMessageFor(endpoint2, Routes{URIs: []string{route2}, LogGuid: logGuid}),
 						},
 					}
 					Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
@@ -342,15 +342,15 @@ var _ = Describe("RoutingTable", func() {
 				BeforeEach(func() {
 					messagesToEmit = table.Sync(
 						RoutesByProcessGuid{},
-						ContainersByProcessGuid{},
+						EndpointsByProcessGuid{},
 					)
 				})
 
 				It("should unregister the missing guids", func() {
 					expected := MessagesToEmit{
 						UnregistrationMessages: []RegistryMessage{
-							RegistryMessageFor(container1, Routes{URIs: []string{route1, route2}, LogGuid: logGuid}),
-							RegistryMessageFor(container2, Routes{URIs: []string{route1, route2}, LogGuid: logGuid}),
+							RegistryMessageFor(endpoint1, Routes{URIs: []string{route1, route2}, LogGuid: logGuid}),
+							RegistryMessageFor(endpoint2, Routes{URIs: []string{route1, route2}, LogGuid: logGuid}),
 						},
 					}
 					Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
@@ -358,17 +358,17 @@ var _ = Describe("RoutingTable", func() {
 			})
 
 			Describe("edge cases", func() {
-				Context("when the original registration had no routes, and then the process guid loses containers", func() {
+				Context("when the original registration had no routes, and then the process guid loses endpoints", func() {
 					BeforeEach(func() {
 						//override previous set up
 						table.Sync(
 							RoutesByProcessGuid{},
-							ContainersByProcessGuid{pg: {container1, container2}},
+							EndpointsByProcessGuid{pg: {endpoint1, endpoint2}},
 						)
 
 						messagesToEmit = table.Sync(
 							RoutesByProcessGuid{pg: {}},
-							ContainersByProcessGuid{pg: {container1}},
+							EndpointsByProcessGuid{pg: {endpoint1}},
 						)
 					})
 
@@ -377,17 +377,17 @@ var _ = Describe("RoutingTable", func() {
 					})
 				})
 
-				Context("when the original registration had no containers, and then the process guid loses a route", func() {
+				Context("when the original registration had no endpoints, and then the process guid loses a route", func() {
 					BeforeEach(func() {
 						//override previous set up
 						table.Sync(
 							RoutesByProcessGuid{pg: Routes{URIs: []string{route1, route2}, LogGuid: logGuid}},
-							ContainersByProcessGuid{},
+							EndpointsByProcessGuid{},
 						)
 
 						messagesToEmit = table.Sync(
 							RoutesByProcessGuid{pg: Routes{URIs: []string{route1}, LogGuid: logGuid}},
-							ContainersByProcessGuid{},
+							EndpointsByProcessGuid{},
 						)
 					})
 
@@ -415,26 +415,26 @@ var _ = Describe("RoutingTable", func() {
 				})
 			})
 
-			Context("when adding/updating containers", func() {
+			Context("when adding/updating endpoints", func() {
 				It("should not emit anything", func() {
-					messagesToEmit = table.AddOrUpdateContainer(pg, container1)
+					messagesToEmit = table.AddOrUpdateEndpoint(pg, endpoint1)
 					Ω(messagesToEmit).Should(BeZero())
 				})
 			})
 
-			Context("when removing containers", func() {
+			Context("when removing endpoints", func() {
 				It("should not emit anything", func() {
-					messagesToEmit = table.RemoveContainer(pg, container1)
+					messagesToEmit = table.RemoveEndpoint(pg, endpoint1)
 					Ω(messagesToEmit).Should(BeZero())
 				})
 			})
 		})
 
-		Context("when there are both containers and routes in the table", func() {
+		Context("when there are both endpoints and routes in the table", func() {
 			BeforeEach(func() {
 				table.SetRoutes(pg, Routes{URIs: []string{route1, route2}, LogGuid: logGuid})
-				table.AddOrUpdateContainer(pg, container1)
-				table.AddOrUpdateContainer(pg, container2)
+				table.AddOrUpdateEndpoint(pg, endpoint1)
+				table.AddOrUpdateEndpoint(pg, endpoint2)
 			})
 
 			Context("When setting routes", func() {
@@ -451,8 +451,8 @@ var _ = Describe("RoutingTable", func() {
 
 						expected := MessagesToEmit{
 							RegistrationMessages: []RegistryMessage{
-								RegistryMessageFor(container1, Routes{URIs: []string{route1, route2, route3}, LogGuid: logGuid}),
-								RegistryMessageFor(container2, Routes{URIs: []string{route1, route2, route3}, LogGuid: logGuid}),
+								RegistryMessageFor(endpoint1, Routes{URIs: []string{route1, route2, route3}, LogGuid: logGuid}),
+								RegistryMessageFor(endpoint2, Routes{URIs: []string{route1, route2, route3}, LogGuid: logGuid}),
 							},
 						}
 						Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
@@ -465,12 +465,12 @@ var _ = Describe("RoutingTable", func() {
 
 						expected := MessagesToEmit{
 							RegistrationMessages: []RegistryMessage{
-								RegistryMessageFor(container1, Routes{URIs: []string{route1}, LogGuid: logGuid}),
-								RegistryMessageFor(container2, Routes{URIs: []string{route1}, LogGuid: logGuid}),
+								RegistryMessageFor(endpoint1, Routes{URIs: []string{route1}, LogGuid: logGuid}),
+								RegistryMessageFor(endpoint2, Routes{URIs: []string{route1}, LogGuid: logGuid}),
 							},
 							UnregistrationMessages: []RegistryMessage{
-								RegistryMessageFor(container1, Routes{URIs: []string{route2}, LogGuid: logGuid}),
-								RegistryMessageFor(container2, Routes{URIs: []string{route2}, LogGuid: logGuid}),
+								RegistryMessageFor(endpoint1, Routes{URIs: []string{route2}, LogGuid: logGuid}),
+								RegistryMessageFor(endpoint2, Routes{URIs: []string{route2}, LogGuid: logGuid}),
 							},
 						}
 						Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
@@ -483,12 +483,12 @@ var _ = Describe("RoutingTable", func() {
 
 						expected := MessagesToEmit{
 							RegistrationMessages: []RegistryMessage{
-								RegistryMessageFor(container1, Routes{URIs: []string{route1, route3}, LogGuid: logGuid}),
-								RegistryMessageFor(container2, Routes{URIs: []string{route1, route3}, LogGuid: logGuid}),
+								RegistryMessageFor(endpoint1, Routes{URIs: []string{route1, route3}, LogGuid: logGuid}),
+								RegistryMessageFor(endpoint2, Routes{URIs: []string{route1, route3}, LogGuid: logGuid}),
 							},
 							UnregistrationMessages: []RegistryMessage{
-								RegistryMessageFor(container1, Routes{URIs: []string{route2}, LogGuid: logGuid}),
-								RegistryMessageFor(container2, Routes{URIs: []string{route2}, LogGuid: logGuid}),
+								RegistryMessageFor(endpoint1, Routes{URIs: []string{route2}, LogGuid: logGuid}),
+								RegistryMessageFor(endpoint2, Routes{URIs: []string{route2}, LogGuid: logGuid}),
 							},
 						}
 						Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
@@ -502,29 +502,29 @@ var _ = Describe("RoutingTable", func() {
 
 					expected := MessagesToEmit{
 						UnregistrationMessages: []RegistryMessage{
-							RegistryMessageFor(container1, Routes{URIs: []string{route1, route2}, LogGuid: logGuid}),
-							RegistryMessageFor(container2, Routes{URIs: []string{route1, route2}, LogGuid: logGuid}),
+							RegistryMessageFor(endpoint1, Routes{URIs: []string{route1, route2}, LogGuid: logGuid}),
+							RegistryMessageFor(endpoint2, Routes{URIs: []string{route1, route2}, LogGuid: logGuid}),
 						},
 					}
 					Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
 				})
 			})
 
-			Context("when adding/updating containers", func() {
-				Context("when the container already exists", func() {
+			Context("when adding/updating endpoints", func() {
+				Context("when the endpoint already exists", func() {
 					It("should emit nothing", func() {
-						messagesToEmit = table.AddOrUpdateContainer(pg, container1)
+						messagesToEmit = table.AddOrUpdateEndpoint(pg, endpoint1)
 						Ω(messagesToEmit).Should(BeZero())
 					})
 				})
 
-				Context("when the container does not already exist", func() {
+				Context("when the endpoint does not already exist", func() {
 					It("should emit registrations", func() {
-						messagesToEmit = table.AddOrUpdateContainer(pg, container3)
+						messagesToEmit = table.AddOrUpdateEndpoint(pg, endpoint3)
 
 						expected := MessagesToEmit{
 							RegistrationMessages: []RegistryMessage{
-								RegistryMessageFor(container3, Routes{URIs: []string{route1, route2}, LogGuid: logGuid}),
+								RegistryMessageFor(endpoint3, Routes{URIs: []string{route1, route2}, LogGuid: logGuid}),
 							},
 						}
 						Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
@@ -532,13 +532,13 @@ var _ = Describe("RoutingTable", func() {
 				})
 			})
 
-			Context("when removing containers", func() {
+			Context("when removing endpoints", func() {
 				It("should emit unregistrations", func() {
-					messagesToEmit = table.RemoveContainer(pg, container2)
+					messagesToEmit = table.RemoveEndpoint(pg, endpoint2)
 
 					expected := MessagesToEmit{
 						UnregistrationMessages: []RegistryMessage{
-							RegistryMessageFor(container2, Routes{URIs: []string{route1, route2}, LogGuid: logGuid}),
+							RegistryMessageFor(endpoint2, Routes{URIs: []string{route1, route2}, LogGuid: logGuid}),
 						},
 					}
 					Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
@@ -565,13 +565,13 @@ var _ = Describe("RoutingTable", func() {
 				})
 			})
 
-			Context("when adding/updating containers", func() {
+			Context("when adding/updating endpoints", func() {
 				It("should emit registrations", func() {
-					messagesToEmit = table.AddOrUpdateContainer(pg, container1)
+					messagesToEmit = table.AddOrUpdateEndpoint(pg, endpoint1)
 
 					expected := MessagesToEmit{
 						RegistrationMessages: []RegistryMessage{
-							RegistryMessageFor(container1, Routes{URIs: []string{route1, route2}, LogGuid: logGuid}),
+							RegistryMessageFor(endpoint1, Routes{URIs: []string{route1, route2}, LogGuid: logGuid}),
 						},
 					}
 					Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
@@ -579,10 +579,10 @@ var _ = Describe("RoutingTable", func() {
 			})
 		})
 
-		Context("when there are only containers in the table", func() {
+		Context("when there are only endpoints in the table", func() {
 			BeforeEach(func() {
-				table.AddOrUpdateContainer(pg, container1)
-				table.AddOrUpdateContainer(pg, container2)
+				table.AddOrUpdateEndpoint(pg, endpoint1)
+				table.AddOrUpdateEndpoint(pg, endpoint2)
 			})
 
 			Context("When setting routes", func() {
@@ -591,8 +591,8 @@ var _ = Describe("RoutingTable", func() {
 
 					expected := MessagesToEmit{
 						RegistrationMessages: []RegistryMessage{
-							RegistryMessageFor(container1, Routes{URIs: []string{route1, route2}, LogGuid: logGuid}),
-							RegistryMessageFor(container2, Routes{URIs: []string{route1, route2}, LogGuid: logGuid}),
+							RegistryMessageFor(endpoint1, Routes{URIs: []string{route1, route2}, LogGuid: logGuid}),
+							RegistryMessageFor(endpoint2, Routes{URIs: []string{route1, route2}, LogGuid: logGuid}),
 						},
 					}
 					Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
@@ -606,16 +606,16 @@ var _ = Describe("RoutingTable", func() {
 				})
 			})
 
-			Context("when adding/updating containers", func() {
+			Context("when adding/updating endpoints", func() {
 				It("should emit nothing", func() {
-					messagesToEmit = table.AddOrUpdateContainer(pg, container2)
+					messagesToEmit = table.AddOrUpdateEndpoint(pg, endpoint2)
 					Ω(messagesToEmit).Should(BeZero())
 				})
 			})
 
-			Context("when removing containers", func() {
+			Context("when removing endpoints", func() {
 				It("should emit nothing", func() {
-					messagesToEmit = table.RemoveContainer(pg, container1)
+					messagesToEmit = table.RemoveEndpoint(pg, endpoint1)
 					Ω(messagesToEmit).Should(BeZero())
 				})
 			})
@@ -630,7 +630,7 @@ var _ = Describe("RoutingTable", func() {
 			})
 		})
 
-		Context("when the table has routes but no containers", func() {
+		Context("when the table has routes but no endpoints", func() {
 			BeforeEach(func() {
 				table.SetRoutes(pg, Routes{URIs: []string{route1, route2}, LogGuid: logGuid})
 			})
@@ -641,10 +641,10 @@ var _ = Describe("RoutingTable", func() {
 			})
 		})
 
-		Context("when the table has containers but no routes", func() {
+		Context("when the table has endpoints but no routes", func() {
 			BeforeEach(func() {
-				table.AddOrUpdateContainer(pg, container1)
-				table.AddOrUpdateContainer(pg, container2)
+				table.AddOrUpdateEndpoint(pg, endpoint1)
+				table.AddOrUpdateEndpoint(pg, endpoint2)
 			})
 
 			It("should be empty", func() {
@@ -653,11 +653,11 @@ var _ = Describe("RoutingTable", func() {
 			})
 		})
 
-		Context("when the table has routes and containers", func() {
+		Context("when the table has routes and endpoints", func() {
 			BeforeEach(func() {
 				table.SetRoutes(pg, Routes{URIs: []string{route1, route2}, LogGuid: logGuid})
-				table.AddOrUpdateContainer(pg, container1)
-				table.AddOrUpdateContainer(pg, container2)
+				table.AddOrUpdateEndpoint(pg, endpoint1)
+				table.AddOrUpdateEndpoint(pg, endpoint2)
 			})
 
 			It("should emit the registrations", func() {
@@ -665,8 +665,8 @@ var _ = Describe("RoutingTable", func() {
 
 				expected := MessagesToEmit{
 					RegistrationMessages: []RegistryMessage{
-						RegistryMessageFor(container1, Routes{URIs: []string{route1, route2}, LogGuid: logGuid}),
-						RegistryMessageFor(container2, Routes{URIs: []string{route1, route2}, LogGuid: logGuid}),
+						RegistryMessageFor(endpoint1, Routes{URIs: []string{route1, route2}, LogGuid: logGuid}),
+						RegistryMessageFor(endpoint2, Routes{URIs: []string{route1, route2}, LogGuid: logGuid}),
 					},
 				}
 				Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))

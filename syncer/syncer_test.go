@@ -73,14 +73,14 @@ var _ = Describe("Syncer", func() {
 
 		//what follows is fake data to distinguish between
 		//the "sync" and "emit" codepaths
-		dummyContainer := routing_table.Container{InstanceGuid: "instance-guid-1", Host: "1.1.1.1", Port: 11}
-		dummyMessage := routing_table.RegistryMessageFor(dummyContainer, routing_table.Routes{URIs: []string{"foo.com", "bar.com"}, LogGuid: logGuid})
+		dummyEndpoint := routing_table.Endpoint{InstanceGuid: "instance-guid-1", Host: "1.1.1.1", Port: 11}
+		dummyMessage := routing_table.RegistryMessageFor(dummyEndpoint, routing_table.Routes{URIs: []string{"foo.com", "bar.com"}, LogGuid: logGuid})
 		syncMessages = routing_table.MessagesToEmit{
 			RegistrationMessages: []routing_table.RegistryMessage{dummyMessage},
 		}
 
-		dummyContainer = routing_table.Container{InstanceGuid: "instance-guid-2", Host: "2.2.2.2", Port: 22}
-		dummyMessage = routing_table.RegistryMessageFor(dummyContainer, routing_table.Routes{URIs: []string{"baz.com"}, LogGuid: logGuid})
+		dummyEndpoint = routing_table.Endpoint{InstanceGuid: "instance-guid-2", Host: "2.2.2.2", Port: 22}
+		dummyMessage = routing_table.RegistryMessageFor(dummyEndpoint, routing_table.Routes{URIs: []string{"baz.com"}, LogGuid: logGuid})
 		messagesToEmit = routing_table.MessagesToEmit{
 			RegistrationMessages: []routing_table.RegistryMessage{dummyMessage},
 		}
@@ -139,13 +139,13 @@ var _ = Describe("Syncer", func() {
 		It("should sync the table", func() {
 			Ω(table.SyncCallCount()).Should(Equal(1))
 
-			routes, containers := table.SyncArgsForCall(0)
+			routes, endpoints := table.SyncArgsForCall(0)
 			Ω(routes[processGuid]).Should(Equal(routing_table.Routes{
 				URIs:    []string{"route-1", "route-2"},
 				LogGuid: logGuid,
 			}))
-			Ω(containers[processGuid]).Should(Equal([]routing_table.Container{
-				{InstanceGuid: instanceGuid, Host: lrpHost, Port: 1234},
+			Ω(endpoints[processGuid]).Should(Equal([]routing_table.Endpoint{
+				{InstanceGuid: instanceGuid, Host: lrpHost, Port: 1234, ContainerPort: 5678},
 			}))
 			Ω(emitter.EmitCallCount()).Should(Equal(1))
 			emittedMessages, _, _ := emitter.EmitArgsForCall(0)

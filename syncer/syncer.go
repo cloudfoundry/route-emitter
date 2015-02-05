@@ -162,7 +162,7 @@ func (syncer *Syncer) syncAndEmit() {
 
 	routesToEmit := syncer.table.Sync(
 		routing_table.RoutesByProcessGuidFromDesireds(desiredLRPs),
-		routing_table.ContainersByProcessGuidFromActuals(runningActualLRPs),
+		routing_table.EndpointsByProcessGuidFromActuals(runningActualLRPs),
 	)
 
 	syncer.logger.Info("emitting-routes-after-syncing", lager.Data{"routes": routesToEmit})

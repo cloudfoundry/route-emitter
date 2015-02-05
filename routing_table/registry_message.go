@@ -9,15 +9,15 @@ type RegistryMessage struct {
 	PrivateInstanceId string `json:"private_instance_id,omitempty"`
 }
 
-func RegistryMessageFor(container Container, routes Routes) RegistryMessage {
+func RegistryMessageFor(endpoint Endpoint, routes Routes) RegistryMessage {
 	return RegistryMessage{
 		URIs: routes.URIs,
-		Host: container.Host,
-		Port: container.Port,
+		Host: endpoint.Host,
+		Port: endpoint.Port,
 
 		App: routes.LogGuid,
 
-		PrivateInstanceId: container.InstanceGuid,
+		PrivateInstanceId: endpoint.InstanceGuid,
 	}
 }
 

@@ -2,15 +2,16 @@ package routing_table
 
 import "sync"
 
+//go:generate counterfeiter -o fake_routing_table/fake_routing_table.go . RoutingTable
 type RoutingTable interface {
-	Sync(routes RoutesByProcessGuid, containers ContainersByProcessGuid) MessagesToEmit
+	Sync(routes RoutesByProcessGuid, endpoints EndpointsByProcessGuid) MessagesToEmit
 	MessagesToEmit() MessagesToEmit
 
 	RouteCount() int
 	SetRoutes(processGuid string, routes Routes) MessagesToEmit
 	RemoveRoutes(processGuid string) MessagesToEmit
-	AddOrUpdateContainer(processGuid string, container Container) MessagesToEmit
-	RemoveContainer(processGuid string, container Container) MessagesToEmit
+	AddOrUpdateEndpoint(processGuid string, endpoint Endpoint) MessagesToEmit
+	RemoveEndpoint(processGuid string, endpoint Endpoint) MessagesToEmit
 }
 
 type routingTable struct {
@@ -36,8 +37,8 @@ func (table *routingTable) RouteCount() int {
 	return count
 }
 
-func (table *routingTable) Sync(routes RoutesByProcessGuid, containers ContainersByProcessGuid) MessagesToEmit {
-	newEntries := combineByProcessGuid(routes, containers)
+func (table *routingTable) Sync(routes RoutesByProcessGuid, endpoints EndpointsByProcessGuid) MessagesToEmit {
+	newEntries := combineByProcessGuid(routes, endpoints)
 
 	table.Lock()
 	defer table.Unlock()
@@ -91,22 +92,22 @@ func (table *routingTable) RemoveRoutes(processGuid string) MessagesToEmit {
 	return table.updateEntry(processGuid, newEntry)
 }
 
-func (table *routingTable) AddOrUpdateContainer(processGuid string, container Container) MessagesToEmit {
+func (table *routingTable) AddOrUpdateEndpoint(processGuid string, endpoint Endpoint) MessagesToEmit {
 	table.Lock()
 	defer table.Unlock()
 
 	newEntry := table.entries[processGuid].copy()
-	newEntry.Containers[container.InstanceGuid] = container
+	newEntry.Endpoints[endpoint.InstanceGuid] = endpoint
 
 	return table.updateEntry(processGuid, newEntry)
 }
 
-func (table *routingTable) RemoveContainer(processGuid string, container Container) MessagesToEmit {
+func (table *routingTable) RemoveEndpoint(processGuid string, endpoint Endpoint) MessagesToEmit {
 	table.Lock()
 	defer table.Unlock()
 
 	newEntry := table.entries[processGuid].copy()
-	delete(newEntry.Containers, container.InstanceGuid)
+	delete(newEntry.Endpoints, endpoint.InstanceGuid)
 
 	return table.updateEntry(processGuid, newEntry)
 }
@@ -121,7 +122,7 @@ func (table *routingTable) updateEntry(processGuid string, newEntry RoutingTable
 	return messagesToEmit
 }
 
-func combineByProcessGuid(routes RoutesByProcessGuid, containers ContainersByProcessGuid) map[string]RoutingTableEntry {
+func combineByProcessGuid(routes RoutesByProcessGuid, endpoints EndpointsByProcessGuid) map[string]RoutingTableEntry {
 	entries := map[string]RoutingTableEntry{}
 
 	for processGuid, entry := range routes {
@@ -131,12 +132,12 @@ func combineByProcessGuid(routes RoutesByProcessGuid, containers ContainersByPro
 		}
 	}
 
-	for processGuid, containers := range containers {
+	for processGuid, endpoints := range endpoints {
 		entry, ok := entries[processGuid]
 		if !ok {
 			entry = RoutingTableEntry{}
 		}
-		entry.Containers = containersAsMap(containers)
+		entry.Endpoints = endpointsAsMap(endpoints)
 		entries[processGuid] = entry
 	}
 
@@ -149,8 +150,8 @@ func registrationsFor(entry RoutingTableEntry) MessagesToEmit {
 		return messagesToEmit
 	}
 
-	for _, container := range entry.Containers {
-		message := RegistryMessageFor(container, entry.routes())
+	for _, endpoint := range entry.Endpoints {
+		message := RegistryMessageFor(endpoint, entry.routes())
 		messagesToEmit.RegistrationMessages = append(messagesToEmit.RegistrationMessages, message)
 	}
 	return messagesToEmit
@@ -169,10 +170,10 @@ func registrationsForTransition(existingEntry RoutingTableEntry, newEntry Routin
 		return registrationsFor(newEntry)
 	}
 
-	//otherwise only register *new* containers
-	for _, container := range newEntry.Containers {
-		if !existingEntry.hasContainer(container) {
-			message := RegistryMessageFor(container, newEntry.routes())
+	//otherwise only register *new* endpoints
+	for _, endpoint := range newEntry.Endpoints {
+		if !existingEntry.hasEndpoint(endpoint) {
+			message := RegistryMessageFor(endpoint, newEntry.routes())
 			messagesToEmit.RegistrationMessages = append(messagesToEmit.RegistrationMessages, message)
 		}
 	}
@@ -188,13 +189,13 @@ func unregistrationsForTransition(existingEntry RoutingTableEntry, newEntry Rout
 		return messagesToEmit
 	}
 
-	containersThatAreStillPresent := []Container{}
-	for _, container := range existingEntry.Containers {
-		if newEntry.hasContainer(container) {
-			containersThatAreStillPresent = append(containersThatAreStillPresent, container)
+	endpointsThatAreStillPresent := []Endpoint{}
+	for _, endpoint := range existingEntry.Endpoints {
+		if newEntry.hasEndpoint(endpoint) {
+			endpointsThatAreStillPresent = append(endpointsThatAreStillPresent, endpoint)
 		} else {
-			//if the container has disappeared unregister all its previous uris
-			message := RegistryMessageFor(container, existingEntry.routes())
+			//if the endpoint has disappeared unregister all its previous uris
+			message := RegistryMessageFor(endpoint, existingEntry.routes())
 			messagesToEmit.UnregistrationMessages = append(messagesToEmit.UnregistrationMessages, message)
 		}
 	}
@@ -207,9 +208,9 @@ func unregistrationsForTransition(existingEntry RoutingTableEntry, newEntry Rout
 	}
 
 	if len(urisThatDisappeared) > 0 {
-		for _, container := range containersThatAreStillPresent {
-			//if a container is still present, and uris have disappeared, unregister those uris
-			message := RegistryMessageFor(container, Routes{
+		for _, endpoint := range endpointsThatAreStillPresent {
+			//if a endpoint is still present, and uris have disappeared, unregister those uris
+			message := RegistryMessageFor(endpoint, Routes{
 				URIs:    urisThatDisappeared,
 				LogGuid: newEntry.LogGuid,
 			})

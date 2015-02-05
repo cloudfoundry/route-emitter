@@ -23,11 +23,11 @@ const logGuid = "some-log-guid"
 
 var _ = Describe("Watcher", func() {
 	const (
-		expectedProcessGuid   = "process-guid"
-		expectedInstanceGuid  = "instance-guid"
-		expectedHost          = "1.1.1.1"
-		expectedExternalPort  = 11000
-		expectedContainerPort = uint16(11)
+		expectedProcessGuid  = "process-guid"
+		expectedInstanceGuid = "instance-guid"
+		expectedHost         = "1.1.1.1"
+		expectedExternalPort = 11000
+		expectedEndpointPort = uint16(11)
 	)
 	var expectedRoutes = []string{"route-1", "route-2"}
 
@@ -49,8 +49,8 @@ var _ = Describe("Watcher", func() {
 		emitter = &fake_nats_emitter.FakeNATSEmitter{}
 		logger := lagertest.NewTestLogger("test")
 
-		dummyContainer := routing_table.Container{InstanceGuid: expectedInstanceGuid, Host: expectedHost, Port: expectedContainerPort}
-		dummyMessage := routing_table.RegistryMessageFor(dummyContainer, routing_table.Routes{URIs: []string{"foo.com", "bar.com"}, LogGuid: logGuid})
+		dummyEndpoint := routing_table.Endpoint{InstanceGuid: expectedInstanceGuid, Host: expectedHost, Port: expectedEndpointPort}
+		dummyMessage := routing_table.RegistryMessageFor(dummyEndpoint, routing_table.Routes{URIs: []string{"foo.com", "bar.com"}, LogGuid: logGuid})
 		dummyMessagesToEmit = routing_table.MessagesToEmit{
 			RegistrationMessages: []routing_table.RegistryMessage{dummyMessage},
 		}
@@ -81,7 +81,7 @@ var _ = Describe("Watcher", func() {
 					},
 					Domain:      "tests",
 					ProcessGuid: expectedProcessGuid,
-					Routes:      cfroutes.CFRoutes{{Hostnames: expectedRoutes, Port: expectedContainerPort}}.RoutingInfo(),
+					Routes:      cfroutes.CFRoutes{{Hostnames: expectedRoutes, Port: expectedEndpointPort}}.RoutingInfo(),
 					LogGuid:     logGuid,
 				}
 
@@ -141,7 +141,7 @@ var _ = Describe("Watcher", func() {
 					},
 					Domain:      "tests",
 					ProcessGuid: expectedProcessGuid,
-					Routes:      cfroutes.CFRoutes{{Hostnames: expectedRoutes, Port: expectedContainerPort}}.RoutingInfo(),
+					Routes:      cfroutes.CFRoutes{{Hostnames: expectedRoutes, Port: expectedEndpointPort}}.RoutingInfo(),
 					LogGuid:     logGuid,
 				}
 
@@ -196,7 +196,7 @@ var _ = Describe("Watcher", func() {
 					},
 					Domain:      "tests",
 					ProcessGuid: expectedProcessGuid,
-					Routes:      cfroutes.CFRoutes{{Hostnames: expectedRoutes, Port: expectedContainerPort}}.RoutingInfo(),
+					Routes:      cfroutes.CFRoutes{{Hostnames: expectedRoutes, Port: expectedEndpointPort}}.RoutingInfo(),
 					LogGuid:     logGuid,
 				}
 
@@ -227,7 +227,7 @@ var _ = Describe("Watcher", func() {
 		Context("when a create event occurs", func() {
 			Context("when the resulting LRP is in the RUNNING state", func() {
 				BeforeEach(func() {
-					table.AddOrUpdateContainerReturns(dummyMessagesToEmit)
+					table.AddOrUpdateEndpointReturns(dummyMessagesToEmit)
 
 					eventSource := new(fake_receptor.FakeEventSource)
 					receptorClient.SubscribeToEventsReturns(eventSource, nil)
@@ -254,14 +254,15 @@ var _ = Describe("Watcher", func() {
 					}
 				})
 
-				It("should add/update the container on the table", func() {
-					Eventually(table.AddOrUpdateContainerCallCount).Should(Equal(1))
-					processGuid, container := table.AddOrUpdateContainerArgsForCall(0)
+				It("should add/update the endpoint on the table", func() {
+					Eventually(table.AddOrUpdateEndpointCallCount).Should(Equal(1))
+					processGuid, endpoint := table.AddOrUpdateEndpointArgsForCall(0)
 					Ω(processGuid).Should(Equal(expectedProcessGuid))
-					Ω(container).Should(Equal(routing_table.Container{
-						InstanceGuid: expectedInstanceGuid,
-						Host:         expectedHost,
-						Port:         expectedExternalPort,
+					Ω(endpoint).Should(Equal(routing_table.Endpoint{
+						InstanceGuid:  expectedInstanceGuid,
+						Host:          expectedHost,
+						Port:          expectedExternalPort,
+						ContainerPort: 8080,
 					}))
 				})
 
@@ -311,8 +312,8 @@ var _ = Describe("Watcher", func() {
 					}
 				})
 
-				It("doesn't add/update the container on the table", func() {
-					Consistently(table.AddOrUpdateContainerCallCount).Should(Equal(0))
+				It("doesn't add/update the endpoint on the table", func() {
+					Consistently(table.AddOrUpdateEndpointCallCount).Should(Equal(0))
 				})
 
 				It("doesn't emit", func() {
@@ -324,7 +325,7 @@ var _ = Describe("Watcher", func() {
 		Context("when a change event occurs", func() {
 			Context("when the resulting LRP is in the RUNNING state", func() {
 				BeforeEach(func() {
-					table.AddOrUpdateContainerReturns(dummyMessagesToEmit)
+					table.AddOrUpdateEndpointReturns(dummyMessagesToEmit)
 
 					eventSource := new(fake_receptor.FakeEventSource)
 					receptorClient.SubscribeToEventsReturns(eventSource, nil)
@@ -359,14 +360,15 @@ var _ = Describe("Watcher", func() {
 					}
 				})
 
-				It("should add/update the container on the table", func() {
-					Eventually(table.AddOrUpdateContainerCallCount).Should(Equal(1))
-					processGuid, container := table.AddOrUpdateContainerArgsForCall(0)
+				It("should add/update the endpoint on the table", func() {
+					Eventually(table.AddOrUpdateEndpointCallCount).Should(Equal(1))
+					processGuid, endpoint := table.AddOrUpdateEndpointArgsForCall(0)
 					Ω(processGuid).Should(Equal(expectedProcessGuid))
-					Ω(container).Should(Equal(routing_table.Container{
-						InstanceGuid: expectedInstanceGuid,
-						Host:         expectedHost,
-						Port:         expectedExternalPort,
+					Ω(endpoint).Should(Equal(routing_table.Endpoint{
+						InstanceGuid:  expectedInstanceGuid,
+						Host:          expectedHost,
+						Port:          expectedExternalPort,
+						ContainerPort: 8080,
 					}))
 				})
 
@@ -391,7 +393,7 @@ var _ = Describe("Watcher", func() {
 
 			Context("when the resulting LRP transitions away form the RUNNING state", func() {
 				BeforeEach(func() {
-					table.RemoveContainerReturns(dummyMessagesToEmit)
+					table.RemoveEndpointReturns(dummyMessagesToEmit)
 
 					eventSource := new(fake_receptor.FakeEventSource)
 					receptorClient.SubscribeToEventsReturns(eventSource, nil)
@@ -424,14 +426,15 @@ var _ = Describe("Watcher", func() {
 					}
 				})
 
-				It("should remove the container from the table", func() {
-					Eventually(table.RemoveContainerCallCount).Should(Equal(1))
-					processGuid, container := table.RemoveContainerArgsForCall(0)
+				It("should remove the endpoint from the table", func() {
+					Eventually(table.RemoveEndpointCallCount).Should(Equal(1))
+					processGuid, endpoint := table.RemoveEndpointArgsForCall(0)
 					Ω(processGuid).Should(Equal(expectedProcessGuid))
-					Ω(container).Should(Equal(routing_table.Container{
-						InstanceGuid: expectedInstanceGuid,
-						Host:         expectedHost,
-						Port:         expectedExternalPort,
+					Ω(endpoint).Should(Equal(routing_table.Endpoint{
+						InstanceGuid:  expectedInstanceGuid,
+						Host:          expectedHost,
+						Port:          expectedExternalPort,
+						ContainerPort: 8080,
 					}))
 				})
 
@@ -442,7 +445,7 @@ var _ = Describe("Watcher", func() {
 				})
 			})
 
-			Context("when the container neither starts nor ends in the RUNNING state", func() {
+			Context("when the endpoint neither starts nor ends in the RUNNING state", func() {
 				BeforeEach(func() {
 					eventSource := new(fake_receptor.FakeEventSource)
 					receptorClient.SubscribeToEventsReturns(eventSource, nil)
@@ -471,12 +474,12 @@ var _ = Describe("Watcher", func() {
 					}
 				})
 
-				It("should not remove the container", func() {
-					Consistently(table.RemoveContainerCallCount).Should(BeZero())
+				It("should not remove the endpoint", func() {
+					Consistently(table.RemoveEndpointCallCount).Should(BeZero())
 				})
 
-				It("should not add or update the container", func() {
-					Consistently(table.AddOrUpdateContainerCallCount).Should(BeZero())
+				It("should not add or update the endpoint", func() {
+					Consistently(table.AddOrUpdateEndpointCallCount).Should(BeZero())
 				})
 
 				It("should not emit anything", func() {
@@ -488,7 +491,7 @@ var _ = Describe("Watcher", func() {
 		Context("when a delete event occurs", func() {
 			Context("when the actual is in the RUNNING state", func() {
 				BeforeEach(func() {
-					table.RemoveContainerReturns(dummyMessagesToEmit)
+					table.RemoveEndpointReturns(dummyMessagesToEmit)
 
 					eventSource := new(fake_receptor.FakeEventSource)
 					receptorClient.SubscribeToEventsReturns(eventSource, nil)
@@ -515,14 +518,15 @@ var _ = Describe("Watcher", func() {
 					}
 				})
 
-				It("should remove the container from the table", func() {
-					Eventually(table.RemoveContainerCallCount).Should(Equal(1))
-					processGuid, container := table.RemoveContainerArgsForCall(0)
+				It("should remove the endpoint from the table", func() {
+					Eventually(table.RemoveEndpointCallCount).Should(Equal(1))
+					processGuid, endpoint := table.RemoveEndpointArgsForCall(0)
 					Ω(processGuid).Should(Equal(expectedProcessGuid))
-					Ω(container).Should(Equal(routing_table.Container{
-						InstanceGuid: expectedInstanceGuid,
-						Host:         expectedHost,
-						Port:         expectedExternalPort,
+					Ω(endpoint).Should(Equal(routing_table.Endpoint{
+						InstanceGuid:  expectedInstanceGuid,
+						Host:          expectedHost,
+						Port:          expectedExternalPort,
+						ContainerPort: 8080,
 					}))
 				})
 
@@ -554,8 +558,8 @@ var _ = Describe("Watcher", func() {
 					}
 				})
 
-				It("doesn't remove the container from the table", func() {
-					Consistently(table.RemoveContainerCallCount).Should(Equal(0))
+				It("doesn't remove the endpoint from the table", func() {
+					Consistently(table.RemoveEndpointCallCount).Should(Equal(0))
 				})
 
 				It("doesn't emit", func() {

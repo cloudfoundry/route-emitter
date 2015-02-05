@@ -42,21 +42,21 @@ var _ = Describe("ByProcessGuid", func() {
 		})
 	})
 
-	Describe("ContainersByProcessGuidFromActuals", func() {
-		It("should build a map of containers, ignoring those without ports", func() {
-			containers := ContainersByProcessGuidFromActuals([]receptor.ActualLRPResponse{
+	Describe("EndpointsByProcessGuidFromActuals", func() {
+		It("should build a map of endpoints, ignoring those without ports", func() {
+			endpoints := EndpointsByProcessGuidFromActuals([]receptor.ActualLRPResponse{
 				{ProcessGuid: "abc", Index: 1, Domain: "domain", Address: "1.1.1.1", Ports: []receptor.PortMapping{{HostPort: 11}}},
 				{ProcessGuid: "abc", Index: 1, Domain: "domain", Address: "2.2.2.2", Ports: []receptor.PortMapping{{HostPort: 22}}},
 				{ProcessGuid: "def", Index: 1, Domain: "domain", Address: "3.3.3.3", Ports: []receptor.PortMapping{{HostPort: 33}}},
 				{ProcessGuid: "def", Index: 1, Domain: "domain", Address: "4.4.4.4", Ports: nil},
 			})
 
-			Ω(containers).Should(HaveLen(2))
-			Ω(containers["abc"]).Should(HaveLen(2))
-			Ω(containers["abc"]).Should(ContainElement(Container{Host: "1.1.1.1", Port: 11}))
-			Ω(containers["abc"]).Should(ContainElement(Container{Host: "2.2.2.2", Port: 22}))
-			Ω(containers["def"]).Should(HaveLen(1))
-			Ω(containers["def"]).Should(ContainElement(Container{Host: "3.3.3.3", Port: 33}))
+			Ω(endpoints).Should(HaveLen(2))
+			Ω(endpoints["abc"]).Should(HaveLen(2))
+			Ω(endpoints["abc"]).Should(ContainElement(Endpoint{Host: "1.1.1.1", Port: 11}))
+			Ω(endpoints["abc"]).Should(ContainElement(Endpoint{Host: "2.2.2.2", Port: 22}))
+			Ω(endpoints["def"]).Should(HaveLen(1))
+			Ω(endpoints["def"]).Should(ContainElement(Endpoint{Host: "3.3.3.3", Port: 33}))
 		})
 	})
 })

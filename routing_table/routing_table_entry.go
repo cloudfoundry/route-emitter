@@ -1,9 +1,10 @@
 package routing_table
 
-type Container struct {
+type Endpoint struct {
 	InstanceGuid string
 	Host         string
 	Port         uint16
+	ContainerPort uint16
 }
 
 type Routes struct {
@@ -12,13 +13,13 @@ type Routes struct {
 }
 
 type RoutingTableEntry struct {
-	URIs       map[string]struct{}
-	Containers map[string]Container
-	LogGuid    string
+	URIs      map[string]struct{}
+	Endpoints map[string]Endpoint
+	LogGuid   string
 }
 
-func (entry RoutingTableEntry) hasContainer(container Container) bool {
-	_, ok := entry.Containers[container.InstanceGuid]
+func (entry RoutingTableEntry) hasEndpoint(endpoint Endpoint) bool {
+	_, ok := entry.Endpoints[endpoint.InstanceGuid]
 	return ok
 }
 
@@ -29,17 +30,17 @@ func (entry RoutingTableEntry) hasURI(uri string) bool {
 
 func (entry RoutingTableEntry) copy() RoutingTableEntry {
 	clone := RoutingTableEntry{
-		URIs:       map[string]struct{}{},
-		Containers: map[string]Container{},
-		LogGuid:    entry.LogGuid,
+		URIs:      map[string]struct{}{},
+		Endpoints: map[string]Endpoint{},
+		LogGuid:   entry.LogGuid,
 	}
 
 	for k, v := range entry.URIs {
 		clone.URIs[k] = v
 	}
 
-	for k, v := range entry.Containers {
-		clone.Containers[k] = v
+	for k, v := range entry.Endpoints {
+		clone.Endpoints[k] = v
 	}
 
 	return clone
@@ -68,10 +69,10 @@ func routesAsMap(routes []string) map[string]struct{} {
 	return routesMap
 }
 
-func containersAsMap(containers []Container) map[string]Container {
-	containersMap := map[string]Container{}
-	for _, container := range containers {
-		containersMap[container.InstanceGuid] = container
+func endpointsAsMap(endpoints []Endpoint) map[string]Endpoint {
+	endpointsMap := map[string]Endpoint{}
+	for _, endpoint := range endpoints {
+		endpointsMap[endpoint.InstanceGuid] = endpoint
 	}
-	return containersMap
+	return endpointsMap
 }

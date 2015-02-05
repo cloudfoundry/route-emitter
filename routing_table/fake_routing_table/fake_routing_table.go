@@ -8,11 +8,11 @@ import (
 )
 
 type FakeRoutingTable struct {
-	SyncStub        func(routes routing_table.RoutesByProcessGuid, containers routing_table.ContainersByProcessGuid) routing_table.MessagesToEmit
+	SyncStub        func(routes routing_table.RoutesByProcessGuid, endpoints routing_table.EndpointsByProcessGuid) routing_table.MessagesToEmit
 	syncMutex       sync.RWMutex
 	syncArgsForCall []struct {
-		routes     routing_table.RoutesByProcessGuid
-		containers routing_table.ContainersByProcessGuid
+		routes    routing_table.RoutesByProcessGuid
+		endpoints routing_table.EndpointsByProcessGuid
 	}
 	syncReturns struct {
 		result1 routing_table.MessagesToEmit
@@ -20,13 +20,13 @@ type FakeRoutingTable struct {
 	MessagesToEmitStub        func() routing_table.MessagesToEmit
 	messagesToEmitMutex       sync.RWMutex
 	messagesToEmitArgsForCall []struct{}
-	messagesToEmitReturns     struct {
+	messagesToEmitReturns struct {
 		result1 routing_table.MessagesToEmit
 	}
 	RouteCountStub        func() int
 	routeCountMutex       sync.RWMutex
 	routeCountArgsForCall []struct{}
-	routeCountReturns     struct {
+	routeCountReturns struct {
 		result1 int
 	}
 	SetRoutesStub        func(processGuid string, routes routing_table.Routes) routing_table.MessagesToEmit
@@ -46,35 +46,35 @@ type FakeRoutingTable struct {
 	removeRoutesReturns struct {
 		result1 routing_table.MessagesToEmit
 	}
-	AddOrUpdateContainerStub        func(processGuid string, container routing_table.Container) routing_table.MessagesToEmit
-	addOrUpdateContainerMutex       sync.RWMutex
-	addOrUpdateContainerArgsForCall []struct {
+	AddOrUpdateEndpointStub        func(processGuid string, endpoint routing_table.Endpoint) routing_table.MessagesToEmit
+	addOrUpdateEndpointMutex       sync.RWMutex
+	addOrUpdateEndpointArgsForCall []struct {
 		processGuid string
-		container   routing_table.Container
+		endpoint    routing_table.Endpoint
 	}
-	addOrUpdateContainerReturns struct {
+	addOrUpdateEndpointReturns struct {
 		result1 routing_table.MessagesToEmit
 	}
-	RemoveContainerStub        func(processGuid string, container routing_table.Container) routing_table.MessagesToEmit
-	removeContainerMutex       sync.RWMutex
-	removeContainerArgsForCall []struct {
+	RemoveEndpointStub        func(processGuid string, endpoint routing_table.Endpoint) routing_table.MessagesToEmit
+	removeEndpointMutex       sync.RWMutex
+	removeEndpointArgsForCall []struct {
 		processGuid string
-		container   routing_table.Container
+		endpoint    routing_table.Endpoint
 	}
-	removeContainerReturns struct {
+	removeEndpointReturns struct {
 		result1 routing_table.MessagesToEmit
 	}
 }
 
-func (fake *FakeRoutingTable) Sync(routes routing_table.RoutesByProcessGuid, containers routing_table.ContainersByProcessGuid) routing_table.MessagesToEmit {
+func (fake *FakeRoutingTable) Sync(routes routing_table.RoutesByProcessGuid, endpoints routing_table.EndpointsByProcessGuid) routing_table.MessagesToEmit {
 	fake.syncMutex.Lock()
 	fake.syncArgsForCall = append(fake.syncArgsForCall, struct {
-		routes     routing_table.RoutesByProcessGuid
-		containers routing_table.ContainersByProcessGuid
-	}{routes, containers})
+		routes    routing_table.RoutesByProcessGuid
+		endpoints routing_table.EndpointsByProcessGuid
+	}{routes, endpoints})
 	fake.syncMutex.Unlock()
 	if fake.SyncStub != nil {
-		return fake.SyncStub(routes, containers)
+		return fake.SyncStub(routes, endpoints)
 	} else {
 		return fake.syncReturns.result1
 	}
@@ -86,10 +86,10 @@ func (fake *FakeRoutingTable) SyncCallCount() int {
 	return len(fake.syncArgsForCall)
 }
 
-func (fake *FakeRoutingTable) SyncArgsForCall(i int) (routing_table.RoutesByProcessGuid, routing_table.ContainersByProcessGuid) {
+func (fake *FakeRoutingTable) SyncArgsForCall(i int) (routing_table.RoutesByProcessGuid, routing_table.EndpointsByProcessGuid) {
 	fake.syncMutex.RLock()
 	defer fake.syncMutex.RUnlock()
-	return fake.syncArgsForCall[i].routes, fake.syncArgsForCall[i].containers
+	return fake.syncArgsForCall[i].routes, fake.syncArgsForCall[i].endpoints
 }
 
 func (fake *FakeRoutingTable) SyncReturns(result1 routing_table.MessagesToEmit) {
@@ -212,68 +212,68 @@ func (fake *FakeRoutingTable) RemoveRoutesReturns(result1 routing_table.Messages
 	}{result1}
 }
 
-func (fake *FakeRoutingTable) AddOrUpdateContainer(processGuid string, container routing_table.Container) routing_table.MessagesToEmit {
-	fake.addOrUpdateContainerMutex.Lock()
-	fake.addOrUpdateContainerArgsForCall = append(fake.addOrUpdateContainerArgsForCall, struct {
+func (fake *FakeRoutingTable) AddOrUpdateEndpoint(processGuid string, endpoint routing_table.Endpoint) routing_table.MessagesToEmit {
+	fake.addOrUpdateEndpointMutex.Lock()
+	fake.addOrUpdateEndpointArgsForCall = append(fake.addOrUpdateEndpointArgsForCall, struct {
 		processGuid string
-		container   routing_table.Container
-	}{processGuid, container})
-	fake.addOrUpdateContainerMutex.Unlock()
-	if fake.AddOrUpdateContainerStub != nil {
-		return fake.AddOrUpdateContainerStub(processGuid, container)
+		endpoint    routing_table.Endpoint
+	}{processGuid, endpoint})
+	fake.addOrUpdateEndpointMutex.Unlock()
+	if fake.AddOrUpdateEndpointStub != nil {
+		return fake.AddOrUpdateEndpointStub(processGuid, endpoint)
 	} else {
-		return fake.addOrUpdateContainerReturns.result1
+		return fake.addOrUpdateEndpointReturns.result1
 	}
 }
 
-func (fake *FakeRoutingTable) AddOrUpdateContainerCallCount() int {
-	fake.addOrUpdateContainerMutex.RLock()
-	defer fake.addOrUpdateContainerMutex.RUnlock()
-	return len(fake.addOrUpdateContainerArgsForCall)
+func (fake *FakeRoutingTable) AddOrUpdateEndpointCallCount() int {
+	fake.addOrUpdateEndpointMutex.RLock()
+	defer fake.addOrUpdateEndpointMutex.RUnlock()
+	return len(fake.addOrUpdateEndpointArgsForCall)
 }
 
-func (fake *FakeRoutingTable) AddOrUpdateContainerArgsForCall(i int) (string, routing_table.Container) {
-	fake.addOrUpdateContainerMutex.RLock()
-	defer fake.addOrUpdateContainerMutex.RUnlock()
-	return fake.addOrUpdateContainerArgsForCall[i].processGuid, fake.addOrUpdateContainerArgsForCall[i].container
+func (fake *FakeRoutingTable) AddOrUpdateEndpointArgsForCall(i int) (string, routing_table.Endpoint) {
+	fake.addOrUpdateEndpointMutex.RLock()
+	defer fake.addOrUpdateEndpointMutex.RUnlock()
+	return fake.addOrUpdateEndpointArgsForCall[i].processGuid, fake.addOrUpdateEndpointArgsForCall[i].endpoint
 }
 
-func (fake *FakeRoutingTable) AddOrUpdateContainerReturns(result1 routing_table.MessagesToEmit) {
-	fake.AddOrUpdateContainerStub = nil
-	fake.addOrUpdateContainerReturns = struct {
+func (fake *FakeRoutingTable) AddOrUpdateEndpointReturns(result1 routing_table.MessagesToEmit) {
+	fake.AddOrUpdateEndpointStub = nil
+	fake.addOrUpdateEndpointReturns = struct {
 		result1 routing_table.MessagesToEmit
 	}{result1}
 }
 
-func (fake *FakeRoutingTable) RemoveContainer(processGuid string, container routing_table.Container) routing_table.MessagesToEmit {
-	fake.removeContainerMutex.Lock()
-	fake.removeContainerArgsForCall = append(fake.removeContainerArgsForCall, struct {
+func (fake *FakeRoutingTable) RemoveEndpoint(processGuid string, endpoint routing_table.Endpoint) routing_table.MessagesToEmit {
+	fake.removeEndpointMutex.Lock()
+	fake.removeEndpointArgsForCall = append(fake.removeEndpointArgsForCall, struct {
 		processGuid string
-		container   routing_table.Container
-	}{processGuid, container})
-	fake.removeContainerMutex.Unlock()
-	if fake.RemoveContainerStub != nil {
-		return fake.RemoveContainerStub(processGuid, container)
+		endpoint    routing_table.Endpoint
+	}{processGuid, endpoint})
+	fake.removeEndpointMutex.Unlock()
+	if fake.RemoveEndpointStub != nil {
+		return fake.RemoveEndpointStub(processGuid, endpoint)
 	} else {
-		return fake.removeContainerReturns.result1
+		return fake.removeEndpointReturns.result1
 	}
 }
 
-func (fake *FakeRoutingTable) RemoveContainerCallCount() int {
-	fake.removeContainerMutex.RLock()
-	defer fake.removeContainerMutex.RUnlock()
-	return len(fake.removeContainerArgsForCall)
+func (fake *FakeRoutingTable) RemoveEndpointCallCount() int {
+	fake.removeEndpointMutex.RLock()
+	defer fake.removeEndpointMutex.RUnlock()
+	return len(fake.removeEndpointArgsForCall)
 }
 
-func (fake *FakeRoutingTable) RemoveContainerArgsForCall(i int) (string, routing_table.Container) {
-	fake.removeContainerMutex.RLock()
-	defer fake.removeContainerMutex.RUnlock()
-	return fake.removeContainerArgsForCall[i].processGuid, fake.removeContainerArgsForCall[i].container
+func (fake *FakeRoutingTable) RemoveEndpointArgsForCall(i int) (string, routing_table.Endpoint) {
+	fake.removeEndpointMutex.RLock()
+	defer fake.removeEndpointMutex.RUnlock()
+	return fake.removeEndpointArgsForCall[i].processGuid, fake.removeEndpointArgsForCall[i].endpoint
 }
 
-func (fake *FakeRoutingTable) RemoveContainerReturns(result1 routing_table.MessagesToEmit) {
-	fake.RemoveContainerStub = nil
-	fake.removeContainerReturns = struct {
+func (fake *FakeRoutingTable) RemoveEndpointReturns(result1 routing_table.MessagesToEmit) {
+	fake.RemoveEndpointStub = nil
+	fake.removeEndpointReturns = struct {
 		result1 routing_table.MessagesToEmit
 	}{result1}
 }
