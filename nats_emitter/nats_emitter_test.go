@@ -23,7 +23,7 @@ func createCounter(name string) *metric.Counter {
 }
 
 var _ = Describe("NatsEmitter", func() {
-	var emitter *NATSEmitter
+	var emitter NATSEmitter
 	var natsClient *diegonats.FakeNATSClient
 	var fakeMetricSender *fake_metrics_sender.FakeMetricSender
 

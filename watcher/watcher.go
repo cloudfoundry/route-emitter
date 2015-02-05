@@ -19,14 +19,14 @@ var (
 type Watcher struct {
 	receptorClient receptor.Client
 	table          routing_table.RoutingTable
-	emitter        nats_emitter.NATSEmitterInterface
+	emitter        nats_emitter.NATSEmitter
 	logger         lager.Logger
 }
 
 func NewWatcher(
 	receptorClient receptor.Client,
 	table routing_table.RoutingTable,
-	emitter nats_emitter.NATSEmitterInterface,
+	emitter nats_emitter.NATSEmitter,
 	logger lager.Logger,
 ) *Watcher {
 	return &Watcher{

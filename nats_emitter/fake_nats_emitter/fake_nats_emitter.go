@@ -56,4 +56,4 @@ func (fake *FakeNATSEmitter) EmitReturns(result1 error) {
 	}{result1}
 }
 
-var _ nats_emitter.NATSEmitterInterface = new(FakeNATSEmitter)
+var _ nats_emitter.NATSEmitter = new(FakeNATSEmitter)

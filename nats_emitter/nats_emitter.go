@@ -11,25 +11,26 @@ import (
 	"github.com/pivotal-golang/lager"
 )
 
-type NATSEmitterInterface interface {
+//go:generate counterfeiter -o fake_nats_emitter/fake_nats_emitter.go . NATSEmitter
+type NATSEmitter interface {
 	Emit(messagesToEmit routing_table.MessagesToEmit, registrationCounter, unregistrationCounter *metric.Counter) error
 }
 
-type NATSEmitter struct {
+type natsEmitter struct {
 	natsClient diegonats.NATSClient
 	workPool   *workpool.WorkPool
 	logger     lager.Logger
 }
 
-func New(natsClient diegonats.NATSClient, workPool *workpool.WorkPool, logger lager.Logger) *NATSEmitter {
-	return &NATSEmitter{
+func New(natsClient diegonats.NATSClient, workPool *workpool.WorkPool, logger lager.Logger) NATSEmitter {
+	return &natsEmitter{
 		natsClient: natsClient,
 		workPool:   workPool,
 		logger:     logger.Session("nats-emitter"),
 	}
 }
 
-func (n *NATSEmitter) Emit(messagesToEmit routing_table.MessagesToEmit, registrationCounter, unregistrationCounter *metric.Counter) error {
+func (n *natsEmitter) Emit(messagesToEmit routing_table.MessagesToEmit, registrationCounter, unregistrationCounter *metric.Counter) error {
 	errors := make(chan error, 1)
 	var wg sync.WaitGroup
 	wg.Add(len(messagesToEmit.RegistrationMessages))
@@ -56,7 +57,7 @@ func (n *NATSEmitter) Emit(messagesToEmit routing_table.MessagesToEmit, registra
 	return nil
 }
 
-func (n *NATSEmitter) emit(subject string, message routing_table.RegistryMessage, wg *sync.WaitGroup, errors chan error) {
+func (n *natsEmitter) emit(subject string, message routing_table.RegistryMessage, wg *sync.WaitGroup, errors chan error) {
 	n.workPool.Submit(func() {
 		var err error
 		defer func() {

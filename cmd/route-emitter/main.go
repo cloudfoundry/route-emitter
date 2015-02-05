@@ -151,7 +151,7 @@ func initializeDropsonde(logger lager.Logger) {
 	}
 }
 
-func initializeNatsEmitter(natsClient diegonats.NATSClient, logger lager.Logger) *nats_emitter.NATSEmitter {
+func initializeNatsEmitter(natsClient diegonats.NATSClient, logger lager.Logger) nats_emitter.NATSEmitter {
 	pool := workpool.New(10, 10, workpool.DefaultAround)
 	return nats_emitter.New(natsClient, pool, logger)
 }

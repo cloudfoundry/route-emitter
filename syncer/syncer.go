@@ -27,7 +27,7 @@ type Syncer struct {
 	natsClient        diegonats.NATSClient
 	logger            lager.Logger
 	table             routing_table.RoutingTable
-	emitter           nats_emitter.NATSEmitterInterface
+	emitter           nats_emitter.NATSEmitter
 	syncDuration      time.Duration
 	heartbeatInterval chan time.Duration
 }
@@ -35,7 +35,7 @@ type Syncer struct {
 func NewSyncer(
 	receptorClient receptor.Client,
 	table routing_table.RoutingTable,
-	emitter nats_emitter.NATSEmitterInterface,
+	emitter nats_emitter.NATSEmitter,
 	syncDuration time.Duration,
 	natsClient diegonats.NATSClient,
 	logger lager.Logger,
