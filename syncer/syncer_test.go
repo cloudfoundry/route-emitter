@@ -13,7 +13,6 @@ import (
 	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
 	"github.com/cloudfoundry-incubator/route-emitter/routing_table/fake_routing_table"
 	. "github.com/cloudfoundry-incubator/route-emitter/syncer"
-	"github.com/cloudfoundry-incubator/runtime-schema/cc_messages"
 	fake_metrics_sender "github.com/cloudfoundry/dropsonde/metric_sender/fake"
 	"github.com/cloudfoundry/dropsonde/metrics"
 	"github.com/cloudfoundry/gunk/diegonats"
@@ -90,8 +89,10 @@ var _ = Describe("Syncer", func() {
 
 		desiredResponse = receptor.DesiredLRPResponse{
 			ProcessGuid: processGuid,
-			Routes:      cc_messages.NewRoutingInfo([]string{"route-1", "route-2"}, 8080),
-			LogGuid:     logGuid,
+			Routes: receptor.CFRoutes{
+				{Hostnames: []string{"route-1", "route-2"}, Port: 8080},
+			}.RoutingInfo(),
+			LogGuid: logGuid,
 		}
 
 		actualResponses = []receptor.ActualLRPResponse{

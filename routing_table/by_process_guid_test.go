@@ -3,7 +3,6 @@ package routing_table_test
 import (
 	"github.com/cloudfoundry-incubator/receptor"
 	. "github.com/cloudfoundry-incubator/route-emitter/routing_table"
-	"github.com/cloudfoundry-incubator/runtime-schema/cc_messages"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -12,8 +11,12 @@ import (
 var _ = Describe("ByProcessGuid", func() {
 	Describe("RoutesByProcessGuidFromDesireds", func() {
 		It("should build a map of routes", func() {
-			abcRoutes := cc_messages.NewRoutingInfo([]string{"foo.com", "bar.com"}, 8080)
-			defRoutes := cc_messages.NewRoutingInfo([]string{"baz.com"}, 8080)
+			abcRoutes := receptor.CFRoutes{
+				{Hostnames: []string{"foo.com", "bar.com"}, Port: 8080},
+			}.RoutingInfo()
+			defRoutes := receptor.CFRoutes{
+				{Hostnames: []string{"baz.com"}, Port: 8080},
+			}.RoutingInfo()
 
 			routes := RoutesByProcessGuidFromDesireds([]receptor.DesiredLRPResponse{
 				{Domain: "tests", ProcessGuid: "abc", Routes: abcRoutes, LogGuid: "abc-guid"},
@@ -32,7 +35,7 @@ var _ = Describe("ByProcessGuid", func() {
 				routes := RoutesByProcessGuidFromDesireds([]receptor.DesiredLRPResponse{
 					{Domain: "tests", ProcessGuid: "abc", Routes: nil, LogGuid: "abc-guid"},
 				})
-				Ω(routes).Should(HaveLen(1))
+				Ω(routes).Should(HaveLen(0))
 				Ω(routes["abc"].URIs).Should(BeNil())
 			})
 		})

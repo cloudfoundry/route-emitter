@@ -6,7 +6,6 @@ import (
 	"github.com/cloudfoundry-incubator/receptor"
 	"github.com/cloudfoundry-incubator/route-emitter/nats_emitter"
 	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
-	"github.com/cloudfoundry-incubator/runtime-schema/cc_messages"
 	"github.com/cloudfoundry-incubator/runtime-schema/metric"
 	"github.com/pivotal-golang/lager"
 )
@@ -107,8 +106,6 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 			return nil
 		}
 	}
-
-	return nil
 }
 
 func (watcher *Watcher) handleEvent(event receptor.Event) {
@@ -134,7 +131,12 @@ func (watcher *Watcher) handleDesiredCreateOrUpdate(desiredLRP receptor.DesiredL
 	watcher.logger.Info("handling-desired-create-or-update", desiredLRPData(desiredLRP))
 	defer watcher.logger.Info("done-handling-desired-create-or-update")
 
-	hostnames := cc_messages.RouteFromRoutingInfo(desiredLRP.Routes).Hostnames
+	var hostnames []string
+
+	routes, err := receptor.CFRoutesFromRoutingInfo(desiredLRP.Routes)
+	if err == nil && len(routes) > 0 {
+		hostnames = routes[0].Hostnames
+	}
 
 	messagesToEmit := watcher.table.SetRoutes(desiredLRP.ProcessGuid, routing_table.Routes{
 		URIs:    hostnames,

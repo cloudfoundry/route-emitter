@@ -9,7 +9,6 @@ import (
 	"github.com/cloudfoundry-incubator/receptor"
 	"github.com/cloudfoundry-incubator/route-emitter/nats_emitter"
 	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
-	"github.com/cloudfoundry-incubator/runtime-schema/cc_messages"
 	"github.com/cloudfoundry-incubator/runtime-schema/metric"
 	"github.com/cloudfoundry/gunk/diegonats"
 	uuid "github.com/nu7hatch/gouuid"
@@ -175,8 +174,12 @@ func (syncer *Syncer) syncAndEmit() {
 }
 
 func (syncer *Syncer) register(desired receptor.DesiredLRPResponse, actual receptor.ActualLRPResponse) error {
+	routes, err := receptor.CFRoutesFromRoutingInfo(desired.Routes)
+	if err != nil || len(routes) == 0 {
+		return err
+	}
 	message := routing_table.RegistryMessage{
-		URIs: cc_messages.RouteFromRoutingInfo(desired.Routes).Hostnames,
+		URIs: routes[0].Hostnames,
 		Host: actual.Address,
 		Port: uint16(actual.Ports[0].HostPort),
 	}

@@ -6,7 +6,6 @@ import (
 
 	"github.com/cloudfoundry-incubator/receptor"
 	"github.com/cloudfoundry-incubator/receptor/fake_receptor"
-	"github.com/cloudfoundry-incubator/runtime-schema/cc_messages"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -81,7 +80,7 @@ var _ = Describe("Watcher", func() {
 					},
 					Domain:      "tests",
 					ProcessGuid: expectedProcessGuid,
-					Routes:      cc_messages.NewRoutingInfo(expectedRoutes, expectedContainerPort),
+					Routes:      receptor.CFRoutes{{Hostnames: expectedRoutes, Port: expectedContainerPort}}.RoutingInfo(),
 					LogGuid:     logGuid,
 				}
 
@@ -141,7 +140,7 @@ var _ = Describe("Watcher", func() {
 					},
 					Domain:      "tests",
 					ProcessGuid: expectedProcessGuid,
-					Routes:      cc_messages.NewRoutingInfo(expectedRoutes, expectedContainerPort),
+					Routes:      receptor.CFRoutes{{Hostnames: expectedRoutes, Port: expectedContainerPort}}.RoutingInfo(),
 					LogGuid:     logGuid,
 				}
 
@@ -196,7 +195,7 @@ var _ = Describe("Watcher", func() {
 					},
 					Domain:      "tests",
 					ProcessGuid: expectedProcessGuid,
-					Routes:      cc_messages.NewRoutingInfo(expectedRoutes, expectedContainerPort),
+					Routes:      receptor.CFRoutes{{Hostnames: expectedRoutes, Port: expectedContainerPort}}.RoutingInfo(),
 					LogGuid:     logGuid,
 				}
 

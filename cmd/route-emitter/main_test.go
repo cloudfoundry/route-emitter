@@ -5,9 +5,9 @@ import (
 	"time"
 
 	"github.com/apcera/nats"
+	"github.com/cloudfoundry-incubator/receptor"
 	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
 	. "github.com/cloudfoundry-incubator/route-emitter/routing_table/matchers"
-	"github.com/cloudfoundry-incubator/runtime-schema/cc_messages"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -335,7 +335,10 @@ var _ = Describe("Route Emitter", func() {
 })
 
 func newRoutes(hosts []string, port uint16) map[string]*json.RawMessage {
-	routingInfo := *cc_messages.NewRoutingInfo(hosts, port)
+	routingInfo := *receptor.CFRoutes{
+		{Hostnames: hosts, Port: port},
+	}.RoutingInfo()
+
 	routes := map[string]*json.RawMessage{}
 
 	for key, message := range routingInfo {

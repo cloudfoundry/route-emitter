@@ -4,23 +4,24 @@ import (
 	"errors"
 
 	"github.com/cloudfoundry-incubator/receptor"
-	"github.com/cloudfoundry-incubator/runtime-schema/cc_messages"
 )
 
 type RoutesByProcessGuid map[string]Routes
 type ContainersByProcessGuid map[string][]Container
 
 func RoutesByProcessGuidFromDesireds(desireds []receptor.DesiredLRPResponse) RoutesByProcessGuid {
-	routes := RoutesByProcessGuid{}
+	routesByProcessGuid := RoutesByProcessGuid{}
 	for _, desired := range desireds {
-		route := cc_messages.RouteFromRoutingInfo(desired.Routes)
-		routes[desired.ProcessGuid] = Routes{
-			URIs:    route.Hostnames,
-			LogGuid: desired.LogGuid,
+		routes, err := receptor.CFRoutesFromRoutingInfo(desired.Routes)
+		if err == nil && len(routes) > 0 {
+			routesByProcessGuid[desired.ProcessGuid] = Routes{
+				URIs:    routes[0].Hostnames,
+				LogGuid: desired.LogGuid,
+			}
 		}
 	}
 
-	return routes
+	return routesByProcessGuid
 }
 
 func ContainersByProcessGuidFromActuals(actuals []receptor.ActualLRPResponse) ContainersByProcessGuid {
