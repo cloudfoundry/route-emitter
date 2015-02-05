@@ -187,7 +187,8 @@ func (watcher *Watcher) handleActualDelete(actualLRP receptor.ActualLRPResponse)
 }
 
 func (watcher *Watcher) addOrUpdateAndEmit(actualLRP receptor.ActualLRPResponse) {
-	endpoint, err := routing_table.EndpointFromActual(actualLRP)
+	endpoints, err := routing_table.EndpointsFromActual(actualLRP)
+	endpoint := endpoints[0]
 	if err != nil {
 		watcher.logger.Error("failed-to-extract-endpoint-from-actual", err)
 		return
@@ -198,7 +199,8 @@ func (watcher *Watcher) addOrUpdateAndEmit(actualLRP receptor.ActualLRPResponse)
 }
 
 func (watcher *Watcher) removeAndEmit(actualLRP receptor.ActualLRPResponse) {
-	endpoint, err := routing_table.EndpointFromActual(actualLRP)
+	endpoints, err := routing_table.EndpointsFromActual(actualLRP)
+	endpoint := endpoints[0]
 	if err != nil {
 		watcher.logger.Error("failed-to-extract-endpoint-from-actual", err)
 		return

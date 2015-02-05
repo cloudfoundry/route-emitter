@@ -26,27 +26,34 @@ func RoutesByProcessGuidFromDesireds(desireds []receptor.DesiredLRPResponse) Rou
 }
 
 func EndpointsByProcessGuidFromActuals(actuals []receptor.ActualLRPResponse) EndpointsByProcessGuid {
-	endpoints := EndpointsByProcessGuid{}
+	endpointsByProcessGuid := EndpointsByProcessGuid{}
 	for _, actual := range actuals {
-		endpoint, err := EndpointFromActual(actual)
+		endpoints, err := EndpointsFromActual(actual)
 		if err != nil {
 			continue
 		}
 
-		endpoints[actual.ProcessGuid] = append(endpoints[actual.ProcessGuid], endpoint)
+		endpointsByProcessGuid[actual.ProcessGuid] = append(endpointsByProcessGuid[actual.ProcessGuid], endpoints...)
 	}
 
-	return endpoints
+	return endpointsByProcessGuid
 }
 
-func EndpointFromActual(actual receptor.ActualLRPResponse) (Endpoint, error) {
+func EndpointsFromActual(actual receptor.ActualLRPResponse) ([]Endpoint, error) {
 	if len(actual.Ports) == 0 {
-		return Endpoint{}, errors.New("missing ports")
+		return []Endpoint{}, errors.New("missing ports")
 	}
 
-	return Endpoint{
-		InstanceGuid: actual.InstanceGuid,
-		Host:         actual.Address,
-		Port:         uint16(actual.Ports[0].HostPort),
-	}, nil
+	endpoints := []Endpoint{}
+	for _, portMapping := range actual.Ports {
+		endpoint := Endpoint{
+			InstanceGuid:  actual.InstanceGuid,
+			Host:          actual.Address,
+			Port:          uint16(portMapping.HostPort),
+			ContainerPort: uint16(portMapping.ContainerPort),
+		}
+		endpoints = append(endpoints, endpoint)
+	}
+
+	return endpoints, nil
 }
