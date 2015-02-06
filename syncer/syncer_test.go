@@ -74,13 +74,13 @@ var _ = Describe("Syncer", func() {
 
 		//what follows is fake data to distinguish between
 		//the "sync" and "emit" codepaths
-		dummyEndpoint := routing_table.Endpoint{InstanceGuid: "instance-guid-1", Host: "1.1.1.1", Port: 11}
+		dummyEndpoint := routing_table.Endpoint{InstanceGuid: "instance-guid-1", Host: "1.1.1.1", Port: 11, ContainerPort: 1111}
 		dummyMessage := routing_table.RegistryMessageFor(dummyEndpoint, routing_table.Routes{URIs: []string{"foo.com", "bar.com"}, LogGuid: logGuid})
 		syncMessages = routing_table.MessagesToEmit{
 			RegistrationMessages: []routing_table.RegistryMessage{dummyMessage},
 		}
 
-		dummyEndpoint = routing_table.Endpoint{InstanceGuid: "instance-guid-2", Host: "2.2.2.2", Port: 22}
+		dummyEndpoint = routing_table.Endpoint{InstanceGuid: "instance-guid-2", Host: "2.2.2.2", Port: 22, ContainerPort: 2222}
 		dummyMessage = routing_table.RegistryMessageFor(dummyEndpoint, routing_table.Routes{URIs: []string{"baz.com"}, LogGuid: logGuid})
 		messagesToEmit = routing_table.MessagesToEmit{
 			RegistrationMessages: []routing_table.RegistryMessage{dummyMessage},
@@ -140,6 +140,9 @@ var _ = Describe("Syncer", func() {
 			Ω(table.SyncCallCount()).Should(Equal(1))
 
 			routes, endpoints := table.SyncArgsForCall(0)
+			Ω(routes).Should(HaveLen(1))
+			Ω(endpoints).Should(HaveLen(1))
+
 			key := routing_table.RoutingKey{ProcessGuid: processGuid, ContainerPort: containerPort}
 			Ω(routes[key]).Should(Equal(routing_table.Routes{
 				URIs:    []string{"route-1", "route-2"},
