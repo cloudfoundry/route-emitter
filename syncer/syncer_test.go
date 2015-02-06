@@ -28,9 +28,10 @@ const logGuid = "some-log-guid"
 
 var _ = Describe("Syncer", func() {
 	const (
-		processGuid  = "process-guid-1"
-		instanceGuid = "instance-guid-1"
-		lrpHost      = "1.2.3.4"
+		processGuid   = "process-guid-1"
+		containerPort = 8080
+		instanceGuid  = "instance-guid-1"
+		lrpHost       = "1.2.3.4"
 	)
 
 	var (
@@ -90,8 +91,8 @@ var _ = Describe("Syncer", func() {
 
 		desiredResponse = receptor.DesiredLRPResponse{
 			ProcessGuid: processGuid,
-			Ports:       []uint16{8080},
-			Routes:      cfroutes.CFRoutes{{Hostnames: []string{"route-1", "route-2"}, Port: 8080}}.RoutingInfo(),
+			Ports:       []uint16{containerPort},
+			Routes:      cfroutes.CFRoutes{{Hostnames: []string{"route-1", "route-2"}, Port: containerPort}}.RoutingInfo(),
 			LogGuid:     logGuid,
 		}
 
@@ -104,7 +105,7 @@ var _ = Describe("Syncer", func() {
 				Index:        1,
 				Address:      lrpHost,
 				Ports: []receptor.PortMapping{
-					{HostPort: 1234, ContainerPort: 8080},
+					{HostPort: 1234, ContainerPort: containerPort},
 				},
 				State: receptor.ActualLRPStateRunning,
 			},
@@ -125,7 +126,7 @@ var _ = Describe("Syncer", func() {
 	JustBeforeEach(func() {
 		logger := lagertest.NewTestLogger("test")
 		syncer = NewSyncer(receptorClient, table, emitter, syncDuration, natsClient, logger)
-		process = ifrit.Envoke(syncer)
+		process = ifrit.Invoke(syncer)
 	})
 
 	AfterEach(func() {
@@ -138,16 +139,16 @@ var _ = Describe("Syncer", func() {
 		It("should sync the table", func() {
 			Ω(table.SyncCallCount()).Should(Equal(1))
 
-			key := routing_table.RoutingKey{ProcessGuid: processGuid, ContainerPort: 8080}
-
 			routes, endpoints := table.SyncArgsForCall(0)
+			key := routing_table.RoutingKey{ProcessGuid: processGuid, ContainerPort: containerPort}
 			Ω(routes[key]).Should(Equal(routing_table.Routes{
 				URIs:    []string{"route-1", "route-2"},
 				LogGuid: logGuid,
 			}))
 			Ω(endpoints[key]).Should(Equal([]routing_table.Endpoint{
-				{InstanceGuid: instanceGuid, Host: lrpHost, Port: 1234, ContainerPort: 8080},
+				{InstanceGuid: instanceGuid, Host: lrpHost, Port: 1234, ContainerPort: containerPort},
 			}))
+
 			Ω(emitter.EmitCallCount()).Should(Equal(1))
 			emittedMessages, _, _ := emitter.EmitArgsForCall(0)
 			Ω(emittedMessages).Should(Equal(syncMessages))
