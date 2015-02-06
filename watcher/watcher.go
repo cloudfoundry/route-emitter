@@ -23,6 +23,17 @@ type Watcher struct {
 	logger         lager.Logger
 }
 
+type set map[interface{}]struct{}
+
+func (set set) contains(value interface{}) bool {
+	_, found := set[value]
+	return found
+}
+
+func (set set) add(value interface{}) {
+	set[value] = struct{}{}
+}
+
 func NewWatcher(
 	receptorClient receptor.Client,
 	table routing_table.RoutingTable,
@@ -112,9 +123,9 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 func (watcher *Watcher) handleEvent(event receptor.Event) {
 	switch event := event.(type) {
 	case receptor.DesiredLRPCreatedEvent:
-		watcher.handleDesiredCreateOrUpdate(event.DesiredLRPResponse)
+		watcher.handleDesiredCreate(event.DesiredLRPResponse)
 	case receptor.DesiredLRPChangedEvent:
-		watcher.handleDesiredCreateOrUpdate(event.After)
+		watcher.handleDesiredUpdate(event.Before, event.After)
 	case receptor.DesiredLRPRemovedEvent:
 		watcher.handleDesiredDelete(event.DesiredLRPResponse)
 	case receptor.ActualLRPCreatedEvent:
@@ -128,24 +139,57 @@ func (watcher *Watcher) handleEvent(event receptor.Event) {
 	}
 }
 
-func (watcher *Watcher) handleDesiredCreateOrUpdate(desiredLRP receptor.DesiredLRPResponse) {
-	watcher.logger.Info("handling-desired-create-or-update", desiredLRPData(desiredLRP))
-	defer watcher.logger.Info("done-handling-desired-create-or-update")
+func (watcher *Watcher) handleDesiredCreate(desiredLRP receptor.DesiredLRPResponse) {
+	watcher.logger.Info("handling-desired-create", desiredLRPData(desiredLRP))
+	defer watcher.logger.Info("done-handling-desired-create")
 
-	var hostnames []string
+	watcher.setRoutesForDesired(desiredLRP)
+}
 
-	routes, err := cfroutes.CFRoutesFromRoutingInfo(desiredLRP.Routes)
-	if err == nil && len(routes) > 0 {
-		hostnames = routes[0].Hostnames
+func (watcher *Watcher) handleDesiredUpdate(before, after receptor.DesiredLRPResponse) {
+	watcher.logger.Info("handling-desired-update", lager.Data{
+		"before": desiredLRPData(before),
+		"after":  desiredLRPData(after),
+	})
+	defer watcher.logger.Info("done-handling-desired-update")
+
+	afterKeysSet := watcher.setRoutesForDesired(after)
+
+	beforeRoutingKeys := routing_table.RoutingKeysFromDesired(before)
+	afterRoutes, _ := cfroutes.CFRoutesFromRoutingInfo(after.Routes)
+
+	afterContainerPorts := set{}
+	for _, route := range afterRoutes {
+		afterContainerPorts.add(route.Port)
 	}
 
-	for _, key := range routing_table.RoutingKeysFromDesired(desiredLRP) {
-		messagesToEmit := watcher.table.SetRoutes(key, routing_table.Routes{
-			URIs:    hostnames,
-			LogGuid: desiredLRP.LogGuid,
-		})
-		watcher.emitter.Emit(messagesToEmit, &routesRegistered, &routesUnregistered)
+	for _, key := range beforeRoutingKeys {
+		if !afterKeysSet.contains(key) || !afterContainerPorts.contains(key.ContainerPort) {
+			messagesToEmit := watcher.table.RemoveRoutes(key)
+			watcher.emitter.Emit(messagesToEmit, &routesRegistered, &routesUnregistered)
+		}
 	}
+}
+
+func (watcher *Watcher) setRoutesForDesired(desiredLRP receptor.DesiredLRPResponse) set {
+	routingKeys := routing_table.RoutingKeysFromDesired(desiredLRP)
+	routes, _ := cfroutes.CFRoutesFromRoutingInfo(desiredLRP.Routes)
+	routingKeySet := set{}
+
+	for _, key := range routingKeys {
+		routingKeySet.add(key)
+		for _, route := range routes {
+			if key.ContainerPort == route.Port {
+				messagesToEmit := watcher.table.SetRoutes(key, routing_table.Routes{
+					URIs:    route.Hostnames,
+					LogGuid: desiredLRP.LogGuid,
+				})
+				watcher.emitter.Emit(messagesToEmit, &routesRegistered, &routesUnregistered)
+			}
+		}
+	}
+
+	return routingKeySet
 }
 
 func (watcher *Watcher) handleDesiredDelete(desiredLRP receptor.DesiredLRPResponse) {
