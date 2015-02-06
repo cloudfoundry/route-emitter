@@ -680,18 +680,19 @@ var _ = Describe("RoutingTable", func() {
 			Expect(table.RouteCount()).To(Equal(0))
 		})
 
-		It("returns 1 after adding a route", func() {
+		It("returns 1 after adding a route to a single process", func() {
 			table.SetRoutes(RoutingKey{ProcessGuid: "fake-process-guid"}, Routes{URIs: []string{"fake-route-url"}, LogGuid: logGuid})
+
 			Expect(table.RouteCount()).To(Equal(1))
 		})
 
-		It("returns 2 after associating 2 urls with a process", func() {
+		It("returns 2 after associating 2 urls with a single process", func() {
 			table.SetRoutes(RoutingKey{ProcessGuid: "fake-process-guid"}, Routes{URIs: []string{"fake-route-url-1", "fake-route-url-2"}, LogGuid: logGuid})
 
 			Expect(table.RouteCount()).To(Equal(2))
 		})
 
-		It("returns 2 after associating 2 urls with a process", func() {
+		It("returns 4 after associating 2 urls with two processes", func() {
 			table.SetRoutes(RoutingKey{ProcessGuid: "fake-process-guid-a"}, Routes{URIs: []string{"fake-route-url-a-1", "fake-route-url-a-2"}, LogGuid: logGuid})
 			table.SetRoutes(RoutingKey{ProcessGuid: "fake-process-guid-b"}, Routes{URIs: []string{"fake-route-url-b-1", "fake-route-url-b-2"}, LogGuid: logGuid})
 
