@@ -6,32 +6,27 @@ import (
 
 	"github.com/cloudfoundry-incubator/route-emitter/nats_emitter"
 	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
-	"github.com/cloudfoundry-incubator/runtime-schema/metric"
 )
 
 type FakeNATSEmitter struct {
-	EmitStub        func(messagesToEmit routing_table.MessagesToEmit, registrationCounter, unregistrationCounter *metric.Counter) error
+	EmitStub        func(messagesToEmit routing_table.MessagesToEmit) error
 	emitMutex       sync.RWMutex
 	emitArgsForCall []struct {
-		messagesToEmit        routing_table.MessagesToEmit
-		registrationCounter   *metric.Counter
-		unregistrationCounter *metric.Counter
+		messagesToEmit routing_table.MessagesToEmit
 	}
 	emitReturns struct {
 		result1 error
 	}
 }
 
-func (fake *FakeNATSEmitter) Emit(messagesToEmit routing_table.MessagesToEmit, registrationCounter *metric.Counter, unregistrationCounter *metric.Counter) error {
+func (fake *FakeNATSEmitter) Emit(messagesToEmit routing_table.MessagesToEmit) error {
 	fake.emitMutex.Lock()
 	fake.emitArgsForCall = append(fake.emitArgsForCall, struct {
-		messagesToEmit        routing_table.MessagesToEmit
-		registrationCounter   *metric.Counter
-		unregistrationCounter *metric.Counter
-	}{messagesToEmit, registrationCounter, unregistrationCounter})
+		messagesToEmit routing_table.MessagesToEmit
+	}{messagesToEmit})
 	fake.emitMutex.Unlock()
 	if fake.EmitStub != nil {
-		return fake.EmitStub(messagesToEmit, registrationCounter, unregistrationCounter)
+		return fake.EmitStub(messagesToEmit)
 	} else {
 		return fake.emitReturns.result1
 	}
@@ -43,10 +38,10 @@ func (fake *FakeNATSEmitter) EmitCallCount() int {
 	return len(fake.emitArgsForCall)
 }
 
-func (fake *FakeNATSEmitter) EmitArgsForCall(i int) (routing_table.MessagesToEmit, *metric.Counter, *metric.Counter) {
+func (fake *FakeNATSEmitter) EmitArgsForCall(i int) routing_table.MessagesToEmit {
 	fake.emitMutex.RLock()
 	defer fake.emitMutex.RUnlock()
-	return fake.emitArgsForCall[i].messagesToEmit, fake.emitArgsForCall[i].registrationCounter, fake.emitArgsForCall[i].unregistrationCounter
+	return fake.emitArgsForCall[i].messagesToEmit
 }
 
 func (fake *FakeNATSEmitter) EmitReturns(result1 error) {

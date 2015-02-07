@@ -6,7 +6,6 @@ import (
 	"github.com/apcera/nats"
 	. "github.com/cloudfoundry-incubator/route-emitter/nats_emitter"
 	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
-	"github.com/cloudfoundry-incubator/runtime-schema/metric"
 	fake_metrics_sender "github.com/cloudfoundry/dropsonde/metric_sender/fake"
 	"github.com/cloudfoundry/dropsonde/metrics"
 	"github.com/cloudfoundry/gunk/diegonats"
@@ -16,11 +15,6 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
-
-func createCounter(name string) *metric.Counter {
-	counter := metric.Counter(name)
-	return &counter
-}
 
 var _ = Describe("NatsEmitter", func() {
 	var emitter NATSEmitter
@@ -49,7 +43,7 @@ var _ = Describe("NatsEmitter", func() {
 
 	Describe("Emitting", func() {
 		It("should emit register and unregister messages", func() {
-			err := emitter.Emit(messagesToEmit, nil, nil)
+			err := emitter.Emit(messagesToEmit)
 			Ω(err).ShouldNot(HaveOccurred())
 
 			Ω(natsClient.PublishedMessages("router.register")).Should(HaveLen(2))
@@ -96,28 +90,6 @@ var _ = Describe("NatsEmitter", func() {
       `)))
 		})
 
-		It("increments the 'routes registered' counter", func() {
-			fakeRegistrationCounter := createCounter("fake-registration-counter")
-			err := emitter.Emit(messagesToEmit, fakeRegistrationCounter, nil)
-			Ω(err).ShouldNot(HaveOccurred())
-			Ω(fakeMetricSender.GetCounter("fake-registration-counter")).Should(BeEquivalentTo(3))
-
-			err = emitter.Emit(messagesToEmit, fakeRegistrationCounter, nil)
-			Ω(err).ShouldNot(HaveOccurred())
-			Ω(fakeMetricSender.GetCounter("fake-registration-counter")).Should(BeEquivalentTo(6))
-		})
-
-		It("increments the 'routes unregistered' counter", func() {
-			fakeUnregistrationCounter := createCounter("fake-unregistration-counter")
-			err := emitter.Emit(messagesToEmit, nil, fakeUnregistrationCounter)
-			Ω(err).ShouldNot(HaveOccurred())
-			Ω(fakeMetricSender.GetCounter("fake-unregistration-counter")).Should(BeEquivalentTo(2))
-
-			err = emitter.Emit(messagesToEmit, nil, fakeUnregistrationCounter)
-			Ω(err).ShouldNot(HaveOccurred())
-			Ω(fakeMetricSender.GetCounter("fake-unregistration-counter")).Should(BeEquivalentTo(4))
-		})
-
 		Context("when the nats client errors", func() {
 			BeforeEach(func() {
 				natsClient.WhenPublishing("router.register", func(*nats.Msg) error {
@@ -126,7 +98,7 @@ var _ = Describe("NatsEmitter", func() {
 			})
 
 			It("should error", func() {
-				Ω(emitter.Emit(messagesToEmit, nil, nil)).Should(MatchError(errors.New("bam")))
+				Ω(emitter.Emit(messagesToEmit)).Should(MatchError(errors.New("bam")))
 			})
 		})
 	})

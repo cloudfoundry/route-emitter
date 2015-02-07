@@ -153,7 +153,7 @@ var _ = Describe("Syncer", func() {
 			}))
 
 			Ω(emitter.EmitCallCount()).Should(Equal(1))
-			emittedMessages, _, _ := emitter.EmitArgsForCall(0)
+			emittedMessages := emitter.EmitArgsForCall(0)
 			Ω(emittedMessages).Should(Equal(syncMessages))
 		})
 	})
@@ -177,22 +177,16 @@ var _ = Describe("Syncer", func() {
 
 			It("should emit routes with the frequency of the passed-in-interval", func() {
 				Eventually(emitter.EmitCallCount, 2).Should(Equal(2))
-				emittedMessages, _, _ := emitter.EmitArgsForCall(1)
+				emittedMessages := emitter.EmitArgsForCall(1)
 				Ω(emittedMessages).Should(Equal(messagesToEmit))
 				t1 := time.Now()
 
 				Eventually(emitter.EmitCallCount, 2).Should(Equal(3))
-				emittedMessages, _, _ = emitter.EmitArgsForCall(2)
+				emittedMessages = emitter.EmitArgsForCall(2)
 				Ω(emittedMessages).Should(Equal(messagesToEmit))
 				t2 := time.Now()
 
 				Ω(t2.Sub(t1)).Should(BeNumerically("~", 1*time.Second, 200*time.Millisecond))
-			})
-
-			It("passes a 'synced routes' counter to Emit", func() {
-				Eventually(emitter.EmitCallCount, 2).Should(Equal(2))
-				_, registerCounter, _ := emitter.EmitArgsForCall(1)
-				Expect(string(*registerCounter)).To(Equal("RoutesSynced"))
 			})
 
 			It("should only greet the router once", func() {
@@ -204,6 +198,12 @@ var _ = Describe("Syncer", func() {
 				Eventually(func() float64 {
 					return fakeMetricSender.GetValue("RoutesTotal").Value
 				}, 2).Should(BeEquivalentTo(123))
+			})
+
+			It("sends a 'synced routes' metric", func() {
+				Eventually(func() uint64 {
+					return fakeMetricSender.GetCounter("RoutesSynced")
+				}, 2).Should(BeEquivalentTo(3))
 			})
 		})
 
@@ -219,12 +219,12 @@ var _ = Describe("Syncer", func() {
 
 				//should now be emitting regularly at the specified interval
 				Eventually(emitter.EmitCallCount, 2).Should(Equal(2))
-				emittedMessages, _, _ := emitter.EmitArgsForCall(1)
+				emittedMessages := emitter.EmitArgsForCall(1)
 				Ω(emittedMessages).Should(Equal(messagesToEmit))
 				t1 := time.Now()
 
 				Eventually(emitter.EmitCallCount, 2).Should(Equal(3))
-				emittedMessages, _, _ = emitter.EmitArgsForCall(2)
+				emittedMessages = emitter.EmitArgsForCall(2)
 				Ω(emittedMessages).Should(Equal(messagesToEmit))
 				t2 := time.Now()
 
@@ -249,13 +249,13 @@ var _ = Describe("Syncer", func() {
 
 				//first emit should be pretty quick, it is in response to the incoming heartbeat interval
 				Eventually(emitter.EmitCallCount, 0.2).Should(Equal(2))
-				emittedMessages, _, _ := emitter.EmitArgsForCall(1)
+				emittedMessages := emitter.EmitArgsForCall(1)
 				Ω(emittedMessages).Should(Equal(messagesToEmit))
 				t1 := time.Now()
 
 				//subsequent emit should follow the interval
 				Eventually(emitter.EmitCallCount, 3).Should(Equal(3))
-				emittedMessages, _, _ = emitter.EmitArgsForCall(2)
+				emittedMessages = emitter.EmitArgsForCall(2)
 				Ω(emittedMessages).Should(Equal(messagesToEmit))
 				t2 := time.Now()
 				Ω(t2.Sub(t1)).Should(BeNumerically("~", 2*time.Second, 200*time.Millisecond))
@@ -299,10 +299,10 @@ var _ = Describe("Syncer", func() {
 			Eventually(emitter.EmitCallCount).Should(Equal(3))
 			t2 := time.Now()
 
-			emittedMessages, _, _ := emitter.EmitArgsForCall(1)
+			emittedMessages := emitter.EmitArgsForCall(1)
 			Ω(emittedMessages).Should(Equal(syncMessages))
 
-			emittedMessages, _, _ = emitter.EmitArgsForCall(2)
+			emittedMessages = emitter.EmitArgsForCall(2)
 			Ω(emittedMessages).Should(Equal(syncMessages))
 
 			Ω(t2.Sub(t1)).Should(BeNumerically("~", 500*time.Millisecond, 100*time.Millisecond))
@@ -320,10 +320,10 @@ var _ = Describe("Syncer", func() {
 			}).Should(BeEquivalentTo(123))
 		})
 
-		It("passes a 'synced routes' counter to Emit", func() {
-			Eventually(emitter.EmitCallCount).Should(Equal(1))
-			_, registerCounter, _ := emitter.EmitArgsForCall(0)
-			Expect(string(*registerCounter)).To(Equal("RoutesSynced"))
+		It("sends a 'synced routes' metric", func() {
+			Eventually(func() uint64 {
+				return fakeMetricSender.GetCounter("RoutesSynced")
+			}, 2).Should(BeEquivalentTo(2))
 		})
 
 		Context("when fetching actuals fails", func() {

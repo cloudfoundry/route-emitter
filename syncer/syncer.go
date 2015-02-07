@@ -121,11 +121,12 @@ func (syncer *Syncer) emit() {
 	messagesToEmit := syncer.table.MessagesToEmit()
 
 	syncer.logger.Info("emitting-messages", lager.Data{"messages": messagesToEmit})
-	err := syncer.emitter.Emit(messagesToEmit, &routesSynced, nil)
+	err := syncer.emitter.Emit(messagesToEmit)
 	if err != nil {
 		syncer.logger.Error("failed-to-emit-routes", err)
 	}
 
+	routesSynced.Add(messagesToEmit.RouteRegistrationCount())
 	routesTotal.Send(syncer.table.RouteCount())
 }
 
@@ -166,11 +167,12 @@ func (syncer *Syncer) syncAndEmit() {
 	)
 
 	syncer.logger.Info("emitting-routes-after-syncing", lager.Data{"routes": routesToEmit})
-	err = syncer.emitter.Emit(routesToEmit, &routesSynced, nil)
+	err = syncer.emitter.Emit(routesToEmit)
 	if err != nil {
 		syncer.logger.Error("failed-to-emit-synced", err)
 	}
 
+	routesSynced.Add(routesToEmit.RouteRegistrationCount())
 	routesTotal.Send(syncer.table.RouteCount())
 }
 

@@ -17,6 +17,8 @@ import (
 	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
 	"github.com/cloudfoundry-incubator/route-emitter/routing_table/fake_routing_table"
 	. "github.com/cloudfoundry-incubator/route-emitter/watcher"
+	fake_metrics_sender "github.com/cloudfoundry/dropsonde/metric_sender/fake"
+	"github.com/cloudfoundry/dropsonde/metrics"
 )
 
 const logGuid = "some-log-guid"
@@ -49,6 +51,7 @@ var _ = Describe("Watcher", func() {
 		expectedAdditionalCFRoute    cfroutes.CFRoute
 
 		dummyMessagesToEmit routing_table.MessagesToEmit
+		fakeMetricSender    *fake_metrics_sender.FakeMetricSender
 	)
 
 	BeforeEach(func() {
@@ -78,6 +81,8 @@ var _ = Describe("Watcher", func() {
 			ProcessGuid:   expectedProcessGuid,
 			ContainerPort: expectedAdditionalContainerPort,
 		}
+		fakeMetricSender = fake_metrics_sender.NewFakeMetricSender()
+		metrics.Initialize(fakeMetricSender)
 	})
 
 	JustBeforeEach(func() {
@@ -127,21 +132,21 @@ var _ = Describe("Watcher", func() {
 				Ω(routes).Should(Equal(routing_table.Routes{URIs: expectedRoutes, LogGuid: logGuid}))
 			})
 
-			It("passes a 'routes registered' counter to Emit", func() {
-				Eventually(emitter.EmitCallCount).Should(Equal(1))
-				_, registerCounter, _ := emitter.EmitArgsForCall(0)
-				Expect(string(*registerCounter)).To(Equal("RoutesRegistered"))
+			It("sends a 'routes registered' metric", func() {
+				Eventually(func() uint64 {
+					return fakeMetricSender.GetCounter("RoutesRegistered")
+				}).Should(BeEquivalentTo(2))
 			})
 
-			It("passes a 'routes unregistered' counter to Emit", func() {
-				Eventually(emitter.EmitCallCount).Should(Equal(1))
-				_, _, unregisterCounter := emitter.EmitArgsForCall(0)
-				Expect(string(*unregisterCounter)).To(Equal("RoutesUnregistered"))
+			It("sends a 'routes unregistered' metric", func() {
+				Eventually(func() uint64 {
+					return fakeMetricSender.GetCounter("RoutesUnRegistered")
+				}).Should(BeEquivalentTo(0))
 			})
 
 			It("should emit whatever the table tells it to emit", func() {
 				Eventually(emitter.EmitCallCount).Should(Equal(1))
-				messagesToEmit, _, _ := emitter.EmitArgsForCall(0)
+				messagesToEmit := emitter.EmitArgsForCall(0)
 				Ω(messagesToEmit).Should(Equal(dummyMessagesToEmit))
 			})
 
@@ -166,10 +171,10 @@ var _ = Describe("Watcher", func() {
 				It("emits whatever the table tells it to emit", func() {
 					Eventually(emitter.EmitCallCount).Should(Equal(2))
 
-					messagesToEmit, _, _ := emitter.EmitArgsForCall(0)
+					messagesToEmit := emitter.EmitArgsForCall(0)
 					Ω(messagesToEmit).Should(Equal(dummyMessagesToEmit))
 
-					messagesToEmit, _, _ = emitter.EmitArgsForCall(1)
+					messagesToEmit = emitter.EmitArgsForCall(1)
 					Ω(messagesToEmit).Should(Equal(dummyMessagesToEmit))
 				})
 			})
@@ -224,21 +229,21 @@ var _ = Describe("Watcher", func() {
 				Ω(routes).Should(Equal(routing_table.Routes{URIs: expectedRoutes, LogGuid: logGuid}))
 			})
 
-			It("passes a 'routes registered' counter to Emit", func() {
-				Eventually(emitter.EmitCallCount).Should(Equal(1))
-				_, registerCounter, _ := emitter.EmitArgsForCall(0)
-				Expect(string(*registerCounter)).To(Equal("RoutesRegistered"))
+			It("sends a 'routes registered' metric", func() {
+				Eventually(func() uint64 {
+					return fakeMetricSender.GetCounter("RoutesRegistered")
+				}).Should(BeEquivalentTo(2))
 			})
 
-			It("passes a 'routes unregistered' counter to Emit", func() {
-				Eventually(emitter.EmitCallCount).Should(Equal(1))
-				_, _, unregisterCounter := emitter.EmitArgsForCall(0)
-				Expect(string(*unregisterCounter)).To(Equal("RoutesUnregistered"))
+			It("sends a 'routes unregistered' metric", func() {
+				Eventually(func() uint64 {
+					return fakeMetricSender.GetCounter("RoutesUnRegistered")
+				}).Should(BeEquivalentTo(0))
 			})
 
 			It("should emit whatever the table tells it to emit", func() {
 				Eventually(emitter.EmitCallCount).Should(Equal(1))
-				messagesToEmit, _, _ := emitter.EmitArgsForCall(0)
+				messagesToEmit := emitter.EmitArgsForCall(0)
 				Ω(messagesToEmit).Should(Equal(dummyMessagesToEmit))
 			})
 
@@ -259,7 +264,7 @@ var _ = Describe("Watcher", func() {
 				It("emits whatever the table tells it to emit", func() {
 					Eventually(emitter.EmitCallCount).Should(Equal(1))
 
-					messagesToEmit, _, _ := emitter.EmitArgsForCall(0)
+					messagesToEmit := emitter.EmitArgsForCall(0)
 					Ω(messagesToEmit).Should(Equal(dummyMessagesToEmit))
 				})
 			})
@@ -285,10 +290,10 @@ var _ = Describe("Watcher", func() {
 				It("emits whatever the table tells it to emit", func() {
 					Eventually(emitter.EmitCallCount).Should(Equal(2))
 
-					messagesToEmit, _, _ := emitter.EmitArgsForCall(0)
+					messagesToEmit := emitter.EmitArgsForCall(0)
 					Ω(messagesToEmit).Should(Equal(dummyMessagesToEmit))
 
-					messagesToEmit, _, _ = emitter.EmitArgsForCall(1)
+					messagesToEmit = emitter.EmitArgsForCall(1)
 					Ω(messagesToEmit).Should(Equal(dummyMessagesToEmit))
 				})
 			})
@@ -312,7 +317,7 @@ var _ = Describe("Watcher", func() {
 				It("emits whatever the table tells it to emit", func() {
 					Eventually(emitter.EmitCallCount).Should(Equal(1))
 
-					messagesToEmit, _, _ := emitter.EmitArgsForCall(0)
+					messagesToEmit := emitter.EmitArgsForCall(0)
 					Ω(messagesToEmit).Should(Equal(dummyMessagesToEmit))
 				})
 			})
@@ -336,7 +341,7 @@ var _ = Describe("Watcher", func() {
 				It("emits whatever the table tells it to emit", func() {
 					Eventually(emitter.EmitCallCount).Should(Equal(1))
 
-					messagesToEmit, _, _ := emitter.EmitArgsForCall(0)
+					messagesToEmit := emitter.EmitArgsForCall(0)
 					Ω(messagesToEmit).Should(Equal(dummyMessagesToEmit))
 				})
 			})
@@ -380,7 +385,7 @@ var _ = Describe("Watcher", func() {
 			It("should emit whatever the table tells it to emit", func() {
 				Eventually(emitter.EmitCallCount).Should(Equal(1))
 
-				messagesToEmit, _, _ := emitter.EmitArgsForCall(0)
+				messagesToEmit := emitter.EmitArgsForCall(0)
 				Ω(messagesToEmit).Should(Equal(dummyMessagesToEmit))
 			})
 
@@ -403,10 +408,10 @@ var _ = Describe("Watcher", func() {
 				It("emits whatever the table tells it to emit", func() {
 					Eventually(emitter.EmitCallCount).Should(Equal(2))
 
-					messagesToEmit, _, _ := emitter.EmitArgsForCall(0)
+					messagesToEmit := emitter.EmitArgsForCall(0)
 					Ω(messagesToEmit).Should(Equal(dummyMessagesToEmit))
 
-					messagesToEmit, _, _ = emitter.EmitArgsForCall(1)
+					messagesToEmit = emitter.EmitArgsForCall(1)
 					Ω(messagesToEmit).Should(Equal(dummyMessagesToEmit))
 				})
 			})
@@ -466,22 +471,20 @@ var _ = Describe("Watcher", func() {
 				It("should emit whatever the table tells it to emit", func() {
 					Eventually(emitter.EmitCallCount).Should(Equal(2))
 
-					messagesToEmit, _, _ := emitter.EmitArgsForCall(0)
+					messagesToEmit := emitter.EmitArgsForCall(0)
 					Ω(messagesToEmit).Should(Equal(dummyMessagesToEmit))
 				})
 
-				It("passes a 'routes registered' counter to Emit", func() {
-					Eventually(emitter.EmitCallCount).Should(Equal(2))
-
-					_, registerCounter, _ := emitter.EmitArgsForCall(0)
-					Expect(string(*registerCounter)).To(Equal("RoutesRegistered"))
+				It("sends a 'routes registered' metric", func() {
+					Eventually(func() uint64 {
+						return fakeMetricSender.GetCounter("RoutesRegistered")
+					}).Should(BeEquivalentTo(4))
 				})
 
-				It("passes a 'routes unregistered' counter to Emit", func() {
-					Eventually(emitter.EmitCallCount).Should(Equal(2))
-
-					_, _, unregisterCounter := emitter.EmitArgsForCall(0)
-					Expect(string(*unregisterCounter)).To(Equal("RoutesUnregistered"))
+				It("sends a 'routes unregistered' metric", func() {
+					Eventually(func() uint64 {
+						return fakeMetricSender.GetCounter("RoutesUnRegistered")
+					}).Should(BeEquivalentTo(0))
 				})
 			})
 
@@ -587,22 +590,20 @@ var _ = Describe("Watcher", func() {
 				It("should emit whatever the table tells it to emit", func() {
 					Eventually(emitter.EmitCallCount).Should(Equal(2))
 
-					messagesToEmit, _, _ := emitter.EmitArgsForCall(0)
+					messagesToEmit := emitter.EmitArgsForCall(0)
 					Ω(messagesToEmit).Should(Equal(dummyMessagesToEmit))
 				})
 
-				It("passes a 'routes registered' counter to Emit", func() {
-					Eventually(emitter.EmitCallCount).Should(Equal(2))
-
-					_, registerCounter, _ := emitter.EmitArgsForCall(0)
-					Expect(string(*registerCounter)).To(Equal("RoutesRegistered"))
+				It("sends a 'routes registered' metric", func() {
+					Eventually(func() uint64 {
+						return fakeMetricSender.GetCounter("RoutesRegistered")
+					}).Should(BeEquivalentTo(4))
 				})
 
-				It("passes a 'routes unregistered' counter to Emit", func() {
-					Eventually(emitter.EmitCallCount).Should(Equal(2))
-
-					_, _, unregisterCounter := emitter.EmitArgsForCall(0)
-					Expect(string(*unregisterCounter)).To(Equal("RoutesUnregistered"))
+				It("sends a 'routes unregistered' metric", func() {
+					Eventually(func() uint64 {
+						return fakeMetricSender.GetCounter("RoutesUnRegistered")
+					}).Should(BeEquivalentTo(0))
 				})
 			})
 
@@ -667,7 +668,7 @@ var _ = Describe("Watcher", func() {
 				It("should emit whatever the table tells it to emit", func() {
 					Eventually(emitter.EmitCallCount).Should(Equal(2))
 
-					messagesToEmit, _, _ := emitter.EmitArgsForCall(0)
+					messagesToEmit := emitter.EmitArgsForCall(0)
 					Ω(messagesToEmit).Should(Equal(dummyMessagesToEmit))
 				})
 			})
@@ -771,10 +772,10 @@ var _ = Describe("Watcher", func() {
 				It("should emit whatever the table tells it to emit", func() {
 					Eventually(emitter.EmitCallCount).Should(Equal(2))
 
-					messagesToEmit, _, _ := emitter.EmitArgsForCall(0)
+					messagesToEmit := emitter.EmitArgsForCall(0)
 					Ω(messagesToEmit).Should(Equal(dummyMessagesToEmit))
 
-					messagesToEmit, _, _ = emitter.EmitArgsForCall(1)
+					messagesToEmit = emitter.EmitArgsForCall(1)
 					Ω(messagesToEmit).Should(Equal(dummyMessagesToEmit))
 				})
 			})

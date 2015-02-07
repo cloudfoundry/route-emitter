@@ -166,7 +166,7 @@ func (watcher *Watcher) handleDesiredUpdate(before, after receptor.DesiredLRPRes
 	for _, key := range beforeRoutingKeys {
 		if !afterKeysSet.contains(key) || !afterContainerPorts.contains(key.ContainerPort) {
 			messagesToEmit := watcher.table.RemoveRoutes(key)
-			watcher.emitter.Emit(messagesToEmit, &routesRegistered, &routesUnregistered)
+			watcher.emitMessages(messagesToEmit)
 		}
 	}
 }
@@ -184,7 +184,7 @@ func (watcher *Watcher) setRoutesForDesired(desiredLRP receptor.DesiredLRPRespon
 					URIs:    route.Hostnames,
 					LogGuid: desiredLRP.LogGuid,
 				})
-				watcher.emitter.Emit(messagesToEmit, &routesRegistered, &routesUnregistered)
+				watcher.emitMessages(messagesToEmit)
 			}
 		}
 	}
@@ -199,7 +199,7 @@ func (watcher *Watcher) handleDesiredDelete(desiredLRP receptor.DesiredLRPRespon
 	for _, key := range routing_table.RoutingKeysFromDesired(desiredLRP) {
 		messagesToEmit := watcher.table.RemoveRoutes(key)
 
-		watcher.emitter.Emit(messagesToEmit, &routesRegistered, &routesUnregistered)
+		watcher.emitMessages(messagesToEmit)
 	}
 }
 
@@ -244,7 +244,7 @@ func (watcher *Watcher) addOrUpdateAndEmit(actualLRP receptor.ActualLRPResponse)
 		for _, endpoint := range endpoints {
 			if key.ContainerPort == endpoint.ContainerPort {
 				messagesToEmit := watcher.table.AddOrUpdateEndpoint(key, endpoint)
-				watcher.emitter.Emit(messagesToEmit, &routesRegistered, &routesUnregistered)
+				watcher.emitMessages(messagesToEmit)
 			}
 		}
 	}
@@ -261,10 +261,16 @@ func (watcher *Watcher) removeAndEmit(actualLRP receptor.ActualLRPResponse) {
 		for _, endpoint := range endpoints {
 			if key.ContainerPort == endpoint.ContainerPort {
 				messagesToEmit := watcher.table.RemoveEndpoint(key, endpoint)
-				watcher.emitter.Emit(messagesToEmit, &routesRegistered, &routesUnregistered)
+				watcher.emitMessages(messagesToEmit)
 			}
 		}
 	}
+}
+
+func (watcher *Watcher) emitMessages(messagesToEmit routing_table.MessagesToEmit) {
+	watcher.emitter.Emit(messagesToEmit)
+	routesRegistered.Add(messagesToEmit.RouteRegistrationCount())
+	routesUnregistered.Add(messagesToEmit.RouteUnregistrationCount())
 }
 
 func desiredLRPData(lrp receptor.DesiredLRPResponse) lager.Data {
