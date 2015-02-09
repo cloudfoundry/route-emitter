@@ -31,7 +31,7 @@ func (table *routingTable) RouteCount() int {
 
 	count := 0
 	for _, entry := range table.entries {
-		count += len(entry.URIs)
+		count += len(entry.Hostnames)
 	}
 
 	return count
@@ -76,7 +76,7 @@ func (table *routingTable) SetRoutes(key RoutingKey, routes Routes) MessagesToEm
 	defer table.Unlock()
 
 	newEntry := table.entries[key].copy()
-	newEntry.URIs = routesAsMap(routes.URIs)
+	newEntry.Hostnames = routesAsMap(routes.Hostnames)
 	newEntry.LogGuid = routes.LogGuid
 
 	return table.updateEntry(key, newEntry)
@@ -87,7 +87,7 @@ func (table *routingTable) RemoveRoutes(key RoutingKey) MessagesToEmit {
 	defer table.Unlock()
 
 	newEntry := table.entries[key].copy()
-	newEntry.URIs = routesAsMap([]string{})
+	newEntry.Hostnames = routesAsMap([]string{})
 
 	return table.updateEntry(key, newEntry)
 }
@@ -127,8 +127,8 @@ func combineByRoutingKey(routes RoutesByRoutingKey, endpoints EndpointsByRouting
 
 	for key, entry := range routes {
 		entries[key] = RoutingTableEntry{
-			URIs:    routesAsMap(entry.URIs),
-			LogGuid: entry.LogGuid,
+			Hostnames: routesAsMap(entry.Hostnames),
+			LogGuid:   entry.LogGuid,
 		}
 	}
 
@@ -146,7 +146,7 @@ func combineByRoutingKey(routes RoutesByRoutingKey, endpoints EndpointsByRouting
 
 func registrationsFor(entry RoutingTableEntry) MessagesToEmit {
 	messagesToEmit := MessagesToEmit{}
-	if len(entry.URIs) == 0 {
+	if len(entry.Hostnames) == 0 {
 		return messagesToEmit
 	}
 
@@ -160,12 +160,12 @@ func registrationsFor(entry RoutingTableEntry) MessagesToEmit {
 func registrationsForTransition(existingEntry RoutingTableEntry, newEntry RoutingTableEntry) MessagesToEmit {
 	messagesToEmit := MessagesToEmit{}
 
-	if len(newEntry.URIs) == 0 {
-		//no uris, so nothing could possibly be registered
+	if len(newEntry.Hostnames) == 0 {
+		//no hostnames, so nothing could possibly be registered
 		return messagesToEmit
 	}
 
-	if urisHaveChanged(existingEntry, newEntry) {
+	if hostnamesHaveChanged(existingEntry, newEntry) {
 		//register everything
 		return registrationsFor(newEntry)
 	}
@@ -184,8 +184,8 @@ func registrationsForTransition(existingEntry RoutingTableEntry, newEntry Routin
 func unregistrationsForTransition(existingEntry RoutingTableEntry, newEntry RoutingTableEntry) MessagesToEmit {
 	messagesToEmit := MessagesToEmit{}
 
-	if len(existingEntry.URIs) == 0 {
-		// the existing entry has no uris and so there is nothing to unregister
+	if len(existingEntry.Hostnames) == 0 {
+		// the existing entry has no hostnames and so there is nothing to unregister
 		return messagesToEmit
 	}
 
@@ -194,25 +194,25 @@ func unregistrationsForTransition(existingEntry RoutingTableEntry, newEntry Rout
 		if newEntry.hasEndpoint(endpoint) {
 			endpointsThatAreStillPresent = append(endpointsThatAreStillPresent, endpoint)
 		} else {
-			//if the endpoint has disappeared unregister all its previous uris
+			//if the endpoint has disappeared unregister all its previous hostnames
 			message := RegistryMessageFor(endpoint, existingEntry.routes())
 			messagesToEmit.UnregistrationMessages = append(messagesToEmit.UnregistrationMessages, message)
 		}
 	}
 
-	urisThatDisappeared := []string{}
-	for uri := range existingEntry.URIs {
-		if !newEntry.hasURI(uri) {
-			urisThatDisappeared = append(urisThatDisappeared, uri)
+	hostnamesThatDisappeared := []string{}
+	for hostname := range existingEntry.Hostnames {
+		if !newEntry.hasHostname(hostname) {
+			hostnamesThatDisappeared = append(hostnamesThatDisappeared, hostname)
 		}
 	}
 
-	if len(urisThatDisappeared) > 0 {
+	if len(hostnamesThatDisappeared) > 0 {
 		for _, endpoint := range endpointsThatAreStillPresent {
-			//if a endpoint is still present, and uris have disappeared, unregister those uris
+			//if a endpoint is still present, and hostnames have disappeared, unregister those hostnames
 			message := RegistryMessageFor(endpoint, Routes{
-				URIs:    urisThatDisappeared,
-				LogGuid: newEntry.LogGuid,
+				Hostnames: hostnamesThatDisappeared,
+				LogGuid:   newEntry.LogGuid,
 			})
 			messagesToEmit.UnregistrationMessages = append(messagesToEmit.UnregistrationMessages, message)
 		}
@@ -221,12 +221,12 @@ func unregistrationsForTransition(existingEntry RoutingTableEntry, newEntry Rout
 	return messagesToEmit
 }
 
-func urisHaveChanged(existingEntry RoutingTableEntry, newEntry RoutingTableEntry) bool {
-	if len(newEntry.URIs) != len(existingEntry.URIs) {
+func hostnamesHaveChanged(existingEntry RoutingTableEntry, newEntry RoutingTableEntry) bool {
+	if len(newEntry.Hostnames) != len(existingEntry.Hostnames) {
 		return true
 	} else {
-		for uri := range newEntry.URIs {
-			if !existingEntry.hasURI(uri) {
+		for hostname := range newEntry.Hostnames {
+			if !existingEntry.hasHostname(hostname) {
 				return true
 			}
 		}

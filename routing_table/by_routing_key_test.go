@@ -26,13 +26,13 @@ var _ = Describe("ByRoutingKey", func() {
 			})
 
 			Ω(routes).Should(HaveLen(3))
-			Ω(routes[RoutingKey{ProcessGuid: "abc", ContainerPort: 8080}].URIs).Should(Equal([]string{"foo.com", "bar.com"}))
+			Ω(routes[RoutingKey{ProcessGuid: "abc", ContainerPort: 8080}].Hostnames).Should(Equal([]string{"foo.com", "bar.com"}))
 			Ω(routes[RoutingKey{ProcessGuid: "abc", ContainerPort: 8080}].LogGuid).Should(Equal("abc-guid"))
 
-			Ω(routes[RoutingKey{ProcessGuid: "abc", ContainerPort: 9090}].URIs).Should(Equal([]string{"foo.example.com"}))
+			Ω(routes[RoutingKey{ProcessGuid: "abc", ContainerPort: 9090}].Hostnames).Should(Equal([]string{"foo.example.com"}))
 			Ω(routes[RoutingKey{ProcessGuid: "abc", ContainerPort: 9090}].LogGuid).Should(Equal("abc-guid"))
 
-			Ω(routes[RoutingKey{ProcessGuid: "def", ContainerPort: 8080}].URIs).Should(Equal([]string{"baz.com"}))
+			Ω(routes[RoutingKey{ProcessGuid: "def", ContainerPort: 8080}].Hostnames).Should(Equal([]string{"baz.com"}))
 			Ω(routes[RoutingKey{ProcessGuid: "def", ContainerPort: 8080}].LogGuid).Should(Equal("def-guid"))
 		})
 

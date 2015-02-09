@@ -61,7 +61,7 @@ var _ = Describe("Watcher", func() {
 		logger := lagertest.NewTestLogger("test")
 
 		dummyEndpoint := routing_table.Endpoint{InstanceGuid: expectedInstanceGuid, Host: expectedHost, Port: expectedContainerPort}
-		dummyMessage := routing_table.RegistryMessageFor(dummyEndpoint, routing_table.Routes{URIs: []string{"foo.com", "bar.com"}, LogGuid: logGuid})
+		dummyMessage := routing_table.RegistryMessageFor(dummyEndpoint, routing_table.Routes{Hostnames: []string{"foo.com", "bar.com"}, LogGuid: logGuid})
 		dummyMessagesToEmit = routing_table.MessagesToEmit{
 			RegistrationMessages: []routing_table.RegistryMessage{dummyMessage},
 		}
@@ -129,7 +129,7 @@ var _ = Describe("Watcher", func() {
 
 				key, routes := table.SetRoutesArgsForCall(0)
 				Ω(key).Should(Equal(expectedRoutingKey))
-				Ω(routes).Should(Equal(routing_table.Routes{URIs: expectedRoutes, LogGuid: logGuid}))
+				Ω(routes).Should(Equal(routing_table.Routes{Hostnames: expectedRoutes, LogGuid: logGuid}))
 			})
 
 			It("sends a 'routes registered' metric", func() {
@@ -161,11 +161,11 @@ var _ = Describe("Watcher", func() {
 
 					key, routes := table.SetRoutesArgsForCall(0)
 					Ω(key).Should(Equal(expectedRoutingKey))
-					Ω(routes).Should(Equal(routing_table.Routes{URIs: expectedRoutes, LogGuid: logGuid}))
+					Ω(routes).Should(Equal(routing_table.Routes{Hostnames: expectedRoutes, LogGuid: logGuid}))
 
 					key, routes = table.SetRoutesArgsForCall(1)
 					Ω(key).Should(Equal(expectedAdditionalRoutingKey))
-					Ω(routes).Should(Equal(routing_table.Routes{URIs: expectedAdditionalRoutes, LogGuid: logGuid}))
+					Ω(routes).Should(Equal(routing_table.Routes{Hostnames: expectedAdditionalRoutes, LogGuid: logGuid}))
 				})
 
 				It("emits whatever the table tells it to emit", func() {
@@ -226,7 +226,7 @@ var _ = Describe("Watcher", func() {
 				Eventually(table.SetRoutesCallCount).Should(Equal(1))
 				key, routes := table.SetRoutesArgsForCall(0)
 				Ω(key).Should(Equal(expectedRoutingKey))
-				Ω(routes).Should(Equal(routing_table.Routes{URIs: expectedRoutes, LogGuid: logGuid}))
+				Ω(routes).Should(Equal(routing_table.Routes{Hostnames: expectedRoutes, LogGuid: logGuid}))
 			})
 
 			It("sends a 'routes registered' metric", func() {
@@ -258,7 +258,7 @@ var _ = Describe("Watcher", func() {
 
 					key, routes := table.SetRoutesArgsForCall(0)
 					Ω(key).Should(Equal(expectedRoutingKey))
-					Ω(routes).Should(Equal(routing_table.Routes{URIs: expectedRoutes, LogGuid: logGuid}))
+					Ω(routes).Should(Equal(routing_table.Routes{Hostnames: expectedRoutes, LogGuid: logGuid}))
 				})
 
 				It("emits whatever the table tells it to emit", func() {
@@ -280,11 +280,11 @@ var _ = Describe("Watcher", func() {
 
 					key, routes := table.SetRoutesArgsForCall(0)
 					Ω(key).Should(Equal(expectedRoutingKey))
-					Ω(routes).Should(Equal(routing_table.Routes{URIs: expectedRoutes, LogGuid: logGuid}))
+					Ω(routes).Should(Equal(routing_table.Routes{Hostnames: expectedRoutes, LogGuid: logGuid}))
 
 					key, routes = table.SetRoutesArgsForCall(1)
 					Ω(key).Should(Equal(expectedAdditionalRoutingKey))
-					Ω(routes).Should(Equal(routing_table.Routes{URIs: expectedAdditionalRoutes, LogGuid: logGuid}))
+					Ω(routes).Should(Equal(routing_table.Routes{Hostnames: expectedAdditionalRoutes, LogGuid: logGuid}))
 				})
 
 				It("emits whatever the table tells it to emit", func() {

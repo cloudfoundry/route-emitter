@@ -35,7 +35,7 @@ var _ = Describe("RoutingTable", func() {
 			Context("when the routing key has both routes and endpoints", func() {
 				BeforeEach(func() {
 					messagesToEmit = table.Sync(
-						RoutesByRoutingKey{key: Routes{URIs: []string{hostname1, hostname2}, LogGuid: logGuid}},
+						RoutesByRoutingKey{key: Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}},
 						EndpointsByRoutingKey{key: {endpoint1, endpoint2}},
 					)
 				})
@@ -43,8 +43,8 @@ var _ = Describe("RoutingTable", func() {
 				It("should emit registrations for each pairing", func() {
 					expected := MessagesToEmit{
 						RegistrationMessages: []RegistryMessage{
-							RegistryMessageFor(endpoint1, Routes{URIs: []string{hostname1, hostname2}, LogGuid: logGuid}),
-							RegistryMessageFor(endpoint2, Routes{URIs: []string{hostname1, hostname2}, LogGuid: logGuid}),
+							RegistryMessageFor(endpoint1, Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}),
+							RegistryMessageFor(endpoint2, Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}),
 						},
 					}
 					Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
@@ -54,7 +54,7 @@ var _ = Describe("RoutingTable", func() {
 			Context("when the process only has routes", func() {
 				BeforeEach(func() {
 					messagesToEmit = table.Sync(
-						RoutesByRoutingKey{key: Routes{URIs: []string{hostname1}, LogGuid: logGuid}},
+						RoutesByRoutingKey{key: Routes{Hostnames: []string{hostname1}, LogGuid: logGuid}},
 						EndpointsByRoutingKey{},
 					)
 				})
@@ -66,7 +66,7 @@ var _ = Describe("RoutingTable", func() {
 				Context("when the endpoints subsequently arrive", func() {
 					BeforeEach(func() {
 						messagesToEmit = table.Sync(
-							RoutesByRoutingKey{key: Routes{URIs: []string{hostname1}, LogGuid: logGuid}},
+							RoutesByRoutingKey{key: Routes{Hostnames: []string{hostname1}, LogGuid: logGuid}},
 							EndpointsByRoutingKey{key: {endpoint1}},
 						)
 					})
@@ -74,7 +74,7 @@ var _ = Describe("RoutingTable", func() {
 					It("should emit registrations for each pairing", func() {
 						expected := MessagesToEmit{
 							RegistrationMessages: []RegistryMessage{
-								RegistryMessageFor(endpoint1, Routes{URIs: []string{hostname1}, LogGuid: logGuid}),
+								RegistryMessageFor(endpoint1, Routes{Hostnames: []string{hostname1}, LogGuid: logGuid}),
 							},
 						}
 						Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
@@ -110,7 +110,7 @@ var _ = Describe("RoutingTable", func() {
 				Context("when the routes subsequently arrive", func() {
 					BeforeEach(func() {
 						messagesToEmit = table.Sync(
-							RoutesByRoutingKey{key: Routes{URIs: []string{hostname1}, LogGuid: logGuid}},
+							RoutesByRoutingKey{key: Routes{Hostnames: []string{hostname1}, LogGuid: logGuid}},
 							EndpointsByRoutingKey{key: {endpoint1}},
 						)
 					})
@@ -118,7 +118,7 @@ var _ = Describe("RoutingTable", func() {
 					It("should emit registrations for each pairing", func() {
 						expected := MessagesToEmit{
 							RegistrationMessages: []RegistryMessage{
-								RegistryMessageFor(endpoint1, Routes{URIs: []string{hostname1}, LogGuid: logGuid}),
+								RegistryMessageFor(endpoint1, Routes{Hostnames: []string{hostname1}, LogGuid: logGuid}),
 							},
 						}
 						Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
@@ -143,7 +143,7 @@ var _ = Describe("RoutingTable", func() {
 		Context("when there is an existing routing key", func() {
 			BeforeEach(func() {
 				table.Sync(
-					RoutesByRoutingKey{key: Routes{URIs: []string{hostname1, hostname2}, LogGuid: logGuid}},
+					RoutesByRoutingKey{key: Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}},
 					EndpointsByRoutingKey{key: {endpoint1, endpoint2}},
 				)
 			})
@@ -151,7 +151,7 @@ var _ = Describe("RoutingTable", func() {
 			Context("when nothing changes", func() {
 				BeforeEach(func() {
 					messagesToEmit = table.Sync(
-						RoutesByRoutingKey{key: Routes{URIs: []string{hostname1, hostname2}, LogGuid: logGuid}},
+						RoutesByRoutingKey{key: Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}},
 						EndpointsByRoutingKey{key: {endpoint1, endpoint2}},
 					)
 				})
@@ -159,8 +159,8 @@ var _ = Describe("RoutingTable", func() {
 				It("should emit all registrations and no unregisration", func() {
 					expected := MessagesToEmit{
 						RegistrationMessages: []RegistryMessage{
-							RegistryMessageFor(endpoint1, Routes{URIs: []string{hostname1, hostname2}, LogGuid: logGuid}),
-							RegistryMessageFor(endpoint2, Routes{URIs: []string{hostname1, hostname2}, LogGuid: logGuid}),
+							RegistryMessageFor(endpoint1, Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}),
+							RegistryMessageFor(endpoint2, Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}),
 						},
 					}
 					Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
@@ -170,7 +170,7 @@ var _ = Describe("RoutingTable", func() {
 			Context("when the routing key gets new routes", func() {
 				BeforeEach(func() {
 					messagesToEmit = table.Sync(
-						RoutesByRoutingKey{key: Routes{URIs: []string{hostname1, hostname2, hostname3}, LogGuid: logGuid}},
+						RoutesByRoutingKey{key: Routes{Hostnames: []string{hostname1, hostname2, hostname3}, LogGuid: logGuid}},
 						EndpointsByRoutingKey{key: {endpoint1, endpoint2}},
 					)
 				})
@@ -178,8 +178,8 @@ var _ = Describe("RoutingTable", func() {
 				It("should emit all registrations and no unregisration", func() {
 					expected := MessagesToEmit{
 						RegistrationMessages: []RegistryMessage{
-							RegistryMessageFor(endpoint1, Routes{URIs: []string{hostname1, hostname2, hostname3}, LogGuid: logGuid}),
-							RegistryMessageFor(endpoint2, Routes{URIs: []string{hostname1, hostname2, hostname3}, LogGuid: logGuid}),
+							RegistryMessageFor(endpoint1, Routes{Hostnames: []string{hostname1, hostname2, hostname3}, LogGuid: logGuid}),
+							RegistryMessageFor(endpoint2, Routes{Hostnames: []string{hostname1, hostname2, hostname3}, LogGuid: logGuid}),
 						},
 					}
 					Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
@@ -189,7 +189,7 @@ var _ = Describe("RoutingTable", func() {
 			Context("when the routing key gets new endpoints", func() {
 				BeforeEach(func() {
 					messagesToEmit = table.Sync(
-						RoutesByRoutingKey{key: Routes{URIs: []string{hostname1, hostname2}, LogGuid: logGuid}},
+						RoutesByRoutingKey{key: Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}},
 						EndpointsByRoutingKey{key: {endpoint1, endpoint2, endpoint3}},
 					)
 				})
@@ -197,9 +197,9 @@ var _ = Describe("RoutingTable", func() {
 				It("should emit all registrations and no unregisration", func() {
 					expected := MessagesToEmit{
 						RegistrationMessages: []RegistryMessage{
-							RegistryMessageFor(endpoint1, Routes{URIs: []string{hostname1, hostname2}, LogGuid: logGuid}),
-							RegistryMessageFor(endpoint2, Routes{URIs: []string{hostname1, hostname2}, LogGuid: logGuid}),
-							RegistryMessageFor(endpoint3, Routes{URIs: []string{hostname1, hostname2}, LogGuid: logGuid}),
+							RegistryMessageFor(endpoint1, Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}),
+							RegistryMessageFor(endpoint2, Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}),
+							RegistryMessageFor(endpoint3, Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}),
 						},
 					}
 					Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
@@ -209,7 +209,7 @@ var _ = Describe("RoutingTable", func() {
 			Context("when the routing key gets new routes and endpoints", func() {
 				BeforeEach(func() {
 					messagesToEmit = table.Sync(
-						RoutesByRoutingKey{key: Routes{URIs: []string{hostname1, hostname2, hostname3}, LogGuid: logGuid}},
+						RoutesByRoutingKey{key: Routes{Hostnames: []string{hostname1, hostname2, hostname3}, LogGuid: logGuid}},
 						EndpointsByRoutingKey{key: {endpoint1, endpoint2, endpoint3}},
 					)
 				})
@@ -217,9 +217,9 @@ var _ = Describe("RoutingTable", func() {
 				It("should emit all registrations and no unregisration", func() {
 					expected := MessagesToEmit{
 						RegistrationMessages: []RegistryMessage{
-							RegistryMessageFor(endpoint1, Routes{URIs: []string{hostname1, hostname2, hostname3}, LogGuid: logGuid}),
-							RegistryMessageFor(endpoint2, Routes{URIs: []string{hostname1, hostname2, hostname3}, LogGuid: logGuid}),
-							RegistryMessageFor(endpoint3, Routes{URIs: []string{hostname1, hostname2, hostname3}, LogGuid: logGuid}),
+							RegistryMessageFor(endpoint1, Routes{Hostnames: []string{hostname1, hostname2, hostname3}, LogGuid: logGuid}),
+							RegistryMessageFor(endpoint2, Routes{Hostnames: []string{hostname1, hostname2, hostname3}, LogGuid: logGuid}),
+							RegistryMessageFor(endpoint3, Routes{Hostnames: []string{hostname1, hostname2, hostname3}, LogGuid: logGuid}),
 						},
 					}
 					Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
@@ -229,7 +229,7 @@ var _ = Describe("RoutingTable", func() {
 			Context("when the routing key loses routes", func() {
 				BeforeEach(func() {
 					messagesToEmit = table.Sync(
-						RoutesByRoutingKey{key: Routes{URIs: []string{hostname1}, LogGuid: logGuid}},
+						RoutesByRoutingKey{key: Routes{Hostnames: []string{hostname1}, LogGuid: logGuid}},
 						EndpointsByRoutingKey{key: {endpoint1, endpoint2}},
 					)
 				})
@@ -237,12 +237,12 @@ var _ = Describe("RoutingTable", func() {
 				It("should emit all registrations and the relevant unregisrations", func() {
 					expected := MessagesToEmit{
 						RegistrationMessages: []RegistryMessage{
-							RegistryMessageFor(endpoint1, Routes{URIs: []string{hostname1}, LogGuid: logGuid}),
-							RegistryMessageFor(endpoint2, Routes{URIs: []string{hostname1}, LogGuid: logGuid}),
+							RegistryMessageFor(endpoint1, Routes{Hostnames: []string{hostname1}, LogGuid: logGuid}),
+							RegistryMessageFor(endpoint2, Routes{Hostnames: []string{hostname1}, LogGuid: logGuid}),
 						},
 						UnregistrationMessages: []RegistryMessage{
-							RegistryMessageFor(endpoint1, Routes{URIs: []string{hostname2}, LogGuid: logGuid}),
-							RegistryMessageFor(endpoint2, Routes{URIs: []string{hostname2}, LogGuid: logGuid}),
+							RegistryMessageFor(endpoint1, Routes{Hostnames: []string{hostname2}, LogGuid: logGuid}),
+							RegistryMessageFor(endpoint2, Routes{Hostnames: []string{hostname2}, LogGuid: logGuid}),
 						},
 					}
 					Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
@@ -252,7 +252,7 @@ var _ = Describe("RoutingTable", func() {
 			Context("when the routing key loses endpoints", func() {
 				BeforeEach(func() {
 					messagesToEmit = table.Sync(
-						RoutesByRoutingKey{key: Routes{URIs: []string{hostname1, hostname2}, LogGuid: logGuid}},
+						RoutesByRoutingKey{key: Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}},
 						EndpointsByRoutingKey{key: {endpoint1}},
 					)
 				})
@@ -260,10 +260,10 @@ var _ = Describe("RoutingTable", func() {
 				It("should emit all registrations and the relevant unregisrations", func() {
 					expected := MessagesToEmit{
 						RegistrationMessages: []RegistryMessage{
-							RegistryMessageFor(endpoint1, Routes{URIs: []string{hostname1, hostname2}, LogGuid: logGuid}),
+							RegistryMessageFor(endpoint1, Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}),
 						},
 						UnregistrationMessages: []RegistryMessage{
-							RegistryMessageFor(endpoint2, Routes{URIs: []string{hostname1, hostname2}, LogGuid: logGuid}),
+							RegistryMessageFor(endpoint2, Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}),
 						},
 					}
 					Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
@@ -273,7 +273,7 @@ var _ = Describe("RoutingTable", func() {
 			Context("when the routing key loses both routes and endpoints", func() {
 				BeforeEach(func() {
 					messagesToEmit = table.Sync(
-						RoutesByRoutingKey{key: Routes{URIs: []string{hostname1}, LogGuid: logGuid}},
+						RoutesByRoutingKey{key: Routes{Hostnames: []string{hostname1}, LogGuid: logGuid}},
 						EndpointsByRoutingKey{key: {endpoint1}},
 					)
 				})
@@ -281,11 +281,11 @@ var _ = Describe("RoutingTable", func() {
 				It("should emit all registrations and the relevant unregisrations", func() {
 					expected := MessagesToEmit{
 						RegistrationMessages: []RegistryMessage{
-							RegistryMessageFor(endpoint1, Routes{URIs: []string{hostname1}, LogGuid: logGuid}),
+							RegistryMessageFor(endpoint1, Routes{Hostnames: []string{hostname1}, LogGuid: logGuid}),
 						},
 						UnregistrationMessages: []RegistryMessage{
-							RegistryMessageFor(endpoint1, Routes{URIs: []string{hostname2}, LogGuid: logGuid}),
-							RegistryMessageFor(endpoint2, Routes{URIs: []string{hostname1, hostname2}, LogGuid: logGuid}),
+							RegistryMessageFor(endpoint1, Routes{Hostnames: []string{hostname2}, LogGuid: logGuid}),
+							RegistryMessageFor(endpoint2, Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}),
 						},
 					}
 					Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
@@ -295,7 +295,7 @@ var _ = Describe("RoutingTable", func() {
 			Context("when the routing key gains routes but loses endpoints", func() {
 				BeforeEach(func() {
 					messagesToEmit = table.Sync(
-						RoutesByRoutingKey{key: Routes{URIs: []string{hostname1, hostname2, hostname3}, LogGuid: logGuid}},
+						RoutesByRoutingKey{key: Routes{Hostnames: []string{hostname1, hostname2, hostname3}, LogGuid: logGuid}},
 						EndpointsByRoutingKey{key: {endpoint1}},
 					)
 				})
@@ -303,10 +303,10 @@ var _ = Describe("RoutingTable", func() {
 				It("should emit all registrations and the relevant unregisrations", func() {
 					expected := MessagesToEmit{
 						RegistrationMessages: []RegistryMessage{
-							RegistryMessageFor(endpoint1, Routes{URIs: []string{hostname1, hostname2, hostname3}, LogGuid: logGuid}),
+							RegistryMessageFor(endpoint1, Routes{Hostnames: []string{hostname1, hostname2, hostname3}, LogGuid: logGuid}),
 						},
 						UnregistrationMessages: []RegistryMessage{
-							RegistryMessageFor(endpoint2, Routes{URIs: []string{hostname1, hostname2}, LogGuid: logGuid}),
+							RegistryMessageFor(endpoint2, Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}),
 						},
 					}
 					Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
@@ -316,7 +316,7 @@ var _ = Describe("RoutingTable", func() {
 			Context("when the routing key loses routes but gains endpoints", func() {
 				BeforeEach(func() {
 					messagesToEmit = table.Sync(
-						RoutesByRoutingKey{key: Routes{URIs: []string{hostname1}, LogGuid: logGuid}},
+						RoutesByRoutingKey{key: Routes{Hostnames: []string{hostname1}, LogGuid: logGuid}},
 						EndpointsByRoutingKey{key: {endpoint1, endpoint2, endpoint3}},
 					)
 				})
@@ -324,13 +324,13 @@ var _ = Describe("RoutingTable", func() {
 				It("should emit all registrations and the relevant unregisrations", func() {
 					expected := MessagesToEmit{
 						RegistrationMessages: []RegistryMessage{
-							RegistryMessageFor(endpoint1, Routes{URIs: []string{hostname1}, LogGuid: logGuid}),
-							RegistryMessageFor(endpoint2, Routes{URIs: []string{hostname1}, LogGuid: logGuid}),
-							RegistryMessageFor(endpoint3, Routes{URIs: []string{hostname1}, LogGuid: logGuid}),
+							RegistryMessageFor(endpoint1, Routes{Hostnames: []string{hostname1}, LogGuid: logGuid}),
+							RegistryMessageFor(endpoint2, Routes{Hostnames: []string{hostname1}, LogGuid: logGuid}),
+							RegistryMessageFor(endpoint3, Routes{Hostnames: []string{hostname1}, LogGuid: logGuid}),
 						},
 						UnregistrationMessages: []RegistryMessage{
-							RegistryMessageFor(endpoint1, Routes{URIs: []string{hostname2}, LogGuid: logGuid}),
-							RegistryMessageFor(endpoint2, Routes{URIs: []string{hostname2}, LogGuid: logGuid}),
+							RegistryMessageFor(endpoint1, Routes{Hostnames: []string{hostname2}, LogGuid: logGuid}),
+							RegistryMessageFor(endpoint2, Routes{Hostnames: []string{hostname2}, LogGuid: logGuid}),
 						},
 					}
 					Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
@@ -348,8 +348,8 @@ var _ = Describe("RoutingTable", func() {
 				It("should unregister the missing guids", func() {
 					expected := MessagesToEmit{
 						UnregistrationMessages: []RegistryMessage{
-							RegistryMessageFor(endpoint1, Routes{URIs: []string{hostname1, hostname2}, LogGuid: logGuid}),
-							RegistryMessageFor(endpoint2, Routes{URIs: []string{hostname1, hostname2}, LogGuid: logGuid}),
+							RegistryMessageFor(endpoint1, Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}),
+							RegistryMessageFor(endpoint2, Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}),
 						},
 					}
 					Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
@@ -380,12 +380,12 @@ var _ = Describe("RoutingTable", func() {
 					BeforeEach(func() {
 						//override previous set up
 						table.Sync(
-							RoutesByRoutingKey{key: Routes{URIs: []string{hostname1, hostname2}, LogGuid: logGuid}},
+							RoutesByRoutingKey{key: Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}},
 							EndpointsByRoutingKey{},
 						)
 
 						messagesToEmit = table.Sync(
-							RoutesByRoutingKey{key: Routes{URIs: []string{hostname1}, LogGuid: logGuid}},
+							RoutesByRoutingKey{key: Routes{Hostnames: []string{hostname1}, LogGuid: logGuid}},
 							EndpointsByRoutingKey{},
 						)
 					})
@@ -402,7 +402,7 @@ var _ = Describe("RoutingTable", func() {
 		Context("when the table is empty", func() {
 			Context("When setting routes", func() {
 				It("should not emit anything", func() {
-					messagesToEmit = table.SetRoutes(key, Routes{URIs: []string{hostname1, hostname2}, LogGuid: logGuid})
+					messagesToEmit = table.SetRoutes(key, Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid})
 					Ω(messagesToEmit).Should(BeZero())
 				})
 			})
@@ -431,7 +431,7 @@ var _ = Describe("RoutingTable", func() {
 
 		Context("when there are both endpoints and routes in the table", func() {
 			BeforeEach(func() {
-				table.SetRoutes(key, Routes{URIs: []string{hostname1, hostname2}, LogGuid: logGuid})
+				table.SetRoutes(key, Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid})
 				table.AddOrUpdateEndpoint(key, endpoint1)
 				table.AddOrUpdateEndpoint(key, endpoint2)
 			})
@@ -439,19 +439,19 @@ var _ = Describe("RoutingTable", func() {
 			Context("When setting routes", func() {
 				Context("when the routes do not change", func() {
 					It("should emit nothing", func() {
-						messagesToEmit = table.SetRoutes(key, Routes{URIs: []string{hostname1, hostname2}, LogGuid: logGuid})
+						messagesToEmit = table.SetRoutes(key, Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid})
 						Ω(messagesToEmit).Should(BeZero())
 					})
 				})
 
 				Context("when routes are added", func() {
 					It("should emit registrations", func() {
-						messagesToEmit = table.SetRoutes(key, Routes{URIs: []string{hostname1, hostname2, hostname3}, LogGuid: logGuid})
+						messagesToEmit = table.SetRoutes(key, Routes{Hostnames: []string{hostname1, hostname2, hostname3}, LogGuid: logGuid})
 
 						expected := MessagesToEmit{
 							RegistrationMessages: []RegistryMessage{
-								RegistryMessageFor(endpoint1, Routes{URIs: []string{hostname1, hostname2, hostname3}, LogGuid: logGuid}),
-								RegistryMessageFor(endpoint2, Routes{URIs: []string{hostname1, hostname2, hostname3}, LogGuid: logGuid}),
+								RegistryMessageFor(endpoint1, Routes{Hostnames: []string{hostname1, hostname2, hostname3}, LogGuid: logGuid}),
+								RegistryMessageFor(endpoint2, Routes{Hostnames: []string{hostname1, hostname2, hostname3}, LogGuid: logGuid}),
 							},
 						}
 						Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
@@ -460,16 +460,16 @@ var _ = Describe("RoutingTable", func() {
 
 				Context("when routes are removed", func() {
 					It("should emit unregistrations and registrations", func() {
-						messagesToEmit = table.SetRoutes(key, Routes{URIs: []string{hostname1}, LogGuid: logGuid})
+						messagesToEmit = table.SetRoutes(key, Routes{Hostnames: []string{hostname1}, LogGuid: logGuid})
 
 						expected := MessagesToEmit{
 							RegistrationMessages: []RegistryMessage{
-								RegistryMessageFor(endpoint1, Routes{URIs: []string{hostname1}, LogGuid: logGuid}),
-								RegistryMessageFor(endpoint2, Routes{URIs: []string{hostname1}, LogGuid: logGuid}),
+								RegistryMessageFor(endpoint1, Routes{Hostnames: []string{hostname1}, LogGuid: logGuid}),
+								RegistryMessageFor(endpoint2, Routes{Hostnames: []string{hostname1}, LogGuid: logGuid}),
 							},
 							UnregistrationMessages: []RegistryMessage{
-								RegistryMessageFor(endpoint1, Routes{URIs: []string{hostname2}, LogGuid: logGuid}),
-								RegistryMessageFor(endpoint2, Routes{URIs: []string{hostname2}, LogGuid: logGuid}),
+								RegistryMessageFor(endpoint1, Routes{Hostnames: []string{hostname2}, LogGuid: logGuid}),
+								RegistryMessageFor(endpoint2, Routes{Hostnames: []string{hostname2}, LogGuid: logGuid}),
 							},
 						}
 						Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
@@ -478,16 +478,16 @@ var _ = Describe("RoutingTable", func() {
 
 				Context("when routes are added and removed", func() {
 					It("should emit registrations and unregistrations", func() {
-						messagesToEmit = table.SetRoutes(key, Routes{URIs: []string{hostname1, hostname3}, LogGuid: logGuid})
+						messagesToEmit = table.SetRoutes(key, Routes{Hostnames: []string{hostname1, hostname3}, LogGuid: logGuid})
 
 						expected := MessagesToEmit{
 							RegistrationMessages: []RegistryMessage{
-								RegistryMessageFor(endpoint1, Routes{URIs: []string{hostname1, hostname3}, LogGuid: logGuid}),
-								RegistryMessageFor(endpoint2, Routes{URIs: []string{hostname1, hostname3}, LogGuid: logGuid}),
+								RegistryMessageFor(endpoint1, Routes{Hostnames: []string{hostname1, hostname3}, LogGuid: logGuid}),
+								RegistryMessageFor(endpoint2, Routes{Hostnames: []string{hostname1, hostname3}, LogGuid: logGuid}),
 							},
 							UnregistrationMessages: []RegistryMessage{
-								RegistryMessageFor(endpoint1, Routes{URIs: []string{hostname2}, LogGuid: logGuid}),
-								RegistryMessageFor(endpoint2, Routes{URIs: []string{hostname2}, LogGuid: logGuid}),
+								RegistryMessageFor(endpoint1, Routes{Hostnames: []string{hostname2}, LogGuid: logGuid}),
+								RegistryMessageFor(endpoint2, Routes{Hostnames: []string{hostname2}, LogGuid: logGuid}),
 							},
 						}
 						Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
@@ -501,8 +501,8 @@ var _ = Describe("RoutingTable", func() {
 
 					expected := MessagesToEmit{
 						UnregistrationMessages: []RegistryMessage{
-							RegistryMessageFor(endpoint1, Routes{URIs: []string{hostname1, hostname2}, LogGuid: logGuid}),
-							RegistryMessageFor(endpoint2, Routes{URIs: []string{hostname1, hostname2}, LogGuid: logGuid}),
+							RegistryMessageFor(endpoint1, Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}),
+							RegistryMessageFor(endpoint2, Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}),
 						},
 					}
 					Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
@@ -523,7 +523,7 @@ var _ = Describe("RoutingTable", func() {
 
 						expected := MessagesToEmit{
 							RegistrationMessages: []RegistryMessage{
-								RegistryMessageFor(endpoint3, Routes{URIs: []string{hostname1, hostname2}, LogGuid: logGuid}),
+								RegistryMessageFor(endpoint3, Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}),
 							},
 						}
 						Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
@@ -537,7 +537,7 @@ var _ = Describe("RoutingTable", func() {
 
 					expected := MessagesToEmit{
 						UnregistrationMessages: []RegistryMessage{
-							RegistryMessageFor(endpoint2, Routes{URIs: []string{hostname1, hostname2}, LogGuid: logGuid}),
+							RegistryMessageFor(endpoint2, Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}),
 						},
 					}
 					Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
@@ -547,12 +547,12 @@ var _ = Describe("RoutingTable", func() {
 
 		Context("when there are only routes in the table", func() {
 			BeforeEach(func() {
-				table.SetRoutes(key, Routes{URIs: []string{hostname1, hostname2}, LogGuid: logGuid})
+				table.SetRoutes(key, Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid})
 			})
 
 			Context("When setting routes", func() {
 				It("should emit nothing", func() {
-					messagesToEmit = table.SetRoutes(key, Routes{URIs: []string{hostname1, hostname3}, LogGuid: logGuid})
+					messagesToEmit = table.SetRoutes(key, Routes{Hostnames: []string{hostname1, hostname3}, LogGuid: logGuid})
 					Ω(messagesToEmit).Should(BeZero())
 				})
 			})
@@ -570,7 +570,7 @@ var _ = Describe("RoutingTable", func() {
 
 					expected := MessagesToEmit{
 						RegistrationMessages: []RegistryMessage{
-							RegistryMessageFor(endpoint1, Routes{URIs: []string{hostname1, hostname2}, LogGuid: logGuid}),
+							RegistryMessageFor(endpoint1, Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}),
 						},
 					}
 					Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
@@ -586,12 +586,12 @@ var _ = Describe("RoutingTable", func() {
 
 			Context("When setting routes", func() {
 				It("should emit registrations", func() {
-					messagesToEmit = table.SetRoutes(key, Routes{URIs: []string{hostname1, hostname2}, LogGuid: logGuid})
+					messagesToEmit = table.SetRoutes(key, Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid})
 
 					expected := MessagesToEmit{
 						RegistrationMessages: []RegistryMessage{
-							RegistryMessageFor(endpoint1, Routes{URIs: []string{hostname1, hostname2}, LogGuid: logGuid}),
-							RegistryMessageFor(endpoint2, Routes{URIs: []string{hostname1, hostname2}, LogGuid: logGuid}),
+							RegistryMessageFor(endpoint1, Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}),
+							RegistryMessageFor(endpoint2, Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}),
 						},
 					}
 					Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
@@ -631,7 +631,7 @@ var _ = Describe("RoutingTable", func() {
 
 		Context("when the table has routes but no endpoints", func() {
 			BeforeEach(func() {
-				table.SetRoutes(key, Routes{URIs: []string{hostname1, hostname2}, LogGuid: logGuid})
+				table.SetRoutes(key, Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid})
 			})
 
 			It("should be empty", func() {
@@ -654,7 +654,7 @@ var _ = Describe("RoutingTable", func() {
 
 		Context("when the table has routes and endpoints", func() {
 			BeforeEach(func() {
-				table.SetRoutes(key, Routes{URIs: []string{hostname1, hostname2}, LogGuid: logGuid})
+				table.SetRoutes(key, Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid})
 				table.AddOrUpdateEndpoint(key, endpoint1)
 				table.AddOrUpdateEndpoint(key, endpoint2)
 			})
@@ -664,8 +664,8 @@ var _ = Describe("RoutingTable", func() {
 
 				expected := MessagesToEmit{
 					RegistrationMessages: []RegistryMessage{
-						RegistryMessageFor(endpoint1, Routes{URIs: []string{hostname1, hostname2}, LogGuid: logGuid}),
-						RegistryMessageFor(endpoint2, Routes{URIs: []string{hostname1, hostname2}, LogGuid: logGuid}),
+						RegistryMessageFor(endpoint1, Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}),
+						RegistryMessageFor(endpoint2, Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}),
 					},
 				}
 				Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
@@ -679,20 +679,20 @@ var _ = Describe("RoutingTable", func() {
 		})
 
 		It("returns 1 after adding a route to a single process", func() {
-			table.SetRoutes(RoutingKey{ProcessGuid: "fake-process-guid"}, Routes{URIs: []string{"fake-route-url"}, LogGuid: logGuid})
+			table.SetRoutes(RoutingKey{ProcessGuid: "fake-process-guid"}, Routes{Hostnames: []string{"fake-route-url"}, LogGuid: logGuid})
 
 			Expect(table.RouteCount()).To(Equal(1))
 		})
 
 		It("returns 2 after associating 2 urls with a single process", func() {
-			table.SetRoutes(RoutingKey{ProcessGuid: "fake-process-guid"}, Routes{URIs: []string{"fake-route-url-1", "fake-route-url-2"}, LogGuid: logGuid})
+			table.SetRoutes(RoutingKey{ProcessGuid: "fake-process-guid"}, Routes{Hostnames: []string{"fake-route-url-1", "fake-route-url-2"}, LogGuid: logGuid})
 
 			Expect(table.RouteCount()).To(Equal(2))
 		})
 
 		It("returns 4 after associating 2 urls with two processes", func() {
-			table.SetRoutes(RoutingKey{ProcessGuid: "fake-process-guid-a"}, Routes{URIs: []string{"fake-route-url-a-1", "fake-route-url-a-2"}, LogGuid: logGuid})
-			table.SetRoutes(RoutingKey{ProcessGuid: "fake-process-guid-b"}, Routes{URIs: []string{"fake-route-url-b-1", "fake-route-url-b-2"}, LogGuid: logGuid})
+			table.SetRoutes(RoutingKey{ProcessGuid: "fake-process-guid-a"}, Routes{Hostnames: []string{"fake-route-url-a-1", "fake-route-url-a-2"}, LogGuid: logGuid})
+			table.SetRoutes(RoutingKey{ProcessGuid: "fake-process-guid-b"}, Routes{Hostnames: []string{"fake-route-url-b-1", "fake-route-url-b-2"}, LogGuid: logGuid})
 
 			Expect(table.RouteCount()).To(Equal(4))
 		})

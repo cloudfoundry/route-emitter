@@ -8,12 +8,12 @@ type Endpoint struct {
 }
 
 type Routes struct {
-	URIs    []string
-	LogGuid string
+	Hostnames []string
+	LogGuid   string
 }
 
 type RoutingTableEntry struct {
-	URIs      map[string]struct{}
+	Hostnames map[string]struct{}
 	Endpoints map[string]Endpoint
 	LogGuid   string
 }
@@ -28,20 +28,20 @@ func (entry RoutingTableEntry) hasEndpoint(endpoint Endpoint) bool {
 	return ok
 }
 
-func (entry RoutingTableEntry) hasURI(uri string) bool {
-	_, ok := entry.URIs[uri]
+func (entry RoutingTableEntry) hasHostname(hostname string) bool {
+	_, ok := entry.Hostnames[hostname]
 	return ok
 }
 
 func (entry RoutingTableEntry) copy() RoutingTableEntry {
 	clone := RoutingTableEntry{
-		URIs:      map[string]struct{}{},
+		Hostnames: map[string]struct{}{},
 		Endpoints: map[string]Endpoint{},
 		LogGuid:   entry.LogGuid,
 	}
 
-	for k, v := range entry.URIs {
-		clone.URIs[k] = v
+	for k, v := range entry.Hostnames {
+		clone.Hostnames[k] = v
 	}
 
 	for k, v := range entry.Endpoints {
@@ -52,17 +52,17 @@ func (entry RoutingTableEntry) copy() RoutingTableEntry {
 }
 
 func (entry RoutingTableEntry) routes() Routes {
-	uris := make([]string, len(entry.URIs))
+	hostnames := make([]string, len(entry.Hostnames))
 
 	i := 0
-	for uri := range entry.URIs {
-		uris[i] = uri
+	for hostname := range entry.Hostnames {
+		hostnames[i] = hostname
 		i++
 	}
 
 	return Routes{
-		URIs:    uris,
-		LogGuid: entry.LogGuid,
+		Hostnames: hostnames,
+		LogGuid:   entry.LogGuid,
 	}
 }
 

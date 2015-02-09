@@ -11,7 +11,7 @@ type RegistryMessage struct {
 
 func RegistryMessageFor(endpoint Endpoint, routes Routes) RegistryMessage {
 	return RegistryMessage{
-		URIs: routes.URIs,
+		URIs: routes.Hostnames,
 		Host: endpoint.Host,
 		Port: endpoint.Port,
 

@@ -60,8 +60,8 @@ var _ = Describe("RegistryMessage", func() {
 				ContainerPort: 11,
 			}
 			routes := routing_table.Routes{
-				URIs:    []string{"host-1.example.com", "host-2.example.com"},
-				LogGuid: "app-guid",
+				Hostnames: []string{"host-1.example.com", "host-2.example.com"},
+				LogGuid:   "app-guid",
 			}
 
 			message := routing_table.RegistryMessageFor(endpoint, routes)

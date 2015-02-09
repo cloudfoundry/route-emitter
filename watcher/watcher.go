@@ -181,8 +181,8 @@ func (watcher *Watcher) setRoutesForDesired(desiredLRP receptor.DesiredLRPRespon
 		for _, route := range routes {
 			if key.ContainerPort == route.Port {
 				messagesToEmit := watcher.table.SetRoutes(key, routing_table.Routes{
-					URIs:    route.Hostnames,
-					LogGuid: desiredLRP.LogGuid,
+					Hostnames: route.Hostnames,
+					LogGuid:   desiredLRP.LogGuid,
 				})
 				watcher.emitMessages(messagesToEmit)
 			}
