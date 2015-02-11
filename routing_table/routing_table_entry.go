@@ -1,10 +1,20 @@
 package routing_table
 
+type EndpointKey struct {
+	InstanceGuid string
+	Evacuating   bool
+}
+
 type Endpoint struct {
 	InstanceGuid  string
 	Host          string
 	Port          uint16
 	ContainerPort uint16
+	Evacuating    bool
+}
+
+func (e Endpoint) key() EndpointKey {
+	return EndpointKey{InstanceGuid: e.InstanceGuid, Evacuating: e.Evacuating}
 }
 
 type Routes struct {
@@ -14,7 +24,7 @@ type Routes struct {
 
 type RoutingTableEntry struct {
 	Hostnames map[string]struct{}
-	Endpoints map[string]Endpoint
+	Endpoints map[EndpointKey]Endpoint
 	LogGuid   string
 }
 
@@ -24,7 +34,7 @@ type RoutingKey struct {
 }
 
 func (entry RoutingTableEntry) hasEndpoint(endpoint Endpoint) bool {
-	_, ok := entry.Endpoints[endpoint.InstanceGuid]
+	_, ok := entry.Endpoints[endpoint.key()]
 	return ok
 }
 
@@ -36,7 +46,7 @@ func (entry RoutingTableEntry) hasHostname(hostname string) bool {
 func (entry RoutingTableEntry) copy() RoutingTableEntry {
 	clone := RoutingTableEntry{
 		Hostnames: map[string]struct{}{},
-		Endpoints: map[string]Endpoint{},
+		Endpoints: map[EndpointKey]Endpoint{},
 		LogGuid:   entry.LogGuid,
 	}
 
@@ -74,10 +84,10 @@ func routesAsMap(routes []string) map[string]struct{} {
 	return routesMap
 }
 
-func endpointsAsMap(endpoints []Endpoint) map[string]Endpoint {
-	endpointsMap := map[string]Endpoint{}
+func endpointsAsMap(endpoints []Endpoint) map[EndpointKey]Endpoint {
+	endpointsMap := map[EndpointKey]Endpoint{}
 	for _, endpoint := range endpoints {
-		endpointsMap[endpoint.InstanceGuid] = endpoint
+		endpointsMap[endpoint.key()] = endpoint
 	}
 	return endpointsMap
 }

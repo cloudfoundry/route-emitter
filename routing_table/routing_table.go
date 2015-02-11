@@ -97,7 +97,7 @@ func (table *routingTable) AddOrUpdateEndpoint(key RoutingKey, endpoint Endpoint
 	defer table.Unlock()
 
 	newEntry := table.entries[key].copy()
-	newEntry.Endpoints[endpoint.InstanceGuid] = endpoint
+	newEntry.Endpoints[endpoint.key()] = endpoint
 
 	return table.updateEntry(key, newEntry)
 }
@@ -107,7 +107,7 @@ func (table *routingTable) RemoveEndpoint(key RoutingKey, endpoint Endpoint) Mes
 	defer table.Unlock()
 
 	newEntry := table.entries[key].copy()
-	delete(newEntry.Endpoints, endpoint.InstanceGuid)
+	delete(newEntry.Endpoints, endpoint.key())
 
 	return table.updateEntry(key, newEntry)
 }
