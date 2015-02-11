@@ -213,7 +213,10 @@ func (watcher *Watcher) handleActualCreate(actualLRP receptor.ActualLRPResponse)
 }
 
 func (watcher *Watcher) handleActualUpdate(before, after receptor.ActualLRPResponse) {
-	watcher.logger.Debug("handling-actual-update", lager.Data{"before": actualLRPData(before), "after": actualLRPData(after)})
+	watcher.logger.Debug("handling-actual-update", lager.Data{
+		"before": actualLRPData(before),
+		"after":  actualLRPData(after),
+	})
 	defer watcher.logger.Debug("done-handling-actual-update")
 
 	switch {
@@ -290,5 +293,6 @@ func actualLRPData(lrp receptor.ActualLRPResponse) lager.Data {
 		"cell-id":       lrp.CellID,
 		"address":       lrp.Address,
 		"ports":         lrp.Ports,
+		"evacuating":    lrp.Evacuating,
 	}
 }

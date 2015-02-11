@@ -58,6 +58,7 @@ func EndpointsFromActual(actual receptor.ActualLRPResponse) (map[uint16]Endpoint
 			Host:          actual.Address,
 			Port:          portMapping.HostPort,
 			ContainerPort: portMapping.ContainerPort,
+			Evacuating:    actual.Evacuating,
 		}
 		endpoints[portMapping.ContainerPort] = endpoint
 	}

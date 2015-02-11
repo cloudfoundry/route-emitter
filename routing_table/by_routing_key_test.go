@@ -89,12 +89,14 @@ var _ = Describe("ByRoutingKey", func() {
 					{HostPort: 11, ContainerPort: 44},
 					{HostPort: 66, ContainerPort: 99},
 				},
+				Evacuating: true,
 			})
 			Ω(err).ShouldNot(HaveOccurred())
 
-			Ω(endpoints).Should(HaveLen(2))
-			Ω(endpoints).Should(ContainElement(Endpoint{Host: "1.1.1.1", Port: 11, InstanceGuid: "instance-guid", ContainerPort: 44}))
-			Ω(endpoints).Should(ContainElement(Endpoint{Host: "1.1.1.1", Port: 66, InstanceGuid: "instance-guid", ContainerPort: 99}))
+			Ω(endpoints).Should(ConsistOf([]Endpoint{
+				Endpoint{Host: "1.1.1.1", Port: 11, InstanceGuid: "instance-guid", ContainerPort: 44, Evacuating: true},
+				Endpoint{Host: "1.1.1.1", Port: 66, InstanceGuid: "instance-guid", ContainerPort: 99, Evacuating: true},
+			}))
 		})
 	})
 
