@@ -20,9 +20,11 @@ var _ = Describe("RoutingTable", func() {
 	hostname2 := "bar.example.com"
 	hostname3 := "baz.example.com"
 
-	endpoint1 := Endpoint{InstanceGuid: "ig-1", Host: "1.1.1.1", Port: 11, ContainerPort: 8080}
-	endpoint2 := Endpoint{InstanceGuid: "ig-2", Host: "2.2.2.2", Port: 22, ContainerPort: 8080}
-	endpoint3 := Endpoint{InstanceGuid: "ig-3", Host: "3.3.3.3", Port: 33, ContainerPort: 8080}
+	endpoint1 := Endpoint{InstanceGuid: "ig-1", Host: "1.1.1.1", Port: 11, ContainerPort: 8080, Evacuating: false}
+	endpoint2 := Endpoint{InstanceGuid: "ig-2", Host: "2.2.2.2", Port: 22, ContainerPort: 8080, Evacuating: false}
+	endpoint3 := Endpoint{InstanceGuid: "ig-3", Host: "3.3.3.3", Port: 33, ContainerPort: 8080, Evacuating: false}
+
+	evacuating1 := Endpoint{InstanceGuid: "ig-1", Host: "1.1.1.1", Port: 11, ContainerPort: 8080, Evacuating: true}
 
 	logGuid := "some-log-guid"
 
@@ -200,6 +202,49 @@ var _ = Describe("RoutingTable", func() {
 							RegistryMessageFor(endpoint1, Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}),
 							RegistryMessageFor(endpoint2, Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}),
 							RegistryMessageFor(endpoint3, Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}),
+						},
+					}
+					Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
+				})
+			})
+
+			Context("when the routing key gets a new evacuating endpoint", func() {
+				BeforeEach(func() {
+					messagesToEmit = table.Sync(
+						RoutesByRoutingKey{key: Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}},
+						EndpointsByRoutingKey{key: {endpoint1, endpoint2, evacuating1}},
+					)
+				})
+
+				It("should emit all registrations and no unregisration", func() {
+					expected := MessagesToEmit{
+						RegistrationMessages: []RegistryMessage{
+							RegistryMessageFor(endpoint1, Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}),
+							RegistryMessageFor(endpoint2, Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}),
+							RegistryMessageFor(evacuating1, Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}),
+						},
+					}
+					Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
+				})
+			})
+
+			Context("when the routing key has an evacuating and instance endpoint", func() {
+				BeforeEach(func() {
+					table.Sync(
+						RoutesByRoutingKey{key: Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}},
+						EndpointsByRoutingKey{key: {endpoint1, endpoint2, evacuating1}},
+					)
+					messagesToEmit = table.Sync(
+						RoutesByRoutingKey{key: Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}},
+						EndpointsByRoutingKey{key: {endpoint2, evacuating1}},
+					)
+				})
+
+				It("should not emit an unregistration ", func() {
+					expected := MessagesToEmit{
+						RegistrationMessages: []RegistryMessage{
+							RegistryMessageFor(endpoint2, Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}),
+							RegistryMessageFor(evacuating1, Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}),
 						},
 					}
 					Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
@@ -517,6 +562,24 @@ var _ = Describe("RoutingTable", func() {
 					})
 				})
 
+				Context("when an evacuating endpoint is added for an instance that already exists", func() {
+					It("should emit nothing", func() {
+						messagesToEmit = table.AddOrUpdateEndpoint(key, evacuating1)
+						Ω(messagesToEmit).Should(BeZero())
+					})
+				})
+
+				Context("when an instance endpoint is updated for an evacuating that already exists", func() {
+					BeforeEach(func() {
+						table.AddOrUpdateEndpoint(key, evacuating1)
+					})
+
+					It("should emit nothing", func() {
+						messagesToEmit = table.AddOrUpdateEndpoint(key, endpoint1)
+						Ω(messagesToEmit).Should(BeZero())
+					})
+				})
+
 				Context("when the endpoint does not already exist", func() {
 					It("should emit registrations", func() {
 						messagesToEmit = table.AddOrUpdateEndpoint(key, endpoint3)
@@ -541,6 +604,28 @@ var _ = Describe("RoutingTable", func() {
 						},
 					}
 					Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
+				})
+
+				Context("when an instance endpoint is removed for an instance that already exists", func() {
+					BeforeEach(func() {
+						table.AddOrUpdateEndpoint(key, evacuating1)
+					})
+
+					It("should emit nothing", func() {
+						messagesToEmit = table.RemoveEndpoint(key, endpoint1)
+						Ω(messagesToEmit).Should(BeZero())
+					})
+				})
+
+				Context("when an evacuating endpoint is removed instance that already exists", func() {
+					BeforeEach(func() {
+						table.AddOrUpdateEndpoint(key, evacuating1)
+					})
+
+					It("should emit nothing", func() {
+						messagesToEmit = table.AddOrUpdateEndpoint(key, endpoint1)
+						Ω(messagesToEmit).Should(BeZero())
+					})
 				})
 			})
 		})

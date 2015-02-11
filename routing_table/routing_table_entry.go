@@ -34,8 +34,13 @@ type RoutingKey struct {
 }
 
 func (entry RoutingTableEntry) hasEndpoint(endpoint Endpoint) bool {
-	_, ok := entry.Endpoints[endpoint.key()]
-	return ok
+	key := endpoint.key()
+	_, found := entry.Endpoints[key]
+	if !found {
+		key.Evacuating = !key.Evacuating
+		_, found = entry.Endpoints[key]
+	}
+	return found
 }
 
 func (entry RoutingTableEntry) hasHostname(hostname string) bool {
