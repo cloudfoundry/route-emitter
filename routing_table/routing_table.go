@@ -10,7 +10,7 @@ type RoutingTable interface {
 	RouteCount() int
 	SetRoutes(key RoutingKey, routes Routes) MessagesToEmit
 	RemoveRoutes(key RoutingKey) MessagesToEmit
-	AddOrUpdateEndpoint(key RoutingKey, endpoint Endpoint) MessagesToEmit
+	AddEndpoint(key RoutingKey, endpoint Endpoint) MessagesToEmit
 	RemoveEndpoint(key RoutingKey, endpoint Endpoint) MessagesToEmit
 }
 
@@ -92,7 +92,7 @@ func (table *routingTable) RemoveRoutes(key RoutingKey) MessagesToEmit {
 	return table.updateEntry(key, newEntry)
 }
 
-func (table *routingTable) AddOrUpdateEndpoint(key RoutingKey, endpoint Endpoint) MessagesToEmit {
+func (table *routingTable) AddEndpoint(key RoutingKey, endpoint Endpoint) MessagesToEmit {
 	table.Lock()
 	defer table.Unlock()
 

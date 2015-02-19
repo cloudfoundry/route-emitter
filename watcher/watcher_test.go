@@ -424,7 +424,7 @@ var _ = Describe("Watcher", func() {
 
 			Context("when the resulting LRP is in the RUNNING state", func() {
 				BeforeEach(func() {
-					table.AddOrUpdateEndpointReturns(dummyMessagesToEmit)
+					table.AddEndpointReturns(dummyMessagesToEmit)
 
 					eventSource := new(fake_receptor.FakeEventSource)
 					receptorClient.SubscribeToEventsReturns(eventSource, nil)
@@ -453,17 +453,17 @@ var _ = Describe("Watcher", func() {
 				})
 
 				It("should add/update the endpoints on the table", func() {
-					Eventually(table.AddOrUpdateEndpointCallCount).Should(Equal(2))
+					Eventually(table.AddEndpointCallCount).Should(Equal(2))
 
 					keys := routing_table.RoutingKeysFromActual(actualLRP)
 					endpoints, err := routing_table.EndpointsFromActual(actualLRP)
 					Ω(err).ShouldNot(HaveOccurred())
 
-					key, endpoint := table.AddOrUpdateEndpointArgsForCall(0)
+					key, endpoint := table.AddEndpointArgsForCall(0)
 					Ω(keys).Should(ContainElement(key))
 					Ω(endpoint).Should(Equal(endpoints[key.ContainerPort]))
 
-					key, endpoint = table.AddOrUpdateEndpointArgsForCall(1)
+					key, endpoint = table.AddEndpointArgsForCall(1)
 					Ω(keys).Should(ContainElement(key))
 					Ω(endpoint).Should(Equal(endpoints[key.ContainerPort]))
 				})
@@ -517,7 +517,7 @@ var _ = Describe("Watcher", func() {
 				})
 
 				It("doesn't add/update the endpoint on the table", func() {
-					Consistently(table.AddOrUpdateEndpointCallCount).Should(Equal(0))
+					Consistently(table.AddEndpointCallCount).Should(Equal(0))
 				})
 
 				It("doesn't emit", func() {
@@ -529,7 +529,7 @@ var _ = Describe("Watcher", func() {
 		Context("when a change event occurs", func() {
 			Context("when the resulting LRP is in the RUNNING state", func() {
 				BeforeEach(func() {
-					table.AddOrUpdateEndpointReturns(dummyMessagesToEmit)
+					table.AddEndpointReturns(dummyMessagesToEmit)
 
 					eventSource := new(fake_receptor.FakeEventSource)
 					receptorClient.SubscribeToEventsReturns(eventSource, nil)
@@ -566,9 +566,9 @@ var _ = Describe("Watcher", func() {
 				})
 
 				It("should add/update the endpoint on the table", func() {
-					Eventually(table.AddOrUpdateEndpointCallCount).Should(Equal(2))
+					Eventually(table.AddEndpointCallCount).Should(Equal(2))
 
-					key, endpoint := table.AddOrUpdateEndpointArgsForCall(0)
+					key, endpoint := table.AddEndpointArgsForCall(0)
 					Ω(key).Should(Equal(expectedRoutingKey))
 					Ω(endpoint).Should(Equal(routing_table.Endpoint{
 						InstanceGuid:  expectedInstanceGuid,
@@ -577,7 +577,7 @@ var _ = Describe("Watcher", func() {
 						ContainerPort: expectedContainerPort,
 					}))
 
-					key, endpoint = table.AddOrUpdateEndpointArgsForCall(1)
+					key, endpoint = table.AddEndpointArgsForCall(1)
 					Ω(key).Should(Equal(expectedAdditionalRoutingKey))
 					Ω(endpoint).Should(Equal(routing_table.Endpoint{
 						InstanceGuid:  expectedInstanceGuid,
@@ -707,7 +707,7 @@ var _ = Describe("Watcher", func() {
 				})
 
 				It("should not add or update the endpoint", func() {
-					Consistently(table.AddOrUpdateEndpointCallCount).Should(BeZero())
+					Consistently(table.AddEndpointCallCount).Should(BeZero())
 				})
 
 				It("should not emit anything", func() {

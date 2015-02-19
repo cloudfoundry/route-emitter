@@ -46,13 +46,13 @@ type FakeRoutingTable struct {
 	removeRoutesReturns struct {
 		result1 routing_table.MessagesToEmit
 	}
-	AddOrUpdateEndpointStub        func(key routing_table.RoutingKey, endpoint routing_table.Endpoint) routing_table.MessagesToEmit
-	addOrUpdateEndpointMutex       sync.RWMutex
-	addOrUpdateEndpointArgsForCall []struct {
+	AddEndpointStub        func(key routing_table.RoutingKey, endpoint routing_table.Endpoint) routing_table.MessagesToEmit
+	addEndpointMutex       sync.RWMutex
+	addEndpointArgsForCall []struct {
 		key      routing_table.RoutingKey
 		endpoint routing_table.Endpoint
 	}
-	addOrUpdateEndpointReturns struct {
+	addEndpointReturns struct {
 		result1 routing_table.MessagesToEmit
 	}
 	RemoveEndpointStub        func(key routing_table.RoutingKey, endpoint routing_table.Endpoint) routing_table.MessagesToEmit
@@ -212,35 +212,35 @@ func (fake *FakeRoutingTable) RemoveRoutesReturns(result1 routing_table.Messages
 	}{result1}
 }
 
-func (fake *FakeRoutingTable) AddOrUpdateEndpoint(key routing_table.RoutingKey, endpoint routing_table.Endpoint) routing_table.MessagesToEmit {
-	fake.addOrUpdateEndpointMutex.Lock()
-	fake.addOrUpdateEndpointArgsForCall = append(fake.addOrUpdateEndpointArgsForCall, struct {
+func (fake *FakeRoutingTable) AddEndpoint(key routing_table.RoutingKey, endpoint routing_table.Endpoint) routing_table.MessagesToEmit {
+	fake.addEndpointMutex.Lock()
+	fake.addEndpointArgsForCall = append(fake.addEndpointArgsForCall, struct {
 		key      routing_table.RoutingKey
 		endpoint routing_table.Endpoint
 	}{key, endpoint})
-	fake.addOrUpdateEndpointMutex.Unlock()
-	if fake.AddOrUpdateEndpointStub != nil {
-		return fake.AddOrUpdateEndpointStub(key, endpoint)
+	fake.addEndpointMutex.Unlock()
+	if fake.AddEndpointStub != nil {
+		return fake.AddEndpointStub(key, endpoint)
 	} else {
-		return fake.addOrUpdateEndpointReturns.result1
+		return fake.addEndpointReturns.result1
 	}
 }
 
-func (fake *FakeRoutingTable) AddOrUpdateEndpointCallCount() int {
-	fake.addOrUpdateEndpointMutex.RLock()
-	defer fake.addOrUpdateEndpointMutex.RUnlock()
-	return len(fake.addOrUpdateEndpointArgsForCall)
+func (fake *FakeRoutingTable) AddEndpointCallCount() int {
+	fake.addEndpointMutex.RLock()
+	defer fake.addEndpointMutex.RUnlock()
+	return len(fake.addEndpointArgsForCall)
 }
 
-func (fake *FakeRoutingTable) AddOrUpdateEndpointArgsForCall(i int) (routing_table.RoutingKey, routing_table.Endpoint) {
-	fake.addOrUpdateEndpointMutex.RLock()
-	defer fake.addOrUpdateEndpointMutex.RUnlock()
-	return fake.addOrUpdateEndpointArgsForCall[i].key, fake.addOrUpdateEndpointArgsForCall[i].endpoint
+func (fake *FakeRoutingTable) AddEndpointArgsForCall(i int) (routing_table.RoutingKey, routing_table.Endpoint) {
+	fake.addEndpointMutex.RLock()
+	defer fake.addEndpointMutex.RUnlock()
+	return fake.addEndpointArgsForCall[i].key, fake.addEndpointArgsForCall[i].endpoint
 }
 
-func (fake *FakeRoutingTable) AddOrUpdateEndpointReturns(result1 routing_table.MessagesToEmit) {
-	fake.AddOrUpdateEndpointStub = nil
-	fake.addOrUpdateEndpointReturns = struct {
+func (fake *FakeRoutingTable) AddEndpointReturns(result1 routing_table.MessagesToEmit) {
+	fake.AddEndpointStub = nil
+	fake.addEndpointReturns = struct {
 		result1 routing_table.MessagesToEmit
 	}{result1}
 }

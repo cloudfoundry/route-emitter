@@ -208,7 +208,7 @@ func (watcher *Watcher) handleActualCreate(actualLRP receptor.ActualLRPResponse)
 	defer watcher.logger.Debug("done-handling-actual-create")
 
 	if actualLRP.State == receptor.ActualLRPStateRunning {
-		watcher.addOrUpdateAndEmit(actualLRP)
+		watcher.addAndEmit(actualLRP)
 	}
 }
 
@@ -221,7 +221,7 @@ func (watcher *Watcher) handleActualUpdate(before, after receptor.ActualLRPRespo
 
 	switch {
 	case after.State == receptor.ActualLRPStateRunning:
-		watcher.addOrUpdateAndEmit(after)
+		watcher.addAndEmit(after)
 	case after.State != receptor.ActualLRPStateRunning && before.State == receptor.ActualLRPStateRunning:
 		watcher.removeAndEmit(before)
 	}
@@ -236,7 +236,7 @@ func (watcher *Watcher) handleActualDelete(actualLRP receptor.ActualLRPResponse)
 	}
 }
 
-func (watcher *Watcher) addOrUpdateAndEmit(actualLRP receptor.ActualLRPResponse) {
+func (watcher *Watcher) addAndEmit(actualLRP receptor.ActualLRPResponse) {
 	endpoints, err := routing_table.EndpointsFromActual(actualLRP)
 	if err != nil {
 		watcher.logger.Error("failed-to-extract-endpoint-from-actual", err)
@@ -246,7 +246,7 @@ func (watcher *Watcher) addOrUpdateAndEmit(actualLRP receptor.ActualLRPResponse)
 	for _, key := range routing_table.RoutingKeysFromActual(actualLRP) {
 		for _, endpoint := range endpoints {
 			if key.ContainerPort == endpoint.ContainerPort {
-				messagesToEmit := watcher.table.AddOrUpdateEndpoint(key, endpoint)
+				messagesToEmit := watcher.table.AddEndpoint(key, endpoint)
 				watcher.emitMessages(messagesToEmit)
 			}
 		}

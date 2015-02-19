@@ -461,7 +461,7 @@ var _ = Describe("RoutingTable", func() {
 
 			Context("when adding/updating endpoints", func() {
 				It("should not emit anything", func() {
-					messagesToEmit = table.AddOrUpdateEndpoint(key, endpoint1)
+					messagesToEmit = table.AddEndpoint(key, endpoint1)
 					Ω(messagesToEmit).Should(BeZero())
 				})
 			})
@@ -477,8 +477,8 @@ var _ = Describe("RoutingTable", func() {
 		Context("when there are both endpoints and routes in the table", func() {
 			BeforeEach(func() {
 				table.SetRoutes(key, Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid})
-				table.AddOrUpdateEndpoint(key, endpoint1)
-				table.AddOrUpdateEndpoint(key, endpoint2)
+				table.AddEndpoint(key, endpoint1)
+				table.AddEndpoint(key, endpoint2)
 			})
 
 			Context("When setting routes", func() {
@@ -557,32 +557,32 @@ var _ = Describe("RoutingTable", func() {
 			Context("when adding/updating endpoints", func() {
 				Context("when the endpoint already exists", func() {
 					It("should emit nothing", func() {
-						messagesToEmit = table.AddOrUpdateEndpoint(key, endpoint1)
+						messagesToEmit = table.AddEndpoint(key, endpoint1)
 						Ω(messagesToEmit).Should(BeZero())
 					})
 				})
 
 				Context("when an evacuating endpoint is added for an instance that already exists", func() {
 					It("should emit nothing", func() {
-						messagesToEmit = table.AddOrUpdateEndpoint(key, evacuating1)
+						messagesToEmit = table.AddEndpoint(key, evacuating1)
 						Ω(messagesToEmit).Should(BeZero())
 					})
 				})
 
 				Context("when an instance endpoint is updated for an evacuating that already exists", func() {
 					BeforeEach(func() {
-						table.AddOrUpdateEndpoint(key, evacuating1)
+						table.AddEndpoint(key, evacuating1)
 					})
 
 					It("should emit nothing", func() {
-						messagesToEmit = table.AddOrUpdateEndpoint(key, endpoint1)
+						messagesToEmit = table.AddEndpoint(key, endpoint1)
 						Ω(messagesToEmit).Should(BeZero())
 					})
 				})
 
 				Context("when the endpoint does not already exist", func() {
 					It("should emit registrations", func() {
-						messagesToEmit = table.AddOrUpdateEndpoint(key, endpoint3)
+						messagesToEmit = table.AddEndpoint(key, endpoint3)
 
 						expected := MessagesToEmit{
 							RegistrationMessages: []RegistryMessage{
@@ -608,7 +608,7 @@ var _ = Describe("RoutingTable", func() {
 
 				Context("when an instance endpoint is removed for an instance that already exists", func() {
 					BeforeEach(func() {
-						table.AddOrUpdateEndpoint(key, evacuating1)
+						table.AddEndpoint(key, evacuating1)
 					})
 
 					It("should emit nothing", func() {
@@ -619,11 +619,11 @@ var _ = Describe("RoutingTable", func() {
 
 				Context("when an evacuating endpoint is removed instance that already exists", func() {
 					BeforeEach(func() {
-						table.AddOrUpdateEndpoint(key, evacuating1)
+						table.AddEndpoint(key, evacuating1)
 					})
 
 					It("should emit nothing", func() {
-						messagesToEmit = table.AddOrUpdateEndpoint(key, endpoint1)
+						messagesToEmit = table.AddEndpoint(key, endpoint1)
 						Ω(messagesToEmit).Should(BeZero())
 					})
 				})
@@ -651,7 +651,7 @@ var _ = Describe("RoutingTable", func() {
 
 			Context("when adding/updating endpoints", func() {
 				It("should emit registrations", func() {
-					messagesToEmit = table.AddOrUpdateEndpoint(key, endpoint1)
+					messagesToEmit = table.AddEndpoint(key, endpoint1)
 
 					expected := MessagesToEmit{
 						RegistrationMessages: []RegistryMessage{
@@ -665,8 +665,8 @@ var _ = Describe("RoutingTable", func() {
 
 		Context("when there are only endpoints in the table", func() {
 			BeforeEach(func() {
-				table.AddOrUpdateEndpoint(key, endpoint1)
-				table.AddOrUpdateEndpoint(key, endpoint2)
+				table.AddEndpoint(key, endpoint1)
+				table.AddEndpoint(key, endpoint2)
 			})
 
 			Context("When setting routes", func() {
@@ -692,7 +692,7 @@ var _ = Describe("RoutingTable", func() {
 
 			Context("when adding/updating endpoints", func() {
 				It("should emit nothing", func() {
-					messagesToEmit = table.AddOrUpdateEndpoint(key, endpoint2)
+					messagesToEmit = table.AddEndpoint(key, endpoint2)
 					Ω(messagesToEmit).Should(BeZero())
 				})
 			})
@@ -727,8 +727,8 @@ var _ = Describe("RoutingTable", func() {
 
 		Context("when the table has endpoints but no routes", func() {
 			BeforeEach(func() {
-				table.AddOrUpdateEndpoint(key, endpoint1)
-				table.AddOrUpdateEndpoint(key, endpoint2)
+				table.AddEndpoint(key, endpoint1)
+				table.AddEndpoint(key, endpoint2)
 			})
 
 			It("should be empty", func() {
@@ -740,8 +740,8 @@ var _ = Describe("RoutingTable", func() {
 		Context("when the table has routes and endpoints", func() {
 			BeforeEach(func() {
 				table.SetRoutes(key, Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid})
-				table.AddOrUpdateEndpoint(key, endpoint1)
-				table.AddOrUpdateEndpoint(key, endpoint2)
+				table.AddEndpoint(key, endpoint1)
+				table.AddEndpoint(key, endpoint2)
 			})
 
 			It("should emit the registrations", func() {
