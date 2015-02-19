@@ -42,7 +42,7 @@ var _ = Describe("RoutingTable", func() {
 					)
 				})
 
-				It("should emit registrations for each pairing", func() {
+				It("emits registrations for each pairing", func() {
 					expected := MessagesToEmit{
 						RegistrationMessages: []RegistryMessage{
 							RegistryMessageFor(endpoint1, Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}),
@@ -73,7 +73,7 @@ var _ = Describe("RoutingTable", func() {
 						)
 					})
 
-					It("should emit registrations for each pairing", func() {
+					It("emits registrations for each pairing", func() {
 						expected := MessagesToEmit{
 							RegistrationMessages: []RegistryMessage{
 								RegistryMessageFor(endpoint1, Routes{Hostnames: []string{hostname1}, LogGuid: logGuid}),
@@ -91,7 +91,7 @@ var _ = Describe("RoutingTable", func() {
 						)
 					})
 
-					It("should emit nothing", func() {
+					It("emits nothing", func() {
 						Ω(messagesToEmit).Should(BeZero())
 					})
 				})
@@ -117,7 +117,7 @@ var _ = Describe("RoutingTable", func() {
 						)
 					})
 
-					It("should emit registrations for each pairing", func() {
+					It("emits registrations for each pairing", func() {
 						expected := MessagesToEmit{
 							RegistrationMessages: []RegistryMessage{
 								RegistryMessageFor(endpoint1, Routes{Hostnames: []string{hostname1}, LogGuid: logGuid}),
@@ -135,7 +135,7 @@ var _ = Describe("RoutingTable", func() {
 						)
 					})
 
-					It("should emit nothing", func() {
+					It("emits nothing", func() {
 						Ω(messagesToEmit).Should(BeZero())
 					})
 				})
@@ -158,7 +158,7 @@ var _ = Describe("RoutingTable", func() {
 					)
 				})
 
-				It("should emit all registrations and no unregisration", func() {
+				It("emits all registrations and no unregisration", func() {
 					expected := MessagesToEmit{
 						RegistrationMessages: []RegistryMessage{
 							RegistryMessageFor(endpoint1, Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}),
@@ -177,7 +177,7 @@ var _ = Describe("RoutingTable", func() {
 					)
 				})
 
-				It("should emit all registrations and no unregisration", func() {
+				It("emits all registrations and no unregisration", func() {
 					expected := MessagesToEmit{
 						RegistrationMessages: []RegistryMessage{
 							RegistryMessageFor(endpoint1, Routes{Hostnames: []string{hostname1, hostname2, hostname3}, LogGuid: logGuid}),
@@ -196,7 +196,7 @@ var _ = Describe("RoutingTable", func() {
 					)
 				})
 
-				It("should emit all registrations and no unregisration", func() {
+				It("emits all registrations and no unregisration", func() {
 					expected := MessagesToEmit{
 						RegistrationMessages: []RegistryMessage{
 							RegistryMessageFor(endpoint1, Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}),
@@ -216,7 +216,7 @@ var _ = Describe("RoutingTable", func() {
 					)
 				})
 
-				It("should emit all registrations and no unregisration", func() {
+				It("emits all registrations and no unregisration", func() {
 					expected := MessagesToEmit{
 						RegistrationMessages: []RegistryMessage{
 							RegistryMessageFor(endpoint1, Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}),
@@ -259,7 +259,7 @@ var _ = Describe("RoutingTable", func() {
 					)
 				})
 
-				It("should emit all registrations and no unregisration", func() {
+				It("emits all registrations and no unregisration", func() {
 					expected := MessagesToEmit{
 						RegistrationMessages: []RegistryMessage{
 							RegistryMessageFor(endpoint1, Routes{Hostnames: []string{hostname1, hostname2, hostname3}, LogGuid: logGuid}),
@@ -279,7 +279,7 @@ var _ = Describe("RoutingTable", func() {
 					)
 				})
 
-				It("should emit all registrations and the relevant unregisrations", func() {
+				It("emits all registrations and the relevant unregisrations", func() {
 					expected := MessagesToEmit{
 						RegistrationMessages: []RegistryMessage{
 							RegistryMessageFor(endpoint1, Routes{Hostnames: []string{hostname1}, LogGuid: logGuid}),
@@ -302,7 +302,7 @@ var _ = Describe("RoutingTable", func() {
 					)
 				})
 
-				It("should emit all registrations and the relevant unregisrations", func() {
+				It("emits all registrations and the relevant unregisrations", func() {
 					expected := MessagesToEmit{
 						RegistrationMessages: []RegistryMessage{
 							RegistryMessageFor(endpoint1, Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}),
@@ -323,7 +323,7 @@ var _ = Describe("RoutingTable", func() {
 					)
 				})
 
-				It("should emit all registrations and the relevant unregisrations", func() {
+				It("emits all registrations and the relevant unregisrations", func() {
 					expected := MessagesToEmit{
 						RegistrationMessages: []RegistryMessage{
 							RegistryMessageFor(endpoint1, Routes{Hostnames: []string{hostname1}, LogGuid: logGuid}),
@@ -345,7 +345,7 @@ var _ = Describe("RoutingTable", func() {
 					)
 				})
 
-				It("should emit all registrations and the relevant unregisrations", func() {
+				It("emits all registrations and the relevant unregisrations", func() {
 					expected := MessagesToEmit{
 						RegistrationMessages: []RegistryMessage{
 							RegistryMessageFor(endpoint1, Routes{Hostnames: []string{hostname1, hostname2, hostname3}, LogGuid: logGuid}),
@@ -366,7 +366,7 @@ var _ = Describe("RoutingTable", func() {
 					)
 				})
 
-				It("should emit all registrations and the relevant unregisrations", func() {
+				It("emits all registrations and the relevant unregisrations", func() {
 					expected := MessagesToEmit{
 						RegistrationMessages: []RegistryMessage{
 							RegistryMessageFor(endpoint1, Routes{Hostnames: []string{hostname1}, LogGuid: logGuid}),
@@ -416,7 +416,7 @@ var _ = Describe("RoutingTable", func() {
 						)
 					})
 
-					It("should emit nothing", func() {
+					It("emits nothing", func() {
 						Ω(messagesToEmit).Should(BeZero())
 					})
 				})
@@ -435,7 +435,7 @@ var _ = Describe("RoutingTable", func() {
 						)
 					})
 
-					It("should emit nothing", func() {
+					It("emits nothing", func() {
 						Ω(messagesToEmit).Should(BeZero())
 					})
 				})
@@ -446,28 +446,28 @@ var _ = Describe("RoutingTable", func() {
 	Describe("Processing deltas", func() {
 		Context("when the table is empty", func() {
 			Context("When setting routes", func() {
-				It("should not emit anything", func() {
+				It("emits nothing", func() {
 					messagesToEmit = table.SetRoutes(key, Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid})
 					Ω(messagesToEmit).Should(BeZero())
 				})
 			})
 
 			Context("when removing routes", func() {
-				It("should not emit anything", func() {
+				It("emits nothing", func() {
 					messagesToEmit = table.RemoveRoutes(key)
 					Ω(messagesToEmit).Should(BeZero())
 				})
 			})
 
 			Context("when adding/updating endpoints", func() {
-				It("should not emit anything", func() {
+				It("emits nothing", func() {
 					messagesToEmit = table.AddEndpoint(key, endpoint1)
 					Ω(messagesToEmit).Should(BeZero())
 				})
 			})
 
 			Context("when removing endpoints", func() {
-				It("should not emit anything", func() {
+				It("emits nothing", func() {
 					messagesToEmit = table.RemoveEndpoint(key, endpoint1)
 					Ω(messagesToEmit).Should(BeZero())
 				})
@@ -563,7 +563,7 @@ var _ = Describe("RoutingTable", func() {
 				})
 
 				Context("when an evacuating endpoint is added for an instance that already exists", func() {
-					It("should emit nothing", func() {
+					It("emits nothing", func() {
 						messagesToEmit = table.AddEndpoint(key, evacuating1)
 						Ω(messagesToEmit).Should(BeZero())
 					})
@@ -574,14 +574,14 @@ var _ = Describe("RoutingTable", func() {
 						table.AddEndpoint(key, evacuating1)
 					})
 
-					It("should emit nothing", func() {
+					It("emits nothing", func() {
 						messagesToEmit = table.AddEndpoint(key, endpoint1)
 						Ω(messagesToEmit).Should(BeZero())
 					})
 				})
 
 				Context("when the endpoint does not already exist", func() {
-					It("should emit registrations", func() {
+					It("emits registrations", func() {
 						messagesToEmit = table.AddEndpoint(key, endpoint3)
 
 						expected := MessagesToEmit{
@@ -595,7 +595,7 @@ var _ = Describe("RoutingTable", func() {
 			})
 
 			Context("when removing endpoints", func() {
-				It("should emit unregistrations", func() {
+				It("emits unregistrations", func() {
 					messagesToEmit = table.RemoveEndpoint(key, endpoint2)
 
 					expected := MessagesToEmit{
@@ -611,7 +611,7 @@ var _ = Describe("RoutingTable", func() {
 						table.AddEndpoint(key, evacuating1)
 					})
 
-					It("should emit nothing", func() {
+					It("emits nothing", func() {
 						messagesToEmit = table.RemoveEndpoint(key, endpoint1)
 						Ω(messagesToEmit).Should(BeZero())
 					})
@@ -622,7 +622,7 @@ var _ = Describe("RoutingTable", func() {
 						table.AddEndpoint(key, evacuating1)
 					})
 
-					It("should emit nothing", func() {
+					It("emits nothing", func() {
 						messagesToEmit = table.AddEndpoint(key, endpoint1)
 						Ω(messagesToEmit).Should(BeZero())
 					})
@@ -636,21 +636,21 @@ var _ = Describe("RoutingTable", func() {
 			})
 
 			Context("When setting routes", func() {
-				It("should emit nothing", func() {
+				It("emits nothing", func() {
 					messagesToEmit = table.SetRoutes(key, Routes{Hostnames: []string{hostname1, hostname3}, LogGuid: logGuid})
 					Ω(messagesToEmit).Should(BeZero())
 				})
 			})
 
 			Context("when removing routes", func() {
-				It("should emit nothing", func() {
+				It("emits nothing", func() {
 					messagesToEmit = table.RemoveRoutes(key)
 					Ω(messagesToEmit).Should(BeZero())
 				})
 			})
 
 			Context("when adding/updating endpoints", func() {
-				It("should emit registrations", func() {
+				It("emits registrations", func() {
 					messagesToEmit = table.AddEndpoint(key, endpoint1)
 
 					expected := MessagesToEmit{
@@ -670,7 +670,7 @@ var _ = Describe("RoutingTable", func() {
 			})
 
 			Context("When setting routes", func() {
-				It("should emit registrations", func() {
+				It("emits registrations", func() {
 					messagesToEmit = table.SetRoutes(key, Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid})
 
 					expected := MessagesToEmit{
@@ -684,21 +684,21 @@ var _ = Describe("RoutingTable", func() {
 			})
 
 			Context("when removing routes", func() {
-				It("should emit nothing", func() {
+				It("emits nothing", func() {
 					messagesToEmit = table.RemoveRoutes(key)
 					Ω(messagesToEmit).Should(BeZero())
 				})
 			})
 
 			Context("when adding/updating endpoints", func() {
-				It("should emit nothing", func() {
+				It("emits nothing", func() {
 					messagesToEmit = table.AddEndpoint(key, endpoint2)
 					Ω(messagesToEmit).Should(BeZero())
 				})
 			})
 
 			Context("when removing endpoints", func() {
-				It("should emit nothing", func() {
+				It("emits nothing", func() {
 					messagesToEmit = table.RemoveEndpoint(key, endpoint1)
 					Ω(messagesToEmit).Should(BeZero())
 				})
@@ -744,7 +744,7 @@ var _ = Describe("RoutingTable", func() {
 				table.AddEndpoint(key, endpoint2)
 			})
 
-			It("should emit the registrations", func() {
+			It("emits the registrations", func() {
 				messagesToEmit = table.MessagesToEmit()
 
 				expected := MessagesToEmit{
