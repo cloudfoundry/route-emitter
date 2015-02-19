@@ -1,16 +1,19 @@
 package routing_table
 
+import "github.com/cloudfoundry-incubator/receptor"
+
 type EndpointKey struct {
 	InstanceGuid string
 	Evacuating   bool
 }
 
 type Endpoint struct {
-	InstanceGuid  string
-	Host          string
-	Port          uint16
-	ContainerPort uint16
-	Evacuating    bool
+	InstanceGuid    string
+	Host            string
+	Port            uint16
+	ContainerPort   uint16
+	Evacuating      bool
+	ModificationTag receptor.ModificationTag
 }
 
 func (e Endpoint) key() EndpointKey {
@@ -18,14 +21,16 @@ func (e Endpoint) key() EndpointKey {
 }
 
 type Routes struct {
-	Hostnames []string
-	LogGuid   string
+	Hostnames       []string
+	LogGuid         string
+	ModificationTag receptor.ModificationTag
 }
 
 type RoutingTableEntry struct {
-	Hostnames map[string]struct{}
-	Endpoints map[EndpointKey]Endpoint
-	LogGuid   string
+	Hostnames       map[string]struct{}
+	Endpoints       map[EndpointKey]Endpoint
+	LogGuid         string
+	ModificationTag receptor.ModificationTag
 }
 
 type RoutingKey struct {
@@ -50,9 +55,10 @@ func (entry RoutingTableEntry) hasHostname(hostname string) bool {
 
 func (entry RoutingTableEntry) copy() RoutingTableEntry {
 	clone := RoutingTableEntry{
-		Hostnames: map[string]struct{}{},
-		Endpoints: map[EndpointKey]Endpoint{},
-		LogGuid:   entry.LogGuid,
+		Hostnames:       map[string]struct{}{},
+		Endpoints:       map[EndpointKey]Endpoint{},
+		LogGuid:         entry.LogGuid,
+		ModificationTag: entry.ModificationTag,
 	}
 
 	for k, v := range entry.Hostnames {

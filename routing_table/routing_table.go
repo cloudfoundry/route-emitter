@@ -75,9 +75,15 @@ func (table *routingTable) SetRoutes(key RoutingKey, routes Routes) MessagesToEm
 	table.Lock()
 	defer table.Unlock()
 
-	newEntry := table.entries[key].copy()
+	currentEntry := table.entries[key]
+	if !currentEntry.ModificationTag.SucceededBy(routes.ModificationTag) {
+		return MessagesToEmit{}
+	}
+
+	newEntry := currentEntry.copy()
 	newEntry.Hostnames = routesAsMap(routes.Hostnames)
 	newEntry.LogGuid = routes.LogGuid
+	newEntry.ModificationTag = routes.ModificationTag
 
 	return table.updateEntry(key, newEntry)
 }
