@@ -271,6 +271,7 @@ func (watcher *Watcher) removeAndEmit(actualLRP receptor.ActualLRPResponse) {
 }
 
 func (watcher *Watcher) emitMessages(messagesToEmit routing_table.MessagesToEmit) {
+	watcher.logger.Info("emitting-messages", lager.Data{"messages": messagesToEmit})
 	watcher.emitter.Emit(messagesToEmit)
 	routesRegistered.Add(messagesToEmit.RouteRegistrationCount())
 	routesUnregistered.Add(messagesToEmit.RouteUnregistrationCount())
