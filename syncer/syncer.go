@@ -8,108 +8,116 @@ import (
 	"github.com/apcera/nats"
 	"github.com/cloudfoundry-incubator/receptor"
 	"github.com/cloudfoundry-incubator/route-emitter/cfroutes"
-	"github.com/cloudfoundry-incubator/route-emitter/nats_emitter"
 	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
 	"github.com/cloudfoundry-incubator/runtime-schema/metric"
 	"github.com/cloudfoundry/gunk/diegonats"
 	uuid "github.com/nu7hatch/gouuid"
+	"github.com/pivotal-golang/clock"
 	"github.com/pivotal-golang/lager"
 )
 
 var (
-	routesTotal       = metric.Metric("RoutesTotal")
-	routesSynced      = metric.Counter("RoutesSynced")
 	routeSyncDuration = metric.Duration("RouteEmitterSyncDuration")
 )
 
 type Syncer struct {
-	receptorClient    receptor.Client
-	natsClient        diegonats.NATSClient
-	logger            lager.Logger
-	table             routing_table.RoutingTable
-	emitter           nats_emitter.NATSEmitter
-	syncDuration      time.Duration
-	heartbeatInterval chan time.Duration
+	receptorClient receptor.Client
+	natsClient     diegonats.NATSClient
+	clock          clock.Clock
+	syncInterval   time.Duration
+	syncEvents     SyncEvents
+	routerGreet    chan time.Duration
+
+	logger lager.Logger
 }
 
 func NewSyncer(
 	receptorClient receptor.Client,
-	table routing_table.RoutingTable,
-	emitter nats_emitter.NATSEmitter,
-	syncDuration time.Duration,
+	clock clock.Clock,
+	syncInterval time.Duration,
 	natsClient diegonats.NATSClient,
 	logger lager.Logger,
 ) *Syncer {
 	return &Syncer{
 		receptorClient: receptorClient,
-		table:          table,
-		emitter:        emitter,
 		natsClient:     natsClient,
-		logger:         logger.Session("syncer"),
 
-		syncDuration:      syncDuration,
-		heartbeatInterval: make(chan time.Duration),
+		clock:        clock,
+		syncInterval: syncInterval,
+		syncEvents: SyncEvents{
+			Begin: make(chan SyncBegin, 1),
+			End:   make(chan SyncEnd),
+			Emit:  make(chan struct{}, 1),
+		},
+
+		routerGreet: make(chan time.Duration),
+
+		logger: logger.Session("syncer"),
 	}
 }
 
-func (syncer *Syncer) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
-	syncer.logger.Info("starting")
+func (s *Syncer) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
+	s.logger.Info("starting")
 	replyUuid, err := uuid.NewV4()
 	if err != nil {
 		return err
 	}
 
-	err = syncer.listenForHeartbeatInterval(replyUuid.String())
+	err = s.listenForRouter(replyUuid.String())
 	if err != nil {
 		return err
 	}
 
-	syncer.syncAndEmit()
+	s.sync()
 	close(ready)
-	syncer.logger.Info("started")
+	s.logger.Info("started")
 
-	var heartbeatInterval time.Duration
-	retryGreetingTicker := time.NewTicker(time.Second)
+	var routerPruneInterval time.Duration
+	retryGreetingTicker := s.clock.NewTicker(time.Second)
 
 	//keep trying to greet until we hear from the router
 GREET_LOOP:
 	for {
-		syncer.logger.Info("greeting-router")
-		err := syncer.greetRouter(replyUuid.String())
+		s.logger.Info("greeting-router")
+		err := s.greetRouter(replyUuid.String())
 		if err != nil {
-			syncer.logger.Error("failed-to-greet-router", err)
+			s.logger.Error("failed-to-greet-router", err)
 			return err
 		}
 
 		select {
-		case heartbeatInterval = <-syncer.heartbeatInterval:
-			syncer.logger.Info("received-heartbeat-interval")
+		case routerPruneInterval = <-s.routerGreet:
+			s.logger.Info("received-router-prune-interval", lager.Data{"interval": routerPruneInterval.String()})
 			break GREET_LOOP
-		case <-retryGreetingTicker.C:
+		case <-retryGreetingTicker.C():
 		case <-signals:
-			syncer.logger.Info("stopping")
+			s.logger.Info("stopping")
 			return nil
 		}
 	}
 	retryGreetingTicker.Stop()
 
-	//now keep emitting at the desired interval, syncing with etcd every syncDuration
-	syncTicker := time.NewTicker(syncer.syncDuration)
+	//now keep emitting at the desired interval, syncing with etcd every syncInterval
+	syncTicker := s.clock.NewTicker(s.syncInterval)
+	routerTicker := s.clock.NewTicker(routerPruneInterval)
+
 	for {
 		select {
-		case heartbeatInterval = <-syncer.heartbeatInterval:
-			syncer.logger.Info("received-new-heartbeat-interval")
-			syncer.emit()
-		case <-time.After(heartbeatInterval):
-			syncer.logger.Info("emitting-routes")
-			syncer.emit()
-		case <-syncTicker.C:
-			//we decouple syncing the routing table (via etcd) from emitting the routes
-			//since the watcher is receiving deltas our internal cache should be generally up-to-date
-			syncer.logger.Info("syncing")
-			syncer.syncAndEmit()
+		case routerPruneInterval = <-s.routerGreet:
+			s.logger.Info("received-new-router-prune-interval", lager.Data{"interval": routerPruneInterval.String()})
+			routerTicker.Stop()
+			routerTicker = s.clock.NewTicker(routerPruneInterval)
+			s.emit()
+		case <-routerTicker.C():
+			s.logger.Info("emitting-routes")
+			s.emit()
+		case <-syncTicker.C():
+			s.logger.Info("syncing")
+			s.sync()
 		case <-signals:
-			syncer.logger.Info("stopping")
+			s.logger.Info("stopping")
+			syncTicker.Stop()
+			routerTicker.Stop()
 			return nil
 		}
 	}
@@ -117,35 +125,37 @@ GREET_LOOP:
 	return nil
 }
 
-func (syncer *Syncer) emit() {
-	messagesToEmit := syncer.table.MessagesToEmit()
-
-	syncer.logger.Info("emitting-messages", lager.Data{"messages": messagesToEmit})
-	err := syncer.emitter.Emit(messagesToEmit)
-	if err != nil {
-		syncer.logger.Error("failed-to-emit-routes", err)
-	}
-
-	routesSynced.Add(messagesToEmit.RouteRegistrationCount())
-	routesTotal.Send(syncer.table.RouteCount())
+func (s *Syncer) SyncEvents() SyncEvents {
+	return s.syncEvents
 }
 
-func (syncer *Syncer) syncAndEmit() {
-	before := time.Now()
-	defer func() {
-		after := time.Now()
-		routeSyncDuration.Send(after.Sub(before))
-	}()
+func (s *Syncer) emit() {
+	select {
+	case s.syncEvents.Emit <- struct{}{}:
+	default:
+	}
+}
 
-	actualLRPResponses, err := syncer.receptorClient.ActualLRPs()
+func (s *Syncer) sync() {
+	ack := make(chan struct{})
+	select {
+	case s.syncEvents.Begin <- SyncBegin{Ack: ack}:
+	default:
+		s.logger.Debug("sync-already-in-progress")
+	}
+	<-ack
+
+	before := s.clock.Now()
+
+	actualLRPResponses, err := s.receptorClient.ActualLRPs()
 	if err != nil {
-		syncer.logger.Error("failed-to-get-actual", err)
+		s.logger.Error("failed-to-get-actual", err)
 		return
 	}
 
-	desiredLRPResponses, err := syncer.receptorClient.DesiredLRPs()
+	desiredLRPResponses, err := s.receptorClient.DesiredLRPs()
 	if err != nil {
-		syncer.logger.Error("failed-to-get-desired", err)
+		s.logger.Error("failed-to-get-desired", err)
 		return
 	}
 
@@ -161,22 +171,21 @@ func (syncer *Syncer) syncAndEmit() {
 		desiredLRPs = append(desiredLRPs, desiredLRPResponse)
 	}
 
-	routesToEmit := syncer.table.Sync(
+	newTable := routing_table.NewTempTable(
 		routing_table.RoutesByRoutingKeyFromDesireds(desiredLRPs),
 		routing_table.EndpointsByRoutingKeyFromActuals(runningActualLRPs),
 	)
 
-	syncer.logger.Info("emitting-routes-after-syncing", lager.Data{"routes": routesToEmit})
-	err = syncer.emitter.Emit(routesToEmit)
-	if err != nil {
-		syncer.logger.Error("failed-to-emit-synced", err)
+	s.syncEvents.End <- SyncEnd{
+		Table: newTable,
+		Callback: func(table routing_table.RoutingTable) {
+			after := s.clock.Now()
+			routeSyncDuration.Send(after.Sub(before))
+		},
 	}
-
-	routesSynced.Add(routesToEmit.RouteRegistrationCount())
-	routesTotal.Send(syncer.table.RouteCount())
 }
 
-func (syncer *Syncer) register(desired receptor.DesiredLRPResponse, actual receptor.ActualLRPResponse) error {
+func (s *Syncer) register(desired receptor.DesiredLRPResponse, actual receptor.ActualLRPResponse) error {
 	routes, err := cfroutes.CFRoutesFromRoutingInfo(desired.Routes)
 	if err != nil || len(routes) == 0 {
 		return err
@@ -189,16 +198,26 @@ func (syncer *Syncer) register(desired receptor.DesiredLRPResponse, actual recep
 
 	payload, _ := json.Marshal(message)
 
-	return syncer.natsClient.Publish("router.register", payload)
+	return s.natsClient.Publish("router.register", payload)
 }
 
-func (syncer *Syncer) listenForHeartbeatInterval(replyUUID string) error {
-	_, err := syncer.natsClient.Subscribe("router.start", syncer.gotRouterHeartbeatInterval)
+func (s *Syncer) listenForRouter(replyUUID string) error {
+	_, err := s.natsClient.Subscribe("router.start", s.handleRouterGreet)
 	if err != nil {
 		return err
 	}
 
-	_, err = syncer.natsClient.Subscribe(replyUUID, syncer.gotRouterHeartbeatInterval)
+	sub, err := s.natsClient.Subscribe(replyUUID, s.handleRouterGreet)
+	if err != nil {
+		return err
+	}
+	sub.AutoUnsubscribe(1)
+
+	return nil
+}
+
+func (s *Syncer) greetRouter(replyUUID string) error {
+	err := s.natsClient.PublishRequest("router.greet", replyUUID, []byte{})
 	if err != nil {
 		return err
 	}
@@ -206,25 +225,21 @@ func (syncer *Syncer) listenForHeartbeatInterval(replyUUID string) error {
 	return nil
 }
 
-func (syncer *Syncer) greetRouter(replyUUID string) error {
-	err := syncer.natsClient.PublishRequest("router.greet", replyUUID, []byte{})
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (syncer *Syncer) gotRouterHeartbeatInterval(msg *nats.Msg) {
+func (s *Syncer) handleRouterGreet(msg *nats.Msg) {
 	var response routing_table.RouterGreetingMessage
 
 	err := json.Unmarshal(msg.Data, &response)
 	if err != nil {
-		syncer.logger.Error("received-invalid-router-start", err, lager.Data{
+		s.logger.Error("received-invalid-router-start", err, lager.Data{
 			"payload": msg.Data,
 		})
 		return
 	}
 
-	syncer.heartbeatInterval <- time.Duration(response.MinimumRegisterInterval) * time.Second
+	greetInterval := response.PruneThresholdInSeconds / 3
+	if greetInterval < response.MinimumRegisterInterval {
+		greetInterval = response.MinimumRegisterInterval
+	}
+
+	s.routerGreet <- time.Duration(greetInterval) * time.Second
 }

@@ -100,13 +100,15 @@ func main() {
 	natsClient := diegonats.NewClient()
 	natsClientRunner := diegonats.NewClientRunner(*natsAddresses, *natsUsername, *natsPassword, logger, natsClient)
 
+	syncer := syncer.NewSyncer(receptorClient, clock.NewClock(), *syncInterval, natsClient, logger)
+
 	emitter := initializeNatsEmitter(natsClient, logger)
 	watcher := ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
-		return watcher.NewWatcher(receptorClient, table, emitter, logger).Run(signals, ready)
+		return watcher.NewWatcher(receptorClient, table, emitter, syncer.SyncEvents(), logger).Run(signals, ready)
 	})
 
-	syncer := ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
-		return syncer.NewSyncer(receptorClient, table, emitter, *syncInterval, natsClient, logger).Run(signals, ready)
+	syncRunner := ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
+		return syncer.Run(signals, ready)
 	})
 
 	uuid, err := uuid.NewV4()
@@ -120,7 +122,7 @@ func main() {
 		{"heartbeater", restart.OnError(heartbeat, heartbeater.ErrStoreUnavailable)},
 		{"nats-client", natsClientRunner},
 		{"watcher", watcher},
-		{"syncer", syncer},
+		{"syncer", syncRunner},
 	}
 
 	if dbgAddr := cf_debug_server.DebugAddress(flag.CommandLine); dbgAddr != "" {
@@ -157,7 +159,7 @@ func initializeNatsEmitter(natsClient diegonats.NATSClient, logger lager.Logger)
 }
 
 func initializeRoutingTable() routing_table.RoutingTable {
-	return routing_table.New()
+	return routing_table.NewTable()
 }
 
 func initializeBbs(logger lager.Logger) Bbs.RouteEmitterBBS {

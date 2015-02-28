@@ -16,6 +16,7 @@ import (
 	"github.com/cloudfoundry-incubator/route-emitter/nats_emitter/fake_nats_emitter"
 	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
 	"github.com/cloudfoundry-incubator/route-emitter/routing_table/fake_routing_table"
+	"github.com/cloudfoundry-incubator/route-emitter/syncer"
 	. "github.com/cloudfoundry-incubator/route-emitter/watcher"
 	fake_metrics_sender "github.com/cloudfoundry/dropsonde/metric_sender/fake"
 	"github.com/cloudfoundry/dropsonde/metrics"
@@ -38,6 +39,7 @@ var _ = Describe("Watcher", func() {
 		receptorClient *fake_receptor.FakeClient
 		table          *fake_routing_table.FakeRoutingTable
 		emitter        *fake_nats_emitter.FakeNATSEmitter
+		syncEvents     syncer.SyncEvents
 
 		watcher *Watcher
 		process ifrit.Process
@@ -58,6 +60,11 @@ var _ = Describe("Watcher", func() {
 		receptorClient = new(fake_receptor.FakeClient)
 		table = &fake_routing_table.FakeRoutingTable{}
 		emitter = &fake_nats_emitter.FakeNATSEmitter{}
+		syncEvents = syncer.SyncEvents{
+			Begin: make(chan syncer.SyncBegin),
+			End:   make(chan syncer.SyncEnd),
+			Emit:  make(chan struct{}),
+		}
 		logger := lagertest.NewTestLogger("test")
 
 		dummyEndpoint := routing_table.Endpoint{InstanceGuid: expectedInstanceGuid, Host: expectedHost, Port: expectedContainerPort}
@@ -66,7 +73,7 @@ var _ = Describe("Watcher", func() {
 			RegistrationMessages: []routing_table.RegistryMessage{dummyMessage},
 		}
 
-		watcher = NewWatcher(receptorClient, table, emitter, logger)
+		watcher = NewWatcher(receptorClient, table, emitter, syncEvents, logger)
 
 		expectedRoutes = []string{"route-1", "route-2"}
 		expectedCFRoute = cfroutes.CFRoute{Hostnames: expectedRoutes, Port: expectedContainerPort}
@@ -115,11 +122,17 @@ var _ = Describe("Watcher", func() {
 					LogGuid:     logGuid,
 				}
 
+				var nextErr error
+				eventSource.CloseStub = func() error {
+					nextErr = errors.New("closed")
+					return nil
+				}
+
 				eventSource.NextStub = func() (receptor.Event, error) {
 					if eventSource.NextCallCount() == 1 {
 						return receptor.NewDesiredLRPCreatedEvent(desiredLRP), nil
 					} else {
-						return nil, nil
+						return nil, nextErr
 					}
 				}
 			})
@@ -203,11 +216,18 @@ var _ = Describe("Watcher", func() {
 					Action: &models.RunAction{
 						Path: "ls",
 					},
-					Domain:      "tests",
-					ProcessGuid: expectedProcessGuid,
-					LogGuid:     logGuid,
-					Ports:       []uint16{expectedContainerPort},
-					Routes:      cfroutes.CFRoutes{{Hostnames: expectedRoutes, Port: expectedContainerPort}}.RoutingInfo(),
+					Domain:          "tests",
+					ProcessGuid:     expectedProcessGuid,
+					LogGuid:         logGuid,
+					Ports:           []uint16{expectedContainerPort},
+					Routes:          cfroutes.CFRoutes{{Hostnames: expectedRoutes, Port: expectedContainerPort}}.RoutingInfo(),
+					ModificationTag: receptor.ModificationTag{Epoch: "abcd", Index: 1},
+				}
+
+				var nextErr error
+				eventSource.CloseStub = func() error {
+					nextErr = errors.New("closed")
+					return nil
 				}
 
 				eventSource.NextStub = func() (receptor.Event, error) {
@@ -217,7 +237,7 @@ var _ = Describe("Watcher", func() {
 							changedDesiredLRP,
 						), nil
 					} else {
-						return nil, nil
+						return nil, nextErr
 					}
 				}
 			})
@@ -310,8 +330,9 @@ var _ = Describe("Watcher", func() {
 				It("deletes the routes for the missng key", func() {
 					Eventually(table.RemoveRoutesCallCount).Should(Equal(1))
 
-					key := table.RemoveRoutesArgsForCall(0)
+					key, modTag := table.RemoveRoutesArgsForCall(0)
 					Ω(key).Should(Equal(expectedRoutingKey))
+					Ω(modTag).Should(Equal(changedDesiredLRP.ModificationTag))
 				})
 
 				It("emits whatever the table tells it to emit", func() {
@@ -334,8 +355,9 @@ var _ = Describe("Watcher", func() {
 				It("deletes the routes for the missng key", func() {
 					Eventually(table.RemoveRoutesCallCount).Should(Equal(1))
 
-					key := table.RemoveRoutesArgsForCall(0)
+					key, modTag := table.RemoveRoutesArgsForCall(0)
 					Ω(key).Should(Equal(expectedRoutingKey))
+					Ω(modTag).Should(Equal(changedDesiredLRP.ModificationTag))
 				})
 
 				It("emits whatever the table tells it to emit", func() {
@@ -360,26 +382,34 @@ var _ = Describe("Watcher", func() {
 					Action: &models.RunAction{
 						Path: "ls",
 					},
-					Domain:      "tests",
-					ProcessGuid: expectedProcessGuid,
-					Ports:       []uint16{expectedContainerPort},
-					Routes:      cfroutes.CFRoutes{expectedCFRoute}.RoutingInfo(),
-					LogGuid:     logGuid,
+					Domain:          "tests",
+					ProcessGuid:     expectedProcessGuid,
+					Ports:           []uint16{expectedContainerPort},
+					Routes:          cfroutes.CFRoutes{expectedCFRoute}.RoutingInfo(),
+					LogGuid:         logGuid,
+					ModificationTag: receptor.ModificationTag{Epoch: "defg", Index: 2},
+				}
+
+				var nextErr error
+				eventSource.CloseStub = func() error {
+					nextErr = errors.New("closed")
+					return nil
 				}
 
 				eventSource.NextStub = func() (receptor.Event, error) {
 					if eventSource.NextCallCount() == 1 {
 						return receptor.NewDesiredLRPRemovedEvent(desiredLRP), nil
 					} else {
-						return nil, nil
+						return nil, nextErr
 					}
 				}
 			})
 
 			It("should remove the routes from the table", func() {
 				Eventually(table.RemoveRoutesCallCount).Should(Equal(1))
-				key := table.RemoveRoutesArgsForCall(0)
+				key, modTag := table.RemoveRoutesArgsForCall(0)
 				Ω(key).Should(Equal(expectedRoutingKey))
+				Ω(modTag).Should(Equal(desiredLRP.ModificationTag))
 			})
 
 			It("should emit whatever the table tells it to emit", func() {
@@ -398,11 +428,16 @@ var _ = Describe("Watcher", func() {
 				It("should remove the routes from the table", func() {
 					Eventually(table.RemoveRoutesCallCount).Should(Equal(2))
 
-					key := table.RemoveRoutesArgsForCall(0)
+					key, modTag := table.RemoveRoutesArgsForCall(0)
 					Ω(key).Should(Equal(expectedRoutingKey))
+					Ω(modTag).Should(Equal(desiredLRP.ModificationTag))
 
-					key = table.RemoveRoutesArgsForCall(1)
+					key, modTag = table.RemoveRoutesArgsForCall(1)
 					Ω(key).Should(Equal(expectedAdditionalRoutingKey))
+
+					key, modTag = table.RemoveRoutesArgsForCall(0)
+					Ω(key).Should(Equal(expectedRoutingKey))
+					Ω(modTag).Should(Equal(desiredLRP.ModificationTag))
 				})
 
 				It("emits whatever the table tells it to emit", func() {
@@ -443,11 +478,17 @@ var _ = Describe("Watcher", func() {
 						State: receptor.ActualLRPStateRunning,
 					}
 
+					var nextErr error
+					eventSource.CloseStub = func() error {
+						nextErr = errors.New("closed")
+						return nil
+					}
+
 					eventSource.NextStub = func() (receptor.Event, error) {
 						if eventSource.NextCallCount() == 1 {
 							return receptor.NewActualLRPCreatedEvent(actualLRP), nil
 						} else {
-							return nil, nil
+							return nil, nextErr
 						}
 					}
 				})
@@ -507,11 +548,17 @@ var _ = Describe("Watcher", func() {
 						State: receptor.ActualLRPStateUnclaimed,
 					}
 
+					var nextErr error
+					eventSource.CloseStub = func() error {
+						nextErr = errors.New("closed")
+						return nil
+					}
+
 					eventSource.NextStub = func() (receptor.Event, error) {
 						if eventSource.NextCallCount() == 1 {
 							return receptor.NewActualLRPCreatedEvent(actualLRP), nil
 						} else {
-							return nil, nil
+							return nil, nextErr
 						}
 					}
 				})
@@ -556,11 +603,17 @@ var _ = Describe("Watcher", func() {
 						State: receptor.ActualLRPStateRunning,
 					}
 
+					var nextErr error
+					eventSource.CloseStub = func() error {
+						nextErr = errors.New("closed")
+						return nil
+					}
+
 					eventSource.NextStub = func() (receptor.Event, error) {
 						if eventSource.NextCallCount() == 1 {
 							return receptor.NewActualLRPChangedEvent(beforeActualLRP, afterActualLRP), nil
 						} else {
-							return nil, nil
+							return nil, nextErr
 						}
 					}
 				})
@@ -634,11 +687,17 @@ var _ = Describe("Watcher", func() {
 						State:       receptor.ActualLRPStateUnclaimed,
 					}
 
+					var nextErr error
+					eventSource.CloseStub = func() error {
+						nextErr = errors.New("closed")
+						return nil
+					}
+
 					eventSource.NextStub = func() (receptor.Event, error) {
 						if eventSource.NextCallCount() == 1 {
 							return receptor.NewActualLRPChangedEvent(beforeActualLRP, afterActualLRP), nil
 						} else {
-							return nil, nil
+							return nil, nextErr
 						}
 					}
 				})
@@ -693,11 +752,17 @@ var _ = Describe("Watcher", func() {
 						State:        receptor.ActualLRPStateClaimed,
 					}
 
+					var nextErr error
+					eventSource.CloseStub = func() error {
+						nextErr = errors.New("closed")
+						return nil
+					}
+
 					eventSource.NextStub = func() (receptor.Event, error) {
 						if eventSource.NextCallCount() == 1 {
 							return receptor.NewActualLRPChangedEvent(beforeActualLRP, afterActualLRP), nil
 						} else {
-							return nil, nil
+							return nil, nextErr
 						}
 					}
 				})
@@ -738,11 +803,17 @@ var _ = Describe("Watcher", func() {
 						State: receptor.ActualLRPStateRunning,
 					}
 
+					var nextErr error
+					eventSource.CloseStub = func() error {
+						nextErr = errors.New("closed")
+						return nil
+					}
+
 					eventSource.NextStub = func() (receptor.Event, error) {
 						if eventSource.NextCallCount() == 1 {
 							return receptor.NewActualLRPRemovedEvent(actualLRP), nil
 						} else {
-							return nil, nil
+							return nil, nextErr
 						}
 					}
 				})
@@ -792,11 +863,17 @@ var _ = Describe("Watcher", func() {
 						State:       receptor.ActualLRPStateCrashed,
 					}
 
+					var nextErr error
+					eventSource.CloseStub = func() error {
+						nextErr = errors.New("closed")
+						return nil
+					}
+
 					eventSource.NextStub = func() (receptor.Event, error) {
 						if eventSource.NextCallCount() == 1 {
 							return receptor.NewActualLRPRemovedEvent(actualLRP), nil
 						} else {
-							return nil, nil
+							return nil, nextErr
 						}
 					}
 				})
@@ -817,11 +894,17 @@ var _ = Describe("Watcher", func() {
 			eventSource := new(fake_receptor.FakeEventSource)
 			receptorClient.SubscribeToEventsReturns(eventSource, nil)
 
+			var nextErr error
+			eventSource.CloseStub = func() error {
+				nextErr = errors.New("closed")
+				return nil
+			}
+
 			eventSource.NextStub = func() (receptor.Event, error) {
 				if eventSource.NextCallCount() == 1 {
 					return unrecognizedEvent{}, nil
 				} else {
-					return nil, nil
+					return nil, nextErr
 				}
 			}
 		})
@@ -873,10 +956,157 @@ var _ = Describe("Watcher", func() {
 			Eventually(process.Wait()).Should(Receive())
 		})
 	})
+
+	Describe("Sync Events", func() {
+		var nextEvent chan receptor.Event
+
+		BeforeEach(func() {
+			eventSource := new(fake_receptor.FakeEventSource)
+			receptorClient.SubscribeToEventsReturns(eventSource, nil)
+			nextEvent = make(chan receptor.Event)
+
+			var nextErr error
+			eventSource.CloseStub = func() error {
+				nextErr = errors.New("closed")
+				return nil
+			}
+
+			eventSource.NextStub = func() (receptor.Event, error) {
+				select {
+				case e := <-nextEvent:
+					return e, nil
+				default:
+				}
+
+				return nil, nextErr
+			}
+		})
+
+		Context("Emit", func() {
+			JustBeforeEach(func() {
+				table.MessagesToEmitReturns(dummyMessagesToEmit)
+				table.RouteCountReturns(123)
+				syncEvents.Emit <- struct{}{}
+			})
+
+			It("emits", func() {
+				Eventually(emitter.EmitCallCount).Should(Equal(1))
+				Ω(emitter.EmitArgsForCall(0)).Should(Equal(dummyMessagesToEmit))
+			})
+
+			It("sends a 'routes total' metric", func() {
+				Eventually(func() float64 {
+					return fakeMetricSender.GetValue("RoutesTotal").Value
+				}, 2).Should(BeEquivalentTo(123))
+			})
+
+			It("sends a 'synced routes' metric", func() {
+				Eventually(func() uint64 {
+					return fakeMetricSender.GetCounter("RoutesSynced")
+				}, 2).Should(BeEquivalentTo(2))
+			})
+		})
+
+		Context("Begin & End events", func() {
+			var ack chan struct{}
+
+			sendEvent := func() {
+				actualLRP := receptor.ActualLRPResponse{
+					ProcessGuid:  expectedProcessGuid,
+					Index:        1,
+					Domain:       "domain",
+					InstanceGuid: expectedInstanceGuid,
+					CellID:       "cell-id",
+					Address:      expectedHost,
+					Ports: []receptor.PortMapping{
+						{ContainerPort: expectedContainerPort, HostPort: expectedExternalPort},
+						{ContainerPort: expectedAdditionalContainerPort, HostPort: expectedAdditionalExternalPort},
+					},
+					State: receptor.ActualLRPStateRunning,
+				}
+
+				nextEvent <- receptor.NewActualLRPRemovedEvent(actualLRP)
+			}
+
+			JustBeforeEach(func() {
+				ack = make(chan struct{})
+				syncEvents.Begin <- syncer.SyncBegin{ack}
+				Eventually(ack).Should(BeClosed())
+			})
+
+			Context("when sync begins", func() {
+				It("caches events", func() {
+					sendEvent()
+					Consistently(table.RemoveEndpointCallCount).Should(Equal(0))
+				})
+			})
+
+			Context("when syncing ends", func() {
+				var tempTable *fake_routing_table.FakeRoutingTable
+				var callback func(routing_table.RoutingTable)
+
+				BeforeEach(func() {
+					tempTable = &fake_routing_table.FakeRoutingTable{}
+					callback = nil
+				})
+
+				sendEnd := func() {
+					syncEvents.End <- syncer.SyncEnd{
+						Table:    tempTable,
+						Callback: callback,
+					}
+				}
+
+				It("swaps the tables", func() {
+					sendEnd()
+
+					Eventually(table.SwapCallCount).Should(Equal(1))
+					Ω(table.SwapArgsForCall(0)).Should(Equal(tempTable))
+				})
+
+				It("applies the cached events and emits one messages", func() {
+					table.MessagesToEmitReturns(dummyMessagesToEmit)
+					sendEvent()
+					sendEnd()
+
+					Eventually(table.RemoveEndpointCallCount).Should(Equal(2))
+					Eventually(emitter.EmitCallCount).Should(Equal(1))
+					Ω(emitter.EmitArgsForCall(0)).Should(Equal(dummyMessagesToEmit))
+				})
+
+				Context("when a callback is provided", func() {
+					var called chan struct{}
+
+					BeforeEach(func() {
+						called = make(chan struct{})
+						callback = func(routing_table.RoutingTable) {
+							close(called)
+						}
+					})
+
+					It("calls the callback", func() {
+						sendEnd()
+						Eventually(called).Should(BeClosed())
+					})
+				})
+
+				It("does not cache events", func() {
+					sendEnd()
+					sendEvent()
+
+					Eventually(table.RemoveEndpointCallCount).Should(Equal(2))
+				})
+			})
+		})
+	})
 })
 
 type unrecognizedEvent struct{}
 
 func (u unrecognizedEvent) EventType() receptor.EventType {
 	return "unrecognized-event"
+}
+
+func (u unrecognizedEvent) Key() string {
+	return ""
 }

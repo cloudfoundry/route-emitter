@@ -23,4 +23,5 @@ func RegistryMessageFor(endpoint Endpoint, routes Routes) RegistryMessage {
 
 type RouterGreetingMessage struct {
 	MinimumRegisterInterval int `json:"minimumRegisterIntervalInSeconds"`
+	PruneThresholdInSeconds int `json:"pruneThresholdInSeconds"`
 }

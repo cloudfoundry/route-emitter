@@ -34,17 +34,19 @@ var _ = Describe("RoutingTable", func() {
 	logGuid := "some-log-guid"
 
 	BeforeEach(func() {
-		table = New()
+		table = NewTable()
 	})
 
-	Describe("When syncing", func() {
+	Describe("Swap", func() {
 		Context("when a new routing key arrives", func() {
 			Context("when the routing key has both routes and endpoints", func() {
 				BeforeEach(func() {
-					messagesToEmit = table.Sync(
+					tempTable := NewTempTable(
 						RoutesByRoutingKey{key: Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}},
 						EndpointsByRoutingKey{key: {endpoint1, endpoint2}},
 					)
+
+					messagesToEmit = table.Swap(tempTable)
 				})
 
 				It("emits registrations for each pairing", func() {
@@ -60,10 +62,11 @@ var _ = Describe("RoutingTable", func() {
 
 			Context("when the process only has routes", func() {
 				BeforeEach(func() {
-					messagesToEmit = table.Sync(
+					tempTable := NewTempTable(
 						RoutesByRoutingKey{key: Routes{Hostnames: []string{hostname1}, LogGuid: logGuid}},
 						EndpointsByRoutingKey{},
 					)
+					messagesToEmit = table.Swap(tempTable)
 				})
 
 				It("should not emit a registration", func() {
@@ -72,10 +75,11 @@ var _ = Describe("RoutingTable", func() {
 
 				Context("when the endpoints subsequently arrive", func() {
 					BeforeEach(func() {
-						messagesToEmit = table.Sync(
+						tempTable := NewTempTable(
 							RoutesByRoutingKey{key: Routes{Hostnames: []string{hostname1}, LogGuid: logGuid}},
 							EndpointsByRoutingKey{key: {endpoint1}},
 						)
+						messagesToEmit = table.Swap(tempTable)
 					})
 
 					It("emits registrations for each pairing", func() {
@@ -90,10 +94,11 @@ var _ = Describe("RoutingTable", func() {
 
 				Context("when the routing key subsequently disappears", func() {
 					BeforeEach(func() {
-						messagesToEmit = table.Sync(
+						tempTable := NewTempTable(
 							RoutesByRoutingKey{},
 							EndpointsByRoutingKey{},
 						)
+						messagesToEmit = table.Swap(tempTable)
 					})
 
 					It("emits nothing", func() {
@@ -104,10 +109,11 @@ var _ = Describe("RoutingTable", func() {
 
 			Context("when the process only has endpoints", func() {
 				BeforeEach(func() {
-					messagesToEmit = table.Sync(
+					tempTable := NewTempTable(
 						RoutesByRoutingKey{},
 						EndpointsByRoutingKey{key: {endpoint1}},
 					)
+					messagesToEmit = table.Swap(tempTable)
 				})
 
 				It("should not emit a registration", func() {
@@ -116,10 +122,11 @@ var _ = Describe("RoutingTable", func() {
 
 				Context("when the routes subsequently arrive", func() {
 					BeforeEach(func() {
-						messagesToEmit = table.Sync(
+						tempTable := NewTempTable(
 							RoutesByRoutingKey{key: Routes{Hostnames: []string{hostname1}, LogGuid: logGuid}},
 							EndpointsByRoutingKey{key: {endpoint1}},
 						)
+						messagesToEmit = table.Swap(tempTable)
 					})
 
 					It("emits registrations for each pairing", func() {
@@ -134,10 +141,11 @@ var _ = Describe("RoutingTable", func() {
 
 				Context("when the endpoint subsequently disappears", func() {
 					BeforeEach(func() {
-						messagesToEmit = table.Sync(
+						tempTable := NewTempTable(
 							RoutesByRoutingKey{},
 							EndpointsByRoutingKey{},
 						)
+						messagesToEmit = table.Swap(tempTable)
 					})
 
 					It("emits nothing", func() {
@@ -149,18 +157,20 @@ var _ = Describe("RoutingTable", func() {
 
 		Context("when there is an existing routing key", func() {
 			BeforeEach(func() {
-				table.Sync(
+				tempTable := NewTempTable(
 					RoutesByRoutingKey{key: Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}},
 					EndpointsByRoutingKey{key: {endpoint1, endpoint2}},
 				)
+				table.Swap(tempTable)
 			})
 
 			Context("when nothing changes", func() {
 				BeforeEach(func() {
-					messagesToEmit = table.Sync(
+					tempTable := NewTempTable(
 						RoutesByRoutingKey{key: Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}},
 						EndpointsByRoutingKey{key: {endpoint1, endpoint2}},
 					)
+					messagesToEmit = table.Swap(tempTable)
 				})
 
 				It("emits all registrations and no unregisration", func() {
@@ -176,10 +186,11 @@ var _ = Describe("RoutingTable", func() {
 
 			Context("when the routing key gets new routes", func() {
 				BeforeEach(func() {
-					messagesToEmit = table.Sync(
+					tempTable := NewTempTable(
 						RoutesByRoutingKey{key: Routes{Hostnames: []string{hostname1, hostname2, hostname3}, LogGuid: logGuid}},
 						EndpointsByRoutingKey{key: {endpoint1, endpoint2}},
 					)
+					messagesToEmit = table.Swap(tempTable)
 				})
 
 				It("emits all registrations and no unregisration", func() {
@@ -195,10 +206,11 @@ var _ = Describe("RoutingTable", func() {
 
 			Context("when the routing key gets new endpoints", func() {
 				BeforeEach(func() {
-					messagesToEmit = table.Sync(
+					tempTable := NewTempTable(
 						RoutesByRoutingKey{key: Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}},
 						EndpointsByRoutingKey{key: {endpoint1, endpoint2, endpoint3}},
 					)
+					messagesToEmit = table.Swap(tempTable)
 				})
 
 				It("emits all registrations and no unregisration", func() {
@@ -215,10 +227,11 @@ var _ = Describe("RoutingTable", func() {
 
 			Context("when the routing key gets a new evacuating endpoint", func() {
 				BeforeEach(func() {
-					messagesToEmit = table.Sync(
+					tempTable := NewTempTable(
 						RoutesByRoutingKey{key: Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}},
 						EndpointsByRoutingKey{key: {endpoint1, endpoint2, evacuating1}},
 					)
+					messagesToEmit = table.Swap(tempTable)
 				})
 
 				It("emits all registrations and no unregisration", func() {
@@ -235,14 +248,17 @@ var _ = Describe("RoutingTable", func() {
 
 			Context("when the routing key has an evacuating and instance endpoint", func() {
 				BeforeEach(func() {
-					table.Sync(
+					tempTable := NewTempTable(
 						RoutesByRoutingKey{key: Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}},
 						EndpointsByRoutingKey{key: {endpoint1, endpoint2, evacuating1}},
 					)
-					messagesToEmit = table.Sync(
+					table.Swap(tempTable)
+
+					tempTable = NewTempTable(
 						RoutesByRoutingKey{key: Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}},
 						EndpointsByRoutingKey{key: {endpoint2, evacuating1}},
 					)
+					messagesToEmit = table.Swap(tempTable)
 				})
 
 				It("should not emit an unregistration ", func() {
@@ -258,10 +274,11 @@ var _ = Describe("RoutingTable", func() {
 
 			Context("when the routing key gets new routes and endpoints", func() {
 				BeforeEach(func() {
-					messagesToEmit = table.Sync(
+					tempTable := NewTempTable(
 						RoutesByRoutingKey{key: Routes{Hostnames: []string{hostname1, hostname2, hostname3}, LogGuid: logGuid}},
 						EndpointsByRoutingKey{key: {endpoint1, endpoint2, endpoint3}},
 					)
+					messagesToEmit = table.Swap(tempTable)
 				})
 
 				It("emits all registrations and no unregisration", func() {
@@ -278,10 +295,11 @@ var _ = Describe("RoutingTable", func() {
 
 			Context("when the routing key loses routes", func() {
 				BeforeEach(func() {
-					messagesToEmit = table.Sync(
+					tempTable := NewTempTable(
 						RoutesByRoutingKey{key: Routes{Hostnames: []string{hostname1}, LogGuid: logGuid}},
 						EndpointsByRoutingKey{key: {endpoint1, endpoint2}},
 					)
+					messagesToEmit = table.Swap(tempTable)
 				})
 
 				It("emits all registrations and the relevant unregisrations", func() {
@@ -301,10 +319,11 @@ var _ = Describe("RoutingTable", func() {
 
 			Context("when the routing key loses endpoints", func() {
 				BeforeEach(func() {
-					messagesToEmit = table.Sync(
+					tempTable := NewTempTable(
 						RoutesByRoutingKey{key: Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}},
 						EndpointsByRoutingKey{key: {endpoint1}},
 					)
+					messagesToEmit = table.Swap(tempTable)
 				})
 
 				It("emits all registrations and the relevant unregisrations", func() {
@@ -322,10 +341,11 @@ var _ = Describe("RoutingTable", func() {
 
 			Context("when the routing key loses both routes and endpoints", func() {
 				BeforeEach(func() {
-					messagesToEmit = table.Sync(
+					tempTable := NewTempTable(
 						RoutesByRoutingKey{key: Routes{Hostnames: []string{hostname1}, LogGuid: logGuid}},
 						EndpointsByRoutingKey{key: {endpoint1}},
 					)
+					messagesToEmit = table.Swap(tempTable)
 				})
 
 				It("emits all registrations and the relevant unregisrations", func() {
@@ -344,10 +364,11 @@ var _ = Describe("RoutingTable", func() {
 
 			Context("when the routing key gains routes but loses endpoints", func() {
 				BeforeEach(func() {
-					messagesToEmit = table.Sync(
+					tempTable := NewTempTable(
 						RoutesByRoutingKey{key: Routes{Hostnames: []string{hostname1, hostname2, hostname3}, LogGuid: logGuid}},
 						EndpointsByRoutingKey{key: {endpoint1}},
 					)
+					messagesToEmit = table.Swap(tempTable)
 				})
 
 				It("emits all registrations and the relevant unregisrations", func() {
@@ -365,10 +386,11 @@ var _ = Describe("RoutingTable", func() {
 
 			Context("when the routing key loses routes but gains endpoints", func() {
 				BeforeEach(func() {
-					messagesToEmit = table.Sync(
+					tempTable := NewTempTable(
 						RoutesByRoutingKey{key: Routes{Hostnames: []string{hostname1}, LogGuid: logGuid}},
 						EndpointsByRoutingKey{key: {endpoint1, endpoint2, endpoint3}},
 					)
+					messagesToEmit = table.Swap(tempTable)
 				})
 
 				It("emits all registrations and the relevant unregisrations", func() {
@@ -389,10 +411,11 @@ var _ = Describe("RoutingTable", func() {
 
 			Context("when the routing key disappears entirely", func() {
 				BeforeEach(func() {
-					messagesToEmit = table.Sync(
+					tempTable := NewTempTable(
 						RoutesByRoutingKey{},
 						EndpointsByRoutingKey{},
 					)
+					messagesToEmit = table.Swap(tempTable)
 				})
 
 				It("should unregister the missing guids", func() {
@@ -410,15 +433,17 @@ var _ = Describe("RoutingTable", func() {
 				Context("when the original registration had no routes, and then the routing key loses endpoints", func() {
 					BeforeEach(func() {
 						//override previous set up
-						table.Sync(
+						tempTable := NewTempTable(
 							RoutesByRoutingKey{},
 							EndpointsByRoutingKey{key: {endpoint1, endpoint2}},
 						)
+						table.Swap(tempTable)
 
-						messagesToEmit = table.Sync(
+						tempTable = NewTempTable(
 							RoutesByRoutingKey{key: {}},
 							EndpointsByRoutingKey{key: {endpoint1}},
 						)
+						messagesToEmit = table.Swap(tempTable)
 					})
 
 					It("emits nothing", func() {
@@ -429,15 +454,17 @@ var _ = Describe("RoutingTable", func() {
 				Context("when the original registration had no endpoints, and then the routing key loses a route", func() {
 					BeforeEach(func() {
 						//override previous set up
-						table.Sync(
+						tempTable := NewTempTable(
 							RoutesByRoutingKey{key: Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}},
 							EndpointsByRoutingKey{},
 						)
+						table.Swap(tempTable)
 
-						messagesToEmit = table.Sync(
+						tempTable = NewTempTable(
 							RoutesByRoutingKey{key: Routes{Hostnames: []string{hostname1}, LogGuid: logGuid}},
 							EndpointsByRoutingKey{},
 						)
+						messagesToEmit = table.Swap(tempTable)
 					})
 
 					It("emits nothing", func() {
@@ -452,14 +479,14 @@ var _ = Describe("RoutingTable", func() {
 		Context("when the table is empty", func() {
 			Context("When setting routes", func() {
 				It("emits nothing", func() {
-					messagesToEmit = table.SetRoutes(key, Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid})
+					messagesToEmit = table.SetRoutes(key, Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid, ModificationTag: currentTag})
 					Ω(messagesToEmit).Should(BeZero())
 				})
 			})
 
 			Context("when removing routes", func() {
 				It("emits nothing", func() {
-					messagesToEmit = table.RemoveRoutes(key)
+					messagesToEmit = table.RemoveRoutes(key, currentTag)
 					Ω(messagesToEmit).Should(BeZero())
 				})
 			})
@@ -553,8 +580,8 @@ var _ = Describe("RoutingTable", func() {
 			})
 
 			Context("RemoveRoutes", func() {
-				It("emits unregistrations", func() {
-					messagesToEmit = table.RemoveRoutes(key)
+				It("emits unregistrations with a newer tag", func() {
+					messagesToEmit = table.RemoveRoutes(key, newerTag)
 
 					expected := MessagesToEmit{
 						UnregistrationMessages: []RegistryMessage{
@@ -563,6 +590,23 @@ var _ = Describe("RoutingTable", func() {
 						},
 					}
 					Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
+				})
+
+				It("emits unregistrations with the same tag", func() {
+					messagesToEmit = table.RemoveRoutes(key, newerTag)
+
+					expected := MessagesToEmit{
+						UnregistrationMessages: []RegistryMessage{
+							RegistryMessageFor(endpoint1, Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}),
+							RegistryMessageFor(endpoint2, Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}),
+						},
+					}
+					Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
+				})
+
+				It("emits nothing when the tag is older", func() {
+					messagesToEmit = table.RemoveRoutes(key, olderTag)
+					Ω(messagesToEmit).Should(BeZero())
 				})
 			})
 
@@ -632,7 +676,7 @@ var _ = Describe("RoutingTable", func() {
 			})
 
 			Context("when removing endpoints", func() {
-				It("emits unregistrations", func() {
+				It("emits unregistrations with the same tag", func() {
 					messagesToEmit = table.RemoveEndpoint(key, endpoint2)
 
 					expected := MessagesToEmit{
@@ -641,6 +685,26 @@ var _ = Describe("RoutingTable", func() {
 						},
 					}
 					Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
+				})
+
+				It("emits unregistrations when the tag is newer", func() {
+					newerEndpoint := endpoint2
+					newerEndpoint.ModificationTag = newerTag
+					messagesToEmit = table.RemoveEndpoint(key, newerEndpoint)
+
+					expected := MessagesToEmit{
+						UnregistrationMessages: []RegistryMessage{
+							RegistryMessageFor(endpoint2, Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}),
+						},
+					}
+					Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
+				})
+
+				It("emits nothing when the tag is older", func() {
+					olderEndpoint := endpoint2
+					olderEndpoint.ModificationTag = olderTag
+					messagesToEmit = table.RemoveEndpoint(key, olderEndpoint)
+					Ω(messagesToEmit).Should(BeZero())
 				})
 
 				Context("when an instance endpoint is removed for an instance that already exists", func() {
@@ -681,7 +745,7 @@ var _ = Describe("RoutingTable", func() {
 
 			Context("when removing routes", func() {
 				It("emits nothing", func() {
-					messagesToEmit = table.RemoveRoutes(key)
+					messagesToEmit = table.RemoveRoutes(key, currentTag)
 					Ω(messagesToEmit).Should(BeZero())
 				})
 			})
@@ -722,7 +786,7 @@ var _ = Describe("RoutingTable", func() {
 
 			Context("when removing routes", func() {
 				It("emits nothing", func() {
-					messagesToEmit = table.RemoveRoutes(key)
+					messagesToEmit = table.RemoveRoutes(key, currentTag)
 					Ω(messagesToEmit).Should(BeZero())
 				})
 			})

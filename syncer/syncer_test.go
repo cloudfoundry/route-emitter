@@ -3,20 +3,19 @@ package syncer_test
 import (
 	"errors"
 	"os"
-	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/apcera/nats"
 	"github.com/cloudfoundry-incubator/receptor"
 	"github.com/cloudfoundry-incubator/receptor/fake_receptor"
 	"github.com/cloudfoundry-incubator/route-emitter/cfroutes"
-	"github.com/cloudfoundry-incubator/route-emitter/nats_emitter/fake_nats_emitter"
 	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
-	"github.com/cloudfoundry-incubator/route-emitter/routing_table/fake_routing_table"
 	. "github.com/cloudfoundry-incubator/route-emitter/syncer"
 	fake_metrics_sender "github.com/cloudfoundry/dropsonde/metric_sender/fake"
 	"github.com/cloudfoundry/dropsonde/metrics"
 	"github.com/cloudfoundry/gunk/diegonats"
+	"github.com/pivotal-golang/clock/fakeclock"
 	"github.com/pivotal-golang/lager/lagertest"
 	"github.com/tedsuo/ifrit"
 
@@ -37,13 +36,18 @@ var _ = Describe("Syncer", func() {
 	var (
 		receptorClient *fake_receptor.FakeClient
 		natsClient     *diegonats.FakeNATSClient
-		emitter        *fake_nats_emitter.FakeNATSEmitter
-		table          *fake_routing_table.FakeRoutingTable
 		syncer         *Syncer
 		process        ifrit.Process
 		syncMessages   routing_table.MessagesToEmit
 		messagesToEmit routing_table.MessagesToEmit
-		syncDuration   time.Duration
+		clock          *fakeclock.FakeClock
+		clockStep      time.Duration
+		syncInterval   time.Duration
+
+		beginCallback func()
+		endCallback   func(func(routing_table.RoutingTable))
+
+		shutdown chan struct{}
 
 		desiredResponse receptor.DesiredLRPResponse
 		actualResponses []receptor.ActualLRPResponse
@@ -55,9 +59,13 @@ var _ = Describe("Syncer", func() {
 	BeforeEach(func() {
 		receptorClient = new(fake_receptor.FakeClient)
 		natsClient = diegonats.NewFakeClient()
-		emitter = &fake_nats_emitter.FakeNATSEmitter{}
-		table = &fake_routing_table.FakeRoutingTable{}
-		syncDuration = 10 * time.Second
+
+		clock = fakeclock.NewFakeClock(time.Now())
+		clockStep = 1 * time.Second
+		syncInterval = 10 * time.Second
+
+		beginCallback = func() {}
+		endCallback = func(f func(t routing_table.RoutingTable)) { f(nil) }
 
 		startMessages := make(chan *nats.Msg)
 		routerStartMessages = startMessages
@@ -85,9 +93,6 @@ var _ = Describe("Syncer", func() {
 		messagesToEmit = routing_table.MessagesToEmit{
 			RegistrationMessages: []routing_table.RegistryMessage{dummyMessage},
 		}
-
-		table.SyncReturns(syncMessages)
-		table.MessagesToEmitReturns(messagesToEmit)
 
 		desiredResponse = receptor.DesiredLRPResponse{
 			ProcessGuid: processGuid,
@@ -120,42 +125,50 @@ var _ = Describe("Syncer", func() {
 
 		fakeMetricSender = fake_metrics_sender.NewFakeMetricSender()
 		metrics.Initialize(fakeMetricSender)
-		table.RouteCountReturns(123)
 	})
 
 	JustBeforeEach(func() {
 		logger := lagertest.NewTestLogger("test")
-		syncer = NewSyncer(receptorClient, table, emitter, syncDuration, natsClient, logger)
+		syncer = NewSyncer(receptorClient, clock, syncInterval, natsClient, logger)
+
+		shutdown = make(chan struct{})
+		go func() {
+			defer GinkgoRecover()
+
+			events := syncer.SyncEvents()
+
+			for {
+				select {
+				case begin := <-events.Begin:
+					close(begin.Ack)
+					beginCallback()
+				case end := <-events.End:
+					endCallback(end.Callback)
+				case <-shutdown:
+					return
+				}
+			}
+		}()
+
+		go func() {
+			for {
+				select {
+				case <-time.After(100 * time.Millisecond):
+					clock.Increment(clockStep)
+				case <-shutdown:
+					return
+				}
+			}
+		}()
+
 		process = ifrit.Invoke(syncer)
 	})
 
 	AfterEach(func() {
 		process.Signal(os.Interrupt)
 		Eventually(process.Wait()).Should(Receive(BeNil()))
+		close(shutdown)
 		close(routerStartMessages)
-	})
-
-	Describe("on startup", func() {
-		It("should sync the table", func() {
-			Ω(table.SyncCallCount()).Should(Equal(1))
-
-			routes, endpoints := table.SyncArgsForCall(0)
-			Ω(routes).Should(HaveLen(1))
-			Ω(endpoints).Should(HaveLen(1))
-
-			key := routing_table.RoutingKey{ProcessGuid: processGuid, ContainerPort: containerPort}
-			Ω(routes[key]).Should(Equal(routing_table.Routes{
-				Hostnames: []string{"route-1", "route-2"},
-				LogGuid:   logGuid,
-			}))
-			Ω(endpoints[key]).Should(Equal([]routing_table.Endpoint{
-				{InstanceGuid: instanceGuid, Host: lrpHost, Port: 1234, ContainerPort: containerPort},
-			}))
-
-			Ω(emitter.EmitCallCount()).Should(Equal(1))
-			emittedMessages := emitter.EmitArgsForCall(0)
-			Ω(emittedMessages).Should(Equal(syncMessages))
-		})
 	})
 
 	Describe("getting the heartbeat interval from the router", func() {
@@ -169,41 +182,51 @@ var _ = Describe("Syncer", func() {
 		})
 
 		Context("when the router emits a router.start", func() {
-			JustBeforeEach(func() {
-				routerStartMessages <- &nats.Msg{
-					Data: []byte(`{"minimumRegisterIntervalInSeconds":1}`),
-				}
+			Context("when register interval is greater than prune interval", func() {
+				JustBeforeEach(func() {
+					routerStartMessages <- &nats.Msg{
+						Data: []byte(`{
+						"minimumRegisterIntervalInSeconds":2,
+						"pruneThresholdInSeconds": 1
+						}`),
+					}
+				})
+
+				It("uses the register interval", func() {
+					Eventually(syncer.SyncEvents().Emit).Should(Receive())
+					t1 := clock.Now()
+
+					Eventually(syncer.SyncEvents().Emit).Should(Receive())
+					t2 := clock.Now()
+
+					Ω(t2.Sub(t1)).Should(BeNumerically("~", 2*time.Second, 200*time.Millisecond))
+				})
 			})
 
-			It("should emit routes with the frequency of the passed-in-interval", func() {
-				Eventually(emitter.EmitCallCount, 2).Should(Equal(2))
-				emittedMessages := emitter.EmitArgsForCall(1)
-				Ω(emittedMessages).Should(Equal(messagesToEmit))
-				t1 := time.Now()
+			Context("using an interval", func() {
+				JustBeforeEach(func() {
+					routerStartMessages <- &nats.Msg{
+						Data: []byte(`{
+						"minimumRegisterIntervalInSeconds":1,
+						"pruneThresholdInSeconds": 3
+						}`),
+					}
+				})
 
-				Eventually(emitter.EmitCallCount, 2).Should(Equal(3))
-				emittedMessages = emitter.EmitArgsForCall(2)
-				Ω(emittedMessages).Should(Equal(messagesToEmit))
-				t2 := time.Now()
+				It("should emit routes with the frequency of the passed-in-interval", func() {
+					Eventually(syncer.SyncEvents().Emit, 2).Should(Receive())
+					t1 := clock.Now()
 
-				Ω(t2.Sub(t1)).Should(BeNumerically("~", 1*time.Second, 200*time.Millisecond))
-			})
+					Eventually(syncer.SyncEvents().Emit, 2).Should(Receive())
+					t2 := clock.Now()
 
-			It("should only greet the router once", func() {
-				Eventually(greetings).Should(Receive())
-				Consistently(greetings, 1).ShouldNot(Receive())
-			})
+					Ω(t2.Sub(t1)).Should(BeNumerically("~", 1*time.Second, 200*time.Millisecond))
+				})
 
-			It("sends a 'routes total' metric", func() {
-				Eventually(func() float64 {
-					return fakeMetricSender.GetValue("RoutesTotal").Value
-				}, 2).Should(BeEquivalentTo(123))
-			})
-
-			It("sends a 'synced routes' metric", func() {
-				Eventually(func() uint64 {
-					return fakeMetricSender.GetCounter("RoutesSynced")
-				}, 2).Should(BeEquivalentTo(3))
+				It("should only greet the router once", func() {
+					Eventually(greetings).Should(Receive())
+					Consistently(greetings, 1).ShouldNot(Receive())
+				})
 			})
 		})
 
@@ -216,19 +239,6 @@ var _ = Describe("Syncer", func() {
 				var msg *nats.Msg
 				Eventually(greetings, 2).Should(Receive(&msg))
 				go natsClient.Publish(msg.Reply, []byte(`{"minimumRegisterIntervalInSeconds":1}`))
-
-				//should now be emitting regularly at the specified interval
-				Eventually(emitter.EmitCallCount, 2).Should(Equal(2))
-				emittedMessages := emitter.EmitArgsForCall(1)
-				Ω(emittedMessages).Should(Equal(messagesToEmit))
-				t1 := time.Now()
-
-				Eventually(emitter.EmitCallCount, 2).Should(Equal(3))
-				emittedMessages = emitter.EmitArgsForCall(2)
-				Ω(emittedMessages).Should(Equal(messagesToEmit))
-				t2 := time.Now()
-
-				Ω(t2.Sub(t1)).Should(BeNumerically("~", 1*time.Second, 200*time.Millisecond))
 
 				//should no longer be greeting the router
 				Consistently(greetings).ShouldNot(Receive())
@@ -248,23 +258,14 @@ var _ = Describe("Syncer", func() {
 				}
 
 				//first emit should be pretty quick, it is in response to the incoming heartbeat interval
-				Eventually(emitter.EmitCallCount, 0.2).Should(Equal(2))
-				emittedMessages := emitter.EmitArgsForCall(1)
-				Ω(emittedMessages).Should(Equal(messagesToEmit))
-				t1 := time.Now()
+				Eventually(syncer.SyncEvents().Emit).Should(Receive())
+				t1 := clock.Now()
 
 				//subsequent emit should follow the interval
-				Eventually(emitter.EmitCallCount, 3).Should(Equal(3))
-				emittedMessages = emitter.EmitArgsForCall(2)
-				Ω(emittedMessages).Should(Equal(messagesToEmit))
-				t2 := time.Now()
-				Ω(t2.Sub(t1)).Should(BeNumerically("~", 2*time.Second, 200*time.Millisecond))
-			})
+				Eventually(syncer.SyncEvents().Emit).Should(Receive())
+				t2 := clock.Now()
 
-			It("sends a 'routes total' metric", func() {
-				Eventually(func() float64 {
-					return fakeMetricSender.GetValue("RoutesTotal").Value
-				}, 2*time.Second).Should(BeEquivalentTo(123))
+				Ω(t2.Sub(t1)).Should(BeNumerically("~", 2*time.Second, 200*time.Millisecond))
 			})
 		})
 
@@ -277,12 +278,33 @@ var _ = Describe("Syncer", func() {
 	})
 
 	Describe("syncing", func() {
+		var syncBeginTimes chan time.Time
+		var syncEndTimes chan time.Time
+
 		BeforeEach(func() {
 			receptorClient.ActualLRPsStub = func() ([]receptor.ActualLRPResponse, error) {
-				time.Sleep(100 * time.Millisecond)
 				return nil, nil
 			}
-			syncDuration = 500 * time.Millisecond
+			syncInterval = 500 * time.Millisecond
+
+			clockStep = 250 * time.Millisecond
+			syncBeginTimes = make(chan time.Time, 3)
+			beginCallback = func() {
+				select {
+				case syncBeginTimes <- clock.Now():
+				default:
+				}
+			}
+
+			syncEndTimes = make(chan time.Time, 3)
+			endCallback = func(f func(routing_table.RoutingTable)) {
+				clock.Increment(100 * time.Millisecond)
+				select {
+				case syncEndTimes <- clock.Now():
+				default:
+				}
+				f(nil)
+			}
 		})
 
 		It("should sync on the specified interval", func() {
@@ -291,51 +313,32 @@ var _ = Describe("Syncer", func() {
 				Data: []byte(`{"minimumRegisterIntervalInSeconds":10}`),
 			}
 
-			Eventually(table.SyncCallCount).Should(Equal(2))
-			Eventually(emitter.EmitCallCount).Should(Equal(2))
-			t1 := time.Now()
-
-			Eventually(table.SyncCallCount).Should(Equal(3))
-			Eventually(emitter.EmitCallCount).Should(Equal(3))
-			t2 := time.Now()
-
-			emittedMessages := emitter.EmitArgsForCall(1)
-			Ω(emittedMessages).Should(Equal(syncMessages))
-
-			emittedMessages = emitter.EmitArgsForCall(2)
-			Ω(emittedMessages).Should(Equal(syncMessages))
+			var t1 time.Time
+			var t2 time.Time
+			Eventually(syncBeginTimes).Should(Receive(&t1))
+			Eventually(syncBeginTimes).Should(Receive(&t2))
 
 			Ω(t2.Sub(t1)).Should(BeNumerically("~", 500*time.Millisecond, 100*time.Millisecond))
 		})
 
 		It("should emit the sync duration", func() {
+			routerStartMessages <- &nats.Msg{
+				Data: []byte(`{"minimumRegisterIntervalInSeconds":10}`),
+			}
+
 			Eventually(func() float64 {
 				return fakeMetricSender.GetValue("RouteEmitterSyncDuration").Value
-			}, 10*time.Second).Should(BeNumerically(">=", 100*time.Millisecond))
-		})
-
-		It("sends a 'routes total' metric", func() {
-			Eventually(func() float64 {
-				return fakeMetricSender.GetValue("RoutesTotal").Value
-			}).Should(BeEquivalentTo(123))
-		})
-
-		It("sends a 'synced routes' metric", func() {
-			Eventually(func() uint64 {
-				return fakeMetricSender.GetCounter("RoutesSynced")
-			}, 2).Should(BeEquivalentTo(2))
+			}, 2).Should(BeNumerically(">=", 100*time.Millisecond))
 		})
 
 		Context("when fetching actuals fails", func() {
+			var returnError int32
+
 			BeforeEach(func() {
-				lock := &sync.Mutex{}
-				calls := 0
+				returnError = 1
 
 				receptorClient.ActualLRPsStub = func() ([]receptor.ActualLRPResponse, error) {
-					lock.Lock()
-					defer lock.Unlock()
-					if calls == 0 {
-						calls++
+					if atomic.LoadInt32(&returnError) == 1 {
 						return nil, errors.New("bam")
 					}
 
@@ -344,25 +347,25 @@ var _ = Describe("Syncer", func() {
 			})
 
 			It("should not call sync until the error resolves", func() {
-				Ω(table.SyncCallCount()).Should(Equal(0))
+				Eventually(receptorClient.ActualLRPsCallCount).Should(Equal(1))
+				Consistently(syncEndTimes).ShouldNot(Receive())
 
+				atomic.StoreInt32(&returnError, 0)
 				routerStartMessages <- &nats.Msg{
 					Data: []byte(`{"minimumRegisterIntervalInSeconds":10}`),
 				}
 
-				Eventually(table.SyncCallCount).Should(Equal(1))
+				Eventually(syncEndTimes).Should(Receive())
+				Ω(receptorClient.ActualLRPsCallCount()).Should(Equal(2))
 			})
 		})
 
 		Context("when fetching desireds fails", func() {
 			BeforeEach(func() {
-				lock := &sync.Mutex{}
-				calls := 0
+				var calls int32
+
 				receptorClient.DesiredLRPsStub = func() ([]receptor.DesiredLRPResponse, error) {
-					lock.Lock()
-					defer lock.Unlock()
-					if calls == 0 {
-						calls++
+					if atomic.AddInt32(&calls, 1) == 1 {
 						return nil, errors.New("bam")
 					}
 
@@ -371,13 +374,13 @@ var _ = Describe("Syncer", func() {
 			})
 
 			It("should not call sync until the error resolves", func() {
-				Ω(table.SyncCallCount()).Should(Equal(0))
+				Eventually(receptorClient.DesiredLRPsCallCount).Should(Equal(1))
 
 				routerStartMessages <- &nats.Msg{
-					Data: []byte(`{"minimumRegisterIntervalInSeconds":10}`),
+					Data: []byte(`{"minimumRegisterIntervalInSeconds":1}`),
 				}
 
-				Eventually(table.SyncCallCount).Should(Equal(1))
+				Eventually(receptorClient.DesiredLRPsCallCount).Should(Equal(2))
 			})
 		})
 	})
