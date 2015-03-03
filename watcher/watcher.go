@@ -151,13 +151,18 @@ func (watcher *Watcher) completeSync(syncEnd syncer.SyncEnd, cachedEvents map[st
 	emitter := watcher.emitter
 	watcher.emitter = nil
 
-	watcher.table.Swap(syncEnd.Table)
+	table := watcher.table
+	watcher.table = syncEnd.Table
+
 	for _, e := range cachedEvents {
 		watcher.handleEvent(e)
 	}
 
+	watcher.table = table
 	watcher.emitter = emitter
-	watcher.emit()
+
+	messages := watcher.table.Swap(syncEnd.Table)
+	watcher.emitMessages(messages)
 
 	if syncEnd.Callback != nil {
 		syncEnd.Callback(watcher.table)

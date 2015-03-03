@@ -54,6 +54,8 @@ var _ = Describe("Watcher", func() {
 
 		dummyMessagesToEmit routing_table.MessagesToEmit
 		fakeMetricSender    *fake_metrics_sender.FakeMetricSender
+
+		logger *lagertest.TestLogger
 	)
 
 	BeforeEach(func() {
@@ -65,7 +67,7 @@ var _ = Describe("Watcher", func() {
 			End:   make(chan syncer.SyncEnd),
 			Emit:  make(chan struct{}),
 		}
-		logger := lagertest.NewTestLogger("test")
+		logger = lagertest.NewTestLogger("test")
 
 		dummyEndpoint := routing_table.Endpoint{InstanceGuid: expectedInstanceGuid, Host: expectedHost, Port: expectedContainerPort}
 		dummyMessage := routing_table.RegistryMessageFor(dummyEndpoint, routing_table.Routes{Hostnames: []string{"foo.com", "bar.com"}, LogGuid: logGuid})
@@ -1008,24 +1010,74 @@ var _ = Describe("Watcher", func() {
 		})
 
 		Context("Begin & End events", func() {
+			currentTag := receptor.ModificationTag{Epoch: "abc", Index: 1}
+			hostname1 := "foo.example.com"
+			hostname2 := "bar.example.com"
+			endpoint1 := routing_table.Endpoint{InstanceGuid: "ig-1", Host: "1.1.1.1", Port: 11, ContainerPort: 8080, Evacuating: false, ModificationTag: currentTag}
+			endpoint2 := routing_table.Endpoint{InstanceGuid: "ig-2", Host: "2.2.2.2", Port: 22, ContainerPort: 8080, Evacuating: false, ModificationTag: currentTag}
+
+			desiredLRP1 := receptor.DesiredLRPResponse{
+				Action: &models.RunAction{
+					Path: "ls",
+				},
+				Domain:      "tests",
+				ProcessGuid: "pg-1",
+				Ports:       []uint16{8080},
+				Routes: cfroutes.CFRoutes{
+					cfroutes.CFRoute{
+						Hostnames: []string{hostname1},
+						Port:      8080,
+					},
+				}.RoutingInfo(),
+				LogGuid: "lg1",
+			}
+
+			desiredLRP2 := receptor.DesiredLRPResponse{
+				Action: &models.RunAction{
+					Path: "ls",
+				},
+				Domain:      "tests",
+				ProcessGuid: "pg-2",
+				Ports:       []uint16{8080},
+				Routes: cfroutes.CFRoutes{
+					cfroutes.CFRoute{
+						Hostnames: []string{hostname2},
+						Port:      8080,
+					},
+				}.RoutingInfo(),
+				LogGuid: "lg2",
+			}
+
+			actualLRP1 := receptor.ActualLRPResponse{
+				ProcessGuid:  "pg-1",
+				Index:        1,
+				Domain:       "domain",
+				InstanceGuid: endpoint1.InstanceGuid,
+				CellID:       "cell-id",
+				Address:      endpoint1.Host,
+				Ports: []receptor.PortMapping{
+					{ContainerPort: endpoint1.ContainerPort, HostPort: endpoint1.Port},
+				},
+				State: receptor.ActualLRPStateRunning,
+			}
+
+			actualLRP2 := receptor.ActualLRPResponse{
+				ProcessGuid:  "pg-2",
+				Index:        1,
+				Domain:       "domain",
+				InstanceGuid: endpoint2.InstanceGuid,
+				CellID:       "cell-id",
+				Address:      endpoint2.Host,
+				Ports: []receptor.PortMapping{
+					{ContainerPort: endpoint2.ContainerPort, HostPort: endpoint2.Port},
+				},
+				State: receptor.ActualLRPStateRunning,
+			}
+
 			var ack chan struct{}
 
 			sendEvent := func() {
-				actualLRP := receptor.ActualLRPResponse{
-					ProcessGuid:  expectedProcessGuid,
-					Index:        1,
-					Domain:       "domain",
-					InstanceGuid: expectedInstanceGuid,
-					CellID:       "cell-id",
-					Address:      expectedHost,
-					Ports: []receptor.PortMapping{
-						{ContainerPort: expectedContainerPort, HostPort: expectedExternalPort},
-						{ContainerPort: expectedAdditionalContainerPort, HostPort: expectedAdditionalExternalPort},
-					},
-					State: receptor.ActualLRPStateRunning,
-				}
-
-				nextEvent <- receptor.NewActualLRPRemovedEvent(actualLRP)
+				nextEvent <- receptor.NewActualLRPRemovedEvent(actualLRP1)
 			}
 
 			JustBeforeEach(func() {
@@ -1042,7 +1094,7 @@ var _ = Describe("Watcher", func() {
 			})
 
 			Context("when syncing ends", func() {
-				var tempTable *fake_routing_table.FakeRoutingTable
+				var tempTable routing_table.RoutingTable
 				var callback func(routing_table.RoutingTable)
 
 				BeforeEach(func() {
@@ -1064,14 +1116,38 @@ var _ = Describe("Watcher", func() {
 					Ω(table.SwapArgsForCall(0)).Should(Equal(tempTable))
 				})
 
-				It("applies the cached events and emits one messages", func() {
-					table.MessagesToEmitReturns(dummyMessagesToEmit)
-					sendEvent()
-					sendEnd()
+				Context("a table with a single routable endpoint", func() {
+					BeforeEach(func() {
+						tempTable = routing_table.NewTempTable(
+							routing_table.RoutesByRoutingKeyFromDesireds([]receptor.DesiredLRPResponse{desiredLRP1, desiredLRP2}),
+							routing_table.EndpointsByRoutingKeyFromActuals([]receptor.ActualLRPResponse{actualLRP1, actualLRP2}),
+						)
 
-					Eventually(table.RemoveEndpointCallCount).Should(Equal(2))
-					Eventually(emitter.EmitCallCount).Should(Equal(1))
-					Ω(emitter.EmitArgsForCall(0)).Should(Equal(dummyMessagesToEmit))
+						table := routing_table.NewTable()
+						table.Swap(tempTable)
+
+						watcher = NewWatcher(receptorClient, table, emitter, syncEvents, logger)
+
+						tempTable = routing_table.NewTempTable(
+							routing_table.RoutesByRoutingKeyFromDesireds([]receptor.DesiredLRPResponse{desiredLRP1, desiredLRP2}),
+							routing_table.EndpointsByRoutingKeyFromActuals([]receptor.ActualLRPResponse{actualLRP1, actualLRP2}),
+						)
+					})
+
+					It("applies the cached events and emits", func() {
+						sendEvent()
+						sendEnd()
+
+						Eventually(emitter.EmitCallCount).Should(Equal(1))
+						Ω(emitter.EmitArgsForCall(0)).Should(Equal(routing_table.MessagesToEmit{
+							RegistrationMessages: []routing_table.RegistryMessage{
+								routing_table.RegistryMessageFor(endpoint2, routing_table.Routes{Hostnames: []string{hostname2}, LogGuid: "lg2"}),
+							},
+							UnregistrationMessages: []routing_table.RegistryMessage{
+								routing_table.RegistryMessageFor(endpoint1, routing_table.Routes{Hostnames: []string{hostname1}, LogGuid: "lg1"}),
+							},
+						}))
+					})
 				})
 
 				Context("when a callback is provided", func() {
@@ -1094,7 +1170,7 @@ var _ = Describe("Watcher", func() {
 					sendEnd()
 					sendEvent()
 
-					Eventually(table.RemoveEndpointCallCount).Should(Equal(2))
+					Eventually(table.RemoveEndpointCallCount).Should(Equal(1))
 				})
 			})
 		})
