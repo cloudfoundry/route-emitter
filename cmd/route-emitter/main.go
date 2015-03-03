@@ -100,11 +100,12 @@ func main() {
 	natsClient := diegonats.NewClient()
 	natsClientRunner := diegonats.NewClientRunner(*natsAddresses, *natsUsername, *natsPassword, logger, natsClient)
 
-	syncer := syncer.NewSyncer(receptorClient, clock.NewClock(), *syncInterval, natsClient, logger)
+	clock := clock.NewClock()
+	syncer := syncer.NewSyncer(clock, *syncInterval, natsClient, logger)
 
 	emitter := initializeNatsEmitter(natsClient, logger)
 	watcher := ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
-		return watcher.NewWatcher(receptorClient, table, emitter, syncer.SyncEvents(), logger).Run(signals, ready)
+		return watcher.NewWatcher(receptorClient, clock, table, emitter, syncer.Events(), logger).Run(signals, ready)
 	})
 
 	syncRunner := ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {

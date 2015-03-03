@@ -9,6 +9,7 @@ import (
 	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
 	"github.com/cloudfoundry-incubator/route-emitter/syncer"
 	"github.com/cloudfoundry-incubator/runtime-schema/metric"
+	"github.com/pivotal-golang/clock"
 	"github.com/pivotal-golang/lager"
 )
 
@@ -16,16 +17,24 @@ var (
 	routesTotal  = metric.Metric("RoutesTotal")
 	routesSynced = metric.Counter("RoutesSynced")
 
+	routeSyncDuration = metric.Duration("RouteEmitterSyncDuration")
+
 	routesRegistered   = metric.Counter("RoutesRegistered")
 	routesUnregistered = metric.Counter("RoutesUnregistered")
 )
 
 type Watcher struct {
 	receptorClient receptor.Client
+	clock          clock.Clock
 	table          routing_table.RoutingTable
 	emitter        nats_emitter.NATSEmitter
-	syncEvents     syncer.SyncEvents
+	syncEvents     syncer.Events
 	logger         lager.Logger
+}
+
+type syncEndEvent struct {
+	Table    routing_table.RoutingTable
+	Callback func(routing_table.RoutingTable)
 }
 
 type set map[interface{}]struct{}
@@ -41,13 +50,15 @@ func (set set) add(value interface{}) {
 
 func NewWatcher(
 	receptorClient receptor.Client,
+	clock clock.Clock,
 	table routing_table.RoutingTable,
 	emitter nats_emitter.NATSEmitter,
-	syncEvents syncer.SyncEvents,
+	syncEvents syncer.Events,
 	logger lager.Logger,
 ) *Watcher {
 	return &Watcher{
 		receptorClient: receptorClient,
+		clock:          clock,
 		table:          table,
 		emitter:        emitter,
 		syncEvents:     syncEvents,
@@ -67,6 +78,7 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 	var syncing bool
 	eventChan := make(chan receptor.Event)
 	errChan := make(chan error, 1)
+	syncEndChan := make(chan syncEndEvent)
 
 	for {
 		if eventSource == nil {
@@ -93,17 +105,22 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 		}
 
 		select {
-		case syncBegin := <-watcher.syncEvents.Begin:
-			syncing = true
-			cachedEvents = make(map[string]receptor.Event)
-			close(syncBegin.Ack)
+		case <-watcher.syncEvents.Sync:
+			if syncing == false {
+				watcher.logger.Info("sync-begin")
+				syncing = true
+				cachedEvents = make(map[string]receptor.Event)
+				go watcher.sync(syncEndChan)
+			}
 
-		case syncEnd := <-watcher.syncEvents.End:
+		case syncEnd := <-syncEndChan:
+			watcher.logger.Info("sync-end")
 			watcher.completeSync(syncEnd, cachedEvents)
 			cachedEvents = nil
 			syncing = false
 
 		case <-watcher.syncEvents.Emit:
+			watcher.logger.Info("sync-emit")
 			watcher.emit()
 
 		case event := <-eventChan:
@@ -147,7 +164,60 @@ func (watcher *Watcher) emit() {
 	routesTotal.Send(watcher.table.RouteCount())
 }
 
-func (watcher *Watcher) completeSync(syncEnd syncer.SyncEnd, cachedEvents map[string]receptor.Event) {
+func (watcher *Watcher) sync(syncEndChan chan syncEndEvent) {
+	endEvent := syncEndEvent{}
+	defer func() {
+		syncEndChan <- endEvent
+	}()
+
+	before := watcher.clock.Now()
+
+	actualLRPResponses, err := watcher.receptorClient.ActualLRPs()
+	if err != nil {
+		watcher.logger.Error("failed-to-get-actual", err)
+		return
+	}
+
+	desiredLRPResponses, err := watcher.receptorClient.DesiredLRPs()
+	if err != nil {
+		watcher.logger.Error("failed-to-get-desired", err)
+		return
+	}
+
+	runningActualLRPs := make([]receptor.ActualLRPResponse, 0, len(actualLRPResponses))
+	for _, actualLRPResponse := range actualLRPResponses {
+		if actualLRPResponse.State == receptor.ActualLRPStateRunning {
+			runningActualLRPs = append(runningActualLRPs, actualLRPResponse)
+		}
+	}
+
+	desiredLRPs := make([]receptor.DesiredLRPResponse, 0, len(desiredLRPResponses))
+	for _, desiredLRPResponse := range desiredLRPResponses {
+		desiredLRPs = append(desiredLRPs, desiredLRPResponse)
+	}
+
+	newTable := routing_table.NewTempTable(
+		routing_table.RoutesByRoutingKeyFromDesireds(desiredLRPs),
+		routing_table.EndpointsByRoutingKeyFromActuals(runningActualLRPs),
+	)
+
+	endEvent.Table = newTable
+	endEvent.Callback = func(table routing_table.RoutingTable) {
+		after := watcher.clock.Now()
+		routeSyncDuration.Send(after.Sub(before))
+	}
+}
+
+func (watcher *Watcher) completeSync(syncEnd syncEndEvent, cachedEvents map[string]receptor.Event) {
+	if syncEnd.Table == nil {
+		// sync failed, process the events on the current table
+		for _, e := range cachedEvents {
+			watcher.handleEvent(e)
+		}
+
+		return
+	}
+
 	emitter := watcher.emitter
 	watcher.emitter = nil
 

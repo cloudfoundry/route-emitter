@@ -1,9 +1,7 @@
 package syncer_test
 
 import (
-	"errors"
 	"os"
-	"sync/atomic"
 	"time"
 
 	"github.com/apcera/nats"
@@ -44,9 +42,6 @@ var _ = Describe("Syncer", func() {
 		clockStep      time.Duration
 		syncInterval   time.Duration
 
-		beginCallback func()
-		endCallback   func(func(routing_table.RoutingTable))
-
 		shutdown chan struct{}
 
 		desiredResponse receptor.DesiredLRPResponse
@@ -63,9 +58,6 @@ var _ = Describe("Syncer", func() {
 		clock = fakeclock.NewFakeClock(time.Now())
 		clockStep = 1 * time.Second
 		syncInterval = 10 * time.Second
-
-		beginCallback = func() {}
-		endCallback = func(f func(t routing_table.RoutingTable)) { f(nil) }
 
 		startMessages := make(chan *nats.Msg)
 		routerStartMessages = startMessages
@@ -129,26 +121,9 @@ var _ = Describe("Syncer", func() {
 
 	JustBeforeEach(func() {
 		logger := lagertest.NewTestLogger("test")
-		syncer = NewSyncer(receptorClient, clock, syncInterval, natsClient, logger)
+		syncer = NewSyncer(clock, syncInterval, natsClient, logger)
 
 		shutdown = make(chan struct{})
-		go func() {
-			defer GinkgoRecover()
-
-			events := syncer.SyncEvents()
-
-			for {
-				select {
-				case begin := <-events.Begin:
-					close(begin.Ack)
-					beginCallback()
-				case end := <-events.End:
-					endCallback(end.Callback)
-				case <-shutdown:
-					return
-				}
-			}
-		}()
 
 		go func() {
 			for {
@@ -193,10 +168,10 @@ var _ = Describe("Syncer", func() {
 				})
 
 				It("should emit routes with the frequency of the passed-in-interval", func() {
-					Eventually(syncer.SyncEvents().Emit, 2).Should(Receive())
+					Eventually(syncer.Events().Emit, 2).Should(Receive())
 					t1 := clock.Now()
 
-					Eventually(syncer.SyncEvents().Emit, 2).Should(Receive())
+					Eventually(syncer.Events().Emit, 2).Should(Receive())
 					t2 := clock.Now()
 
 					Ω(t2.Sub(t1)).Should(BeNumerically("~", 1*time.Second, 200*time.Millisecond))
@@ -237,11 +212,11 @@ var _ = Describe("Syncer", func() {
 				}
 
 				//first emit should be pretty quick, it is in response to the incoming heartbeat interval
-				Eventually(syncer.SyncEvents().Emit).Should(Receive())
+				Eventually(syncer.Events().Emit).Should(Receive())
 				t1 := clock.Now()
 
 				//subsequent emit should follow the interval
-				Eventually(syncer.SyncEvents().Emit).Should(Receive())
+				Eventually(syncer.Events().Emit).Should(Receive())
 				t2 := clock.Now()
 
 				Ω(t2.Sub(t1)).Should(BeNumerically("~", 2*time.Second, 200*time.Millisecond))
@@ -257,9 +232,6 @@ var _ = Describe("Syncer", func() {
 	})
 
 	Describe("syncing", func() {
-		var syncBeginTimes chan time.Time
-		var syncEndTimes chan time.Time
-
 		BeforeEach(func() {
 			receptorClient.ActualLRPsStub = func() ([]receptor.ActualLRPResponse, error) {
 				return nil, nil
@@ -267,23 +239,6 @@ var _ = Describe("Syncer", func() {
 			syncInterval = 500 * time.Millisecond
 
 			clockStep = 250 * time.Millisecond
-			syncBeginTimes = make(chan time.Time, 3)
-			beginCallback = func() {
-				select {
-				case syncBeginTimes <- clock.Now():
-				default:
-				}
-			}
-
-			syncEndTimes = make(chan time.Time, 3)
-			endCallback = func(f func(routing_table.RoutingTable)) {
-				clock.Increment(100 * time.Millisecond)
-				select {
-				case syncEndTimes <- clock.Now():
-				default:
-				}
-				f(nil)
-			}
 		})
 
 		JustBeforeEach(func() {
@@ -299,7 +254,7 @@ var _ = Describe("Syncer", func() {
 			})
 
 			It("syncs", func() {
-				Eventually(syncBeginTimes).Should(Receive())
+				Eventually(syncer.Events().Sync).Should(Receive())
 			})
 		})
 
@@ -307,69 +262,22 @@ var _ = Describe("Syncer", func() {
 			It("should sync", func() {
 				var t1 time.Time
 				var t2 time.Time
-				Eventually(syncBeginTimes).Should(Receive(&t1))
-				Eventually(syncBeginTimes).Should(Receive(&t2))
 
-				Ω(t2.Sub(t1)).Should(BeNumerically("~", 500*time.Millisecond, 100*time.Millisecond))
-			})
-
-			It("should emit the sync duration", func() {
-				Eventually(func() float64 {
-					return fakeMetricSender.GetValue("RouteEmitterSyncDuration").Value
-				}, 2).Should(BeNumerically(">=", 100*time.Millisecond))
-			})
-		})
-
-		Context("when fetching actuals fails", func() {
-			var returnError int32
-
-			BeforeEach(func() {
-				returnError = 1
-
-				receptorClient.ActualLRPsStub = func() ([]receptor.ActualLRPResponse, error) {
-					if atomic.LoadInt32(&returnError) == 1 {
-						return nil, errors.New("bam")
-					}
-
-					return []receptor.ActualLRPResponse{}, nil
-				}
-			})
-
-			It("should not call sync until the error resolves", func() {
-				Eventually(receptorClient.ActualLRPsCallCount).Should(Equal(1))
-				Consistently(syncEndTimes).ShouldNot(Receive())
-
-				atomic.StoreInt32(&returnError, 0)
-				routerStartMessages <- &nats.Msg{
-					Data: []byte(`{"minimumRegisterIntervalInSeconds":10, "pruneThresholdInSeconds": 20}`),
+				select {
+				case <-syncer.Events().Sync:
+					t1 = clock.Now()
+				case <-time.After(500 * time.Millisecond):
+					Fail("did not receive a sync event")
 				}
 
-				Eventually(syncEndTimes).Should(Receive())
-				Ω(receptorClient.ActualLRPsCallCount()).Should(Equal(2))
-			})
-		})
-
-		Context("when fetching desireds fails", func() {
-			BeforeEach(func() {
-				var calls int32
-
-				receptorClient.DesiredLRPsStub = func() ([]receptor.DesiredLRPResponse, error) {
-					if atomic.AddInt32(&calls, 1) == 1 {
-						return nil, errors.New("bam")
-					}
-
-					return []receptor.DesiredLRPResponse{}, nil
-				}
-			})
-
-			It("should not call sync until the error resolves", func() {
-				Eventually(receptorClient.DesiredLRPsCallCount).Should(Equal(1))
-
-				routerStartMessages <- &nats.Msg{
-					Data: []byte(`{"minimumRegisterIntervalInSeconds":1, "pruneThresholdInSeconds": 3}`),
+				select {
+				case <-syncer.Events().Sync:
+					t2 = clock.Now()
+				case <-time.After(500 * time.Millisecond):
+					Fail("did not receive a sync event")
 				}
 
-				Eventually(receptorClient.DesiredLRPsCallCount).Should(Equal(2))
+				Ω(t2.Sub(t1)).Should(BeNumerically("~", syncInterval, 100*time.Millisecond))
 			})
 		})
 	})

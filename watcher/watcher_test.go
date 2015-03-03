@@ -3,12 +3,15 @@ package watcher_test
 import (
 	"errors"
 	"os"
+	"sync/atomic"
+	"time"
 
 	"github.com/cloudfoundry-incubator/receptor"
 	"github.com/cloudfoundry-incubator/receptor/fake_receptor"
 	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/pivotal-golang/clock/fakeclock"
 	"github.com/pivotal-golang/lager/lagertest"
 	"github.com/tedsuo/ifrit"
 
@@ -39,8 +42,9 @@ var _ = Describe("Watcher", func() {
 		receptorClient *fake_receptor.FakeClient
 		table          *fake_routing_table.FakeRoutingTable
 		emitter        *fake_nats_emitter.FakeNATSEmitter
-		syncEvents     syncer.SyncEvents
+		syncEvents     syncer.Events
 
+		clock   *fakeclock.FakeClock
 		watcher *Watcher
 		process ifrit.Process
 
@@ -62,10 +66,9 @@ var _ = Describe("Watcher", func() {
 		receptorClient = new(fake_receptor.FakeClient)
 		table = &fake_routing_table.FakeRoutingTable{}
 		emitter = &fake_nats_emitter.FakeNATSEmitter{}
-		syncEvents = syncer.SyncEvents{
-			Begin: make(chan syncer.SyncBegin),
-			End:   make(chan syncer.SyncEnd),
-			Emit:  make(chan struct{}),
+		syncEvents = syncer.Events{
+			Sync: make(chan struct{}),
+			Emit: make(chan struct{}),
 		}
 		logger = lagertest.NewTestLogger("test")
 
@@ -75,7 +78,9 @@ var _ = Describe("Watcher", func() {
 			RegistrationMessages: []routing_table.RegistryMessage{dummyMessage},
 		}
 
-		watcher = NewWatcher(receptorClient, table, emitter, syncEvents, logger)
+		clock = fakeclock.NewFakeClock(time.Now())
+
+		watcher = NewWatcher(receptorClient, clock, table, emitter, syncEvents, logger)
 
 		expectedRoutes = []string{"route-1", "route-2"}
 		expectedCFRoute = cfroutes.CFRoute{Hostnames: expectedRoutes, Port: expectedContainerPort}
@@ -1074,51 +1079,126 @@ var _ = Describe("Watcher", func() {
 				State: receptor.ActualLRPStateRunning,
 			}
 
-			var ack chan struct{}
-
 			sendEvent := func() {
 				nextEvent <- receptor.NewActualLRPRemovedEvent(actualLRP1)
 			}
 
-			JustBeforeEach(func() {
-				ack = make(chan struct{})
-				syncEvents.Begin <- syncer.SyncBegin{ack}
-				Eventually(ack).Should(BeClosed())
-			})
-
 			Context("when sync begins", func() {
+				JustBeforeEach(func() {
+					syncEvents.Sync <- struct{}{}
+				})
+
 				It("caches events", func() {
 					sendEvent()
 					Consistently(table.RemoveEndpointCallCount).Should(Equal(0))
 				})
+
+				Context("additional sync events", func() {
+					var ready chan struct{}
+					var count int32
+
+					BeforeEach(func() {
+						ready = make(chan struct{})
+
+						receptorClient.ActualLRPsStub = func() ([]receptor.ActualLRPResponse, error) {
+							defer GinkgoRecover()
+
+							atomic.AddInt32(&count, 1)
+							ready <- struct{}{}
+							Eventually(ready).Should(Receive())
+							return nil, nil
+						}
+					})
+
+					It("are ignored", func() {
+						Eventually(ready).Should(Receive())
+
+						syncEvents.Sync <- struct{}{}
+
+						Consistently(atomic.LoadInt32(&count)).Should(Equal(int32(1)))
+						ready <- struct{}{}
+					})
+				})
+
+				Context("when fetching actuals fails", func() {
+					var returnError int32
+
+					BeforeEach(func() {
+						returnError = 1
+
+						receptorClient.ActualLRPsStub = func() ([]receptor.ActualLRPResponse, error) {
+							if atomic.LoadInt32(&returnError) == 1 {
+								return nil, errors.New("bam")
+							}
+
+							return []receptor.ActualLRPResponse{}, nil
+						}
+					})
+
+					It("should not call sync until the error resolves", func() {
+						Eventually(receptorClient.ActualLRPsCallCount).Should(Equal(1))
+						Consistently(table.SwapCallCount).Should(Equal(0))
+
+						atomic.StoreInt32(&returnError, 0)
+						syncEvents.Sync <- struct{}{}
+
+						Eventually(table.SwapCallCount).Should(Equal(1))
+						Ω(receptorClient.ActualLRPsCallCount()).Should(Equal(2))
+					})
+				})
+
+				Context("when fetching desireds fails", func() {
+					var returnError int32
+
+					BeforeEach(func() {
+						returnError = 1
+
+						receptorClient.DesiredLRPsStub = func() ([]receptor.DesiredLRPResponse, error) {
+							if atomic.LoadInt32(&returnError) == 1 {
+								return nil, errors.New("bam")
+							}
+
+							return []receptor.DesiredLRPResponse{}, nil
+						}
+					})
+
+					It("should not call sync until the error resolves", func() {
+						Eventually(receptorClient.DesiredLRPsCallCount).Should(Equal(1))
+						Consistently(table.SwapCallCount).Should(Equal(0))
+
+						atomic.StoreInt32(&returnError, 0)
+						syncEvents.Sync <- struct{}{}
+
+						Eventually(table.SwapCallCount).Should(Equal(1))
+						Ω(receptorClient.DesiredLRPsCallCount()).Should(Equal(2))
+					})
+				})
 			})
 
 			Context("when syncing ends", func() {
-				var tempTable routing_table.RoutingTable
-				var callback func(routing_table.RoutingTable)
-
 				BeforeEach(func() {
-					tempTable = &fake_routing_table.FakeRoutingTable{}
-					callback = nil
+					receptorClient.ActualLRPsStub = func() ([]receptor.ActualLRPResponse, error) {
+						clock.IncrementBySeconds(1)
+
+						return []receptor.ActualLRPResponse{actualLRP1, actualLRP2}, nil
+					}
 				})
 
-				sendEnd := func() {
-					syncEvents.End <- syncer.SyncEnd{
-						Table:    tempTable,
-						Callback: callback,
-					}
-				}
+				JustBeforeEach(func() {
+					syncEvents.Sync <- struct{}{}
+				})
 
 				It("swaps the tables", func() {
-					sendEnd()
-
 					Eventually(table.SwapCallCount).Should(Equal(1))
-					Ω(table.SwapArgsForCall(0)).Should(Equal(tempTable))
 				})
 
 				Context("a table with a single routable endpoint", func() {
+					var ready chan struct{}
+
 					BeforeEach(func() {
-						tempTable = routing_table.NewTempTable(
+						ready = make(chan struct{})
+
+						tempTable := routing_table.NewTempTable(
 							routing_table.RoutesByRoutingKeyFromDesireds([]receptor.DesiredLRPResponse{desiredLRP1, desiredLRP2}),
 							routing_table.EndpointsByRoutingKeyFromActuals([]receptor.ActualLRPResponse{actualLRP1, actualLRP2}),
 						)
@@ -1126,17 +1206,21 @@ var _ = Describe("Watcher", func() {
 						table := routing_table.NewTable()
 						table.Swap(tempTable)
 
-						watcher = NewWatcher(receptorClient, table, emitter, syncEvents, logger)
+						watcher = NewWatcher(receptorClient, clock, table, emitter, syncEvents, logger)
 
-						tempTable = routing_table.NewTempTable(
-							routing_table.RoutesByRoutingKeyFromDesireds([]receptor.DesiredLRPResponse{desiredLRP1, desiredLRP2}),
-							routing_table.EndpointsByRoutingKeyFromActuals([]receptor.ActualLRPResponse{actualLRP1, actualLRP2}),
-						)
+						receptorClient.DesiredLRPsStub = func() ([]receptor.DesiredLRPResponse, error) {
+							ready <- struct{}{}
+							Eventually(ready).Should(Receive())
+
+							return []receptor.DesiredLRPResponse{desiredLRP1, desiredLRP2}, nil
+						}
 					})
 
 					It("applies the cached events and emits", func() {
+						Eventually(ready).Should(Receive())
 						sendEvent()
-						sendEnd()
+
+						ready <- struct{}{}
 
 						Eventually(emitter.EmitCallCount).Should(Equal(1))
 						Ω(emitter.EmitArgsForCall(0)).Should(Equal(routing_table.MessagesToEmit{
@@ -1150,24 +1234,12 @@ var _ = Describe("Watcher", func() {
 					})
 				})
 
-				Context("when a callback is provided", func() {
-					var called chan struct{}
+				It("should emit the sync duration, and allow event processing", func() {
+					Eventually(func() float64 {
+						return fakeMetricSender.GetValue("RouteEmitterSyncDuration").Value
+					}).Should(BeNumerically(">=", 100*time.Millisecond))
 
-					BeforeEach(func() {
-						called = make(chan struct{})
-						callback = func(routing_table.RoutingTable) {
-							close(called)
-						}
-					})
-
-					It("calls the callback", func() {
-						sendEnd()
-						Eventually(called).Should(BeClosed())
-					})
-				})
-
-				It("does not cache events", func() {
-					sendEnd()
+					By("completing, events are no longer cached")
 					sendEvent()
 
 					Eventually(table.RemoveEndpointCallCount).Should(Equal(1))

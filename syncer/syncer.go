@@ -6,48 +6,37 @@ import (
 	"time"
 
 	"github.com/apcera/nats"
-	"github.com/cloudfoundry-incubator/receptor"
-	"github.com/cloudfoundry-incubator/route-emitter/cfroutes"
 	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
-	"github.com/cloudfoundry-incubator/runtime-schema/metric"
 	"github.com/cloudfoundry/gunk/diegonats"
 	uuid "github.com/nu7hatch/gouuid"
 	"github.com/pivotal-golang/clock"
 	"github.com/pivotal-golang/lager"
 )
 
-var (
-	routeSyncDuration = metric.Duration("RouteEmitterSyncDuration")
-)
-
 type Syncer struct {
-	receptorClient receptor.Client
-	natsClient     diegonats.NATSClient
-	clock          clock.Clock
-	syncInterval   time.Duration
-	syncEvents     SyncEvents
-	routerGreet    chan time.Duration
+	natsClient   diegonats.NATSClient
+	clock        clock.Clock
+	syncInterval time.Duration
+	events       Events
+	routerGreet  chan time.Duration
 
 	logger lager.Logger
 }
 
 func NewSyncer(
-	receptorClient receptor.Client,
 	clock clock.Clock,
 	syncInterval time.Duration,
 	natsClient diegonats.NATSClient,
 	logger lager.Logger,
 ) *Syncer {
 	return &Syncer{
-		receptorClient: receptorClient,
-		natsClient:     natsClient,
+		natsClient: natsClient,
 
 		clock:        clock,
 		syncInterval: syncInterval,
-		syncEvents: SyncEvents{
-			Begin: make(chan SyncBegin, 1),
-			End:   make(chan SyncEnd),
-			Emit:  make(chan struct{}, 1),
+		events: Events{
+			Sync: make(chan struct{}, 1),
+			Emit: make(chan struct{}, 1),
 		},
 
 		routerGreet: make(chan time.Duration),
@@ -126,80 +115,24 @@ GREET_LOOP:
 	return nil
 }
 
-func (s *Syncer) SyncEvents() SyncEvents {
-	return s.syncEvents
+func (s *Syncer) Events() Events {
+	return s.events
 }
 
 func (s *Syncer) emit() {
 	select {
-	case s.syncEvents.Emit <- struct{}{}:
+	case s.events.Emit <- struct{}{}:
 	default:
+		s.logger.Debug("emit-already-in-progress")
 	}
 }
 
 func (s *Syncer) sync() {
-	ack := make(chan struct{})
 	select {
-	case s.syncEvents.Begin <- SyncBegin{Ack: ack}:
+	case s.events.Sync <- struct{}{}:
 	default:
 		s.logger.Debug("sync-already-in-progress")
 	}
-	<-ack
-
-	before := s.clock.Now()
-
-	actualLRPResponses, err := s.receptorClient.ActualLRPs()
-	if err != nil {
-		s.logger.Error("failed-to-get-actual", err)
-		return
-	}
-
-	desiredLRPResponses, err := s.receptorClient.DesiredLRPs()
-	if err != nil {
-		s.logger.Error("failed-to-get-desired", err)
-		return
-	}
-
-	runningActualLRPs := make([]receptor.ActualLRPResponse, 0, len(actualLRPResponses))
-	for _, actualLRPResponse := range actualLRPResponses {
-		if actualLRPResponse.State == receptor.ActualLRPStateRunning {
-			runningActualLRPs = append(runningActualLRPs, actualLRPResponse)
-		}
-	}
-
-	desiredLRPs := make([]receptor.DesiredLRPResponse, 0, len(desiredLRPResponses))
-	for _, desiredLRPResponse := range desiredLRPResponses {
-		desiredLRPs = append(desiredLRPs, desiredLRPResponse)
-	}
-
-	newTable := routing_table.NewTempTable(
-		routing_table.RoutesByRoutingKeyFromDesireds(desiredLRPs),
-		routing_table.EndpointsByRoutingKeyFromActuals(runningActualLRPs),
-	)
-
-	s.syncEvents.End <- SyncEnd{
-		Table: newTable,
-		Callback: func(table routing_table.RoutingTable) {
-			after := s.clock.Now()
-			routeSyncDuration.Send(after.Sub(before))
-		},
-	}
-}
-
-func (s *Syncer) register(desired receptor.DesiredLRPResponse, actual receptor.ActualLRPResponse) error {
-	routes, err := cfroutes.CFRoutesFromRoutingInfo(desired.Routes)
-	if err != nil || len(routes) == 0 {
-		return err
-	}
-	message := routing_table.RegistryMessage{
-		URIs: routes[0].Hostnames,
-		Host: actual.Address,
-		Port: uint16(actual.Ports[0].HostPort),
-	}
-
-	payload, _ := json.Marshal(message)
-
-	return s.natsClient.Publish("router.register", payload)
 }
 
 func (s *Syncer) listenForRouter(replyUUID string) error {
