@@ -286,28 +286,38 @@ var _ = Describe("Syncer", func() {
 			}
 		})
 
-		It("should sync on the specified interval", func() {
+		JustBeforeEach(func() {
 			//we set the emit interval real high to avoid colliding with our sync interval
 			routerStartMessages <- &nats.Msg{
 				Data: []byte(`{"minimumRegisterIntervalInSeconds":10, "pruneThresholdInSeconds": 20}`),
 			}
-
-			var t1 time.Time
-			var t2 time.Time
-			Eventually(syncBeginTimes).Should(Receive(&t1))
-			Eventually(syncBeginTimes).Should(Receive(&t2))
-
-			Ω(t2.Sub(t1)).Should(BeNumerically("~", 500*time.Millisecond, 100*time.Millisecond))
 		})
 
-		It("should emit the sync duration", func() {
-			routerStartMessages <- &nats.Msg{
-				Data: []byte(`{"minimumRegisterIntervalInSeconds":10, "pruneThresholdInSeconds": 20}`),
-			}
+		Context("after the router greets", func() {
+			BeforeEach(func() {
+				syncInterval = 10 * time.Minute
+			})
 
-			Eventually(func() float64 {
-				return fakeMetricSender.GetValue("RouteEmitterSyncDuration").Value
-			}, 2).Should(BeNumerically(">=", 100*time.Millisecond))
+			It("syncs", func() {
+				Eventually(syncBeginTimes).Should(Receive())
+			})
+		})
+
+		Context("on a specified interval", func() {
+			It("should sync", func() {
+				var t1 time.Time
+				var t2 time.Time
+				Eventually(syncBeginTimes).Should(Receive(&t1))
+				Eventually(syncBeginTimes).Should(Receive(&t2))
+
+				Ω(t2.Sub(t1)).Should(BeNumerically("~", 500*time.Millisecond, 100*time.Millisecond))
+			})
+
+			It("should emit the sync duration", func() {
+				Eventually(func() float64 {
+					return fakeMetricSender.GetValue("RouteEmitterSyncDuration").Value
+				}, 2).Should(BeNumerically(">=", 100*time.Millisecond))
+			})
 		})
 
 		Context("when fetching actuals fails", func() {
