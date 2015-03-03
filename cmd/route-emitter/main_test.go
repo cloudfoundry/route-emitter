@@ -89,6 +89,7 @@ var _ = Describe("Route Emitter", func() {
 
 			greeting := routing_table.RouterGreetingMessage{
 				MinimumRegisterInterval: 2,
+				PruneThresholdInSeconds: 6,
 			}
 
 			response, err := json.Marshal(greeting)

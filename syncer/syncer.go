@@ -237,9 +237,5 @@ func (s *Syncer) handleRouterGreet(msg *nats.Msg) {
 	}
 
 	greetInterval := response.PruneThresholdInSeconds / 3
-	if greetInterval < response.MinimumRegisterInterval {
-		greetInterval = response.MinimumRegisterInterval
-	}
-
 	s.routerGreet <- time.Duration(greetInterval) * time.Second
 }

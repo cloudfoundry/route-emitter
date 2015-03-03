@@ -182,27 +182,6 @@ var _ = Describe("Syncer", func() {
 		})
 
 		Context("when the router emits a router.start", func() {
-			Context("when register interval is greater than prune interval", func() {
-				JustBeforeEach(func() {
-					routerStartMessages <- &nats.Msg{
-						Data: []byte(`{
-						"minimumRegisterIntervalInSeconds":2,
-						"pruneThresholdInSeconds": 1
-						}`),
-					}
-				})
-
-				It("uses the register interval", func() {
-					Eventually(syncer.SyncEvents().Emit).Should(Receive())
-					t1 := clock.Now()
-
-					Eventually(syncer.SyncEvents().Emit).Should(Receive())
-					t2 := clock.Now()
-
-					Ω(t2.Sub(t1)).Should(BeNumerically("~", 2*time.Second, 200*time.Millisecond))
-				})
-			})
-
 			Context("using an interval", func() {
 				JustBeforeEach(func() {
 					routerStartMessages <- &nats.Msg{
@@ -238,7 +217,7 @@ var _ = Describe("Syncer", func() {
 				//get the second greeting, and respond
 				var msg *nats.Msg
 				Eventually(greetings, 2).Should(Receive(&msg))
-				go natsClient.Publish(msg.Reply, []byte(`{"minimumRegisterIntervalInSeconds":1}`))
+				go natsClient.Publish(msg.Reply, []byte(`{"minimumRegisterIntervalInSeconds":1, "pruneThresholdInSeconds": 3}`))
 
 				//should no longer be greeting the router
 				Consistently(greetings).ShouldNot(Receive())
@@ -248,13 +227,13 @@ var _ = Describe("Syncer", func() {
 		Context("after getting the first interval, when a second interval arrives", func() {
 			JustBeforeEach(func() {
 				routerStartMessages <- &nats.Msg{
-					Data: []byte(`{"minimumRegisterIntervalInSeconds":1}`),
+					Data: []byte(`{"minimumRegisterIntervalInSeconds":1, "pruneThresholdInSeconds": 3}`),
 				}
 			})
 
 			It("should modify its update rate", func() {
 				routerStartMessages <- &nats.Msg{
-					Data: []byte(`{"minimumRegisterIntervalInSeconds":2}`),
+					Data: []byte(`{"minimumRegisterIntervalInSeconds":2, "pruneThresholdInSeconds": 6}`),
 				}
 
 				//first emit should be pretty quick, it is in response to the incoming heartbeat interval
@@ -310,7 +289,7 @@ var _ = Describe("Syncer", func() {
 		It("should sync on the specified interval", func() {
 			//we set the emit interval real high to avoid colliding with our sync interval
 			routerStartMessages <- &nats.Msg{
-				Data: []byte(`{"minimumRegisterIntervalInSeconds":10}`),
+				Data: []byte(`{"minimumRegisterIntervalInSeconds":10, "pruneThresholdInSeconds": 20}`),
 			}
 
 			var t1 time.Time
@@ -323,7 +302,7 @@ var _ = Describe("Syncer", func() {
 
 		It("should emit the sync duration", func() {
 			routerStartMessages <- &nats.Msg{
-				Data: []byte(`{"minimumRegisterIntervalInSeconds":10}`),
+				Data: []byte(`{"minimumRegisterIntervalInSeconds":10, "pruneThresholdInSeconds": 20}`),
 			}
 
 			Eventually(func() float64 {
@@ -352,7 +331,7 @@ var _ = Describe("Syncer", func() {
 
 				atomic.StoreInt32(&returnError, 0)
 				routerStartMessages <- &nats.Msg{
-					Data: []byte(`{"minimumRegisterIntervalInSeconds":10}`),
+					Data: []byte(`{"minimumRegisterIntervalInSeconds":10, "pruneThresholdInSeconds": 20}`),
 				}
 
 				Eventually(syncEndTimes).Should(Receive())
@@ -377,7 +356,7 @@ var _ = Describe("Syncer", func() {
 				Eventually(receptorClient.DesiredLRPsCallCount).Should(Equal(1))
 
 				routerStartMessages <- &nats.Msg{
-					Data: []byte(`{"minimumRegisterIntervalInSeconds":1}`),
+					Data: []byte(`{"minimumRegisterIntervalInSeconds":1, "pruneThresholdInSeconds": 3}`),
 				}
 
 				Eventually(receptorClient.DesiredLRPsCallCount).Should(Equal(2))
