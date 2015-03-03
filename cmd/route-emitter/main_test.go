@@ -288,6 +288,8 @@ var _ = Describe("Route Emitter", func() {
 
 			Context("and a route is added", func() {
 				BeforeEach(func() {
+					Eventually(registeredRoutes).Should(Receive())
+
 					hostnames = []string{"route-1", "route-2", "route-3"}
 
 					updateRequest := models.DesiredLRPUpdate{
@@ -312,6 +314,8 @@ var _ = Describe("Route Emitter", func() {
 
 			Context("and a route is removed", func() {
 				BeforeEach(func() {
+					Eventually(registeredRoutes).Should(Receive())
+
 					updateRequest := models.DesiredLRPUpdate{
 						Routes:     newRoutes([]string{"route-2"}, containerPort),
 						Instances:  &desiredLRP.Instances,

@@ -58,6 +58,7 @@ func createEmitterRunner() *ginkgomon.Runner {
 			"-natsAddresses", fmt.Sprintf("127.0.0.1:%d", natsPort),
 			"-heartbeatInterval", heartbeatInterval.String(),
 			"-diegoAPIURL", fmt.Sprintf("http://127.0.0.1:%d", receptorPort),
+			"-communicationTimeout", "100ms",
 		),
 
 		StartCheck: "route-emitter.started",
@@ -110,7 +111,7 @@ var _ = BeforeEach(func() {
 })
 
 var _ = AfterEach(func() {
-	ginkgomon.Interrupt(receptorRunner)
+	ginkgomon.Kill(receptorRunner)
 	etcdRunner.Stop()
 	gnatsdRunner.Signal(os.Interrupt)
 	Eventually(gnatsdRunner.Wait(), 5).Should(Receive())
