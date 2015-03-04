@@ -27,6 +27,10 @@ import (
 
 const logGuid = "some-log-guid"
 
+type EventHolder struct {
+	event receptor.Event
+}
+
 var _ = Describe("Watcher", func() {
 	const (
 		expectedProcessGuid             = "process-guid"
@@ -61,6 +65,9 @@ var _ = Describe("Watcher", func() {
 		fakeMetricSender    *fake_metrics_sender.FakeMetricSender
 
 		logger *lagertest.TestLogger
+
+		nextErr   atomic.Value
+		nextEvent atomic.Value
 	)
 
 	BeforeEach(func() {
@@ -101,6 +108,28 @@ var _ = Describe("Watcher", func() {
 		}
 		fakeMetricSender = fake_metrics_sender.NewFakeMetricSender()
 		metrics.Initialize(fakeMetricSender)
+
+		eventSource.CloseStub = func() error {
+			nextErr.Store(errors.New("closed"))
+			return nil
+		}
+
+		eventSource.NextStub = func() (receptor.Event, error) {
+			if eventHolder := nextEvent.Load(); eventHolder != nil {
+				nextEvent.Store(EventHolder{})
+
+				eh := eventHolder.(EventHolder)
+				if eh.event != nil {
+					return eh.event, nil
+				}
+			}
+
+			if err := nextErr.Load(); err != nil {
+				return nil, err.(error)
+			}
+
+			return nil, nil
+		}
 	})
 
 	JustBeforeEach(func() {
@@ -145,21 +174,7 @@ var _ = Describe("Watcher", func() {
 			JustBeforeEach(func() {
 				table.SetRoutesReturns(dummyMessagesToEmit)
 
-				var nextErr error
-				eventSource.CloseStub = func() error {
-					nextErr = errors.New("closed")
-					return nil
-				}
-
-				callCount := 0
-				eventSource.NextStub = func() (receptor.Event, error) {
-					callCount++
-					if callCount == 1 {
-						return receptor.NewDesiredLRPCreatedEvent(desiredLRP), nil
-					} else {
-						return nil, nextErr
-					}
-				}
+				nextEvent.Store(EventHolder{receptor.NewDesiredLRPCreatedEvent(desiredLRP)})
 			})
 
 			It("should set the routes on the table", func() {
@@ -245,23 +260,13 @@ var _ = Describe("Watcher", func() {
 					Routes:          cfroutes.CFRoutes{{Hostnames: expectedRoutes, Port: expectedContainerPort}}.RoutingInfo(),
 					ModificationTag: receptor.ModificationTag{Epoch: "abcd", Index: 1},
 				}
+			})
 
-				var nextErr error
-				eventSource.CloseStub = func() error {
-					nextErr = errors.New("closed")
-					return nil
-				}
-
-				eventSource.NextStub = func() (receptor.Event, error) {
-					if eventSource.NextCallCount() == 1 {
-						return receptor.NewDesiredLRPChangedEvent(
-							originalDesiredLRP,
-							changedDesiredLRP,
-						), nil
-					} else {
-						return nil, nextErr
-					}
-				}
+			JustBeforeEach(func() {
+				nextEvent.Store(EventHolder{receptor.NewDesiredLRPChangedEvent(
+					originalDesiredLRP,
+					changedDesiredLRP,
+				)})
 			})
 
 			It("should set the routes on the table", func() {
@@ -408,20 +413,10 @@ var _ = Describe("Watcher", func() {
 					LogGuid:         logGuid,
 					ModificationTag: receptor.ModificationTag{Epoch: "defg", Index: 2},
 				}
+			})
 
-				var nextErr error
-				eventSource.CloseStub = func() error {
-					nextErr = errors.New("closed")
-					return nil
-				}
-
-				eventSource.NextStub = func() (receptor.Event, error) {
-					if eventSource.NextCallCount() == 1 {
-						return receptor.NewDesiredLRPRemovedEvent(desiredLRP), nil
-					} else {
-						return nil, nextErr
-					}
-				}
+			JustBeforeEach(func() {
+				nextEvent.Store(EventHolder{receptor.NewDesiredLRPRemovedEvent(desiredLRP)})
 			})
 
 			It("should remove the routes from the table", func() {
@@ -500,22 +495,7 @@ var _ = Describe("Watcher", func() {
 
 				JustBeforeEach(func() {
 					table.AddEndpointReturns(dummyMessagesToEmit)
-
-					var nextErr error
-					eventSource.CloseStub = func() error {
-						nextErr = errors.New("closed")
-						return nil
-					}
-
-					callCount := 0
-					eventSource.NextStub = func() (receptor.Event, error) {
-						callCount++
-						if callCount == 1 {
-							return receptor.NewActualLRPCreatedEvent(actualLRP), nil
-						} else {
-							return nil, nextErr
-						}
-					}
+					nextEvent.Store(EventHolder{receptor.NewActualLRPCreatedEvent(actualLRP)})
 				})
 
 				It("should add/update the endpoints on the table", func() {
@@ -570,22 +550,7 @@ var _ = Describe("Watcher", func() {
 						State: receptor.ActualLRPStateUnclaimed,
 					}
 
-					var nextErr error
-					eventSource.CloseStub = func() error {
-						nextErr = errors.New("closed")
-						return nil
-					}
-
-					callCount := 0
-					eventSource.NextStub = func() (receptor.Event, error) {
-						callCount++
-
-						if callCount == 1 {
-							return receptor.NewActualLRPCreatedEvent(actualLRP), nil
-						} else {
-							return nil, nextErr
-						}
-					}
+					nextEvent.Store(EventHolder{receptor.NewActualLRPCreatedEvent(actualLRP)})
 				})
 
 				It("doesn't add/update the endpoint on the table", func() {
@@ -602,7 +567,9 @@ var _ = Describe("Watcher", func() {
 			Context("when the resulting LRP is in the RUNNING state", func() {
 				BeforeEach(func() {
 					table.AddEndpointReturns(dummyMessagesToEmit)
+				})
 
+				JustBeforeEach(func() {
 					beforeActualLRP := receptor.ActualLRPResponse{
 						ProcessGuid:  expectedProcessGuid,
 						Index:        1,
@@ -625,19 +592,7 @@ var _ = Describe("Watcher", func() {
 						State: receptor.ActualLRPStateRunning,
 					}
 
-					var nextErr error
-					eventSource.CloseStub = func() error {
-						nextErr = errors.New("closed")
-						return nil
-					}
-
-					eventSource.NextStub = func() (receptor.Event, error) {
-						if eventSource.NextCallCount() == 1 {
-							return receptor.NewActualLRPChangedEvent(beforeActualLRP, afterActualLRP), nil
-						} else {
-							return nil, nextErr
-						}
-					}
+					nextEvent.Store(EventHolder{receptor.NewActualLRPChangedEvent(beforeActualLRP, afterActualLRP)})
 				})
 
 				It("should add/update the endpoint on the table", func() {
@@ -706,21 +661,7 @@ var _ = Describe("Watcher", func() {
 						State:       receptor.ActualLRPStateUnclaimed,
 					}
 
-					var nextErr error
-					eventSource.CloseStub = func() error {
-						nextErr = errors.New("closed")
-						return nil
-					}
-
-					callCount := 0
-					eventSource.NextStub = func() (receptor.Event, error) {
-						callCount++
-						if callCount == 1 {
-							return receptor.NewActualLRPChangedEvent(beforeActualLRP, afterActualLRP), nil
-						} else {
-							return nil, nextErr
-						}
-					}
+					nextEvent.Store(EventHolder{receptor.NewActualLRPChangedEvent(beforeActualLRP, afterActualLRP)})
 				})
 
 				It("should remove the endpoint from the table", func() {
@@ -754,7 +695,7 @@ var _ = Describe("Watcher", func() {
 			})
 
 			Context("when the endpoint neither starts nor ends in the RUNNING state", func() {
-				BeforeEach(func() {
+				JustBeforeEach(func() {
 					beforeActualLRP := receptor.ActualLRPResponse{
 						ProcessGuid: expectedProcessGuid,
 						Index:       1,
@@ -770,19 +711,7 @@ var _ = Describe("Watcher", func() {
 						State:        receptor.ActualLRPStateClaimed,
 					}
 
-					var nextErr error
-					eventSource.CloseStub = func() error {
-						nextErr = errors.New("closed")
-						return nil
-					}
-
-					eventSource.NextStub = func() (receptor.Event, error) {
-						if eventSource.NextCallCount() == 1 {
-							return receptor.NewActualLRPChangedEvent(beforeActualLRP, afterActualLRP), nil
-						} else {
-							return nil, nextErr
-						}
-					}
+					nextEvent.Store(EventHolder{receptor.NewActualLRPChangedEvent(beforeActualLRP, afterActualLRP)})
 				})
 
 				It("should not remove the endpoint", func() {
@@ -803,7 +732,9 @@ var _ = Describe("Watcher", func() {
 			Context("when the actual is in the RUNNING state", func() {
 				BeforeEach(func() {
 					table.RemoveEndpointReturns(dummyMessagesToEmit)
+				})
 
+				JustBeforeEach(func() {
 					actualLRP := receptor.ActualLRPResponse{
 						ProcessGuid:  expectedProcessGuid,
 						Index:        1,
@@ -818,19 +749,7 @@ var _ = Describe("Watcher", func() {
 						State: receptor.ActualLRPStateRunning,
 					}
 
-					var nextErr error
-					eventSource.CloseStub = func() error {
-						nextErr = errors.New("closed")
-						return nil
-					}
-
-					eventSource.NextStub = func() (receptor.Event, error) {
-						if eventSource.NextCallCount() == 1 {
-							return receptor.NewActualLRPRemovedEvent(actualLRP), nil
-						} else {
-							return nil, nextErr
-						}
-					}
+					nextEvent.Store(EventHolder{receptor.NewActualLRPRemovedEvent(actualLRP)})
 				})
 
 				It("should remove the endpoint from the table", func() {
@@ -867,7 +786,7 @@ var _ = Describe("Watcher", func() {
 			})
 
 			Context("when the actual is not in the RUNNING state", func() {
-				BeforeEach(func() {
+				JustBeforeEach(func() {
 					actualLRP := receptor.ActualLRPResponse{
 						ProcessGuid: expectedProcessGuid,
 						Index:       1,
@@ -875,19 +794,7 @@ var _ = Describe("Watcher", func() {
 						State:       receptor.ActualLRPStateCrashed,
 					}
 
-					var nextErr error
-					eventSource.CloseStub = func() error {
-						nextErr = errors.New("closed")
-						return nil
-					}
-
-					eventSource.NextStub = func() (receptor.Event, error) {
-						if eventSource.NextCallCount() == 1 {
-							return receptor.NewActualLRPRemovedEvent(actualLRP), nil
-						} else {
-							return nil, nextErr
-						}
-					}
+					nextEvent.Store(EventHolder{receptor.NewActualLRPRemovedEvent(actualLRP)})
 				})
 
 				It("doesn't remove the endpoint from the table", func() {
@@ -902,28 +809,16 @@ var _ = Describe("Watcher", func() {
 	})
 
 	Describe("Unrecognized events", func() {
+		BeforeEach(func() {
+			nextEvent.Store(EventHolder{unrecognizedEvent{}})
+		})
+
 		JustBeforeEach(func() {
 			syncEvents.Sync <- struct{}{}
-			Eventually(emitter.EmitCallCount).ShouldNot(Equal(0))
+			Eventually(emitter.EmitCallCount).Should(Equal(1))
 		})
 
-		JustBeforeEach(func() {
-			var nextErr error
-			eventSource.CloseStub = func() error {
-				nextErr = errors.New("closed")
-				return nil
-			}
-
-			eventSource.NextStub = func() (receptor.Event, error) {
-				if eventSource.NextCallCount() == 1 {
-					return unrecognizedEvent{}, nil
-				} else {
-					return nil, nextErr
-				}
-			}
-		})
-
-		It("does not emit any messages", func() {
+		It("does not emit any more messages", func() {
 			Consistently(emitter.EmitCallCount).Should(Equal(1))
 		})
 	})
@@ -949,7 +844,6 @@ var _ = Describe("Watcher", func() {
 
 		JustBeforeEach(func() {
 			syncEvents.Sync <- struct{}{}
-			Eventually(emitter.EmitCallCount).ShouldNot(Equal(0))
 		})
 
 		It("re-subscribes", func() {
@@ -976,12 +870,7 @@ var _ = Describe("Watcher", func() {
 		BeforeEach(func() {
 			nextEvent = make(chan receptor.Event)
 
-			var nextErr error
-			eventSource.CloseStub = func() error {
-				nextErr = errors.New("closed")
-				return nil
-			}
-
+			nextEvent := nextEvent
 			eventSource.NextStub = func() (receptor.Event, error) {
 				select {
 				case e := <-nextEvent:
@@ -989,7 +878,11 @@ var _ = Describe("Watcher", func() {
 				default:
 				}
 
-				return nil, nextErr
+				if err := nextErr.Load(); err != nil {
+					return nil, err.(error)
+				}
+
+				return nil, nil
 			}
 		})
 

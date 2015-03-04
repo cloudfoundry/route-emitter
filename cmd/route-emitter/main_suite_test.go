@@ -111,7 +111,7 @@ var _ = BeforeEach(func() {
 })
 
 var _ = AfterEach(func() {
-	ginkgomon.Kill(receptorRunner)
+	ginkgomon.Kill(receptorRunner, 5)
 	etcdRunner.Stop()
 	gnatsdRunner.Signal(os.Interrupt)
 	Eventually(gnatsdRunner.Wait(), 5).Should(Receive())

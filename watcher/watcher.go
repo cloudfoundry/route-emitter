@@ -114,12 +114,12 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 			if syncing == false {
 				watcher.logger.Info("sync-begin")
 				syncing = true
-				cachedEvents = make(map[string]receptor.Event)
-				go watcher.sync(syncEndChan)
-
 				if err := checkEventSource(); err != nil {
 					return err
 				}
+
+				cachedEvents = make(map[string]receptor.Event)
+				go watcher.sync(syncEndChan)
 			}
 
 		case syncEnd := <-syncEndChan:
