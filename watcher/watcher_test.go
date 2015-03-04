@@ -39,6 +39,7 @@ var _ = Describe("Watcher", func() {
 	)
 
 	var (
+		eventSource    *fake_receptor.FakeEventSource
 		receptorClient *fake_receptor.FakeClient
 		table          *fake_routing_table.FakeRoutingTable
 		emitter        *fake_nats_emitter.FakeNATSEmitter
@@ -63,7 +64,10 @@ var _ = Describe("Watcher", func() {
 	)
 
 	BeforeEach(func() {
+		eventSource = new(fake_receptor.FakeEventSource)
 		receptorClient = new(fake_receptor.FakeClient)
+		receptorClient.SubscribeToEventsReturns(eventSource, nil)
+
 		table = &fake_routing_table.FakeRoutingTable{}
 		emitter = &fake_nats_emitter.FakeNATSEmitter{}
 		syncEvents = syncer.Events{
@@ -108,16 +112,24 @@ var _ = Describe("Watcher", func() {
 		Eventually(process.Wait()).Should(Receive())
 	})
 
+	Context("on startup", func() {
+		It("processes events after the first sync event", func() {
+			Consistently(receptorClient.SubscribeToEventsCallCount).Should(Equal(0))
+			syncEvents.Sync <- struct{}{}
+			Eventually(receptorClient.SubscribeToEventsCallCount).Should(Equal(1))
+		})
+	})
+
 	Describe("Desired LRP changes", func() {
+		JustBeforeEach(func() {
+			syncEvents.Sync <- struct{}{}
+			Eventually(emitter.EmitCallCount).ShouldNot(Equal(0))
+		})
+
 		Context("when a create event occurs", func() {
 			var desiredLRP receptor.DesiredLRPResponse
 
 			BeforeEach(func() {
-				table.SetRoutesReturns(dummyMessagesToEmit)
-
-				eventSource := new(fake_receptor.FakeEventSource)
-				receptorClient.SubscribeToEventsReturns(eventSource, nil)
-
 				desiredLRP = receptor.DesiredLRPResponse{
 					Action: &models.RunAction{
 						Path: "ls",
@@ -128,6 +140,10 @@ var _ = Describe("Watcher", func() {
 					Routes:      cfroutes.CFRoutes{expectedCFRoute}.RoutingInfo(),
 					LogGuid:     logGuid,
 				}
+			})
+
+			JustBeforeEach(func() {
+				table.SetRoutesReturns(dummyMessagesToEmit)
 
 				var nextErr error
 				eventSource.CloseStub = func() error {
@@ -135,8 +151,10 @@ var _ = Describe("Watcher", func() {
 					return nil
 				}
 
+				callCount := 0
 				eventSource.NextStub = func() (receptor.Event, error) {
-					if eventSource.NextCallCount() == 1 {
+					callCount++
+					if callCount == 1 {
 						return receptor.NewDesiredLRPCreatedEvent(desiredLRP), nil
 					} else {
 						return nil, nextErr
@@ -165,8 +183,8 @@ var _ = Describe("Watcher", func() {
 			})
 
 			It("should emit whatever the table tells it to emit", func() {
-				Eventually(emitter.EmitCallCount).Should(Equal(1))
-				messagesToEmit := emitter.EmitArgsForCall(0)
+				Eventually(emitter.EmitCallCount).Should(Equal(2))
+				messagesToEmit := emitter.EmitArgsForCall(1)
 				Ω(messagesToEmit).Should(Equal(dummyMessagesToEmit))
 			})
 
@@ -189,12 +207,12 @@ var _ = Describe("Watcher", func() {
 				})
 
 				It("emits whatever the table tells it to emit", func() {
-					Eventually(emitter.EmitCallCount).Should(Equal(2))
+					Eventually(emitter.EmitCallCount).Should(Equal(3))
 
-					messagesToEmit := emitter.EmitArgsForCall(0)
+					messagesToEmit := emitter.EmitArgsForCall(1)
 					Ω(messagesToEmit).Should(Equal(dummyMessagesToEmit))
 
-					messagesToEmit = emitter.EmitArgsForCall(1)
+					messagesToEmit = emitter.EmitArgsForCall(2)
 					Ω(messagesToEmit).Should(Equal(dummyMessagesToEmit))
 				})
 			})
@@ -206,9 +224,6 @@ var _ = Describe("Watcher", func() {
 
 			BeforeEach(func() {
 				table.SetRoutesReturns(dummyMessagesToEmit)
-
-				eventSource := new(fake_receptor.FakeEventSource)
-				receptorClient.SubscribeToEventsReturns(eventSource, nil)
 
 				originalDesiredLRP = receptor.DesiredLRPResponse{
 					Action: &models.RunAction{
@@ -269,8 +284,8 @@ var _ = Describe("Watcher", func() {
 			})
 
 			It("should emit whatever the table tells it to emit", func() {
-				Eventually(emitter.EmitCallCount).Should(Equal(1))
-				messagesToEmit := emitter.EmitArgsForCall(0)
+				Eventually(emitter.EmitCallCount).Should(Equal(2))
+				messagesToEmit := emitter.EmitArgsForCall(1)
 				Ω(messagesToEmit).Should(Equal(dummyMessagesToEmit))
 			})
 
@@ -289,9 +304,9 @@ var _ = Describe("Watcher", func() {
 				})
 
 				It("emits whatever the table tells it to emit", func() {
-					Eventually(emitter.EmitCallCount).Should(Equal(1))
+					Eventually(emitter.EmitCallCount).Should(Equal(2))
 
-					messagesToEmit := emitter.EmitArgsForCall(0)
+					messagesToEmit := emitter.EmitArgsForCall(1)
 					Ω(messagesToEmit).Should(Equal(dummyMessagesToEmit))
 				})
 			})
@@ -315,12 +330,12 @@ var _ = Describe("Watcher", func() {
 				})
 
 				It("emits whatever the table tells it to emit", func() {
-					Eventually(emitter.EmitCallCount).Should(Equal(2))
+					Eventually(emitter.EmitCallCount).Should(Equal(3))
 
-					messagesToEmit := emitter.EmitArgsForCall(0)
+					messagesToEmit := emitter.EmitArgsForCall(1)
 					Ω(messagesToEmit).Should(Equal(dummyMessagesToEmit))
 
-					messagesToEmit = emitter.EmitArgsForCall(1)
+					messagesToEmit = emitter.EmitArgsForCall(2)
 					Ω(messagesToEmit).Should(Equal(dummyMessagesToEmit))
 				})
 			})
@@ -343,9 +358,9 @@ var _ = Describe("Watcher", func() {
 				})
 
 				It("emits whatever the table tells it to emit", func() {
-					Eventually(emitter.EmitCallCount).Should(Equal(1))
+					Eventually(emitter.EmitCallCount).Should(Equal(2))
 
-					messagesToEmit := emitter.EmitArgsForCall(0)
+					messagesToEmit := emitter.EmitArgsForCall(1)
 					Ω(messagesToEmit).Should(Equal(dummyMessagesToEmit))
 				})
 			})
@@ -368,9 +383,9 @@ var _ = Describe("Watcher", func() {
 				})
 
 				It("emits whatever the table tells it to emit", func() {
-					Eventually(emitter.EmitCallCount).Should(Equal(1))
+					Eventually(emitter.EmitCallCount).Should(Equal(2))
 
-					messagesToEmit := emitter.EmitArgsForCall(0)
+					messagesToEmit := emitter.EmitArgsForCall(1)
 					Ω(messagesToEmit).Should(Equal(dummyMessagesToEmit))
 				})
 			})
@@ -381,9 +396,6 @@ var _ = Describe("Watcher", func() {
 
 			BeforeEach(func() {
 				table.RemoveRoutesReturns(dummyMessagesToEmit)
-
-				eventSource := new(fake_receptor.FakeEventSource)
-				receptorClient.SubscribeToEventsReturns(eventSource, nil)
 
 				desiredLRP = receptor.DesiredLRPResponse{
 					Action: &models.RunAction{
@@ -420,9 +432,9 @@ var _ = Describe("Watcher", func() {
 			})
 
 			It("should emit whatever the table tells it to emit", func() {
-				Eventually(emitter.EmitCallCount).Should(Equal(1))
+				Eventually(emitter.EmitCallCount).Should(Equal(2))
 
-				messagesToEmit := emitter.EmitArgsForCall(0)
+				messagesToEmit := emitter.EmitArgsForCall(1)
 				Ω(messagesToEmit).Should(Equal(dummyMessagesToEmit))
 			})
 
@@ -448,12 +460,12 @@ var _ = Describe("Watcher", func() {
 				})
 
 				It("emits whatever the table tells it to emit", func() {
-					Eventually(emitter.EmitCallCount).Should(Equal(2))
+					Eventually(emitter.EmitCallCount).Should(Equal(3))
 
-					messagesToEmit := emitter.EmitArgsForCall(0)
+					messagesToEmit := emitter.EmitArgsForCall(1)
 					Ω(messagesToEmit).Should(Equal(dummyMessagesToEmit))
 
-					messagesToEmit = emitter.EmitArgsForCall(1)
+					messagesToEmit = emitter.EmitArgsForCall(2)
 					Ω(messagesToEmit).Should(Equal(dummyMessagesToEmit))
 				})
 			})
@@ -461,16 +473,16 @@ var _ = Describe("Watcher", func() {
 	})
 
 	Describe("Actual LRP changes", func() {
+		JustBeforeEach(func() {
+			syncEvents.Sync <- struct{}{}
+			Eventually(emitter.EmitCallCount).ShouldNot(Equal(0))
+		})
+
 		Context("when a create event occurs", func() {
 			var actualLRP receptor.ActualLRPResponse
 
 			Context("when the resulting LRP is in the RUNNING state", func() {
 				BeforeEach(func() {
-					table.AddEndpointReturns(dummyMessagesToEmit)
-
-					eventSource := new(fake_receptor.FakeEventSource)
-					receptorClient.SubscribeToEventsReturns(eventSource, nil)
-
 					actualLRP = receptor.ActualLRPResponse{
 						ProcessGuid:  expectedProcessGuid,
 						Index:        1,
@@ -484,6 +496,10 @@ var _ = Describe("Watcher", func() {
 						},
 						State: receptor.ActualLRPStateRunning,
 					}
+				})
+
+				JustBeforeEach(func() {
+					table.AddEndpointReturns(dummyMessagesToEmit)
 
 					var nextErr error
 					eventSource.CloseStub = func() error {
@@ -491,8 +507,10 @@ var _ = Describe("Watcher", func() {
 						return nil
 					}
 
+					callCount := 0
 					eventSource.NextStub = func() (receptor.Event, error) {
-						if eventSource.NextCallCount() == 1 {
+						callCount++
+						if callCount == 1 {
 							return receptor.NewActualLRPCreatedEvent(actualLRP), nil
 						} else {
 							return nil, nextErr
@@ -517,9 +535,9 @@ var _ = Describe("Watcher", func() {
 				})
 
 				It("should emit whatever the table tells it to emit", func() {
-					Eventually(emitter.EmitCallCount).Should(Equal(2))
+					Eventually(emitter.EmitCallCount).Should(Equal(3))
 
-					messagesToEmit := emitter.EmitArgsForCall(0)
+					messagesToEmit := emitter.EmitArgsForCall(1)
 					Ω(messagesToEmit).Should(Equal(dummyMessagesToEmit))
 				})
 
@@ -537,10 +555,7 @@ var _ = Describe("Watcher", func() {
 			})
 
 			Context("when the resulting LRP is not in the RUNNING state", func() {
-				BeforeEach(func() {
-					eventSource := new(fake_receptor.FakeEventSource)
-					receptorClient.SubscribeToEventsReturns(eventSource, nil)
-
+				JustBeforeEach(func() {
 					actualLRP := receptor.ActualLRPResponse{
 						ProcessGuid:  expectedProcessGuid,
 						Index:        1,
@@ -561,8 +576,11 @@ var _ = Describe("Watcher", func() {
 						return nil
 					}
 
+					callCount := 0
 					eventSource.NextStub = func() (receptor.Event, error) {
-						if eventSource.NextCallCount() == 1 {
+						callCount++
+
+						if callCount == 1 {
 							return receptor.NewActualLRPCreatedEvent(actualLRP), nil
 						} else {
 							return nil, nextErr
@@ -575,7 +593,7 @@ var _ = Describe("Watcher", func() {
 				})
 
 				It("doesn't emit", func() {
-					Eventually(emitter.EmitCallCount).Should(Equal(0))
+					Eventually(emitter.EmitCallCount).Should(Equal(1))
 				})
 			})
 		})
@@ -584,9 +602,6 @@ var _ = Describe("Watcher", func() {
 			Context("when the resulting LRP is in the RUNNING state", func() {
 				BeforeEach(func() {
 					table.AddEndpointReturns(dummyMessagesToEmit)
-
-					eventSource := new(fake_receptor.FakeEventSource)
-					receptorClient.SubscribeToEventsReturns(eventSource, nil)
 
 					beforeActualLRP := receptor.ActualLRPResponse{
 						ProcessGuid:  expectedProcessGuid,
@@ -648,9 +663,9 @@ var _ = Describe("Watcher", func() {
 				})
 
 				It("should emit whatever the table tells it to emit", func() {
-					Eventually(emitter.EmitCallCount).Should(Equal(2))
+					Eventually(emitter.EmitCallCount).Should(Equal(3))
 
-					messagesToEmit := emitter.EmitArgsForCall(0)
+					messagesToEmit := emitter.EmitArgsForCall(1)
 					Ω(messagesToEmit).Should(Equal(dummyMessagesToEmit))
 				})
 
@@ -668,11 +683,8 @@ var _ = Describe("Watcher", func() {
 			})
 
 			Context("when the resulting LRP transitions away form the RUNNING state", func() {
-				BeforeEach(func() {
+				JustBeforeEach(func() {
 					table.RemoveEndpointReturns(dummyMessagesToEmit)
-
-					eventSource := new(fake_receptor.FakeEventSource)
-					receptorClient.SubscribeToEventsReturns(eventSource, nil)
 
 					beforeActualLRP := receptor.ActualLRPResponse{
 						ProcessGuid:  expectedProcessGuid,
@@ -700,8 +712,10 @@ var _ = Describe("Watcher", func() {
 						return nil
 					}
 
+					callCount := 0
 					eventSource.NextStub = func() (receptor.Event, error) {
-						if eventSource.NextCallCount() == 1 {
+						callCount++
+						if callCount == 1 {
 							return receptor.NewActualLRPChangedEvent(beforeActualLRP, afterActualLRP), nil
 						} else {
 							return nil, nextErr
@@ -732,18 +746,15 @@ var _ = Describe("Watcher", func() {
 				})
 
 				It("should emit whatever the table tells it to emit", func() {
-					Eventually(emitter.EmitCallCount).Should(Equal(2))
+					Eventually(emitter.EmitCallCount).Should(Equal(3))
 
-					messagesToEmit := emitter.EmitArgsForCall(0)
+					messagesToEmit := emitter.EmitArgsForCall(1)
 					Ω(messagesToEmit).Should(Equal(dummyMessagesToEmit))
 				})
 			})
 
 			Context("when the endpoint neither starts nor ends in the RUNNING state", func() {
 				BeforeEach(func() {
-					eventSource := new(fake_receptor.FakeEventSource)
-					receptorClient.SubscribeToEventsReturns(eventSource, nil)
-
 					beforeActualLRP := receptor.ActualLRPResponse{
 						ProcessGuid: expectedProcessGuid,
 						Index:       1,
@@ -783,7 +794,7 @@ var _ = Describe("Watcher", func() {
 				})
 
 				It("should not emit anything", func() {
-					Consistently(emitter.EmitCallCount).Should(BeZero())
+					Consistently(emitter.EmitCallCount).Should(Equal(1))
 				})
 			})
 		})
@@ -792,9 +803,6 @@ var _ = Describe("Watcher", func() {
 			Context("when the actual is in the RUNNING state", func() {
 				BeforeEach(func() {
 					table.RemoveEndpointReturns(dummyMessagesToEmit)
-
-					eventSource := new(fake_receptor.FakeEventSource)
-					receptorClient.SubscribeToEventsReturns(eventSource, nil)
 
 					actualLRP := receptor.ActualLRPResponse{
 						ProcessGuid:  expectedProcessGuid,
@@ -848,21 +856,18 @@ var _ = Describe("Watcher", func() {
 				})
 
 				It("should emit whatever the table tells it to emit", func() {
-					Eventually(emitter.EmitCallCount).Should(Equal(2))
+					Eventually(emitter.EmitCallCount).Should(Equal(3))
 
-					messagesToEmit := emitter.EmitArgsForCall(0)
+					messagesToEmit := emitter.EmitArgsForCall(1)
 					Ω(messagesToEmit).Should(Equal(dummyMessagesToEmit))
 
-					messagesToEmit = emitter.EmitArgsForCall(1)
+					messagesToEmit = emitter.EmitArgsForCall(2)
 					Ω(messagesToEmit).Should(Equal(dummyMessagesToEmit))
 				})
 			})
 
 			Context("when the actual is not in the RUNNING state", func() {
 				BeforeEach(func() {
-					eventSource := new(fake_receptor.FakeEventSource)
-					receptorClient.SubscribeToEventsReturns(eventSource, nil)
-
 					actualLRP := receptor.ActualLRPResponse{
 						ProcessGuid: expectedProcessGuid,
 						Index:       1,
@@ -890,17 +895,19 @@ var _ = Describe("Watcher", func() {
 				})
 
 				It("doesn't emit", func() {
-					Consistently(emitter.EmitCallCount).Should(Equal(0))
+					Consistently(emitter.EmitCallCount).Should(Equal(1))
 				})
 			})
 		})
 	})
 
 	Describe("Unrecognized events", func() {
-		BeforeEach(func() {
-			eventSource := new(fake_receptor.FakeEventSource)
-			receptorClient.SubscribeToEventsReturns(eventSource, nil)
+		JustBeforeEach(func() {
+			syncEvents.Sync <- struct{}{}
+			Eventually(emitter.EmitCallCount).ShouldNot(Equal(0))
+		})
 
+		JustBeforeEach(func() {
 			var nextErr error
 			eventSource.CloseStub = func() error {
 				nextErr = errors.New("closed")
@@ -917,7 +924,7 @@ var _ = Describe("Watcher", func() {
 		})
 
 		It("does not emit any messages", func() {
-			Consistently(emitter.EmitCallCount).Should(BeZero())
+			Consistently(emitter.EmitCallCount).Should(Equal(1))
 		})
 	})
 
@@ -928,7 +935,6 @@ var _ = Describe("Watcher", func() {
 			subscribeErr = errors.New("subscribe-error")
 			nextErr = errors.New("next-error")
 
-			eventSource := new(fake_receptor.FakeEventSource)
 			receptorClient.SubscribeToEventsStub = func() (receptor.EventSource, error) {
 				if receptorClient.SubscribeToEventsCallCount() == 1 {
 					return eventSource, nil
@@ -941,8 +947,13 @@ var _ = Describe("Watcher", func() {
 			}
 		})
 
+		JustBeforeEach(func() {
+			syncEvents.Sync <- struct{}{}
+			Eventually(emitter.EmitCallCount).ShouldNot(Equal(0))
+		})
+
 		It("re-subscribes", func() {
-			Eventually(receptorClient.SubscribeToEventsCallCount).Should(Equal(2))
+			Eventually(receptorClient.SubscribeToEventsCallCount).Should(BeNumerically(">", 1))
 		})
 
 		Context("when re-subscribing fails", func() {
@@ -953,11 +964,6 @@ var _ = Describe("Watcher", func() {
 	})
 
 	Describe("interrupting the process", func() {
-		BeforeEach(func() {
-			eventSource := new(fake_receptor.FakeEventSource)
-			receptorClient.SubscribeToEventsReturns(eventSource, nil)
-		})
-
 		It("should be possible to SIGINT the route emitter", func() {
 			process.Signal(os.Interrupt)
 			Eventually(process.Wait()).Should(Receive())
@@ -968,8 +974,6 @@ var _ = Describe("Watcher", func() {
 		var nextEvent chan receptor.Event
 
 		BeforeEach(func() {
-			eventSource := new(fake_receptor.FakeEventSource)
-			receptorClient.SubscribeToEventsReturns(eventSource, nil)
 			nextEvent = make(chan receptor.Event)
 
 			var nextErr error
@@ -1088,17 +1092,13 @@ var _ = Describe("Watcher", func() {
 					syncEvents.Sync <- struct{}{}
 				})
 
-				It("caches events", func() {
-					sendEvent()
-					Consistently(table.RemoveEndpointCallCount).Should(Equal(0))
-				})
-
-				Context("additional sync events", func() {
+				Describe("receptor events", func() {
 					var ready chan struct{}
 					var count int32
 
 					BeforeEach(func() {
 						ready = make(chan struct{})
+						count = 0
 
 						receptorClient.ActualLRPsStub = func() ([]receptor.ActualLRPResponse, error) {
 							defer GinkgoRecover()
@@ -1110,13 +1110,25 @@ var _ = Describe("Watcher", func() {
 						}
 					})
 
-					It("are ignored", func() {
+					JustBeforeEach(func() {
 						Eventually(ready).Should(Receive())
+					})
 
-						syncEvents.Sync <- struct{}{}
-
-						Consistently(atomic.LoadInt32(&count)).Should(Equal(int32(1)))
+					It("caches events", func() {
+						sendEvent()
+						Consistently(table.RemoveEndpointCallCount).Should(Equal(0))
 						ready <- struct{}{}
+					})
+
+					Context("additional sync events", func() {
+						JustBeforeEach(func() {
+							syncEvents.Sync <- struct{}{}
+						})
+
+						It("ignores the sync event", func() {
+							Consistently(atomic.LoadInt32(&count)).Should(Equal(int32(1)))
+							ready <- struct{}{}
+						})
 					})
 				})
 
@@ -1209,6 +1221,8 @@ var _ = Describe("Watcher", func() {
 						watcher = NewWatcher(receptorClient, clock, table, emitter, syncEvents, logger)
 
 						receptorClient.DesiredLRPsStub = func() ([]receptor.DesiredLRPResponse, error) {
+							defer GinkgoRecover()
+
 							ready <- struct{}{}
 							Eventually(ready).Should(Receive())
 

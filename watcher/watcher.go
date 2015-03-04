@@ -75,12 +75,13 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 
 	var eventSource receptor.EventSource
 	var cachedEvents map[string]receptor.Event
-	var syncing bool
+
 	eventChan := make(chan receptor.Event)
 	errChan := make(chan error, 1)
 	syncEndChan := make(chan syncEndEvent)
 
-	for {
+	syncing := false
+	checkEventSource := func() error {
 		if eventSource == nil {
 			var resubscribeErr error
 			eventSource, resubscribeErr = watcher.receptorClient.SubscribeToEvents()
@@ -104,6 +105,10 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 			}()
 		}
 
+		return nil
+	}
+
+	for {
 		select {
 		case <-watcher.syncEvents.Sync:
 			if syncing == false {
@@ -111,6 +116,10 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 				syncing = true
 				cachedEvents = make(map[string]receptor.Event)
 				go watcher.sync(syncEndChan)
+
+				if err := checkEventSource(); err != nil {
+					return err
+				}
 			}
 
 		case syncEnd := <-syncEndChan:
@@ -137,6 +146,10 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 		case err := <-errChan:
 			watcher.logger.Error("failed-getting-next-event", err)
 			eventSource = nil
+
+			if err := checkEventSource(); err != nil {
+				return err
+			}
 
 		case <-signals:
 			watcher.logger.Info("stopping")
