@@ -44,6 +44,7 @@ var natsClient diegonats.NATSClient
 var store storeadapter.StoreAdapter
 var bbs *Bbs.BBS
 var logger *lagertest.TestLogger
+var syncInterval time.Duration
 
 func TestRouteEmitter(t *testing.T) {
 	RegisterFailHandler(Fail)
@@ -59,6 +60,7 @@ func createEmitterRunner() *ginkgomon.Runner {
 			"-heartbeatInterval", heartbeatInterval.String(),
 			"-diegoAPIURL", fmt.Sprintf("http://127.0.0.1:%d", receptorPort),
 			"-communicationTimeout", "100ms",
+			"-syncInterval", syncInterval.String(),
 		),
 
 		StartCheck: "route-emitter.started",
@@ -99,6 +101,8 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 
 	logger = lagertest.NewTestLogger("test")
 	bbs = Bbs.NewBBS(store, clock.NewClock(), logger)
+
+	syncInterval = 200 * time.Millisecond
 })
 
 var _ = BeforeEach(func() {

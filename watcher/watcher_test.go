@@ -31,6 +31,8 @@ type EventHolder struct {
 	event receptor.Event
 }
 
+var nilEventHolder = EventHolder{}
+
 var _ = Describe("Watcher", func() {
 	const (
 		expectedProcessGuid             = "process-guid"
@@ -109,14 +111,18 @@ var _ = Describe("Watcher", func() {
 		fakeMetricSender = fake_metrics_sender.NewFakeMetricSender()
 		metrics.Initialize(fakeMetricSender)
 
+		nextErr = atomic.Value{}
+		nextEvent.Store(nilEventHolder)
+
 		eventSource.CloseStub = func() error {
 			nextErr.Store(errors.New("closed"))
 			return nil
 		}
 
 		eventSource.NextStub = func() (receptor.Event, error) {
-			if eventHolder := nextEvent.Load(); eventHolder != nil {
-				nextEvent.Store(EventHolder{})
+			time.Sleep(10 * time.Millisecond)
+			if eventHolder := nextEvent.Load(); eventHolder != nil || eventHolder != nilEventHolder {
+				nextEvent.Store(nilEventHolder)
 
 				eh := eventHolder.(EventHolder)
 				if eh.event != nil {
@@ -870,6 +876,7 @@ var _ = Describe("Watcher", func() {
 			nextEvent = make(chan receptor.Event)
 
 			nextEvent := nextEvent
+			nextErr := nextErr
 			eventSource.NextStub = func() (receptor.Event, error) {
 				select {
 				case e := <-nextEvent:

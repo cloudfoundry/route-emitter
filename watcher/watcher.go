@@ -34,8 +34,10 @@ type Watcher struct {
 }
 
 type syncEndEvent struct {
-	Table    routing_table.RoutingTable
-	Callback func(routing_table.RoutingTable)
+	table    routing_table.RoutingTable
+	callback func(routing_table.RoutingTable)
+
+	logger lager.Logger
 }
 
 type set map[interface{}]struct{}
@@ -123,7 +125,8 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 		select {
 		case <-watcher.syncEvents.Sync:
 			if syncing == false {
-				watcher.logger.Info("sync-begin")
+				logger := watcher.logger.Session("sync")
+				logger.Info("starting")
 				syncing = true
 
 				if subscribeFailure == nil {
@@ -132,32 +135,32 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 				}
 
 				cachedEvents = make(map[string]receptor.Event)
-				go watcher.sync(syncEndChan)
+				go watcher.sync(logger, syncEndChan)
 			}
 
 		case syncEnd := <-syncEndChan:
-			watcher.logger.Info("sync-end")
 			watcher.completeSync(syncEnd, cachedEvents)
 			cachedEvents = nil
 			syncing = false
+			syncEnd.logger.Info("complete")
 
 		case <-watcher.syncEvents.Emit:
-			watcher.logger.Info("sync-emit")
-			watcher.emit()
+			logger := watcher.logger.Session("emit")
+			watcher.emit(logger)
 
 		case err := <-subscribeFailure:
 			watcher.logger.Error("failed-subscribing-to-events", err)
 			return err
 
 		case event := <-eventChan:
-			watcher.logger.Info("handling-event", lager.Data{
-				"type": event.EventType(),
-			})
-
 			if syncing {
+				watcher.logger.Info("caching-event", lager.Data{
+					"type": event.EventType(),
+				})
+
 				cachedEvents[event.Key()] = event
 			} else {
-				watcher.handleEvent(event)
+				watcher.handleEvent(watcher.logger, event)
 			}
 
 		case <-signals:
@@ -174,21 +177,21 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 	}
 }
 
-func (watcher *Watcher) emit() {
+func (watcher *Watcher) emit(logger lager.Logger) {
 	messagesToEmit := watcher.table.MessagesToEmit()
 
-	watcher.logger.Info("emitting-messages", lager.Data{"messages": messagesToEmit})
+	logger.Info("emitting-messages", lager.Data{"messages": messagesToEmit})
 	err := watcher.emitter.Emit(messagesToEmit)
 	if err != nil {
-		watcher.logger.Error("failed-to-emit-routes", err)
+		logger.Error("failed-to-emit-routes", err)
 	}
 
 	routesSynced.Add(messagesToEmit.RouteRegistrationCount())
 	routesTotal.Send(watcher.table.RouteCount())
 }
 
-func (watcher *Watcher) sync(syncEndChan chan syncEndEvent) {
-	endEvent := syncEndEvent{}
+func (watcher *Watcher) sync(logger lager.Logger, syncEndChan chan syncEndEvent) {
+	endEvent := syncEndEvent{logger: logger}
 	defer func() {
 		syncEndChan <- endEvent
 	}()
@@ -197,13 +200,13 @@ func (watcher *Watcher) sync(syncEndChan chan syncEndEvent) {
 
 	actualLRPResponses, err := watcher.receptorClient.ActualLRPs()
 	if err != nil {
-		watcher.logger.Error("failed-to-get-actual", err)
+		logger.Error("failed-to-get-actual", err)
 		return
 	}
 
 	desiredLRPResponses, err := watcher.receptorClient.DesiredLRPs()
 	if err != nil {
-		watcher.logger.Error("failed-to-get-desired", err)
+		logger.Error("failed-to-get-desired", err)
 		return
 	}
 
@@ -224,18 +227,20 @@ func (watcher *Watcher) sync(syncEndChan chan syncEndEvent) {
 		routing_table.EndpointsByRoutingKeyFromActuals(runningActualLRPs),
 	)
 
-	endEvent.Table = newTable
-	endEvent.Callback = func(table routing_table.RoutingTable) {
+	endEvent.table = newTable
+	endEvent.callback = func(table routing_table.RoutingTable) {
 		after := watcher.clock.Now()
 		routeSyncDuration.Send(after.Sub(before))
 	}
 }
 
 func (watcher *Watcher) completeSync(syncEnd syncEndEvent, cachedEvents map[string]receptor.Event) {
-	if syncEnd.Table == nil {
+	logger := syncEnd.logger
+
+	if syncEnd.table == nil {
 		// sync failed, process the events on the current table
 		for _, e := range cachedEvents {
-			watcher.handleEvent(e)
+			watcher.handleEvent(logger, e)
 		}
 
 		return
@@ -245,57 +250,59 @@ func (watcher *Watcher) completeSync(syncEnd syncEndEvent, cachedEvents map[stri
 	watcher.emitter = nil
 
 	table := watcher.table
-	watcher.table = syncEnd.Table
+	watcher.table = syncEnd.table
 
 	for _, e := range cachedEvents {
-		watcher.handleEvent(e)
+		watcher.handleEvent(logger, e)
 	}
 
 	watcher.table = table
 	watcher.emitter = emitter
 
-	messages := watcher.table.Swap(syncEnd.Table)
-	watcher.emitMessages(messages)
+	messages := watcher.table.Swap(syncEnd.table)
+	watcher.emitMessages(logger, messages)
 
-	if syncEnd.Callback != nil {
-		syncEnd.Callback(watcher.table)
+	if syncEnd.callback != nil {
+		syncEnd.callback(watcher.table)
 	}
 }
 
-func (watcher *Watcher) handleEvent(event receptor.Event) {
+func (watcher *Watcher) handleEvent(logger lager.Logger, event receptor.Event) {
 	switch event := event.(type) {
 	case receptor.DesiredLRPCreatedEvent:
-		watcher.handleDesiredCreate(event.DesiredLRPResponse)
+		watcher.handleDesiredCreate(logger, event.DesiredLRPResponse)
 	case receptor.DesiredLRPChangedEvent:
-		watcher.handleDesiredUpdate(event.Before, event.After)
+		watcher.handleDesiredUpdate(logger, event.Before, event.After)
 	case receptor.DesiredLRPRemovedEvent:
-		watcher.handleDesiredDelete(event.DesiredLRPResponse)
+		watcher.handleDesiredDelete(logger, event.DesiredLRPResponse)
 	case receptor.ActualLRPCreatedEvent:
-		watcher.handleActualCreate(event.ActualLRPResponse)
+		watcher.handleActualCreate(logger, event.ActualLRPResponse)
 	case receptor.ActualLRPChangedEvent:
-		watcher.handleActualUpdate(event.Before, event.After)
+		watcher.handleActualUpdate(logger, event.Before, event.After)
 	case receptor.ActualLRPRemovedEvent:
-		watcher.handleActualDelete(event.ActualLRPResponse)
+		watcher.handleActualDelete(logger, event.ActualLRPResponse)
 	default:
-		watcher.logger.Info("did-not-handle-unrecognizable-event", lager.Data{"event-type": event.EventType()})
+		logger.Info("did-not-handle-unrecognizable-event", lager.Data{"event-type": event.EventType()})
 	}
 }
 
-func (watcher *Watcher) handleDesiredCreate(desiredLRP receptor.DesiredLRPResponse) {
-	watcher.logger.Info("handling-desired-create", desiredLRPData(desiredLRP))
-	defer watcher.logger.Info("done-handling-desired-create")
+func (watcher *Watcher) handleDesiredCreate(logger lager.Logger, desiredLRP receptor.DesiredLRPResponse) {
+	logger = logger.Session("handle-desired-create", desiredLRPData(desiredLRP))
+	logger.Info("starting")
+	defer logger.Info("complete")
 
-	watcher.setRoutesForDesired(desiredLRP)
+	watcher.setRoutesForDesired(logger, desiredLRP)
 }
 
-func (watcher *Watcher) handleDesiredUpdate(before, after receptor.DesiredLRPResponse) {
-	watcher.logger.Info("handling-desired-update", lager.Data{
+func (watcher *Watcher) handleDesiredUpdate(logger lager.Logger, before, after receptor.DesiredLRPResponse) {
+	logger = logger.Session("handling-desired-update", lager.Data{
 		"before": desiredLRPData(before),
 		"after":  desiredLRPData(after),
 	})
-	defer watcher.logger.Info("done-handling-desired-update")
+	logger.Info("starting")
+	defer logger.Info("complete")
 
-	afterKeysSet := watcher.setRoutesForDesired(after)
+	afterKeysSet := watcher.setRoutesForDesired(logger, after)
 
 	beforeRoutingKeys := routing_table.RoutingKeysFromDesired(before)
 	afterRoutes, _ := cfroutes.CFRoutesFromRoutingInfo(after.Routes)
@@ -308,12 +315,12 @@ func (watcher *Watcher) handleDesiredUpdate(before, after receptor.DesiredLRPRes
 	for _, key := range beforeRoutingKeys {
 		if !afterKeysSet.contains(key) || !afterContainerPorts.contains(key.ContainerPort) {
 			messagesToEmit := watcher.table.RemoveRoutes(key, after.ModificationTag)
-			watcher.emitMessages(messagesToEmit)
+			watcher.emitMessages(logger, messagesToEmit)
 		}
 	}
 }
 
-func (watcher *Watcher) setRoutesForDesired(desiredLRP receptor.DesiredLRPResponse) set {
+func (watcher *Watcher) setRoutesForDesired(logger lager.Logger, desiredLRP receptor.DesiredLRPResponse) set {
 	routingKeys := routing_table.RoutingKeysFromDesired(desiredLRP)
 	routes, _ := cfroutes.CFRoutesFromRoutingInfo(desiredLRP.Routes)
 	routingKeySet := set{}
@@ -326,7 +333,7 @@ func (watcher *Watcher) setRoutesForDesired(desiredLRP receptor.DesiredLRPRespon
 					Hostnames: route.Hostnames,
 					LogGuid:   desiredLRP.LogGuid,
 				})
-				watcher.emitMessages(messagesToEmit)
+				watcher.emitMessages(logger, messagesToEmit)
 			}
 		}
 	}
@@ -334,54 +341,58 @@ func (watcher *Watcher) setRoutesForDesired(desiredLRP receptor.DesiredLRPRespon
 	return routingKeySet
 }
 
-func (watcher *Watcher) handleDesiredDelete(desiredLRP receptor.DesiredLRPResponse) {
-	watcher.logger.Debug("handling-desired-delete", desiredLRPData(desiredLRP))
-	defer watcher.logger.Debug("done-handling-desired-delete")
+func (watcher *Watcher) handleDesiredDelete(logger lager.Logger, desiredLRP receptor.DesiredLRPResponse) {
+	logger = logger.Session("handling-desired-delete", desiredLRPData(desiredLRP))
+	logger.Info("starting")
+	defer logger.Info("complete")
 
 	for _, key := range routing_table.RoutingKeysFromDesired(desiredLRP) {
 		messagesToEmit := watcher.table.RemoveRoutes(key, desiredLRP.ModificationTag)
 
-		watcher.emitMessages(messagesToEmit)
+		watcher.emitMessages(logger, messagesToEmit)
 	}
 }
 
-func (watcher *Watcher) handleActualCreate(actualLRP receptor.ActualLRPResponse) {
-	watcher.logger.Debug("handling-actual-create", actualLRPData(actualLRP))
-	defer watcher.logger.Debug("done-handling-actual-create")
+func (watcher *Watcher) handleActualCreate(logger lager.Logger, actualLRP receptor.ActualLRPResponse) {
+	logger = logger.Session("handling-actual-create", actualLRPData(actualLRP))
+	logger.Info("starting")
+	defer logger.Info("complete")
 
 	if actualLRP.State == receptor.ActualLRPStateRunning {
-		watcher.addAndEmit(actualLRP)
+		watcher.addAndEmit(logger, actualLRP)
 	}
 }
 
-func (watcher *Watcher) handleActualUpdate(before, after receptor.ActualLRPResponse) {
-	watcher.logger.Debug("handling-actual-update", lager.Data{
+func (watcher *Watcher) handleActualUpdate(logger lager.Logger, before, after receptor.ActualLRPResponse) {
+	logger = logger.Session("handling-actual-update", lager.Data{
 		"before": actualLRPData(before),
 		"after":  actualLRPData(after),
 	})
-	defer watcher.logger.Debug("done-handling-actual-update")
+	logger.Info("starting")
+	defer logger.Info("complete")
 
 	switch {
 	case after.State == receptor.ActualLRPStateRunning:
-		watcher.addAndEmit(after)
+		watcher.addAndEmit(logger, after)
 	case after.State != receptor.ActualLRPStateRunning && before.State == receptor.ActualLRPStateRunning:
-		watcher.removeAndEmit(before)
+		watcher.removeAndEmit(logger, before)
 	}
 }
 
-func (watcher *Watcher) handleActualDelete(actualLRP receptor.ActualLRPResponse) {
-	watcher.logger.Debug("handling-actual-delete", actualLRPData(actualLRP))
-	defer watcher.logger.Debug("done-handling-actual-delete")
+func (watcher *Watcher) handleActualDelete(logger lager.Logger, actualLRP receptor.ActualLRPResponse) {
+	logger = logger.Session("handling-actual-delete", actualLRPData(actualLRP))
+	logger.Info("starting")
+	defer logger.Info("complete")
 
 	if actualLRP.State == receptor.ActualLRPStateRunning {
-		watcher.removeAndEmit(actualLRP)
+		watcher.removeAndEmit(logger, actualLRP)
 	}
 }
 
-func (watcher *Watcher) addAndEmit(actualLRP receptor.ActualLRPResponse) {
+func (watcher *Watcher) addAndEmit(logger lager.Logger, actualLRP receptor.ActualLRPResponse) {
 	endpoints, err := routing_table.EndpointsFromActual(actualLRP)
 	if err != nil {
-		watcher.logger.Error("failed-to-extract-endpoint-from-actual", err)
+		logger.Error("failed-to-extract-endpoint-from-actual", err)
 		return
 	}
 
@@ -389,16 +400,16 @@ func (watcher *Watcher) addAndEmit(actualLRP receptor.ActualLRPResponse) {
 		for _, endpoint := range endpoints {
 			if key.ContainerPort == endpoint.ContainerPort {
 				messagesToEmit := watcher.table.AddEndpoint(key, endpoint)
-				watcher.emitMessages(messagesToEmit)
+				watcher.emitMessages(logger, messagesToEmit)
 			}
 		}
 	}
 }
 
-func (watcher *Watcher) removeAndEmit(actualLRP receptor.ActualLRPResponse) {
+func (watcher *Watcher) removeAndEmit(logger lager.Logger, actualLRP receptor.ActualLRPResponse) {
 	endpoints, err := routing_table.EndpointsFromActual(actualLRP)
 	if err != nil {
-		watcher.logger.Error("failed-to-extract-endpoint-from-actual", err)
+		logger.Error("failed-to-extract-endpoint-from-actual", err)
 		return
 	}
 
@@ -406,15 +417,15 @@ func (watcher *Watcher) removeAndEmit(actualLRP receptor.ActualLRPResponse) {
 		for _, endpoint := range endpoints {
 			if key.ContainerPort == endpoint.ContainerPort {
 				messagesToEmit := watcher.table.RemoveEndpoint(key, endpoint)
-				watcher.emitMessages(messagesToEmit)
+				watcher.emitMessages(logger, messagesToEmit)
 			}
 		}
 	}
 }
 
-func (watcher *Watcher) emitMessages(messagesToEmit routing_table.MessagesToEmit) {
+func (watcher *Watcher) emitMessages(logger lager.Logger, messagesToEmit routing_table.MessagesToEmit) {
 	if watcher.emitter != nil {
-		watcher.logger.Info("emitting-messages", lager.Data{"messages": messagesToEmit})
+		logger.Info("emitting-messages", lager.Data{"messages": messagesToEmit})
 		watcher.emitter.Emit(messagesToEmit)
 		routesRegistered.Add(messagesToEmit.RouteRegistrationCount())
 		routesUnregistered.Add(messagesToEmit.RouteUnregistrationCount())

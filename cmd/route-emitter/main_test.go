@@ -146,7 +146,7 @@ var _ = Describe("Route Emitter", func() {
 			})
 		})
 
-		Context("an actual lrp starts without a routed desried lrp", func() {
+		Context("an actual lrp starts without a routed desired lrp", func() {
 			BeforeEach(func() {
 				desiredLRP.Routes = nil
 				err := bbs.DesireLRP(logger, desiredLRP)
@@ -158,7 +158,6 @@ var _ = Describe("Route Emitter", func() {
 
 			Context("and a route is desired", func() {
 				BeforeEach(func() {
-					time.Sleep(100 * time.Millisecond)
 					update := models.DesiredLRPUpdate{
 						Routes: routes,
 					}
@@ -186,7 +185,7 @@ var _ = Describe("Route Emitter", func() {
 					t2 := time.Now()
 
 					Ω(msg2).Should(MatchRegistryMessage(msg1))
-					Ω(t2.Sub(t1)).Should(BeNumerically("~", 2*time.Second, 500*time.Millisecond))
+					Ω(t2.Sub(t1)).Should(BeNumerically("~", 2*syncInterval, 500*time.Millisecond))
 				})
 
 				Context("when etcd goes away", func() {
