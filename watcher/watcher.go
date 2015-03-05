@@ -2,6 +2,7 @@ package watcher
 
 import (
 	"os"
+	"sync/atomic"
 
 	"github.com/cloudfoundry-incubator/receptor"
 	"github.com/cloudfoundry-incubator/route-emitter/cfroutes"
@@ -73,39 +74,49 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 	watcher.logger.Info("started")
 	defer watcher.logger.Info("finished")
 
-	var eventSource receptor.EventSource
 	var cachedEvents map[string]receptor.Event
 
 	eventChan := make(chan receptor.Event)
-	errChan := make(chan error, 1)
 	syncEndChan := make(chan syncEndEvent)
 
 	syncing := false
-	checkEventSource := func() error {
-		if eventSource == nil {
-			var resubscribeErr error
-			eventSource, resubscribeErr = watcher.receptorClient.SubscribeToEvents()
-			if resubscribeErr != nil {
-				watcher.logger.Error("failed-resubscribing-to-events", resubscribeErr)
-				return resubscribeErr
-			}
 
-			go func() {
+	var eventSource atomic.Value
+	var stopEventSource int32
+	var subscribeFailure chan error
+
+	startEventSource := func(subscribeFailure chan error) {
+		go func() {
+			var err error
+			var es receptor.EventSource
+
+			for {
+				if atomic.LoadInt32(&stopEventSource) == 1 {
+					return
+				}
+
+				es, err = watcher.receptorClient.SubscribeToEvents()
+				if err != nil {
+					subscribeFailure <- err
+					return
+				}
+
+				eventSource.Store(es)
+
+				var event receptor.Event
 				for {
-					event, err := eventSource.Next()
+					event, err = es.Next()
 					if err != nil {
-						errChan <- err
-						return
+						watcher.logger.Error("failed-getting-next-event", err)
+						break
 					}
 
 					if event != nil {
 						eventChan <- event
 					}
 				}
-			}()
-		}
-
-		return nil
+			}
+		}()
 	}
 
 	for {
@@ -114,8 +125,10 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 			if syncing == false {
 				watcher.logger.Info("sync-begin")
 				syncing = true
-				if err := checkEventSource(); err != nil {
-					return err
+
+				if subscribeFailure == nil {
+					subscribeFailure = make(chan error)
+					startEventSource(subscribeFailure)
 				}
 
 				cachedEvents = make(map[string]receptor.Event)
@@ -132,6 +145,10 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 			watcher.logger.Info("sync-emit")
 			watcher.emit()
 
+		case err := <-subscribeFailure:
+			watcher.logger.Error("failed-subscribing-to-events", err)
+			return err
+
 		case event := <-eventChan:
 			watcher.logger.Info("handling-event", lager.Data{
 				"type": event.EventType(),
@@ -143,18 +160,11 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 				watcher.handleEvent(event)
 			}
 
-		case err := <-errChan:
-			watcher.logger.Error("failed-getting-next-event", err)
-			eventSource = nil
-
-			if err := checkEventSource(); err != nil {
-				return err
-			}
-
 		case <-signals:
 			watcher.logger.Info("stopping")
-			if eventSource != nil {
-				err := eventSource.Close()
+			atomic.StoreInt32(&stopEventSource, 1)
+			if es := eventSource.Load(); es != nil {
+				err := es.(receptor.EventSource).Close()
 				if err != nil {
 					watcher.logger.Error("failed-closing-event-source", err)
 				}

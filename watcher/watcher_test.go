@@ -824,11 +824,10 @@ var _ = Describe("Watcher", func() {
 	})
 
 	Context("when the event source returns an error", func() {
-		var subscribeErr, nextErr error
+		var subscribeErr error
 
 		BeforeEach(func() {
 			subscribeErr = errors.New("subscribe-error")
-			nextErr = errors.New("next-error")
 
 			receptorClient.SubscribeToEventsStub = func() (receptor.EventSource, error) {
 				if receptorClient.SubscribeToEventsCallCount() == 1 {
@@ -838,7 +837,7 @@ var _ = Describe("Watcher", func() {
 			}
 
 			eventSource.NextStub = func() (receptor.Event, error) {
-				return nil, nextErr
+				return nil, errors.New("next-error")
 			}
 		})
 
