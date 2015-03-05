@@ -125,7 +125,7 @@ var _ = Describe("Syncer", func() {
 
 		shutdown = make(chan struct{})
 
-		go func() {
+		go func(clock *fakeclock.FakeClock, clockStep time.Duration, shutdown chan struct{}) {
 			for {
 				select {
 				case <-time.After(100 * time.Millisecond):
@@ -134,7 +134,7 @@ var _ = Describe("Syncer", func() {
 					return
 				}
 			}
-		}()
+		}(clock, clockStep, shutdown)
 
 		process = ifrit.Invoke(syncer)
 	})
