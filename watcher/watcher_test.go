@@ -145,7 +145,7 @@ var _ = Describe("Watcher", func() {
 		It("processes events after the first sync event", func() {
 			Consistently(receptorClient.SubscribeToEventsCallCount).Should(Equal(0))
 			syncEvents.Sync <- struct{}{}
-			Eventually(receptorClient.SubscribeToEventsCallCount).Should(Equal(1))
+			Eventually(receptorClient.SubscribeToEventsCallCount).Should(BeNumerically(">", 0))
 		})
 	})
 
