@@ -43,9 +43,9 @@ var _ = Describe("Route Emitter", func() {
 		domain      string
 		desiredLRP  models.DesiredLRP
 
-		lrpKey       models.ActualLRPKey
-		containerKey models.ActualLRPContainerKey
-		netInfo      models.ActualLRPNetInfo
+		lrpKey      models.ActualLRPKey
+		instanceKey models.ActualLRPInstanceKey
+		netInfo     models.ActualLRPNetInfo
 
 		hostnames     []string
 		containerPort uint16
@@ -76,7 +76,7 @@ var _ = Describe("Route Emitter", func() {
 		}
 
 		lrpKey = models.NewActualLRPKey(processGuid, 0, domain)
-		containerKey = models.NewActualLRPContainerKey("iguid1", "cell-id")
+		instanceKey = models.NewActualLRPInstanceKey("iguid1", "cell-id")
 		netInfo = models.NewActualLRPNetInfo("1.2.3.4", []models.PortMapping{
 			{ContainerPort: 8080, HostPort: 65100},
 		})
@@ -119,7 +119,7 @@ var _ = Describe("Route Emitter", func() {
 
 			Context("and an instance starts", func() {
 				BeforeEach(func() {
-					err := bbs.StartActualLRP(logger, lrpKey, containerKey, netInfo)
+					err := bbs.StartActualLRP(logger, lrpKey, instanceKey, netInfo)
 					Ω(err).ShouldNot(HaveOccurred())
 				})
 
@@ -129,14 +129,14 @@ var _ = Describe("Route Emitter", func() {
 						Host:              netInfo.Address,
 						Port:              uint16(netInfo.Ports[0].HostPort),
 						App:               desiredLRP.LogGuid,
-						PrivateInstanceId: containerKey.InstanceGuid,
+						PrivateInstanceId: instanceKey.InstanceGuid,
 					})))
 				})
 			})
 
 			Context("and an instance is claimed", func() {
 				BeforeEach(func() {
-					err := bbs.ClaimActualLRP(logger, lrpKey, containerKey)
+					err := bbs.ClaimActualLRP(logger, lrpKey, instanceKey)
 					Ω(err).ShouldNot(HaveOccurred())
 				})
 
@@ -152,7 +152,7 @@ var _ = Describe("Route Emitter", func() {
 				err := bbs.DesireLRP(logger, desiredLRP)
 				Ω(err).ShouldNot(HaveOccurred())
 
-				err = bbs.StartActualLRP(logger, lrpKey, containerKey, netInfo)
+				err = bbs.StartActualLRP(logger, lrpKey, instanceKey, netInfo)
 				Ω(err).ShouldNot(HaveOccurred())
 			})
 
@@ -171,7 +171,7 @@ var _ = Describe("Route Emitter", func() {
 						Host:              netInfo.Address,
 						Port:              uint16(netInfo.Ports[0].HostPort),
 						App:               desiredLRP.LogGuid,
-						PrivateInstanceId: containerKey.InstanceGuid,
+						PrivateInstanceId: instanceKey.InstanceGuid,
 					})))
 				})
 
@@ -262,7 +262,7 @@ var _ = Describe("Route Emitter", func() {
 			err := bbs.DesireLRP(logger, desiredLRP)
 			Ω(err).ShouldNot(HaveOccurred())
 
-			err = bbs.StartActualLRP(logger, lrpKey, containerKey, netInfo)
+			err = bbs.StartActualLRP(logger, lrpKey, instanceKey, netInfo)
 			Ω(err).ShouldNot(HaveOccurred())
 		})
 
