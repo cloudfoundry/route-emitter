@@ -66,7 +66,7 @@ var _ = Describe("Route Emitter", func() {
 			Ports:       []uint16{containerPort},
 			Routes:      routes,
 			Instances:   5,
-			Stack:       "some-stack",
+			RootFS:      "some:rootfs",
 			MemoryMB:    1024,
 			DiskMB:      512,
 			LogGuid:     "some-log-guid",
