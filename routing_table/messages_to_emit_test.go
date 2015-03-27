@@ -1,7 +1,7 @@
 package routing_table_test
 
 import (
-	. "github.com/cloudfoundry-incubator/route-emitter/routing_table"
+	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -9,13 +9,13 @@ import (
 
 var _ = Describe("MessagesToEmit", func() {
 	var (
-		messagesToEmit MessagesToEmit
-		messages1      []RegistryMessage
+		messagesToEmit routing_table.MessagesToEmit
+		messages1      []routing_table.RegistryMessage
 	)
 
 	BeforeEach(func() {
-		messagesToEmit = MessagesToEmit{}
-		messages1 = []RegistryMessage{
+		messagesToEmit = routing_table.MessagesToEmit{}
+		messages1 = []routing_table.RegistryMessage{
 			{
 				Host: "1.1.1.1",
 				Port: 61000,

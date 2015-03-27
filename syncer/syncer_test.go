@@ -9,7 +9,7 @@ import (
 	"github.com/cloudfoundry-incubator/receptor/fake_receptor"
 	"github.com/cloudfoundry-incubator/route-emitter/cfroutes"
 	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
-	. "github.com/cloudfoundry-incubator/route-emitter/syncer"
+	"github.com/cloudfoundry-incubator/route-emitter/syncer"
 	fake_metrics_sender "github.com/cloudfoundry/dropsonde/metric_sender/fake"
 	"github.com/cloudfoundry/dropsonde/metrics"
 	"github.com/cloudfoundry/gunk/diegonats"
@@ -34,7 +34,7 @@ var _ = Describe("Syncer", func() {
 	var (
 		receptorClient *fake_receptor.FakeClient
 		natsClient     *diegonats.FakeNATSClient
-		syncer         *Syncer
+		syncerRunner   *syncer.Syncer
 		process        ifrit.Process
 		syncMessages   routing_table.MessagesToEmit
 		messagesToEmit routing_table.MessagesToEmit
@@ -121,7 +121,7 @@ var _ = Describe("Syncer", func() {
 
 	JustBeforeEach(func() {
 		logger := lagertest.NewTestLogger("test")
-		syncer = NewSyncer(clock, syncInterval, natsClient, logger)
+		syncerRunner = syncer.NewSyncer(clock, syncInterval, natsClient, logger)
 
 		shutdown = make(chan struct{})
 
@@ -136,7 +136,7 @@ var _ = Describe("Syncer", func() {
 			}
 		}(clock, clockStep, shutdown)
 
-		process = ifrit.Invoke(syncer)
+		process = ifrit.Invoke(syncerRunner)
 	})
 
 	AfterEach(func() {
@@ -168,10 +168,10 @@ var _ = Describe("Syncer", func() {
 				})
 
 				It("should emit routes with the frequency of the passed-in-interval", func() {
-					Eventually(syncer.Events().Emit, 2).Should(Receive())
+					Eventually(syncerRunner.Events().Emit, 2).Should(Receive())
 					t1 := clock.Now()
 
-					Eventually(syncer.Events().Emit, 2).Should(Receive())
+					Eventually(syncerRunner.Events().Emit, 2).Should(Receive())
 					t2 := clock.Now()
 
 					Ω(t2.Sub(t1)).Should(BeNumerically("~", 1*time.Second, 200*time.Millisecond))
@@ -212,11 +212,11 @@ var _ = Describe("Syncer", func() {
 				}
 
 				//first emit should be pretty quick, it is in response to the incoming heartbeat interval
-				Eventually(syncer.Events().Emit).Should(Receive())
+				Eventually(syncerRunner.Events().Emit).Should(Receive())
 				t1 := clock.Now()
 
 				//subsequent emit should follow the interval
-				Eventually(syncer.Events().Emit).Should(Receive())
+				Eventually(syncerRunner.Events().Emit).Should(Receive())
 				t2 := clock.Now()
 
 				Ω(t2.Sub(t1)).Should(BeNumerically("~", 2*time.Second, 200*time.Millisecond))
@@ -254,7 +254,7 @@ var _ = Describe("Syncer", func() {
 			})
 
 			It("syncs", func() {
-				Eventually(syncer.Events().Sync).Should(Receive())
+				Eventually(syncerRunner.Events().Sync).Should(Receive())
 			})
 		})
 
@@ -264,14 +264,14 @@ var _ = Describe("Syncer", func() {
 				var t2 time.Time
 
 				select {
-				case <-syncer.Events().Sync:
+				case <-syncerRunner.Events().Sync:
 					t1 = clock.Now()
 				case <-time.After(500 * time.Millisecond):
 					Fail("did not receive a sync event")
 				}
 
 				select {
-				case <-syncer.Events().Sync:
+				case <-syncerRunner.Events().Sync:
 					t2 = clock.Now()
 				case <-time.After(500 * time.Millisecond):
 					Fail("did not receive a sync event")

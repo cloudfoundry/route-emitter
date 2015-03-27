@@ -4,7 +4,7 @@ import (
 	"errors"
 
 	"github.com/apcera/nats"
-	. "github.com/cloudfoundry-incubator/route-emitter/nats_emitter"
+	"github.com/cloudfoundry-incubator/route-emitter/nats_emitter"
 	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
 	fake_metrics_sender "github.com/cloudfoundry/dropsonde/metric_sender/fake"
 	"github.com/cloudfoundry/dropsonde/metrics"
@@ -17,7 +17,7 @@ import (
 )
 
 var _ = Describe("NatsEmitter", func() {
-	var emitter NATSEmitter
+	var emitter nats_emitter.NATSEmitter
 	var natsClient *diegonats.FakeNATSClient
 	var fakeMetricSender *fake_metrics_sender.FakeMetricSender
 
@@ -36,7 +36,7 @@ var _ = Describe("NatsEmitter", func() {
 		natsClient = diegonats.NewFakeClient()
 		logger := lagertest.NewTestLogger("test")
 		workPool := workpool.NewWorkPool(1)
-		emitter = New(natsClient, workPool, logger)
+		emitter = nats_emitter.New(natsClient, workPool, logger)
 		fakeMetricSender = fake_metrics_sender.NewFakeMetricSender()
 		metrics.Initialize(fakeMetricSender)
 	})

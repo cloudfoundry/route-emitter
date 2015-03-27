@@ -20,7 +20,7 @@ import (
 	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
 	"github.com/cloudfoundry-incubator/route-emitter/routing_table/fake_routing_table"
 	"github.com/cloudfoundry-incubator/route-emitter/syncer"
-	. "github.com/cloudfoundry-incubator/route-emitter/watcher"
+	"github.com/cloudfoundry-incubator/route-emitter/watcher"
 	fake_metrics_sender "github.com/cloudfoundry/dropsonde/metric_sender/fake"
 	"github.com/cloudfoundry/dropsonde/metrics"
 )
@@ -51,9 +51,9 @@ var _ = Describe("Watcher", func() {
 		emitter        *fake_nats_emitter.FakeNATSEmitter
 		syncEvents     syncer.Events
 
-		clock   *fakeclock.FakeClock
-		watcher *Watcher
-		process ifrit.Process
+		clock          *fakeclock.FakeClock
+		watcherProcess *watcher.Watcher
+		process        ifrit.Process
 
 		expectedRoutes     []string
 		expectedRoutingKey routing_table.RoutingKey
@@ -93,7 +93,7 @@ var _ = Describe("Watcher", func() {
 
 		clock = fakeclock.NewFakeClock(time.Now())
 
-		watcher = NewWatcher(receptorClient, clock, table, emitter, syncEvents, logger)
+		watcherProcess = watcher.NewWatcher(receptorClient, clock, table, emitter, syncEvents, logger)
 
 		expectedRoutes = []string{"route-1", "route-2"}
 		expectedCFRoute = cfroutes.CFRoute{Hostnames: expectedRoutes, Port: expectedContainerPort}
@@ -139,7 +139,7 @@ var _ = Describe("Watcher", func() {
 	})
 
 	JustBeforeEach(func() {
-		process = ifrit.Invoke(watcher)
+		process = ifrit.Invoke(watcherProcess)
 	})
 
 	AfterEach(func() {
@@ -1117,7 +1117,7 @@ var _ = Describe("Watcher", func() {
 						table := routing_table.NewTable()
 						table.Swap(tempTable)
 
-						watcher = NewWatcher(receptorClient, clock, table, emitter, syncEvents, logger)
+						watcherProcess = watcher.NewWatcher(receptorClient, clock, table, emitter, syncEvents, logger)
 
 						receptorClient.DesiredLRPsStub = func() ([]receptor.DesiredLRPResponse, error) {
 							defer GinkgoRecover()
