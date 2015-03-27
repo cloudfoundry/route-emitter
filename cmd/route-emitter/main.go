@@ -9,6 +9,7 @@ import (
 	"github.com/cloudfoundry-incubator/cf-debug-server"
 	"github.com/cloudfoundry-incubator/cf-lager"
 	"github.com/cloudfoundry-incubator/cf_http"
+	"github.com/cloudfoundry-incubator/consuladapter"
 	"github.com/cloudfoundry-incubator/receptor"
 	"github.com/cloudfoundry-incubator/route-emitter/nats_emitter"
 	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
@@ -16,30 +17,45 @@ import (
 	"github.com/cloudfoundry-incubator/route-emitter/watcher"
 	Bbs "github.com/cloudfoundry-incubator/runtime-schema/bbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/bbs/lock_bbs"
-	"github.com/cloudfoundry-incubator/runtime-schema/heartbeater"
 	"github.com/cloudfoundry/dropsonde"
 	"github.com/cloudfoundry/gunk/diegonats"
 	"github.com/cloudfoundry/gunk/workpool"
-	"github.com/cloudfoundry/storeadapter/etcdstoreadapter"
 	"github.com/nu7hatch/gouuid"
 	"github.com/pivotal-golang/clock"
 	"github.com/pivotal-golang/lager"
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/ifrit/grouper"
-	"github.com/tedsuo/ifrit/restart"
 	"github.com/tedsuo/ifrit/sigmon"
-)
-
-var etcdCluster = flag.String(
-	"etcdCluster",
-	"http://127.0.0.1:4001",
-	"comma-separated list of etcd addresses (http://ip:port)",
 )
 
 var diegoAPIURL = flag.String(
 	"diegoAPIURL",
 	"",
 	"URL of diego API",
+)
+
+var consulCluster = flag.String(
+	"consulCluster",
+	"",
+	"comma-separated list of consul server addresses (ip:port)",
+)
+
+var consulScheme = flag.String(
+	"consulScheme",
+	"http",
+	"protocol scheme for communication with consul servers",
+)
+
+var lockTTL = flag.Duration(
+	"lockTTL",
+	lock_bbs.LockTTL,
+	"TTL for service lock",
+)
+
+var heartbeatRetryInterval = flag.Duration(
+	"heartbeatRetryInterval",
+	lock_bbs.RetryInterval,
+	"interval to wait before retrying a failed lock acquisition",
 )
 
 var natsAddresses = flag.String(
@@ -64,12 +80,6 @@ var syncInterval = flag.Duration(
 	"syncInterval",
 	time.Minute,
 	"the interval between syncs of the routing table from etcd",
-)
-
-var heartbeatInterval = flag.Duration(
-	"heartbeatInterval",
-	lock_bbs.HEARTBEAT_INTERVAL,
-	"the interval between heartbeats to the lock",
 )
 
 var communicationTimeout = flag.Duration(
@@ -117,10 +127,10 @@ func main() {
 		logger.Fatal("Couldn't generate uuid", err)
 	}
 
-	heartbeat := bbs.NewRouteEmitterLock(uuid.String(), *heartbeatInterval)
+	heartbeater := bbs.NewRouteEmitterLock(uuid.String(), *lockTTL, *heartbeatRetryInterval)
 
 	members := grouper.Members{
-		{"heartbeater", restart.OnError(heartbeat, heartbeater.ErrStoreUnavailable)},
+		{"heartbeater", heartbeater},
 		{"nats-client", natsClientRunner},
 		{"watcher", watcher},
 		{"syncer", syncRunner},
@@ -164,15 +174,13 @@ func initializeRoutingTable() routing_table.RoutingTable {
 }
 
 func initializeBbs(logger lager.Logger) Bbs.RouteEmitterBBS {
-	etcdAdapter := etcdstoreadapter.NewETCDStoreAdapter(
-		strings.Split(*etcdCluster, ","),
-		workpool.NewWorkPool(10),
+	consulAdapter, err := consuladapter.NewAdapter(
+		strings.Split(*consulCluster, ","),
+		*consulScheme,
 	)
-
-	err := etcdAdapter.Connect()
 	if err != nil {
-		logger.Fatal("failed-to-connect-to-etcd", err)
+		logger.Fatal("failed-building-consul-adapter", err)
 	}
 
-	return Bbs.NewRouteEmitterBBS(etcdAdapter, clock.NewClock(), logger)
+	return Bbs.NewRouteEmitterBBS(consulAdapter, clock.NewClock(), logger)
 }

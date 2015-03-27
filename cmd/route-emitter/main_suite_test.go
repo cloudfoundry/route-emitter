@@ -13,6 +13,7 @@ import (
 	"github.com/cloudfoundry/storeadapter"
 	"github.com/cloudfoundry/storeadapter/storerunner/etcdstorerunner"
 	. "github.com/onsi/ginkgo"
+	"github.com/onsi/ginkgo/config"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gexec"
 	"github.com/pivotal-golang/clock"
@@ -20,6 +21,7 @@ import (
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/ifrit/ginkgomon"
 
+	"github.com/cloudfoundry-incubator/consuladapter"
 	"github.com/cloudfoundry-incubator/receptor/cmd/receptor/testrunner"
 	Bbs "github.com/cloudfoundry-incubator/runtime-schema/bbs"
 )
@@ -46,6 +48,9 @@ var bbs *Bbs.BBS
 var logger *lagertest.TestLogger
 var syncInterval time.Duration
 
+var consulPort int
+var consulRunner consuladapter.ClusterRunner
+
 func TestRouteEmitter(t *testing.T) {
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "Route Emitter Suite")
@@ -55,12 +60,13 @@ func createEmitterRunner() *ginkgomon.Runner {
 	return ginkgomon.New(ginkgomon.Config{
 		Command: exec.Command(
 			string(emitterPath),
-			"-etcdCluster", fmt.Sprintf("http://127.0.0.1:%d", etcdPort),
 			"-natsAddresses", fmt.Sprintf("127.0.0.1:%d", natsPort),
-			"-heartbeatInterval", heartbeatInterval.String(),
 			"-diegoAPIURL", fmt.Sprintf("http://127.0.0.1:%d", receptorPort),
 			"-communicationTimeout", "100ms",
 			"-syncInterval", syncInterval.String(),
+			"-heartbeatRetryInterval", "1s",
+			"-consulCluster", strings.Join(consulRunner.Addresses(), ","),
+			"-consulScheme", "http",
 		),
 
 		StartCheck: "route-emitter.started",
@@ -99,24 +105,34 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 	receptorPath = string(binaries["receptor"])
 	store = etcdRunner.Adapter()
 
+	consulPort = 9001 + config.GinkgoConfig.ParallelNode*consuladapter.PortOffsetLength
+	consulRunner = consuladapter.NewClusterRunner(
+		consulPort,
+		1,
+		"http",
+	)
+
 	logger = lagertest.NewTestLogger("test")
-	bbs = Bbs.NewBBS(store, clock.NewClock(), logger)
 
 	syncInterval = 200 * time.Millisecond
 })
 
 var _ = BeforeEach(func() {
 	etcdRunner.Start()
+	consulRunner.Start()
+	bbs = Bbs.NewBBS(store, consulRunner.NewAdapter(), clock.NewClock(), logger)
 	gnatsdRunner, natsClient = diegonats.StartGnatsd(natsPort)
 	receptorRunner = ginkgomon.Invoke(testrunner.New(receptorPath, testrunner.Args{
-		Address:     fmt.Sprintf("127.0.0.1:%d", receptorPort),
-		EtcdCluster: strings.Join(etcdRunner.NodeURLS(), ","),
+		Address:       fmt.Sprintf("127.0.0.1:%d", receptorPort),
+		EtcdCluster:   strings.Join(etcdRunner.NodeURLS(), ","),
+		ConsulCluster: strings.Join(consulRunner.Addresses(), ","),
 	}))
 })
 
 var _ = AfterEach(func() {
 	ginkgomon.Kill(receptorRunner, 5)
 	etcdRunner.Stop()
+	consulRunner.Stop()
 	gnatsdRunner.Signal(os.Interrupt)
 	Eventually(gnatsdRunner.Wait(), 5).Should(Receive())
 })
