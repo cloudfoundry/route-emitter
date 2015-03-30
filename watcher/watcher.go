@@ -85,9 +85,8 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 
 	var eventSource atomic.Value
 	var stopEventSource int32
-	var subscribeFailure chan error
 
-	startEventSource := func(subscribeFailure chan error) {
+	startEventSource := func() {
 		go func() {
 			var err error
 			var es receptor.EventSource
@@ -99,8 +98,8 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 
 				es, err = watcher.receptorClient.SubscribeToEvents()
 				if err != nil {
-					subscribeFailure <- err
-					return
+					watcher.logger.Error("failed-subscribing-to-events", err)
+					continue
 				}
 
 				eventSource.Store(es)
@@ -121,6 +120,7 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 		}()
 	}
 
+	startedEventSource := false
 	for {
 		select {
 		case <-watcher.syncEvents.Sync:
@@ -129,9 +129,9 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 				logger.Info("starting")
 				syncing = true
 
-				if subscribeFailure == nil {
-					subscribeFailure = make(chan error)
-					startEventSource(subscribeFailure)
+				if !startedEventSource {
+					startedEventSource = true
+					startEventSource()
 				}
 
 				cachedEvents = make(map[string]receptor.Event)
@@ -147,10 +147,6 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 		case <-watcher.syncEvents.Emit:
 			logger := watcher.logger.Session("emit")
 			watcher.emit(logger)
-
-		case err := <-subscribeFailure:
-			watcher.logger.Error("failed-subscribing-to-events", err)
-			return err
 
 		case event := <-eventChan:
 			if syncing {

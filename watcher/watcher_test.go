@@ -852,13 +852,11 @@ var _ = Describe("Watcher", func() {
 		})
 
 		It("re-subscribes", func() {
-			Eventually(receptorClient.SubscribeToEventsCallCount).Should(BeNumerically(">", 1))
+			Eventually(receptorClient.SubscribeToEventsCallCount).Should(BeNumerically(">", 5))
 		})
 
-		Context("when re-subscribing fails", func() {
-			It("returns an error", func() {
-				Eventually(process.Wait()).Should(Receive(Equal(subscribeErr)))
-			})
+		It("does not exit", func() {
+			Consistently(process.Wait()).ShouldNot(Receive())
 		})
 	})
 
