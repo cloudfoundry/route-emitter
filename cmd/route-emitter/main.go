@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/cloudfoundry-incubator/cf-debug-server"
@@ -17,6 +16,7 @@ import (
 	"github.com/cloudfoundry-incubator/route-emitter/watcher"
 	Bbs "github.com/cloudfoundry-incubator/runtime-schema/bbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/bbs/lock_bbs"
+	"github.com/cloudfoundry-incubator/runtime-schema/heartbeater"
 	"github.com/cloudfoundry/dropsonde"
 	"github.com/cloudfoundry/gunk/diegonats"
 	"github.com/cloudfoundry/gunk/workpool"
@@ -25,6 +25,7 @@ import (
 	"github.com/pivotal-golang/lager"
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/ifrit/grouper"
+	"github.com/tedsuo/ifrit/restart"
 	"github.com/tedsuo/ifrit/sigmon"
 )
 
@@ -37,13 +38,7 @@ var diegoAPIURL = flag.String(
 var consulCluster = flag.String(
 	"consulCluster",
 	"",
-	"comma-separated list of consul server addresses (ip:port)",
-)
-
-var consulScheme = flag.String(
-	"consulScheme",
-	"http",
-	"protocol scheme for communication with consul servers",
+	"comma-separated list of consul server URLs (scheme://ip:port)",
 )
 
 var lockTTL = flag.Duration(
@@ -127,10 +122,10 @@ func main() {
 		logger.Fatal("Couldn't generate uuid", err)
 	}
 
-	heartbeater := bbs.NewRouteEmitterLock(uuid.String(), *lockTTL, *heartbeatRetryInterval)
+	heartbeat := bbs.NewRouteEmitterLock(uuid.String(), *lockTTL, *heartbeatRetryInterval)
 
 	members := grouper.Members{
-		{"heartbeater", heartbeater},
+		{"heartbeater", restart.OnError(heartbeat, heartbeater.ErrStoreUnavailable)},
 		{"nats-client", natsClientRunner},
 		{"watcher", watcher},
 		{"syncer", syncRunner},
@@ -174,10 +169,12 @@ func initializeRoutingTable() routing_table.RoutingTable {
 }
 
 func initializeBbs(logger lager.Logger) Bbs.RouteEmitterBBS {
-	consulAdapter, err := consuladapter.NewAdapter(
-		strings.Split(*consulCluster, ","),
-		*consulScheme,
-	)
+	consulScheme, consulAddresses, err := consuladapter.Parse(*consulCluster)
+	if err != nil {
+		logger.Fatal("failed-parsing-consul-cluster", err)
+	}
+
+	consulAdapter, err := consuladapter.NewAdapter(consulAddresses, consulScheme)
 	if err != nil {
 		logger.Fatal("failed-building-consul-adapter", err)
 	}

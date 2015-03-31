@@ -40,6 +40,7 @@ var (
 )
 
 var etcdRunner *etcdstorerunner.ETCDClusterRunner
+var consulRunner *consuladapter.ClusterRunner
 var gnatsdRunner ifrit.Process
 var receptorRunner ifrit.Process
 var natsClient diegonats.NATSClient
@@ -47,9 +48,6 @@ var store storeadapter.StoreAdapter
 var bbs *Bbs.BBS
 var logger *lagertest.TestLogger
 var syncInterval time.Duration
-
-var consulPort int
-var consulRunner consuladapter.ClusterRunner
 
 func TestRouteEmitter(t *testing.T) {
 	RegisterFailHandler(Fail)
@@ -65,8 +63,7 @@ func createEmitterRunner() *ginkgomon.Runner {
 			"-communicationTimeout", "100ms",
 			"-syncInterval", syncInterval.String(),
 			"-heartbeatRetryInterval", "1s",
-			"-consulCluster", strings.Join(consulRunner.Addresses(), ","),
-			"-consulScheme", "http",
+			"-consulCluster", consulRunner.ConsulCluster(),
 		),
 
 		StartCheck: "route-emitter.started",
@@ -105,9 +102,8 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 	receptorPath = string(binaries["receptor"])
 	store = etcdRunner.Adapter()
 
-	consulPort = 9001 + config.GinkgoConfig.ParallelNode*consuladapter.PortOffsetLength
 	consulRunner = consuladapter.NewClusterRunner(
-		consulPort,
+		9001+config.GinkgoConfig.ParallelNode*consuladapter.PortOffsetLength,
 		1,
 		"http",
 	)
@@ -125,7 +121,7 @@ var _ = BeforeEach(func() {
 	receptorRunner = ginkgomon.Invoke(testrunner.New(receptorPath, testrunner.Args{
 		Address:       fmt.Sprintf("127.0.0.1:%d", receptorPort),
 		EtcdCluster:   strings.Join(etcdRunner.NodeURLS(), ","),
-		ConsulCluster: strings.Join(consulRunner.Addresses(), ","),
+		ConsulCluster: consulRunner.ConsulCluster(),
 	}))
 })
 
