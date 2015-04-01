@@ -116,7 +116,7 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 var _ = BeforeEach(func() {
 	etcdRunner.Start()
 	consulRunner.Start()
-	bbs = Bbs.NewBBS(store, consulRunner.NewAdapter(), clock.NewClock(), logger)
+	bbs = Bbs.NewBBS(store, consulRunner.NewAdapter(), "http://receptor.bogus.com", clock.NewClock(), logger)
 	gnatsdRunner, natsClient = diegonats.StartGnatsd(natsPort)
 	receptorRunner = ginkgomon.Invoke(testrunner.New(receptorPath, testrunner.Args{
 		Address:       fmt.Sprintf("127.0.0.1:%d", receptorPort),
