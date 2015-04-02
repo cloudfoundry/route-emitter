@@ -194,17 +194,21 @@ func (watcher *Watcher) sync(logger lager.Logger, syncEndChan chan syncEndEvent)
 
 	before := watcher.clock.Now()
 
+	logger.Debug("getting-actual-lrps")
 	actualLRPResponses, err := watcher.receptorClient.ActualLRPs()
 	if err != nil {
-		logger.Error("failed-to-get-actual", err)
+		logger.Error("failed-getting-actual-lrps", err)
 		return
 	}
+	logger.Debug("succeeded-getting-actual-lrps", lager.Data{"num-actual-responses": len(actualLRPResponses)})
 
+	logger.Debug("getting-desired-lrps")
 	desiredLRPResponses, err := watcher.receptorClient.DesiredLRPs()
 	if err != nil {
-		logger.Error("failed-to-get-desired", err)
+		logger.Error("failed-getting-desired-lrps", err)
 		return
 	}
+	logger.Debug("succeeded-getting-desired-lrps", lager.Data{"num-desired-responses": len(desiredLRPResponses)})
 
 	runningActualLRPs := make([]receptor.ActualLRPResponse, 0, len(actualLRPResponses))
 	for _, actualLRPResponse := range actualLRPResponses {
@@ -235,9 +239,11 @@ func (watcher *Watcher) completeSync(syncEnd syncEndEvent, cachedEvents map[stri
 
 	if syncEnd.table == nil {
 		// sync failed, process the events on the current table
+		logger.Debug("handling-events-from-failed-sync")
 		for _, e := range cachedEvents {
 			watcher.handleEvent(logger, e)
 		}
+		logger.Debug("done-handling-events-from-failed-sync")
 
 		return
 	}
@@ -248,15 +254,25 @@ func (watcher *Watcher) completeSync(syncEnd syncEndEvent, cachedEvents map[stri
 	table := watcher.table
 	watcher.table = syncEnd.table
 
+	logger.Debug("handling-cached-events")
 	for _, e := range cachedEvents {
 		watcher.handleEvent(logger, e)
 	}
+	logger.Debug("done-handling-cached-events")
 
 	watcher.table = table
 	watcher.emitter = emitter
 
 	messages := watcher.table.Swap(syncEnd.table)
+	logger.Debug("emitting-messages", lager.Data{
+		"num-registration-messages":   len(messages.RegistrationMessages),
+		"num-unregistration-messages": len(messages.UnregistrationMessages),
+	})
 	watcher.emitMessages(logger, messages)
+	logger.Debug("done-emitting-messages", lager.Data{
+		"num-registration-messages":   len(messages.RegistrationMessages),
+		"num-unregistration-messages": len(messages.UnregistrationMessages),
+	})
 
 	if syncEnd.callback != nil {
 		syncEnd.callback(watcher.table)
