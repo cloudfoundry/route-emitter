@@ -54,10 +54,11 @@ func TestRouteEmitter(t *testing.T) {
 	RunSpecs(t, "Route Emitter Suite")
 }
 
-func createEmitterRunner() *ginkgomon.Runner {
+func createEmitterRunner(sessionName string) *ginkgomon.Runner {
 	return ginkgomon.New(ginkgomon.Config{
 		Command: exec.Command(
 			string(emitterPath),
+			"-sessionName", sessionName,
 			"-natsAddresses", fmt.Sprintf("127.0.0.1:%d", natsPort),
 			"-diegoAPIURL", fmt.Sprintf("http://127.0.0.1:%d", receptorPort),
 			"-communicationTimeout", "100ms",
@@ -116,7 +117,9 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 var _ = BeforeEach(func() {
 	etcdRunner.Start()
 	consulRunner.Start()
-	bbs = Bbs.NewBBS(store, consulRunner.NewAdapter(), "http://receptor.bogus.com", clock.NewClock(), logger)
+	consulRunner.WaitUntilReady()
+
+	bbs = Bbs.NewBBS(store, consulRunner.NewSession("a-session"), "http://receptor.bogus.com", clock.NewClock(), logger)
 	gnatsdRunner, natsClient = diegonats.StartGnatsd(natsPort)
 	receptorRunner = ginkgomon.Invoke(testrunner.New(receptorPath, testrunner.Args{
 		Address:       fmt.Sprintf("127.0.0.1:%d", receptorPort),

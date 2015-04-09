@@ -104,7 +104,9 @@ var _ = Describe("Route Emitter", func() {
 		var emitter ifrit.Process
 
 		BeforeEach(func() {
-			emitter = ginkgomon.Invoke(createEmitterRunner())
+			runner := createEmitterRunner("emitter1")
+			runner.StartCheck = "emitter1.started"
+			emitter = ginkgomon.Invoke(runner)
 		})
 
 		AfterEach(func() {
@@ -214,8 +216,8 @@ var _ = Describe("Route Emitter", func() {
 			)
 
 			BeforeEach(func() {
-				secondRunner = createEmitterRunner()
-				secondRunner.StartCheck = ""
+				secondRunner = createEmitterRunner("emitter2")
+				secondRunner.StartCheck = "lock.acquiring-lock"
 
 				secondEmitter = ginkgomon.Invoke(secondRunner)
 			})
@@ -227,7 +229,7 @@ var _ = Describe("Route Emitter", func() {
 
 			Describe("the second emitter", func() {
 				It("does not become active", func() {
-					Consistently(secondRunner.Buffer, 5*time.Second).ShouldNot(gbytes.Say("route-emitter.started"))
+					Consistently(secondRunner.Buffer, 5*time.Second).ShouldNot(gbytes.Say("emitter2.started"))
 				})
 			})
 
@@ -238,7 +240,7 @@ var _ = Describe("Route Emitter", func() {
 
 				Describe("the second emitter", func() {
 					It("becomes active", func() {
-						Eventually(secondRunner.Buffer, 5*time.Second).Should(gbytes.Say("route-emitter.started"))
+						Eventually(secondRunner.Buffer, 10).Should(gbytes.Say("emitter2.started"))
 					})
 				})
 			})
@@ -268,7 +270,7 @@ var _ = Describe("Route Emitter", func() {
 
 		Context("and the emitter is started", func() {
 			BeforeEach(func() {
-				emitter = ginkgomon.Invoke(createEmitterRunner())
+				emitter = ginkgomon.Invoke(createEmitterRunner("route-emitter"))
 			})
 
 			AfterEach(func() {

@@ -16,7 +16,6 @@ import (
 	"github.com/cloudfoundry-incubator/route-emitter/watcher"
 	Bbs "github.com/cloudfoundry-incubator/runtime-schema/bbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/bbs/lock_bbs"
-	"github.com/cloudfoundry-incubator/runtime-schema/heartbeater"
 	"github.com/cloudfoundry/dropsonde"
 	"github.com/cloudfoundry/gunk/diegonats"
 	"github.com/cloudfoundry/gunk/workpool"
@@ -25,7 +24,6 @@ import (
 	"github.com/pivotal-golang/lager"
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/ifrit/grouper"
-	"github.com/tedsuo/ifrit/restart"
 	"github.com/tedsuo/ifrit/sigmon"
 )
 
@@ -33,6 +31,12 @@ var diegoAPIURL = flag.String(
 	"diegoAPIURL",
 	"",
 	"URL of diego API",
+)
+
+var sessionName = flag.String(
+	"sessionName",
+	"route-emitter",
+	"consul session name",
 )
 
 var consulCluster = flag.String(
@@ -95,7 +99,7 @@ func main() {
 
 	cf_http.Initialize(*communicationTimeout)
 
-	logger, reconfigurableSink := cf_lager.New("route-emitter")
+	logger, reconfigurableSink := cf_lager.New(*sessionName)
 
 	initializeDropsonde(logger)
 	bbs := initializeBbs(logger)
@@ -122,10 +126,10 @@ func main() {
 		logger.Fatal("Couldn't generate uuid", err)
 	}
 
-	heartbeat := bbs.NewRouteEmitterLock(uuid.String(), *lockTTL, *heartbeatRetryInterval)
+	heartbeater := bbs.NewRouteEmitterLock(uuid.String(), *heartbeatRetryInterval)
 
 	members := grouper.Members{
-		{"heartbeater", restart.OnError(heartbeat, heartbeater.ErrStoreUnavailable)},
+		{"heartbeater", heartbeater},
 		{"nats-client", natsClientRunner},
 		{"watcher", watcher},
 		{"syncer", syncRunner},
@@ -169,15 +173,16 @@ func initializeRoutingTable() routing_table.RoutingTable {
 }
 
 func initializeBbs(logger lager.Logger) Bbs.RouteEmitterBBS {
-	consulScheme, consulAddresses, err := consuladapter.Parse(*consulCluster)
+	client, err := consuladapter.NewClient(*consulCluster)
 	if err != nil {
-		logger.Fatal("failed-parsing-consul-cluster", err)
+		logger.Fatal("new-client-failed", err)
 	}
 
-	consulAdapter, err := consuladapter.NewAdapter(consulAddresses, consulScheme)
+	sessionMgr := consuladapter.NewSessionManager(client)
+	consulSession, err := consuladapter.NewSession(*sessionName, *lockTTL, client, sessionMgr)
 	if err != nil {
-		logger.Fatal("failed-building-consul-adapter", err)
+		logger.Fatal("consul-session-failed", err)
 	}
 
-	return Bbs.NewRouteEmitterBBS(consulAdapter, clock.NewClock(), logger)
+	return Bbs.NewRouteEmitterBBS(consulSession, clock.NewClock(), logger)
 }
