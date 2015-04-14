@@ -51,8 +51,8 @@ var lockTTL = flag.Duration(
 	"TTL for service lock",
 )
 
-var heartbeatRetryInterval = flag.Duration(
-	"heartbeatRetryInterval",
+var lockRetryInterval = flag.Duration(
+	"lockRetryInterval",
 	lock_bbs.RetryInterval,
 	"interval to wait before retrying a failed lock acquisition",
 )
@@ -126,10 +126,10 @@ func main() {
 		logger.Fatal("Couldn't generate uuid", err)
 	}
 
-	heartbeater := bbs.NewRouteEmitterLock(uuid.String(), *heartbeatRetryInterval)
+	lockMaintainer := bbs.NewRouteEmitterLock(uuid.String(), *lockRetryInterval)
 
 	members := grouper.Members{
-		{"heartbeater", heartbeater},
+		{"lock-maintainer", lockMaintainer},
 		{"nats-client", natsClientRunner},
 		{"watcher", watcher},
 		{"syncer", syncRunner},

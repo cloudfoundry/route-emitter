@@ -63,7 +63,7 @@ func createEmitterRunner(sessionName string) *ginkgomon.Runner {
 			"-diegoAPIURL", fmt.Sprintf("http://127.0.0.1:%d", receptorPort),
 			"-communicationTimeout", "100ms",
 			"-syncInterval", syncInterval.String(),
-			"-heartbeatRetryInterval", "1s",
+			"-lockRetryInterval", "1s",
 			"-consulCluster", consulRunner.ConsulCluster(),
 		),
 
