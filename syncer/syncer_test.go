@@ -174,7 +174,7 @@ var _ = Describe("Syncer", func() {
 					Eventually(syncerRunner.Events().Emit, 2).Should(Receive())
 					t2 := clock.Now()
 
-					Ω(t2.Sub(t1)).Should(BeNumerically("~", 1*time.Second, 200*time.Millisecond))
+					Expect(t2.Sub(t1)).To(BeNumerically("~", 1*time.Second, 200*time.Millisecond))
 				})
 
 				It("should only greet the router once", func() {
@@ -219,7 +219,7 @@ var _ = Describe("Syncer", func() {
 				Eventually(syncerRunner.Events().Emit).Should(Receive())
 				t2 := clock.Now()
 
-				Ω(t2.Sub(t1)).Should(BeNumerically("~", 2*time.Second, 200*time.Millisecond))
+				Expect(t2.Sub(t1)).To(BeNumerically("~", 2*time.Second, 200*time.Millisecond))
 			})
 		})
 
@@ -277,7 +277,7 @@ var _ = Describe("Syncer", func() {
 					Fail("did not receive a sync event")
 				}
 
-				Ω(t2.Sub(t1)).Should(BeNumerically("~", syncInterval, 100*time.Millisecond))
+				Expect(t2.Sub(t1)).To(BeNumerically("~", syncInterval, 100*time.Millisecond))
 			})
 		})
 	})

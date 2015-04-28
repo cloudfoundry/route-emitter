@@ -25,15 +25,15 @@ var _ = Describe("ByRoutingKey", func() {
 				{Domain: "tests", ProcessGuid: "def", Routes: defRoutes.RoutingInfo(), LogGuid: "def-guid"},
 			})
 
-			Ω(routes).Should(HaveLen(3))
-			Ω(routes[routing_table.RoutingKey{ProcessGuid: "abc", ContainerPort: 8080}].Hostnames).Should(Equal([]string{"foo.com", "bar.com"}))
-			Ω(routes[routing_table.RoutingKey{ProcessGuid: "abc", ContainerPort: 8080}].LogGuid).Should(Equal("abc-guid"))
+			Expect(routes).To(HaveLen(3))
+			Expect(routes[routing_table.RoutingKey{ProcessGuid: "abc", ContainerPort: 8080}].Hostnames).To(Equal([]string{"foo.com", "bar.com"}))
+			Expect(routes[routing_table.RoutingKey{ProcessGuid: "abc", ContainerPort: 8080}].LogGuid).To(Equal("abc-guid"))
 
-			Ω(routes[routing_table.RoutingKey{ProcessGuid: "abc", ContainerPort: 9090}].Hostnames).Should(Equal([]string{"foo.example.com"}))
-			Ω(routes[routing_table.RoutingKey{ProcessGuid: "abc", ContainerPort: 9090}].LogGuid).Should(Equal("abc-guid"))
+			Expect(routes[routing_table.RoutingKey{ProcessGuid: "abc", ContainerPort: 9090}].Hostnames).To(Equal([]string{"foo.example.com"}))
+			Expect(routes[routing_table.RoutingKey{ProcessGuid: "abc", ContainerPort: 9090}].LogGuid).To(Equal("abc-guid"))
 
-			Ω(routes[routing_table.RoutingKey{ProcessGuid: "def", ContainerPort: 8080}].Hostnames).Should(Equal([]string{"baz.com"}))
-			Ω(routes[routing_table.RoutingKey{ProcessGuid: "def", ContainerPort: 8080}].LogGuid).Should(Equal("def-guid"))
+			Expect(routes[routing_table.RoutingKey{ProcessGuid: "def", ContainerPort: 8080}].Hostnames).To(Equal([]string{"baz.com"}))
+			Expect(routes[routing_table.RoutingKey{ProcessGuid: "def", ContainerPort: 8080}].LogGuid).To(Equal("def-guid"))
 		})
 
 		Context("when the routing info is nil", func() {
@@ -41,7 +41,7 @@ var _ = Describe("ByRoutingKey", func() {
 				routes := routing_table.RoutesByRoutingKeyFromDesireds([]receptor.DesiredLRPResponse{
 					{Domain: "tests", ProcessGuid: "abc", Routes: nil, LogGuid: "abc-guid"},
 				})
-				Ω(routes).Should(HaveLen(0))
+				Expect(routes).To(HaveLen(0))
 			})
 		})
 	})
@@ -63,17 +63,17 @@ var _ = Describe("ByRoutingKey", func() {
 				{ProcessGuid: "def", Index: 1, Domain: "domain", Address: "4.4.4.4", Ports: nil},
 			})
 
-			Ω(endpoints).Should(HaveLen(3))
-			Ω(endpoints[routing_table.RoutingKey{ProcessGuid: "abc", ContainerPort: 44}]).Should(HaveLen(2))
-			Ω(endpoints[routing_table.RoutingKey{ProcessGuid: "abc", ContainerPort: 44}]).Should(ContainElement(routing_table.Endpoint{Host: "1.1.1.1", Port: 11, ContainerPort: 44}))
-			Ω(endpoints[routing_table.RoutingKey{ProcessGuid: "abc", ContainerPort: 44}]).Should(ContainElement(routing_table.Endpoint{Host: "2.2.2.2", Port: 22, ContainerPort: 44}))
+			Expect(endpoints).To(HaveLen(3))
+			Expect(endpoints[routing_table.RoutingKey{ProcessGuid: "abc", ContainerPort: 44}]).To(HaveLen(2))
+			Expect(endpoints[routing_table.RoutingKey{ProcessGuid: "abc", ContainerPort: 44}]).To(ContainElement(routing_table.Endpoint{Host: "1.1.1.1", Port: 11, ContainerPort: 44}))
+			Expect(endpoints[routing_table.RoutingKey{ProcessGuid: "abc", ContainerPort: 44}]).To(ContainElement(routing_table.Endpoint{Host: "2.2.2.2", Port: 22, ContainerPort: 44}))
 
-			Ω(endpoints[routing_table.RoutingKey{ProcessGuid: "abc", ContainerPort: 99}]).Should(HaveLen(2))
-			Ω(endpoints[routing_table.RoutingKey{ProcessGuid: "abc", ContainerPort: 99}]).Should(ContainElement(routing_table.Endpoint{Host: "1.1.1.1", Port: 66, ContainerPort: 99}))
-			Ω(endpoints[routing_table.RoutingKey{ProcessGuid: "abc", ContainerPort: 99}]).Should(ContainElement(routing_table.Endpoint{Host: "2.2.2.2", Port: 88, ContainerPort: 99}))
+			Expect(endpoints[routing_table.RoutingKey{ProcessGuid: "abc", ContainerPort: 99}]).To(HaveLen(2))
+			Expect(endpoints[routing_table.RoutingKey{ProcessGuid: "abc", ContainerPort: 99}]).To(ContainElement(routing_table.Endpoint{Host: "1.1.1.1", Port: 66, ContainerPort: 99}))
+			Expect(endpoints[routing_table.RoutingKey{ProcessGuid: "abc", ContainerPort: 99}]).To(ContainElement(routing_table.Endpoint{Host: "2.2.2.2", Port: 88, ContainerPort: 99}))
 
-			Ω(endpoints[routing_table.RoutingKey{ProcessGuid: "def", ContainerPort: 55}]).Should(HaveLen(1))
-			Ω(endpoints[routing_table.RoutingKey{ProcessGuid: "def", ContainerPort: 55}]).Should(ContainElement(routing_table.Endpoint{Host: "3.3.3.3", Port: 33, ContainerPort: 55}))
+			Expect(endpoints[routing_table.RoutingKey{ProcessGuid: "def", ContainerPort: 55}]).To(HaveLen(1))
+			Expect(endpoints[routing_table.RoutingKey{ProcessGuid: "def", ContainerPort: 55}]).To(ContainElement(routing_table.Endpoint{Host: "3.3.3.3", Port: 33, ContainerPort: 55}))
 		})
 	})
 
@@ -91,12 +91,13 @@ var _ = Describe("ByRoutingKey", func() {
 				},
 				Evacuating: true,
 			})
-			Ω(err).ShouldNot(HaveOccurred())
+			Expect(err).NotTo(HaveOccurred())
 
-			Ω(endpoints).Should(ConsistOf([]routing_table.Endpoint{
+			Expect(endpoints).To(ConsistOf([]routing_table.Endpoint{
 				routing_table.Endpoint{Host: "1.1.1.1", Port: 11, InstanceGuid: "instance-guid", ContainerPort: 44, Evacuating: true},
 				routing_table.Endpoint{Host: "1.1.1.1", Port: 66, InstanceGuid: "instance-guid", ContainerPort: 99, Evacuating: true},
 			}))
+
 		})
 	})
 
@@ -114,9 +115,9 @@ var _ = Describe("ByRoutingKey", func() {
 				},
 			})
 
-			Ω(keys).Should(HaveLen(2))
-			Ω(keys).Should(ContainElement(routing_table.RoutingKey{ProcessGuid: "process-guid", ContainerPort: 44}))
-			Ω(keys).Should(ContainElement(routing_table.RoutingKey{ProcessGuid: "process-guid", ContainerPort: 99}))
+			Expect(keys).To(HaveLen(2))
+			Expect(keys).To(ContainElement(routing_table.RoutingKey{ProcessGuid: "process-guid", ContainerPort: 44}))
+			Expect(keys).To(ContainElement(routing_table.RoutingKey{ProcessGuid: "process-guid", ContainerPort: 99}))
 		})
 
 		Context("when the actual lrp has no port mappings", func() {
@@ -129,7 +130,7 @@ var _ = Describe("ByRoutingKey", func() {
 					Address:      "1.1.1.1",
 				})
 
-				Ω(keys).Should(HaveLen(0))
+				Expect(keys).To(HaveLen(0))
 			})
 		})
 	})
@@ -151,9 +152,9 @@ var _ = Describe("ByRoutingKey", func() {
 
 			keys := routing_table.RoutingKeysFromDesired(desired)
 
-			Ω(keys).Should(HaveLen(2))
-			Ω(keys).Should(ContainElement(routing_table.RoutingKey{ProcessGuid: "process-guid", ContainerPort: 8080}))
-			Ω(keys).Should(ContainElement(routing_table.RoutingKey{ProcessGuid: "process-guid", ContainerPort: 9090}))
+			Expect(keys).To(HaveLen(2))
+			Expect(keys).To(ContainElement(routing_table.RoutingKey{ProcessGuid: "process-guid", ContainerPort: 8080}))
+			Expect(keys).To(ContainElement(routing_table.RoutingKey{ProcessGuid: "process-guid", ContainerPort: 9090}))
 		})
 
 		Context("when the desired LRP does not define any container ports", func() {
@@ -166,7 +167,7 @@ var _ = Describe("ByRoutingKey", func() {
 				}
 
 				keys := routing_table.RoutingKeysFromDesired(desired)
-				Ω(keys).Should(HaveLen(0))
+				Expect(keys).To(HaveLen(0))
 			})
 		})
 	})

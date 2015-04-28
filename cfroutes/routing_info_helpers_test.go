@@ -45,12 +45,12 @@ var _ = Describe("RoutingInfoHelpers", func() {
 
 		It("wraps the serialized routes with the correct key", func() {
 			expectedBytes, err := json.Marshal(routes)
-			Ω(err).ShouldNot(HaveOccurred())
+			Expect(err).NotTo(HaveOccurred())
 
 			payload, err := routingInfo[cfroutes.CF_ROUTER].MarshalJSON()
-			Ω(err).ShouldNot(HaveOccurred())
+			Expect(err).NotTo(HaveOccurred())
 
-			Ω(payload).Should(MatchJSON(expectedBytes))
+			Expect(payload).To(MatchJSON(expectedBytes))
 		})
 
 		Context("when CFRoutes is empty", func() {
@@ -60,9 +60,9 @@ var _ = Describe("RoutingInfoHelpers", func() {
 
 			It("marshals an empty list", func() {
 				payload, err := routingInfo[cfroutes.CF_ROUTER].MarshalJSON()
-				Ω(err).ShouldNot(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 
-				Ω(payload).Should(MatchJSON(`[]`))
+				Expect(payload).To(MatchJSON(`[]`))
 			})
 		})
 	})
@@ -85,7 +85,7 @@ var _ = Describe("RoutingInfoHelpers", func() {
 			})
 
 			It("returns the routes", func() {
-				Ω(routes).Should(Equal(routesResult))
+				Expect(routes).To(Equal(routesResult))
 			})
 
 			Context("when the CF routes are nil", func() {
@@ -94,8 +94,8 @@ var _ = Describe("RoutingInfoHelpers", func() {
 				})
 
 				It("returns nil routes", func() {
-					Ω(conversionError).ShouldNot(HaveOccurred())
-					Ω(routesResult).Should(BeNil())
+					Expect(conversionError).NotTo(HaveOccurred())
+					Expect(routesResult).To(BeNil())
 				})
 			})
 		})
@@ -106,8 +106,8 @@ var _ = Describe("RoutingInfoHelpers", func() {
 			})
 
 			It("returns nil routes", func() {
-				Ω(conversionError).ShouldNot(HaveOccurred())
-				Ω(routesResult).Should(BeNil())
+				Expect(conversionError).NotTo(HaveOccurred())
+				Expect(routesResult).To(BeNil())
 			})
 		})
 
@@ -117,8 +117,8 @@ var _ = Describe("RoutingInfoHelpers", func() {
 			})
 
 			It("returns nil routes", func() {
-				Ω(conversionError).ShouldNot(HaveOccurred())
-				Ω(routesResult).Should(BeNil())
+				Expect(conversionError).NotTo(HaveOccurred())
+				Expect(routesResult).To(BeNil())
 			})
 		})
 	})

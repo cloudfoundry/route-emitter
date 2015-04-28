@@ -27,7 +27,7 @@ var _ = Describe("Route Emitter", func() {
 
 			var message routing_table.RegistryMessage
 			err := json.Unmarshal(msg.Data, &message)
-			Ω(err).ShouldNot(HaveOccurred())
+			Expect(err).NotTo(HaveOccurred())
 
 			routes <- message
 		})
@@ -93,10 +93,10 @@ var _ = Describe("Route Emitter", func() {
 			}
 
 			response, err := json.Marshal(greeting)
-			Ω(err).ShouldNot(HaveOccurred())
+			Expect(err).NotTo(HaveOccurred())
 
 			err = natsClient.Publish(msg.Reply, response)
-			Ω(err).ShouldNot(HaveOccurred())
+			Expect(err).NotTo(HaveOccurred())
 		})
 	})
 
@@ -116,13 +116,13 @@ var _ = Describe("Route Emitter", func() {
 		Context("and an lrp with routes is desired", func() {
 			BeforeEach(func() {
 				err := bbs.DesireLRP(logger, desiredLRP)
-				Ω(err).ShouldNot(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 			})
 
 			Context("and an instance starts", func() {
 				BeforeEach(func() {
 					err := bbs.StartActualLRP(logger, lrpKey, instanceKey, netInfo)
-					Ω(err).ShouldNot(HaveOccurred())
+					Expect(err).NotTo(HaveOccurred())
 				})
 
 				It("emits its routes immediately", func() {
@@ -139,7 +139,7 @@ var _ = Describe("Route Emitter", func() {
 			Context("and an instance is claimed", func() {
 				BeforeEach(func() {
 					err := bbs.ClaimActualLRP(logger, lrpKey, instanceKey)
-					Ω(err).ShouldNot(HaveOccurred())
+					Expect(err).NotTo(HaveOccurred())
 				})
 
 				It("does not emit routes", func() {
@@ -152,10 +152,10 @@ var _ = Describe("Route Emitter", func() {
 			BeforeEach(func() {
 				desiredLRP.Routes = nil
 				err := bbs.DesireLRP(logger, desiredLRP)
-				Ω(err).ShouldNot(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 
 				err = bbs.StartActualLRP(logger, lrpKey, instanceKey, netInfo)
-				Ω(err).ShouldNot(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 			})
 
 			Context("and a route is desired", func() {
@@ -164,7 +164,7 @@ var _ = Describe("Route Emitter", func() {
 						Routes: routes,
 					}
 					err := bbs.UpdateDesiredLRP(logger, desiredLRP.ProcessGuid, update)
-					Ω(err).ShouldNot(HaveOccurred())
+					Expect(err).NotTo(HaveOccurred())
 				})
 
 				It("emits its routes immediately", func() {
@@ -186,8 +186,8 @@ var _ = Describe("Route Emitter", func() {
 					Eventually(registeredRoutes, 5).Should(Receive(&msg2))
 					t2 := time.Now()
 
-					Ω(msg2).Should(MatchRegistryMessage(msg1))
-					Ω(t2.Sub(t1)).Should(BeNumerically("~", 2*syncInterval, 500*time.Millisecond))
+					Expect(msg2).To(MatchRegistryMessage(msg1))
+					Expect(t2.Sub(t1)).To(BeNumerically("~", 2*syncInterval, 500*time.Millisecond))
 				})
 
 				Context("when etcd goes away", func() {
@@ -203,7 +203,7 @@ var _ = Describe("Route Emitter", func() {
 
 					It("continues to broadcast routes", func() {
 						Eventually(registeredRoutes, 5).Should(Receive(&msg2))
-						Ω(msg2).Should(MatchRegistryMessage(msg1))
+						Expect(msg2).To(MatchRegistryMessage(msg1))
 					})
 				})
 			})
@@ -223,7 +223,7 @@ var _ = Describe("Route Emitter", func() {
 			})
 
 			AfterEach(func() {
-				Ω(secondEmitter.Wait()).ShouldNot(Receive(), "Runner should not have exploded!")
+				Expect(secondEmitter.Wait()).NotTo(Receive(), "Runner should not have exploded!")
 				ginkgomon.Interrupt(secondEmitter, emitterInterruptTimeout)
 			})
 
@@ -262,10 +262,10 @@ var _ = Describe("Route Emitter", func() {
 
 		BeforeEach(func() {
 			err := bbs.DesireLRP(logger, desiredLRP)
-			Ω(err).ShouldNot(HaveOccurred())
+			Expect(err).NotTo(HaveOccurred())
 
 			err = bbs.StartActualLRP(logger, lrpKey, instanceKey, netInfo)
-			Ω(err).ShouldNot(HaveOccurred())
+			Expect(err).NotTo(HaveOccurred())
 		})
 
 		Context("and the emitter is started", func() {
@@ -299,7 +299,7 @@ var _ = Describe("Route Emitter", func() {
 						Annotation: &desiredLRP.Annotation,
 					}
 					err := bbs.UpdateDesiredLRP(logger, processGuid, updateRequest)
-					Ω(err).ShouldNot(HaveOccurred())
+					Expect(err).NotTo(HaveOccurred())
 				})
 
 				It("immediately emits router.register", func() {
@@ -323,7 +323,7 @@ var _ = Describe("Route Emitter", func() {
 						Annotation: &desiredLRP.Annotation,
 					}
 					err := bbs.UpdateDesiredLRP(logger, processGuid, updateRequest)
-					Ω(err).ShouldNot(HaveOccurred())
+					Expect(err).NotTo(HaveOccurred())
 				})
 
 				It("immediately emits router.unregister", func() {

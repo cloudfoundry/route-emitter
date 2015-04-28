@@ -44,10 +44,10 @@ var _ = Describe("NatsEmitter", func() {
 	Describe("Emitting", func() {
 		It("should emit register and unregister messages", func() {
 			err := emitter.Emit(messagesToEmit)
-			Ω(err).ShouldNot(HaveOccurred())
+			Expect(err).NotTo(HaveOccurred())
 
-			Ω(natsClient.PublishedMessages("router.register")).Should(HaveLen(2))
-			Ω(natsClient.PublishedMessages("router.unregister")).Should(HaveLen(2))
+			Expect(natsClient.PublishedMessages("router.register")).To(HaveLen(2))
+			Expect(natsClient.PublishedMessages("router.unregister")).To(HaveLen(2))
 
 			registeredPayloads := [][]byte{
 				natsClient.PublishedMessages("router.register")[0].Data,
@@ -59,14 +59,15 @@ var _ = Describe("NatsEmitter", func() {
 				natsClient.PublishedMessages("router.unregister")[1].Data,
 			}
 
-			Ω(registeredPayloads).Should(ContainElement(MatchJSON(`
+			Expect(registeredPayloads).To(ContainElement(MatchJSON(`
         {
           "uris":["foo.com", "bar.com"],
           "host":"1.1.1.1",
           "port":11
         }
       `)))
-			Ω(registeredPayloads).Should(ContainElement(MatchJSON(`
+
+			Expect(registeredPayloads).To(ContainElement(MatchJSON(`
         {
           "uris":["baz.com"],
           "host":"2.2.2.2",
@@ -74,20 +75,22 @@ var _ = Describe("NatsEmitter", func() {
         }
       `)))
 
-			Ω(unregisteredPayloads).Should(ContainElement(MatchJSON(`
+			Expect(unregisteredPayloads).To(ContainElement(MatchJSON(`
         {
           "uris":["wibble.com"],
           "host":"1.1.1.1",
           "port":11
         }
       `)))
-			Ω(unregisteredPayloads).Should(ContainElement(MatchJSON(`
+
+			Expect(unregisteredPayloads).To(ContainElement(MatchJSON(`
         {
           "uris":["baz.com"],
           "host":"3.3.3.3",
           "port":33
         }
       `)))
+
 		})
 
 		Context("when the nats client errors", func() {
@@ -98,7 +101,7 @@ var _ = Describe("NatsEmitter", func() {
 			})
 
 			It("should error", func() {
-				Ω(emitter.Emit(messagesToEmit)).Should(MatchError(errors.New("bam")))
+				Expect(emitter.Emit(messagesToEmit)).To(MatchError(errors.New("bam")))
 			})
 		})
 	})

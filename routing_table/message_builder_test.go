@@ -47,7 +47,7 @@ var _ = Describe("MessagesToEmitBuilder", func() {
 						routing_table.RegistryMessageFor(endpoint1, routing_table.Routes{Hostnames: []string{hostname1}}),
 					},
 				}
-				Ω(messages).Should(MatchMessagesToEmit(expected))
+				Expect(messages).To(MatchMessagesToEmit(expected))
 			})
 		})
 
@@ -57,7 +57,7 @@ var _ = Describe("MessagesToEmitBuilder", func() {
 			})
 
 			It("emits nothing", func() {
-				Ω(messages).Should(BeZero())
+				Expect(messages).To(BeZero())
 			})
 		})
 
@@ -68,7 +68,7 @@ var _ = Describe("MessagesToEmitBuilder", func() {
 				})
 
 				It("emits nothing", func() {
-					Ω(messages).Should(BeZero())
+					Expect(messages).To(BeZero())
 				})
 			})
 
@@ -86,7 +86,7 @@ var _ = Describe("MessagesToEmitBuilder", func() {
 							routing_table.RegistryMessageFor(endpoint1, routing_table.Routes{Hostnames: []string{hostname1}}),
 						},
 					}
-					Ω(messages).Should(MatchMessagesToEmit(expected))
+					Expect(messages).To(MatchMessagesToEmit(expected))
 				})
 			})
 
@@ -107,7 +107,7 @@ var _ = Describe("MessagesToEmitBuilder", func() {
 								routing_table.RegistryMessageFor(endpoint2, routing_table.Routes{Hostnames: []string{hostname1}}),
 							},
 						}
-						Ω(messages).Should(MatchMessagesToEmit(expected))
+						Expect(messages).To(MatchMessagesToEmit(expected))
 					})
 				})
 
@@ -122,7 +122,7 @@ var _ = Describe("MessagesToEmitBuilder", func() {
 					})
 
 					It("emits nothing", func() {
-						Ω(messages).Should(BeZero())
+						Expect(messages).To(BeZero())
 					})
 				})
 			})
@@ -148,7 +148,7 @@ var _ = Describe("MessagesToEmitBuilder", func() {
 			})
 
 			It("emits nothing", func() {
-				Ω(messages).Should(BeZero())
+				Expect(messages).To(BeZero())
 			})
 		})
 
@@ -172,7 +172,7 @@ var _ = Describe("MessagesToEmitBuilder", func() {
 							routing_table.RegistryMessageFor(endpoint1, routing_table.Routes{Hostnames: []string{hostname1, hostname2}}),
 						},
 					}
-					Ω(messages).Should(MatchMessagesToEmit(expected))
+					Expect(messages).To(MatchMessagesToEmit(expected))
 				})
 			})
 
@@ -190,7 +190,7 @@ var _ = Describe("MessagesToEmitBuilder", func() {
 				})
 
 				It("emits nothing", func() {
-					Ω(messages).Should(BeZero())
+					Expect(messages).To(BeZero())
 				})
 			})
 
@@ -205,7 +205,7 @@ var _ = Describe("MessagesToEmitBuilder", func() {
 				})
 
 				It("emits nothing", func() {
-					Ω(messages).Should(BeZero())
+					Expect(messages).To(BeZero())
 				})
 			})
 		})
@@ -230,7 +230,7 @@ var _ = Describe("MessagesToEmitBuilder", func() {
 							routing_table.RegistryMessageFor(endpoint1, routing_table.Routes{Hostnames: []string{hostname1, hostname2}}),
 						},
 					}
-					Ω(messages).Should(MatchMessagesToEmit(expected))
+					Expect(messages).To(MatchMessagesToEmit(expected))
 				})
 			})
 
@@ -248,7 +248,7 @@ var _ = Describe("MessagesToEmitBuilder", func() {
 				})
 
 				It("emits nothing", func() {
-					Ω(messages).Should(BeZero())
+					Expect(messages).To(BeZero())
 				})
 			})
 
@@ -263,7 +263,7 @@ var _ = Describe("MessagesToEmitBuilder", func() {
 				})
 
 				It("emits nothing", func() {
-					Ω(messages).Should(BeZero())
+					Expect(messages).To(BeZero())
 				})
 			})
 		})

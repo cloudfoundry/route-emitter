@@ -187,8 +187,8 @@ var _ = Describe("Watcher", func() {
 				Eventually(table.SetRoutesCallCount).Should(Equal(1))
 
 				key, routes := table.SetRoutesArgsForCall(0)
-				Ω(key).Should(Equal(expectedRoutingKey))
-				Ω(routes).Should(Equal(routing_table.Routes{Hostnames: expectedRoutes, LogGuid: logGuid}))
+				Expect(key).To(Equal(expectedRoutingKey))
+				Expect(routes).To(Equal(routing_table.Routes{Hostnames: expectedRoutes, LogGuid: logGuid}))
 			})
 
 			It("sends a 'routes registered' metric", func() {
@@ -206,7 +206,7 @@ var _ = Describe("Watcher", func() {
 			It("should emit whatever the table tells it to emit", func() {
 				Eventually(emitter.EmitCallCount).Should(Equal(2))
 				messagesToEmit := emitter.EmitArgsForCall(1)
-				Ω(messagesToEmit).Should(Equal(dummyMessagesToEmit))
+				Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
 			})
 
 			Context("when there are multiple CF routes", func() {
@@ -219,22 +219,22 @@ var _ = Describe("Watcher", func() {
 					Eventually(table.SetRoutesCallCount).Should(Equal(2))
 
 					key, routes := table.SetRoutesArgsForCall(0)
-					Ω(key).Should(Equal(expectedRoutingKey))
-					Ω(routes).Should(Equal(routing_table.Routes{Hostnames: expectedRoutes, LogGuid: logGuid}))
+					Expect(key).To(Equal(expectedRoutingKey))
+					Expect(routes).To(Equal(routing_table.Routes{Hostnames: expectedRoutes, LogGuid: logGuid}))
 
 					key, routes = table.SetRoutesArgsForCall(1)
-					Ω(key).Should(Equal(expectedAdditionalRoutingKey))
-					Ω(routes).Should(Equal(routing_table.Routes{Hostnames: expectedAdditionalRoutes, LogGuid: logGuid}))
+					Expect(key).To(Equal(expectedAdditionalRoutingKey))
+					Expect(routes).To(Equal(routing_table.Routes{Hostnames: expectedAdditionalRoutes, LogGuid: logGuid}))
 				})
 
 				It("emits whatever the table tells it to emit", func() {
 					Eventually(emitter.EmitCallCount).Should(Equal(3))
 
 					messagesToEmit := emitter.EmitArgsForCall(1)
-					Ω(messagesToEmit).Should(Equal(dummyMessagesToEmit))
+					Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
 
 					messagesToEmit = emitter.EmitArgsForCall(2)
-					Ω(messagesToEmit).Should(Equal(dummyMessagesToEmit))
+					Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
 				})
 			})
 		})
@@ -278,8 +278,8 @@ var _ = Describe("Watcher", func() {
 			It("should set the routes on the table", func() {
 				Eventually(table.SetRoutesCallCount).Should(Equal(1))
 				key, routes := table.SetRoutesArgsForCall(0)
-				Ω(key).Should(Equal(expectedRoutingKey))
-				Ω(routes).Should(Equal(routing_table.Routes{Hostnames: expectedRoutes, LogGuid: logGuid}))
+				Expect(key).To(Equal(expectedRoutingKey))
+				Expect(routes).To(Equal(routing_table.Routes{Hostnames: expectedRoutes, LogGuid: logGuid}))
 			})
 
 			It("sends a 'routes registered' metric", func() {
@@ -297,7 +297,7 @@ var _ = Describe("Watcher", func() {
 			It("should emit whatever the table tells it to emit", func() {
 				Eventually(emitter.EmitCallCount).Should(Equal(2))
 				messagesToEmit := emitter.EmitArgsForCall(1)
-				Ω(messagesToEmit).Should(Equal(dummyMessagesToEmit))
+				Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
 			})
 
 			Context("when CF routes are added without an associated container port", func() {
@@ -310,15 +310,15 @@ var _ = Describe("Watcher", func() {
 					Eventually(table.SetRoutesCallCount).Should(Equal(1))
 
 					key, routes := table.SetRoutesArgsForCall(0)
-					Ω(key).Should(Equal(expectedRoutingKey))
-					Ω(routes).Should(Equal(routing_table.Routes{Hostnames: expectedRoutes, LogGuid: logGuid}))
+					Expect(key).To(Equal(expectedRoutingKey))
+					Expect(routes).To(Equal(routing_table.Routes{Hostnames: expectedRoutes, LogGuid: logGuid}))
 				})
 
 				It("emits whatever the table tells it to emit", func() {
 					Eventually(emitter.EmitCallCount).Should(Equal(2))
 
 					messagesToEmit := emitter.EmitArgsForCall(1)
-					Ω(messagesToEmit).Should(Equal(dummyMessagesToEmit))
+					Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
 				})
 			})
 
@@ -332,22 +332,22 @@ var _ = Describe("Watcher", func() {
 					Eventually(table.SetRoutesCallCount).Should(Equal(2))
 
 					key, routes := table.SetRoutesArgsForCall(0)
-					Ω(key).Should(Equal(expectedRoutingKey))
-					Ω(routes).Should(Equal(routing_table.Routes{Hostnames: expectedRoutes, LogGuid: logGuid}))
+					Expect(key).To(Equal(expectedRoutingKey))
+					Expect(routes).To(Equal(routing_table.Routes{Hostnames: expectedRoutes, LogGuid: logGuid}))
 
 					key, routes = table.SetRoutesArgsForCall(1)
-					Ω(key).Should(Equal(expectedAdditionalRoutingKey))
-					Ω(routes).Should(Equal(routing_table.Routes{Hostnames: expectedAdditionalRoutes, LogGuid: logGuid}))
+					Expect(key).To(Equal(expectedAdditionalRoutingKey))
+					Expect(routes).To(Equal(routing_table.Routes{Hostnames: expectedAdditionalRoutes, LogGuid: logGuid}))
 				})
 
 				It("emits whatever the table tells it to emit", func() {
 					Eventually(emitter.EmitCallCount).Should(Equal(3))
 
 					messagesToEmit := emitter.EmitArgsForCall(1)
-					Ω(messagesToEmit).Should(Equal(dummyMessagesToEmit))
+					Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
 
 					messagesToEmit = emitter.EmitArgsForCall(2)
-					Ω(messagesToEmit).Should(Equal(dummyMessagesToEmit))
+					Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
 				})
 			})
 
@@ -364,15 +364,15 @@ var _ = Describe("Watcher", func() {
 					Eventually(table.RemoveRoutesCallCount).Should(Equal(1))
 
 					key, modTag := table.RemoveRoutesArgsForCall(0)
-					Ω(key).Should(Equal(expectedRoutingKey))
-					Ω(modTag).Should(Equal(changedDesiredLRP.ModificationTag))
+					Expect(key).To(Equal(expectedRoutingKey))
+					Expect(modTag).To(Equal(changedDesiredLRP.ModificationTag))
 				})
 
 				It("emits whatever the table tells it to emit", func() {
 					Eventually(emitter.EmitCallCount).Should(Equal(2))
 
 					messagesToEmit := emitter.EmitArgsForCall(1)
-					Ω(messagesToEmit).Should(Equal(dummyMessagesToEmit))
+					Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
 				})
 			})
 
@@ -389,15 +389,15 @@ var _ = Describe("Watcher", func() {
 					Eventually(table.RemoveRoutesCallCount).Should(Equal(1))
 
 					key, modTag := table.RemoveRoutesArgsForCall(0)
-					Ω(key).Should(Equal(expectedRoutingKey))
-					Ω(modTag).Should(Equal(changedDesiredLRP.ModificationTag))
+					Expect(key).To(Equal(expectedRoutingKey))
+					Expect(modTag).To(Equal(changedDesiredLRP.ModificationTag))
 				})
 
 				It("emits whatever the table tells it to emit", func() {
 					Eventually(emitter.EmitCallCount).Should(Equal(2))
 
 					messagesToEmit := emitter.EmitArgsForCall(1)
-					Ω(messagesToEmit).Should(Equal(dummyMessagesToEmit))
+					Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
 				})
 			})
 		})
@@ -428,15 +428,15 @@ var _ = Describe("Watcher", func() {
 			It("should remove the routes from the table", func() {
 				Eventually(table.RemoveRoutesCallCount).Should(Equal(1))
 				key, modTag := table.RemoveRoutesArgsForCall(0)
-				Ω(key).Should(Equal(expectedRoutingKey))
-				Ω(modTag).Should(Equal(desiredLRP.ModificationTag))
+				Expect(key).To(Equal(expectedRoutingKey))
+				Expect(modTag).To(Equal(desiredLRP.ModificationTag))
 			})
 
 			It("should emit whatever the table tells it to emit", func() {
 				Eventually(emitter.EmitCallCount).Should(Equal(2))
 
 				messagesToEmit := emitter.EmitArgsForCall(1)
-				Ω(messagesToEmit).Should(Equal(dummyMessagesToEmit))
+				Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
 			})
 
 			Context("when there are multiple CF routes", func() {
@@ -449,25 +449,25 @@ var _ = Describe("Watcher", func() {
 					Eventually(table.RemoveRoutesCallCount).Should(Equal(2))
 
 					key, modTag := table.RemoveRoutesArgsForCall(0)
-					Ω(key).Should(Equal(expectedRoutingKey))
-					Ω(modTag).Should(Equal(desiredLRP.ModificationTag))
+					Expect(key).To(Equal(expectedRoutingKey))
+					Expect(modTag).To(Equal(desiredLRP.ModificationTag))
 
 					key, modTag = table.RemoveRoutesArgsForCall(1)
-					Ω(key).Should(Equal(expectedAdditionalRoutingKey))
+					Expect(key).To(Equal(expectedAdditionalRoutingKey))
 
 					key, modTag = table.RemoveRoutesArgsForCall(0)
-					Ω(key).Should(Equal(expectedRoutingKey))
-					Ω(modTag).Should(Equal(desiredLRP.ModificationTag))
+					Expect(key).To(Equal(expectedRoutingKey))
+					Expect(modTag).To(Equal(desiredLRP.ModificationTag))
 				})
 
 				It("emits whatever the table tells it to emit", func() {
 					Eventually(emitter.EmitCallCount).Should(Equal(3))
 
 					messagesToEmit := emitter.EmitArgsForCall(1)
-					Ω(messagesToEmit).Should(Equal(dummyMessagesToEmit))
+					Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
 
 					messagesToEmit = emitter.EmitArgsForCall(2)
-					Ω(messagesToEmit).Should(Equal(dummyMessagesToEmit))
+					Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
 				})
 			})
 		})
@@ -509,22 +509,22 @@ var _ = Describe("Watcher", func() {
 
 					keys := routing_table.RoutingKeysFromActual(actualLRP)
 					endpoints, err := routing_table.EndpointsFromActual(actualLRP)
-					Ω(err).ShouldNot(HaveOccurred())
+					Expect(err).NotTo(HaveOccurred())
 
 					key, endpoint := table.AddEndpointArgsForCall(0)
-					Ω(keys).Should(ContainElement(key))
-					Ω(endpoint).Should(Equal(endpoints[key.ContainerPort]))
+					Expect(keys).To(ContainElement(key))
+					Expect(endpoint).To(Equal(endpoints[key.ContainerPort]))
 
 					key, endpoint = table.AddEndpointArgsForCall(1)
-					Ω(keys).Should(ContainElement(key))
-					Ω(endpoint).Should(Equal(endpoints[key.ContainerPort]))
+					Expect(keys).To(ContainElement(key))
+					Expect(endpoint).To(Equal(endpoints[key.ContainerPort]))
 				})
 
 				It("should emit whatever the table tells it to emit", func() {
 					Eventually(emitter.EmitCallCount).Should(Equal(3))
 
 					messagesToEmit := emitter.EmitArgsForCall(1)
-					Ω(messagesToEmit).Should(Equal(dummyMessagesToEmit))
+					Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
 				})
 
 				It("sends a 'routes registered' metric", func() {
@@ -605,8 +605,8 @@ var _ = Describe("Watcher", func() {
 					Eventually(table.AddEndpointCallCount).Should(Equal(2))
 
 					key, endpoint := table.AddEndpointArgsForCall(0)
-					Ω(key).Should(Equal(expectedRoutingKey))
-					Ω(endpoint).Should(Equal(routing_table.Endpoint{
+					Expect(key).To(Equal(expectedRoutingKey))
+					Expect(endpoint).To(Equal(routing_table.Endpoint{
 						InstanceGuid:  expectedInstanceGuid,
 						Host:          expectedHost,
 						Port:          expectedExternalPort,
@@ -614,20 +614,21 @@ var _ = Describe("Watcher", func() {
 					}))
 
 					key, endpoint = table.AddEndpointArgsForCall(1)
-					Ω(key).Should(Equal(expectedAdditionalRoutingKey))
-					Ω(endpoint).Should(Equal(routing_table.Endpoint{
+					Expect(key).To(Equal(expectedAdditionalRoutingKey))
+					Expect(endpoint).To(Equal(routing_table.Endpoint{
 						InstanceGuid:  expectedInstanceGuid,
 						Host:          expectedHost,
 						Port:          expectedAdditionalExternalPort,
 						ContainerPort: expectedAdditionalContainerPort,
 					}))
+
 				})
 
 				It("should emit whatever the table tells it to emit", func() {
 					Eventually(emitter.EmitCallCount).Should(Equal(3))
 
 					messagesToEmit := emitter.EmitArgsForCall(1)
-					Ω(messagesToEmit).Should(Equal(dummyMessagesToEmit))
+					Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
 				})
 
 				It("sends a 'routes registered' metric", func() {
@@ -674,8 +675,8 @@ var _ = Describe("Watcher", func() {
 					Eventually(table.RemoveEndpointCallCount).Should(Equal(2))
 
 					key, endpoint := table.RemoveEndpointArgsForCall(0)
-					Ω(key).Should(Equal(expectedRoutingKey))
-					Ω(endpoint).Should(Equal(routing_table.Endpoint{
+					Expect(key).To(Equal(expectedRoutingKey))
+					Expect(endpoint).To(Equal(routing_table.Endpoint{
 						InstanceGuid:  expectedInstanceGuid,
 						Host:          expectedHost,
 						Port:          expectedExternalPort,
@@ -683,20 +684,21 @@ var _ = Describe("Watcher", func() {
 					}))
 
 					key, endpoint = table.RemoveEndpointArgsForCall(1)
-					Ω(key).Should(Equal(expectedAdditionalRoutingKey))
-					Ω(endpoint).Should(Equal(routing_table.Endpoint{
+					Expect(key).To(Equal(expectedAdditionalRoutingKey))
+					Expect(endpoint).To(Equal(routing_table.Endpoint{
 						InstanceGuid:  expectedInstanceGuid,
 						Host:          expectedHost,
 						Port:          expectedAdditionalExternalPort,
 						ContainerPort: expectedAdditionalContainerPort,
 					}))
+
 				})
 
 				It("should emit whatever the table tells it to emit", func() {
 					Eventually(emitter.EmitCallCount).Should(Equal(3))
 
 					messagesToEmit := emitter.EmitArgsForCall(1)
-					Ω(messagesToEmit).Should(Equal(dummyMessagesToEmit))
+					Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
 				})
 			})
 
@@ -762,8 +764,8 @@ var _ = Describe("Watcher", func() {
 					Eventually(table.RemoveEndpointCallCount).Should(Equal(2))
 
 					key, endpoint := table.RemoveEndpointArgsForCall(0)
-					Ω(key).Should(Equal(expectedRoutingKey))
-					Ω(endpoint).Should(Equal(routing_table.Endpoint{
+					Expect(key).To(Equal(expectedRoutingKey))
+					Expect(endpoint).To(Equal(routing_table.Endpoint{
 						InstanceGuid:  expectedInstanceGuid,
 						Host:          expectedHost,
 						Port:          expectedExternalPort,
@@ -771,23 +773,24 @@ var _ = Describe("Watcher", func() {
 					}))
 
 					key, endpoint = table.RemoveEndpointArgsForCall(1)
-					Ω(key).Should(Equal(expectedAdditionalRoutingKey))
-					Ω(endpoint).Should(Equal(routing_table.Endpoint{
+					Expect(key).To(Equal(expectedAdditionalRoutingKey))
+					Expect(endpoint).To(Equal(routing_table.Endpoint{
 						InstanceGuid:  expectedInstanceGuid,
 						Host:          expectedHost,
 						Port:          expectedAdditionalExternalPort,
 						ContainerPort: expectedAdditionalContainerPort,
 					}))
+
 				})
 
 				It("should emit whatever the table tells it to emit", func() {
 					Eventually(emitter.EmitCallCount).Should(Equal(3))
 
 					messagesToEmit := emitter.EmitArgsForCall(1)
-					Ω(messagesToEmit).Should(Equal(dummyMessagesToEmit))
+					Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
 
 					messagesToEmit = emitter.EmitArgsForCall(2)
-					Ω(messagesToEmit).Should(Equal(dummyMessagesToEmit))
+					Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
 				})
 			})
 
@@ -899,7 +902,7 @@ var _ = Describe("Watcher", func() {
 
 			It("emits", func() {
 				Eventually(emitter.EmitCallCount).Should(Equal(1))
-				Ω(emitter.EmitArgsForCall(0)).Should(Equal(dummyMessagesToEmit))
+				Expect(emitter.EmitArgsForCall(0)).To(Equal(dummyMessagesToEmit))
 			})
 
 			It("sends a 'routes total' metric", func() {
@@ -1052,7 +1055,7 @@ var _ = Describe("Watcher", func() {
 						syncEvents.Sync <- struct{}{}
 
 						Eventually(table.SwapCallCount).Should(Equal(1))
-						Ω(receptorClient.ActualLRPsCallCount()).Should(Equal(2))
+						Expect(receptorClient.ActualLRPsCallCount()).To(Equal(2))
 					})
 				})
 
@@ -1079,7 +1082,7 @@ var _ = Describe("Watcher", func() {
 						syncEvents.Sync <- struct{}{}
 
 						Eventually(table.SwapCallCount).Should(Equal(1))
-						Ω(receptorClient.DesiredLRPsCallCount()).Should(Equal(2))
+						Expect(receptorClient.DesiredLRPsCallCount()).To(Equal(2))
 					})
 				})
 			})
@@ -1134,7 +1137,7 @@ var _ = Describe("Watcher", func() {
 						ready <- struct{}{}
 
 						Eventually(emitter.EmitCallCount).Should(Equal(1))
-						Ω(emitter.EmitArgsForCall(0)).Should(Equal(routing_table.MessagesToEmit{
+						Expect(emitter.EmitArgsForCall(0)).To(Equal(routing_table.MessagesToEmit{
 							RegistrationMessages: []routing_table.RegistryMessage{
 								routing_table.RegistryMessageFor(endpoint2, routing_table.Routes{Hostnames: []string{hostname2}, LogGuid: "lg2"}),
 							},
@@ -1142,6 +1145,7 @@ var _ = Describe("Watcher", func() {
 								routing_table.RegistryMessageFor(endpoint1, routing_table.Routes{Hostnames: []string{hostname1}, LogGuid: "lg1"}),
 							},
 						}))
+
 					})
 				})
 

@@ -56,7 +56,7 @@ var _ = Describe("RoutingTable", func() {
 							routing_table.RegistryMessageFor(endpoint2, routing_table.Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}),
 						},
 					}
-					Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
+					Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
 				})
 			})
 
@@ -70,7 +70,7 @@ var _ = Describe("RoutingTable", func() {
 				})
 
 				It("should not emit a registration", func() {
-					Ω(messagesToEmit).Should(BeZero())
+					Expect(messagesToEmit).To(BeZero())
 				})
 
 				Context("when the endpoints subsequently arrive", func() {
@@ -88,7 +88,7 @@ var _ = Describe("RoutingTable", func() {
 								routing_table.RegistryMessageFor(endpoint1, routing_table.Routes{Hostnames: []string{hostname1}, LogGuid: logGuid}),
 							},
 						}
-						Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
+						Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
 					})
 				})
 
@@ -102,7 +102,7 @@ var _ = Describe("RoutingTable", func() {
 					})
 
 					It("emits nothing", func() {
-						Ω(messagesToEmit).Should(BeZero())
+						Expect(messagesToEmit).To(BeZero())
 					})
 				})
 			})
@@ -117,7 +117,7 @@ var _ = Describe("RoutingTable", func() {
 				})
 
 				It("should not emit a registration", func() {
-					Ω(messagesToEmit).Should(BeZero())
+					Expect(messagesToEmit).To(BeZero())
 				})
 
 				Context("when the routes subsequently arrive", func() {
@@ -135,7 +135,7 @@ var _ = Describe("RoutingTable", func() {
 								routing_table.RegistryMessageFor(endpoint1, routing_table.Routes{Hostnames: []string{hostname1}, LogGuid: logGuid}),
 							},
 						}
-						Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
+						Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
 					})
 				})
 
@@ -149,7 +149,7 @@ var _ = Describe("RoutingTable", func() {
 					})
 
 					It("emits nothing", func() {
-						Ω(messagesToEmit).Should(BeZero())
+						Expect(messagesToEmit).To(BeZero())
 					})
 				})
 			})
@@ -180,7 +180,7 @@ var _ = Describe("RoutingTable", func() {
 							routing_table.RegistryMessageFor(endpoint2, routing_table.Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}),
 						},
 					}
-					Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
+					Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
 				})
 			})
 
@@ -200,7 +200,7 @@ var _ = Describe("RoutingTable", func() {
 							routing_table.RegistryMessageFor(endpoint2, routing_table.Routes{Hostnames: []string{hostname1, hostname2, hostname3}, LogGuid: logGuid}),
 						},
 					}
-					Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
+					Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
 				})
 			})
 
@@ -221,7 +221,7 @@ var _ = Describe("RoutingTable", func() {
 							routing_table.RegistryMessageFor(endpoint3, routing_table.Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}),
 						},
 					}
-					Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
+					Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
 				})
 			})
 
@@ -242,7 +242,7 @@ var _ = Describe("RoutingTable", func() {
 							routing_table.RegistryMessageFor(evacuating1, routing_table.Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}),
 						},
 					}
-					Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
+					Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
 				})
 			})
 
@@ -268,7 +268,7 @@ var _ = Describe("RoutingTable", func() {
 							routing_table.RegistryMessageFor(evacuating1, routing_table.Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}),
 						},
 					}
-					Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
+					Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
 				})
 			})
 
@@ -289,7 +289,7 @@ var _ = Describe("RoutingTable", func() {
 							routing_table.RegistryMessageFor(endpoint3, routing_table.Routes{Hostnames: []string{hostname1, hostname2, hostname3}, LogGuid: logGuid}),
 						},
 					}
-					Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
+					Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
 				})
 			})
 
@@ -313,7 +313,7 @@ var _ = Describe("RoutingTable", func() {
 							routing_table.RegistryMessageFor(endpoint2, routing_table.Routes{Hostnames: []string{hostname2}, LogGuid: logGuid}),
 						},
 					}
-					Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
+					Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
 				})
 			})
 
@@ -335,7 +335,7 @@ var _ = Describe("RoutingTable", func() {
 							routing_table.RegistryMessageFor(endpoint2, routing_table.Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}),
 						},
 					}
-					Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
+					Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
 				})
 			})
 
@@ -358,7 +358,7 @@ var _ = Describe("RoutingTable", func() {
 							routing_table.RegistryMessageFor(endpoint2, routing_table.Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}),
 						},
 					}
-					Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
+					Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
 				})
 			})
 
@@ -380,7 +380,7 @@ var _ = Describe("RoutingTable", func() {
 							routing_table.RegistryMessageFor(endpoint2, routing_table.Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}),
 						},
 					}
-					Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
+					Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
 				})
 			})
 
@@ -405,7 +405,7 @@ var _ = Describe("RoutingTable", func() {
 							routing_table.RegistryMessageFor(endpoint2, routing_table.Routes{Hostnames: []string{hostname2}, LogGuid: logGuid}),
 						},
 					}
-					Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
+					Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
 				})
 			})
 
@@ -425,7 +425,7 @@ var _ = Describe("RoutingTable", func() {
 							routing_table.RegistryMessageFor(endpoint2, routing_table.Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}),
 						},
 					}
-					Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
+					Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
 				})
 			})
 
@@ -447,7 +447,7 @@ var _ = Describe("RoutingTable", func() {
 					})
 
 					It("emits nothing", func() {
-						Ω(messagesToEmit).Should(BeZero())
+						Expect(messagesToEmit).To(BeZero())
 					})
 				})
 
@@ -468,7 +468,7 @@ var _ = Describe("RoutingTable", func() {
 					})
 
 					It("emits nothing", func() {
-						Ω(messagesToEmit).Should(BeZero())
+						Expect(messagesToEmit).To(BeZero())
 					})
 				})
 			})
@@ -480,28 +480,28 @@ var _ = Describe("RoutingTable", func() {
 			Context("When setting routes", func() {
 				It("emits nothing", func() {
 					messagesToEmit = table.SetRoutes(key, routing_table.Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid, ModificationTag: currentTag})
-					Ω(messagesToEmit).Should(BeZero())
+					Expect(messagesToEmit).To(BeZero())
 				})
 			})
 
 			Context("when removing routes", func() {
 				It("emits nothing", func() {
 					messagesToEmit = table.RemoveRoutes(key, currentTag)
-					Ω(messagesToEmit).Should(BeZero())
+					Expect(messagesToEmit).To(BeZero())
 				})
 			})
 
 			Context("when adding/updating endpoints", func() {
 				It("emits nothing", func() {
 					messagesToEmit = table.AddEndpoint(key, endpoint1)
-					Ω(messagesToEmit).Should(BeZero())
+					Expect(messagesToEmit).To(BeZero())
 				})
 			})
 
 			Context("when removing endpoints", func() {
 				It("emits nothing", func() {
 					messagesToEmit = table.RemoveEndpoint(key, endpoint1)
-					Ω(messagesToEmit).Should(BeZero())
+					Expect(messagesToEmit).To(BeZero())
 				})
 			})
 		})
@@ -516,12 +516,12 @@ var _ = Describe("RoutingTable", func() {
 			Describe("SetRoutes", func() {
 				It("emits nothing when the route's hostnames do not change", func() {
 					messagesToEmit = table.SetRoutes(key, routing_table.Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid, ModificationTag: currentTag})
-					Ω(messagesToEmit).Should(BeZero())
+					Expect(messagesToEmit).To(BeZero())
 				})
 
 				It("emits nothing when a hostname is added to a route with an older tag", func() {
 					messagesToEmit = table.SetRoutes(key, routing_table.Routes{Hostnames: []string{hostname1, hostname2, hostname3}, LogGuid: logGuid, ModificationTag: olderTag})
-					Ω(messagesToEmit).Should(BeZero())
+					Expect(messagesToEmit).To(BeZero())
 				})
 
 				It("emits registrations when a hostname is added to a route with a newer tag", func() {
@@ -533,12 +533,12 @@ var _ = Describe("RoutingTable", func() {
 							routing_table.RegistryMessageFor(endpoint2, routing_table.Routes{Hostnames: []string{hostname1, hostname2, hostname3}, LogGuid: logGuid}),
 						},
 					}
-					Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
+					Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
 				})
 
 				It("emits nothing when a hostname is removed from a route with an older tag", func() {
 					messagesToEmit = table.SetRoutes(key, routing_table.Routes{Hostnames: []string{hostname1}, LogGuid: logGuid, ModificationTag: olderTag})
-					Ω(messagesToEmit).Should(BeZero())
+					Expect(messagesToEmit).To(BeZero())
 				})
 
 				It("emits registrations and unregistrations when a hostname is removed from a route with a newer tag", func() {
@@ -554,12 +554,12 @@ var _ = Describe("RoutingTable", func() {
 							routing_table.RegistryMessageFor(endpoint2, routing_table.Routes{Hostnames: []string{hostname2}, LogGuid: logGuid}),
 						},
 					}
-					Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
+					Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
 				})
 
 				It("emits nothing when hostnames are added and removed from a route with an older tag", func() {
 					messagesToEmit = table.SetRoutes(key, routing_table.Routes{Hostnames: []string{hostname1, hostname3}, LogGuid: logGuid, ModificationTag: olderTag})
-					Ω(messagesToEmit).Should(BeZero())
+					Expect(messagesToEmit).To(BeZero())
 				})
 
 				It("emits registrations and unregistrations when hostnames are added and removed from a route with a newer tag", func() {
@@ -575,7 +575,7 @@ var _ = Describe("RoutingTable", func() {
 							routing_table.RegistryMessageFor(endpoint2, routing_table.Routes{Hostnames: []string{hostname2}, LogGuid: logGuid}),
 						},
 					}
-					Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
+					Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
 				})
 			})
 
@@ -589,7 +589,7 @@ var _ = Describe("RoutingTable", func() {
 							routing_table.RegistryMessageFor(endpoint2, routing_table.Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}),
 						},
 					}
-					Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
+					Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
 				})
 
 				It("emits unregistrations with the same tag", func() {
@@ -601,19 +601,19 @@ var _ = Describe("RoutingTable", func() {
 							routing_table.RegistryMessageFor(endpoint2, routing_table.Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}),
 						},
 					}
-					Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
+					Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
 				})
 
 				It("emits nothing when the tag is older", func() {
 					messagesToEmit = table.RemoveRoutes(key, olderTag)
-					Ω(messagesToEmit).Should(BeZero())
+					Expect(messagesToEmit).To(BeZero())
 				})
 			})
 
 			Context("AddEndpoint", func() {
 				It("emits nothing when the tag is the same", func() {
 					messagesToEmit = table.AddEndpoint(key, endpoint1)
-					Ω(messagesToEmit).Should(BeZero())
+					Expect(messagesToEmit).To(BeZero())
 				})
 
 				It("emits nothing when updating an endpoint with an older tag", func() {
@@ -621,7 +621,7 @@ var _ = Describe("RoutingTable", func() {
 					updatedEndpoint.ModificationTag = olderTag
 
 					messagesToEmit = table.AddEndpoint(key, updatedEndpoint)
-					Ω(messagesToEmit).Should(BeZero())
+					Expect(messagesToEmit).To(BeZero())
 				})
 
 				It("emits nothing when updating an endpoint with a newer tag", func() {
@@ -629,7 +629,7 @@ var _ = Describe("RoutingTable", func() {
 					updatedEndpoint.ModificationTag = newerTag
 
 					messagesToEmit = table.AddEndpoint(key, updatedEndpoint)
-					Ω(messagesToEmit).Should(BeZero())
+					Expect(messagesToEmit).To(BeZero())
 				})
 
 				It("emits registrations when adding an endpoint", func() {
@@ -640,13 +640,13 @@ var _ = Describe("RoutingTable", func() {
 							routing_table.RegistryMessageFor(endpoint3, routing_table.Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}),
 						},
 					}
-					Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
+					Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
 				})
 
 				Context("when an evacuating endpoint is added for an instance that already exists", func() {
 					It("emits nothing", func() {
 						messagesToEmit = table.AddEndpoint(key, evacuating1)
-						Ω(messagesToEmit).Should(BeZero())
+						Expect(messagesToEmit).To(BeZero())
 					})
 				})
 
@@ -657,7 +657,7 @@ var _ = Describe("RoutingTable", func() {
 
 					It("emits nothing", func() {
 						messagesToEmit = table.AddEndpoint(key, endpoint1)
-						Ω(messagesToEmit).Should(BeZero())
+						Expect(messagesToEmit).To(BeZero())
 					})
 				})
 
@@ -670,7 +670,7 @@ var _ = Describe("RoutingTable", func() {
 								routing_table.RegistryMessageFor(endpoint3, routing_table.Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}),
 							},
 						}
-						Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
+						Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
 					})
 				})
 			})
@@ -684,7 +684,7 @@ var _ = Describe("RoutingTable", func() {
 							routing_table.RegistryMessageFor(endpoint2, routing_table.Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}),
 						},
 					}
-					Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
+					Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
 				})
 
 				It("emits unregistrations when the tag is newer", func() {
@@ -697,14 +697,14 @@ var _ = Describe("RoutingTable", func() {
 							routing_table.RegistryMessageFor(endpoint2, routing_table.Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}),
 						},
 					}
-					Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
+					Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
 				})
 
 				It("emits nothing when the tag is older", func() {
 					olderEndpoint := endpoint2
 					olderEndpoint.ModificationTag = olderTag
 					messagesToEmit = table.RemoveEndpoint(key, olderEndpoint)
-					Ω(messagesToEmit).Should(BeZero())
+					Expect(messagesToEmit).To(BeZero())
 				})
 
 				Context("when an instance endpoint is removed for an instance that already exists", func() {
@@ -714,7 +714,7 @@ var _ = Describe("RoutingTable", func() {
 
 					It("emits nothing", func() {
 						messagesToEmit = table.RemoveEndpoint(key, endpoint1)
-						Ω(messagesToEmit).Should(BeZero())
+						Expect(messagesToEmit).To(BeZero())
 					})
 				})
 
@@ -725,7 +725,7 @@ var _ = Describe("RoutingTable", func() {
 
 					It("emits nothing", func() {
 						messagesToEmit = table.AddEndpoint(key, endpoint1)
-						Ω(messagesToEmit).Should(BeZero())
+						Expect(messagesToEmit).To(BeZero())
 					})
 				})
 			})
@@ -739,14 +739,14 @@ var _ = Describe("RoutingTable", func() {
 			Context("When setting routes", func() {
 				It("emits nothing", func() {
 					messagesToEmit = table.SetRoutes(key, routing_table.Routes{Hostnames: []string{hostname1, hostname3}, LogGuid: logGuid})
-					Ω(messagesToEmit).Should(BeZero())
+					Expect(messagesToEmit).To(BeZero())
 				})
 			})
 
 			Context("when removing routes", func() {
 				It("emits nothing", func() {
 					messagesToEmit = table.RemoveRoutes(key, currentTag)
-					Ω(messagesToEmit).Should(BeZero())
+					Expect(messagesToEmit).To(BeZero())
 				})
 			})
 
@@ -759,7 +759,7 @@ var _ = Describe("RoutingTable", func() {
 							routing_table.RegistryMessageFor(endpoint1, routing_table.Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}),
 						},
 					}
-					Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
+					Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
 				})
 			})
 		})
@@ -780,28 +780,28 @@ var _ = Describe("RoutingTable", func() {
 							routing_table.RegistryMessageFor(endpoint2, routing_table.Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}),
 						},
 					}
-					Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
+					Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
 				})
 			})
 
 			Context("when removing routes", func() {
 				It("emits nothing", func() {
 					messagesToEmit = table.RemoveRoutes(key, currentTag)
-					Ω(messagesToEmit).Should(BeZero())
+					Expect(messagesToEmit).To(BeZero())
 				})
 			})
 
 			Context("when adding/updating endpoints", func() {
 				It("emits nothing", func() {
 					messagesToEmit = table.AddEndpoint(key, endpoint2)
-					Ω(messagesToEmit).Should(BeZero())
+					Expect(messagesToEmit).To(BeZero())
 				})
 			})
 
 			Context("when removing endpoints", func() {
 				It("emits nothing", func() {
 					messagesToEmit = table.RemoveEndpoint(key, endpoint1)
-					Ω(messagesToEmit).Should(BeZero())
+					Expect(messagesToEmit).To(BeZero())
 				})
 			})
 		})
@@ -811,7 +811,7 @@ var _ = Describe("RoutingTable", func() {
 		Context("when the table is empty", func() {
 			It("should be empty", func() {
 				messagesToEmit = table.MessagesToEmit()
-				Ω(messagesToEmit).Should(BeZero())
+				Expect(messagesToEmit).To(BeZero())
 			})
 		})
 
@@ -822,7 +822,7 @@ var _ = Describe("RoutingTable", func() {
 
 			It("should be empty", func() {
 				messagesToEmit = table.MessagesToEmit()
-				Ω(messagesToEmit).Should(BeZero())
+				Expect(messagesToEmit).To(BeZero())
 			})
 		})
 
@@ -834,7 +834,7 @@ var _ = Describe("RoutingTable", func() {
 
 			It("should be empty", func() {
 				messagesToEmit = table.MessagesToEmit()
-				Ω(messagesToEmit).Should(BeZero())
+				Expect(messagesToEmit).To(BeZero())
 			})
 		})
 
@@ -854,7 +854,7 @@ var _ = Describe("RoutingTable", func() {
 						routing_table.RegistryMessageFor(endpoint2, routing_table.Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}),
 					},
 				}
-				Ω(messagesToEmit).Should(MatchMessagesToEmit(expected))
+				Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
 			})
 		})
 	})

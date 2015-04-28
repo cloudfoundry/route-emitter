@@ -50,7 +50,7 @@ var _ = Describe("MessagesToEmit", func() {
 			})
 
 			It("adds the number of hostnames in each route message", func() {
-				Ω(messagesToEmit.RouteRegistrationCount()).Should(BeEquivalentTo(5))
+				Expect(messagesToEmit.RouteRegistrationCount()).To(BeEquivalentTo(5))
 			})
 		})
 
@@ -61,7 +61,7 @@ var _ = Describe("MessagesToEmit", func() {
 			})
 
 			It("adds the number of hostnames in each route message", func() {
-				Ω(messagesToEmit.RouteRegistrationCount()).Should(BeEquivalentTo(0))
+				Expect(messagesToEmit.RouteRegistrationCount()).To(BeEquivalentTo(0))
 			})
 		})
 	})
@@ -73,7 +73,7 @@ var _ = Describe("MessagesToEmit", func() {
 			})
 
 			It("adds the number of hostnames in each route message", func() {
-				Ω(messagesToEmit.RouteUnregistrationCount()).Should(BeEquivalentTo(5))
+				Expect(messagesToEmit.RouteUnregistrationCount()).To(BeEquivalentTo(5))
 			})
 		})
 
@@ -84,7 +84,7 @@ var _ = Describe("MessagesToEmit", func() {
 			})
 
 			It("adds the number of hostnames in each route message", func() {
-				Ω(messagesToEmit.RouteUnregistrationCount()).Should(BeEquivalentTo(0))
+				Expect(messagesToEmit.RouteUnregistrationCount()).To(BeEquivalentTo(0))
 			})
 		})
 	})

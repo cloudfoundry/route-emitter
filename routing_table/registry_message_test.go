@@ -37,17 +37,17 @@ var _ = Describe("RegistryMessage", func() {
 
 		It("marshals correctly", func() {
 			payload, err := json.Marshal(expectedMessage)
-			Ω(err).ShouldNot(HaveOccurred())
+			Expect(err).NotTo(HaveOccurred())
 
-			Ω(payload).Should(MatchJSON(expectedJSON))
+			Expect(payload).To(MatchJSON(expectedJSON))
 		})
 
 		It("unmarshals correctly", func() {
 			message := routing_table.RegistryMessage{}
 
 			err := json.Unmarshal([]byte(expectedJSON), &message)
-			Ω(err).ShouldNot(HaveOccurred())
-			Ω(message).Should(Equal(expectedMessage))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(message).To(Equal(expectedMessage))
 		})
 	})
 
@@ -65,7 +65,7 @@ var _ = Describe("RegistryMessage", func() {
 			}
 
 			message := routing_table.RegistryMessageFor(endpoint, routes)
-			Ω(message).Should(Equal(expectedMessage))
+			Expect(message).To(Equal(expectedMessage))
 		})
 	})
 })
