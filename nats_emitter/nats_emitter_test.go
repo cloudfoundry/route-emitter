@@ -35,7 +35,8 @@ var _ = Describe("NatsEmitter", func() {
 	BeforeEach(func() {
 		natsClient = diegonats.NewFakeClient()
 		logger := lagertest.NewTestLogger("test")
-		workPool := workpool.NewWorkPool(1)
+		workPool, err := workpool.NewWorkPool(1)
+		Expect(err).NotTo(HaveOccurred())
 		emitter = nats_emitter.New(natsClient, workPool, logger)
 		fakeMetricSender = fake_metrics_sender.NewFakeMetricSender()
 		metrics.Initialize(fakeMetricSender)

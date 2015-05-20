@@ -164,8 +164,12 @@ func initializeDropsonde(logger lager.Logger) {
 }
 
 func initializeNatsEmitter(natsClient diegonats.NATSClient, logger lager.Logger) nats_emitter.NATSEmitter {
-	pool := workpool.New(10, 10, workpool.DefaultAround)
-	return nats_emitter.New(natsClient, pool, logger)
+	workPool, err := workpool.New(10, 10)
+	if err != nil {
+		logger.Fatal("failed-to-construct-nats-emitter-workpool", err, lager.Data{"num-workers": 10, "num-pending": 10}) // should never happen
+	}
+
+	return nats_emitter.New(natsClient, workPool, logger)
 }
 
 func initializeRoutingTable() routing_table.RoutingTable {
