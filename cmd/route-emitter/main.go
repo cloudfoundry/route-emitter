@@ -14,7 +14,7 @@ import (
 	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
 	"github.com/cloudfoundry-incubator/route-emitter/syncer"
 	"github.com/cloudfoundry-incubator/route-emitter/watcher"
-	Bbs "github.com/cloudfoundry-incubator/runtime-schema/bbs"
+	"github.com/cloudfoundry-incubator/runtime-schema/bbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/bbs/lock_bbs"
 	"github.com/cloudfoundry/dropsonde"
 	"github.com/cloudfoundry/gunk/diegonats"
@@ -100,18 +100,16 @@ func main() {
 	cf_http.Initialize(*communicationTimeout)
 
 	logger, reconfigurableSink := cf_lager.New(*sessionName)
-
-	initializeDropsonde(logger)
-	bbs := initializeBbs(logger)
-	table := initializeRoutingTable()
-	receptorClient := receptor.NewClient(*diegoAPIURL)
-
 	natsClient := diegonats.NewClient()
-	natsClientRunner := diegonats.NewClientRunner(*natsAddresses, *natsUsername, *natsPassword, logger, natsClient)
-
 	clock := clock.NewClock()
 	syncer := syncer.NewSyncer(clock, *syncInterval, natsClient, logger)
 
+	initializeDropsonde(logger)
+
+	natsClientRunner := diegonats.NewClientRunner(*natsAddresses, *natsUsername, *natsPassword, logger, natsClient)
+
+	receptorClient := receptor.NewClient(*diegoAPIURL)
+	table := initializeRoutingTable()
 	emitter := initializeNatsEmitter(natsClient, logger)
 	watcher := ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
 		return watcher.NewWatcher(receptorClient, clock, table, emitter, syncer.Events(), logger).Run(signals, ready)
@@ -121,12 +119,7 @@ func main() {
 		return syncer.Run(signals, ready)
 	})
 
-	uuid, err := uuid.NewV4()
-	if err != nil {
-		logger.Fatal("Couldn't generate uuid", err)
-	}
-
-	lockMaintainer := bbs.NewRouteEmitterLock(uuid.String(), *lockRetryInterval)
+	lockMaintainer := initializeLockMaintainer(logger, *consulCluster, *sessionName, *lockTTL, *lockRetryInterval, clock)
 
 	members := grouper.Members{
 		{"lock-maintainer", lockMaintainer},
@@ -147,7 +140,7 @@ func main() {
 
 	logger.Info("started")
 
-	err = <-monitor.Wait()
+	err := <-monitor.Wait()
 	if err != nil {
 		logger.Error("exited-with-failure", err)
 		os.Exit(1)
@@ -176,17 +169,28 @@ func initializeRoutingTable() routing_table.RoutingTable {
 	return routing_table.NewTable()
 }
 
-func initializeBbs(logger lager.Logger) Bbs.RouteEmitterBBS {
-	client, err := consuladapter.NewClient(*consulCluster)
+func initializeLockMaintainer(
+	logger lager.Logger,
+	consulCluster, sessionName string,
+	lockTTL, lockRetryInterval time.Duration,
+	clock clock.Clock,
+) ifrit.Runner {
+	client, err := consuladapter.NewClient(consulCluster)
 	if err != nil {
 		logger.Fatal("new-client-failed", err)
 	}
-
 	sessionMgr := consuladapter.NewSessionManager(client)
-	consulSession, err := consuladapter.NewSession(*sessionName, *lockTTL, client, sessionMgr)
+	consulSession, err := consuladapter.NewSession(sessionName, lockTTL, client, sessionMgr)
 	if err != nil {
 		logger.Fatal("consul-session-failed", err)
 	}
 
-	return Bbs.NewRouteEmitterBBS(consulSession, clock.NewClock(), logger)
+	uuid, err := uuid.NewV4()
+	if err != nil {
+		logger.Fatal("Couldn't generate uuid", err)
+	}
+
+	routeEmitterBBS := bbs.NewRouteEmitterBBS(consulSession, clock, logger)
+
+	return routeEmitterBBS.NewRouteEmitterLock(uuid.String(), lockRetryInterval)
 }
