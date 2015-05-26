@@ -109,7 +109,7 @@ var _ = Describe("Watcher", func() {
 			ContainerPort: expectedAdditionalContainerPort,
 		}
 		fakeMetricSender = fake_metrics_sender.NewFakeMetricSender()
-		metrics.Initialize(fakeMetricSender)
+		metrics.Initialize(fakeMetricSender, nil)
 
 		nextErr = atomic.Value{}
 		nextEvent.Store(nilEventHolder)

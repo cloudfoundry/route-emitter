@@ -116,7 +116,7 @@ var _ = Describe("Syncer", func() {
 		receptorClient.ActualLRPsReturns(actualResponses, nil)
 
 		fakeMetricSender = fake_metrics_sender.NewFakeMetricSender()
-		metrics.Initialize(fakeMetricSender)
+		metrics.Initialize(fakeMetricSender, nil)
 	})
 
 	JustBeforeEach(func() {

@@ -39,7 +39,7 @@ var _ = Describe("NatsEmitter", func() {
 		Expect(err).NotTo(HaveOccurred())
 		emitter = nats_emitter.New(natsClient, workPool, logger)
 		fakeMetricSender = fake_metrics_sender.NewFakeMetricSender()
-		metrics.Initialize(fakeMetricSender)
+		metrics.Initialize(fakeMetricSender, nil)
 	})
 
 	Describe("Emitting", func() {
