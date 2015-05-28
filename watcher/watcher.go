@@ -2,6 +2,7 @@ package watcher
 
 import (
 	"os"
+	"sync"
 	"sync/atomic"
 
 	"github.com/cloudfoundry-incubator/receptor"
@@ -194,32 +195,57 @@ func (watcher *Watcher) sync(logger lager.Logger, syncEndChan chan syncEndEvent)
 
 	before := watcher.clock.Now()
 
-	logger.Debug("getting-actual-lrps")
-	actualLRPResponses, err := watcher.receptorClient.ActualLRPs()
-	if err != nil {
-		logger.Error("failed-getting-actual-lrps", err)
-		return
-	}
-	logger.Debug("succeeded-getting-actual-lrps", lager.Data{"num-actual-responses": len(actualLRPResponses)})
+	var runningActualLRPs []receptor.ActualLRPResponse
+	var getActualLRPsErr error
+	var desiredLRPs []receptor.DesiredLRPResponse
+	var getDesiredLRPsErr error
 
-	logger.Debug("getting-desired-lrps")
-	desiredLRPResponses, err := watcher.receptorClient.DesiredLRPs()
-	if err != nil {
-		logger.Error("failed-getting-desired-lrps", err)
-		return
-	}
-	logger.Debug("succeeded-getting-desired-lrps", lager.Data{"num-desired-responses": len(desiredLRPResponses)})
+	wg := sync.WaitGroup{}
 
-	runningActualLRPs := make([]receptor.ActualLRPResponse, 0, len(actualLRPResponses))
-	for _, actualLRPResponse := range actualLRPResponses {
-		if actualLRPResponse.State == receptor.ActualLRPStateRunning {
-			runningActualLRPs = append(runningActualLRPs, actualLRPResponse)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+
+		logger.Debug("getting-actual-lrps")
+		actualLRPResponses, err := watcher.receptorClient.ActualLRPs()
+		if err != nil {
+			logger.Error("failed-getting-actual-lrps", err)
+			getActualLRPsErr = err
+			return
 		}
-	}
+		logger.Debug("succeeded-getting-actual-lrps", lager.Data{"num-actual-responses": len(actualLRPResponses)})
 
-	desiredLRPs := make([]receptor.DesiredLRPResponse, 0, len(desiredLRPResponses))
-	for _, desiredLRPResponse := range desiredLRPResponses {
-		desiredLRPs = append(desiredLRPs, desiredLRPResponse)
+		runningActualLRPs = make([]receptor.ActualLRPResponse, 0, len(actualLRPResponses))
+		for _, actualLRPResponse := range actualLRPResponses {
+			if actualLRPResponse.State == receptor.ActualLRPStateRunning {
+				runningActualLRPs = append(runningActualLRPs, actualLRPResponse)
+			}
+		}
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+
+		logger.Debug("getting-desired-lrps")
+		desiredLRPResponses, err := watcher.receptorClient.DesiredLRPs()
+		if err != nil {
+			logger.Error("failed-getting-desired-lrps", err)
+			getDesiredLRPsErr = err
+			return
+		}
+		logger.Debug("succeeded-getting-desired-lrps", lager.Data{"num-desired-responses": len(desiredLRPResponses)})
+
+		desiredLRPs = make([]receptor.DesiredLRPResponse, 0, len(desiredLRPResponses))
+		for _, desiredLRPResponse := range desiredLRPResponses {
+			desiredLRPs = append(desiredLRPs, desiredLRPResponse)
+		}
+	}()
+
+	wg.Wait()
+
+	if getActualLRPsErr != nil || getDesiredLRPsErr != nil {
+		return
 	}
 
 	newTable := routing_table.NewTempTable(
