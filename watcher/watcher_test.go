@@ -1145,7 +1145,6 @@ var _ = Describe("Watcher", func() {
 								routing_table.RegistryMessageFor(endpoint1, routing_table.Routes{Hostnames: []string{hostname1}, LogGuid: "lg1"}),
 							},
 						}))
-
 					})
 				})
 
