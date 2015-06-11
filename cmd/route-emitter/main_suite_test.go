@@ -51,6 +51,7 @@ var syncInterval time.Duration
 
 func TestRouteEmitter(t *testing.T) {
 	RegisterFailHandler(Fail)
+	SetDefaultEventuallyTimeout(2 * time.Second)
 	RunSpecs(t, "Route Emitter Suite")
 }
 
@@ -98,10 +99,11 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 	natsPort = 4001 + GinkgoParallelNode()
 	receptorPort = 6001 + GinkgoParallelNode()
 
-	etcdRunner = etcdstorerunner.NewETCDClusterRunner(etcdPort, 1)
+	etcdRunner = etcdstorerunner.NewETCDClusterRunner(etcdPort, 1, nil)
+
 	emitterPath = string(binaries["emitter"])
 	receptorPath = string(binaries["receptor"])
-	store = etcdRunner.Adapter()
+	store = etcdRunner.Adapter(nil)
 
 	consulRunner = consuladapter.NewClusterRunner(
 		9001+config.GinkgoConfig.ParallelNode*consuladapter.PortOffsetLength,
