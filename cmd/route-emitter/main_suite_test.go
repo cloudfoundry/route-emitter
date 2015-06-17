@@ -21,7 +21,7 @@ import (
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/ifrit/ginkgomon"
 
-	"github.com/cloudfoundry-incubator/consuladapter"
+	"github.com/cloudfoundry-incubator/consuladapter/consulrunner"
 	"github.com/cloudfoundry-incubator/receptor/cmd/receptor/testrunner"
 	Bbs "github.com/cloudfoundry-incubator/runtime-schema/bbs"
 )
@@ -40,7 +40,7 @@ var (
 )
 
 var etcdRunner *etcdstorerunner.ETCDClusterRunner
-var consulRunner *consuladapter.ClusterRunner
+var consulRunner *consulrunner.ClusterRunner
 var gnatsdRunner ifrit.Process
 var receptorRunner ifrit.Process
 var natsClient diegonats.NATSClient
@@ -105,8 +105,8 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 	receptorPath = string(binaries["receptor"])
 	store = etcdRunner.Adapter(nil)
 
-	consulRunner = consuladapter.NewClusterRunner(
-		9001+config.GinkgoConfig.ParallelNode*consuladapter.PortOffsetLength,
+	consulRunner = consulrunner.NewClusterRunner(
+		9001+config.GinkgoConfig.ParallelNode*consulrunner.PortOffsetLength,
 		1,
 		"http",
 	)
