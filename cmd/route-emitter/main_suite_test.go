@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/cloudfoundry/gunk/diegonats"
+	"github.com/cloudfoundry/gunk/diegonats/gnatsdrunner"
 	"github.com/cloudfoundry/storeadapter"
 	"github.com/cloudfoundry/storeadapter/storerunner/etcdstorerunner"
 	. "github.com/onsi/ginkgo"
@@ -122,7 +123,7 @@ var _ = BeforeEach(func() {
 	consulRunner.WaitUntilReady()
 
 	bbs = Bbs.NewBBS(store, consulRunner.NewSession("a-session"), "http://receptor.bogus.com", clock.NewClock(), logger)
-	gnatsdRunner, natsClient = diegonats.StartGnatsd(natsPort)
+	gnatsdRunner, natsClient = gnatsdrunner.StartGnatsd(natsPort)
 	receptorRunner = ginkgomon.Invoke(testrunner.New(receptorPath, testrunner.Args{
 		Address:       fmt.Sprintf("127.0.0.1:%d", receptorPort),
 		EtcdCluster:   strings.Join(etcdRunner.NodeURLS(), ","),
