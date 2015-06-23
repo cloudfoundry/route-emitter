@@ -167,6 +167,7 @@ var _ = Describe("Watcher", func() {
 			BeforeEach(func() {
 				desiredLRP = receptor.DesiredLRPResponse{
 					Action: &models.RunAction{
+						User: "me",
 						Path: "ls",
 					},
 					Domain:      "tests",
@@ -248,6 +249,7 @@ var _ = Describe("Watcher", func() {
 
 				originalDesiredLRP = receptor.DesiredLRPResponse{
 					Action: &models.RunAction{
+						User: "me",
 						Path: "ls",
 					},
 					Domain:      "tests",
@@ -257,6 +259,7 @@ var _ = Describe("Watcher", func() {
 				}
 				changedDesiredLRP = receptor.DesiredLRPResponse{
 					Action: &models.RunAction{
+						User: "me",
 						Path: "ls",
 					},
 					Domain:          "tests",
@@ -410,6 +413,7 @@ var _ = Describe("Watcher", func() {
 
 				desiredLRP = receptor.DesiredLRPResponse{
 					Action: &models.RunAction{
+						User: "me",
 						Path: "ls",
 					},
 					Domain:          "tests",
@@ -927,6 +931,7 @@ var _ = Describe("Watcher", func() {
 
 			desiredLRP1 := receptor.DesiredLRPResponse{
 				Action: &models.RunAction{
+					User: "me",
 					Path: "ls",
 				},
 				Domain:      "tests",
@@ -943,6 +948,7 @@ var _ = Describe("Watcher", func() {
 
 			desiredLRP2 := receptor.DesiredLRPResponse{
 				Action: &models.RunAction{
+					User: "me",
 					Path: "ls",
 				},
 				Domain:      "tests",

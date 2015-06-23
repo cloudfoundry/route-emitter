@@ -71,6 +71,7 @@ var _ = Describe("Route Emitter", func() {
 			DiskMB:      512,
 			LogGuid:     "some-log-guid",
 			Action: &models.RunAction{
+				User: "me",
 				Path: "ls",
 			},
 		}
