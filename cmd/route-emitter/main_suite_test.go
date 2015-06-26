@@ -3,6 +3,7 @@ package main_test
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
 	"os/exec"
 	"strings"
@@ -22,6 +23,7 @@ import (
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/ifrit/ginkgomon"
 
+	bbstestrunner "github.com/cloudfoundry-incubator/bbs/cmd/bbs/testrunner"
 	"github.com/cloudfoundry-incubator/consuladapter/consulrunner"
 	"github.com/cloudfoundry-incubator/receptor/cmd/receptor/testrunner"
 	Bbs "github.com/cloudfoundry-incubator/runtime-schema/bbs"
@@ -38,7 +40,14 @@ var (
 	etcdPort int
 
 	natsPort int
+
+	bbsPath string
+	bbsURL  *url.URL
 )
+
+var bbsArgs bbstestrunner.Args
+var bbsRunner *ginkgomon.Runner
+var bbsProcess ifrit.Process
 
 var etcdRunner *etcdstorerunner.ETCDClusterRunner
 var consulRunner *consulrunner.ClusterRunner
@@ -82,9 +91,13 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 	receptor, err := gexec.Build("github.com/cloudfoundry-incubator/receptor/cmd/receptor", "-race")
 	Expect(err).NotTo(HaveOccurred())
 
+	bbs, err := gexec.Build("github.com/cloudfoundry-incubator/bbs/cmd/bbs", "-race")
+	Expect(err).NotTo(HaveOccurred())
+
 	payload, err := json.Marshal(map[string]string{
 		"emitter":  emitter,
 		"receptor": receptor,
+		"bbs":      bbs,
 	})
 
 	Expect(err).NotTo(HaveOccurred())
@@ -115,6 +128,19 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 	logger = lagertest.NewTestLogger("test")
 
 	syncInterval = 200 * time.Millisecond
+
+	bbsPath = string(binaries["bbs"])
+	bbsAddress := fmt.Sprintf("127.0.0.1:%d", 13000+GinkgoParallelNode())
+
+	bbsURL = &url.URL{
+		Scheme: "http",
+		Host:   bbsAddress,
+	}
+
+	bbsArgs = bbstestrunner.Args{
+		Address:     bbsAddress,
+		EtcdCluster: strings.Join(etcdRunner.NodeURLS(), ","),
+	}
 })
 
 var _ = BeforeEach(func() {
@@ -122,16 +148,21 @@ var _ = BeforeEach(func() {
 	consulRunner.Start()
 	consulRunner.WaitUntilReady()
 
+	bbsRunner = bbstestrunner.New(bbsPath, bbsArgs)
+	bbsProcess = ginkgomon.Invoke(bbsRunner)
+
 	bbs = Bbs.NewBBS(store, consulRunner.NewSession("a-session"), "http://receptor.bogus.com", clock.NewClock(), logger)
 	gnatsdRunner, natsClient = gnatsdrunner.StartGnatsd(natsPort)
 	receptorRunner = ginkgomon.Invoke(testrunner.New(receptorPath, testrunner.Args{
 		Address:       fmt.Sprintf("127.0.0.1:%d", receptorPort),
+		BBSAddress:    bbsURL.String(),
 		EtcdCluster:   strings.Join(etcdRunner.NodeURLS(), ","),
 		ConsulCluster: consulRunner.ConsulCluster(),
 	}))
 })
 
 var _ = AfterEach(func() {
+	ginkgomon.Kill(bbsProcess)
 	ginkgomon.Kill(receptorRunner, 5)
 	etcdRunner.Stop()
 	consulRunner.Stop()
