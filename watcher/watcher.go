@@ -4,6 +4,7 @@ import (
 	"os"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/cloudfoundry-incubator/receptor"
 	"github.com/cloudfoundry-incubator/route-emitter/cfroutes"
@@ -110,6 +111,8 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 					event, err = es.Next()
 					if err != nil {
 						watcher.logger.Error("failed-getting-next-event", err)
+						// wait a bit before retrying
+						time.Sleep(time.Second)
 						break
 					}
 

@@ -6,9 +6,9 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/cloudfoundry-incubator/bbs/models"
 	"github.com/cloudfoundry-incubator/receptor"
 	"github.com/cloudfoundry-incubator/receptor/fake_receptor"
-	"github.com/cloudfoundry-incubator/runtime-schema/models"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/pivotal-golang/clock/fakeclock"
@@ -166,10 +166,10 @@ var _ = Describe("Watcher", func() {
 
 			BeforeEach(func() {
 				desiredLRP = receptor.DesiredLRPResponse{
-					Action: &models.RunAction{
+					Action: models.WrapAction(&models.RunAction{
 						User: "me",
 						Path: "ls",
-					},
+					}),
 					Domain:      "tests",
 					ProcessGuid: expectedProcessGuid,
 					Ports:       []uint16{expectedContainerPort},
@@ -248,20 +248,20 @@ var _ = Describe("Watcher", func() {
 				table.SetRoutesReturns(dummyMessagesToEmit)
 
 				originalDesiredLRP = receptor.DesiredLRPResponse{
-					Action: &models.RunAction{
+					Action: models.WrapAction(&models.RunAction{
 						User: "me",
 						Path: "ls",
-					},
+					}),
 					Domain:      "tests",
 					ProcessGuid: expectedProcessGuid,
 					LogGuid:     logGuid,
 					Ports:       []uint16{expectedContainerPort},
 				}
 				changedDesiredLRP = receptor.DesiredLRPResponse{
-					Action: &models.RunAction{
+					Action: models.WrapAction(&models.RunAction{
 						User: "me",
 						Path: "ls",
-					},
+					}),
 					Domain:          "tests",
 					ProcessGuid:     expectedProcessGuid,
 					LogGuid:         logGuid,
@@ -412,10 +412,10 @@ var _ = Describe("Watcher", func() {
 				table.RemoveRoutesReturns(dummyMessagesToEmit)
 
 				desiredLRP = receptor.DesiredLRPResponse{
-					Action: &models.RunAction{
+					Action: models.WrapAction(&models.RunAction{
 						User: "me",
 						Path: "ls",
-					},
+					}),
 					Domain:          "tests",
 					ProcessGuid:     expectedProcessGuid,
 					Ports:           []uint16{expectedContainerPort},
@@ -859,7 +859,7 @@ var _ = Describe("Watcher", func() {
 		})
 
 		It("re-subscribes", func() {
-			Eventually(receptorClient.SubscribeToEventsCallCount).Should(BeNumerically(">", 5))
+			Eventually(receptorClient.SubscribeToEventsCallCount, 2*time.Second).Should(BeNumerically(">", 5))
 		})
 
 		It("does not exit", func() {
@@ -930,10 +930,10 @@ var _ = Describe("Watcher", func() {
 			endpoint2 := routing_table.Endpoint{InstanceGuid: "ig-2", Host: "2.2.2.2", Port: 22, ContainerPort: 8080, Evacuating: false, ModificationTag: currentTag}
 
 			desiredLRP1 := receptor.DesiredLRPResponse{
-				Action: &models.RunAction{
+				Action: models.WrapAction(&models.RunAction{
 					User: "me",
 					Path: "ls",
-				},
+				}),
 				Domain:      "tests",
 				ProcessGuid: "pg-1",
 				Ports:       []uint16{8080},
@@ -947,10 +947,10 @@ var _ = Describe("Watcher", func() {
 			}
 
 			desiredLRP2 := receptor.DesiredLRPResponse{
-				Action: &models.RunAction{
+				Action: models.WrapAction(&models.RunAction{
 					User: "me",
 					Path: "ls",
-				},
+				}),
 				Domain:      "tests",
 				ProcessGuid: "pg-2",
 				Ports:       []uint16{8080},
