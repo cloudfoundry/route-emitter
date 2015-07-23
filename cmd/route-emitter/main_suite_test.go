@@ -23,6 +23,7 @@ import (
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/ifrit/ginkgomon"
 
+	"github.com/cloudfoundry-incubator/bbs"
 	bbstestrunner "github.com/cloudfoundry-incubator/bbs/cmd/bbs/testrunner"
 	"github.com/cloudfoundry-incubator/consuladapter/consulrunner"
 	"github.com/cloudfoundry-incubator/receptor/cmd/receptor/testrunner"
@@ -55,7 +56,8 @@ var gnatsdRunner ifrit.Process
 var receptorRunner ifrit.Process
 var natsClient diegonats.NATSClient
 var store storeadapter.StoreAdapter
-var bbs *Bbs.BBS
+var legacyBBS *Bbs.BBS
+var bbsClient bbs.Client
 var logger *lagertest.TestLogger
 var syncInterval time.Duration
 
@@ -137,6 +139,8 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 		Host:   bbsAddress,
 	}
 
+	bbsClient = bbs.NewClient(bbsURL.String())
+
 	bbsArgs = bbstestrunner.Args{
 		Address:     bbsAddress,
 		EtcdCluster: strings.Join(etcdRunner.NodeURLS(), ","),
@@ -151,7 +155,7 @@ var _ = BeforeEach(func() {
 	bbsRunner = bbstestrunner.New(bbsPath, bbsArgs)
 	bbsProcess = ginkgomon.Invoke(bbsRunner)
 
-	bbs = Bbs.NewBBS(store, consulRunner.NewSession("a-session"), "http://receptor.bogus.com", clock.NewClock(), logger)
+	legacyBBS = Bbs.NewBBS(store, consulRunner.NewSession("a-session"), "http://receptor.bogus.com", clock.NewClock(), logger)
 	gnatsdRunner, natsClient = gnatsdrunner.StartGnatsd(natsPort)
 	receptorRunner = ginkgomon.Invoke(testrunner.New(receptorPath, testrunner.Args{
 		Address:       fmt.Sprintf("127.0.0.1:%d", receptorPort),

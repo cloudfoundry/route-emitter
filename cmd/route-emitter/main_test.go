@@ -5,10 +5,11 @@ import (
 	"time"
 
 	"github.com/apcera/nats"
+	"github.com/cloudfoundry-incubator/bbs/models"
 	"github.com/cloudfoundry-incubator/route-emitter/cfroutes"
 	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
 	. "github.com/cloudfoundry-incubator/route-emitter/routing_table/matchers"
-	"github.com/cloudfoundry-incubator/runtime-schema/models"
+	oldmodels "github.com/cloudfoundry-incubator/runtime-schema/models"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gbytes"
@@ -41,11 +42,16 @@ var _ = Describe("Route Emitter", func() {
 
 		processGuid string
 		domain      string
-		desiredLRP  models.DesiredLRP
+		desiredLRP  oldmodels.DesiredLRP
+		index       int32
 
 		lrpKey      models.ActualLRPKey
 		instanceKey models.ActualLRPInstanceKey
-		netInfo     models.ActualLRPNetInfo
+		// netInfo      oldmodels.ActualLRPNetInfo
+
+		legacyLRPKey      oldmodels.ActualLRPKey
+		legacyInstanceKey oldmodels.ActualLRPInstanceKey
+		netInfo           oldmodels.ActualLRPNetInfo
 
 		hostnames     []string
 		containerPort uint16
@@ -60,7 +66,7 @@ var _ = Describe("Route Emitter", func() {
 		containerPort = 8080
 		routes = newRoutes(hostnames, containerPort)
 
-		desiredLRP = models.DesiredLRP{
+		desiredLRP = oldmodels.DesiredLRP{
 			Domain:      domain,
 			ProcessGuid: processGuid,
 			Ports:       []uint16{containerPort},
@@ -70,15 +76,20 @@ var _ = Describe("Route Emitter", func() {
 			MemoryMB:    1024,
 			DiskMB:      512,
 			LogGuid:     "some-log-guid",
-			Action: &models.RunAction{
+			Action: &oldmodels.RunAction{
 				User: "me",
 				Path: "ls",
 			},
 		}
 
-		lrpKey = models.NewActualLRPKey(processGuid, 0, domain)
+		index = 0
+		lrpKey = models.NewActualLRPKey(processGuid, index, domain)
+		legacyLRPKey = oldmodels.NewActualLRPKey(processGuid, int(index), domain)
+
+		legacyInstanceKey = oldmodels.NewActualLRPInstanceKey("iguid1", "cell-id")
 		instanceKey = models.NewActualLRPInstanceKey("iguid1", "cell-id")
-		netInfo = models.NewActualLRPNetInfo("1.2.3.4", []models.PortMapping{
+
+		netInfo = oldmodels.NewActualLRPNetInfo("1.2.3.4", []oldmodels.PortMapping{
 			{ContainerPort: 8080, HostPort: 65100},
 		})
 
@@ -116,13 +127,13 @@ var _ = Describe("Route Emitter", func() {
 
 		Context("and an lrp with routes is desired", func() {
 			BeforeEach(func() {
-				err := bbs.DesireLRP(logger, desiredLRP)
+				err := legacyBBS.DesireLRP(logger, desiredLRP)
 				Expect(err).NotTo(HaveOccurred())
 			})
 
 			Context("and an instance starts", func() {
 				BeforeEach(func() {
-					err := bbs.StartActualLRP(logger, lrpKey, instanceKey, netInfo)
+					err := legacyBBS.StartActualLRP(logger, legacyLRPKey, legacyInstanceKey, netInfo)
 					Expect(err).NotTo(HaveOccurred())
 				})
 
@@ -132,14 +143,14 @@ var _ = Describe("Route Emitter", func() {
 						Host:              netInfo.Address,
 						Port:              uint16(netInfo.Ports[0].HostPort),
 						App:               desiredLRP.LogGuid,
-						PrivateInstanceId: instanceKey.InstanceGuid,
+						PrivateInstanceId: legacyInstanceKey.InstanceGuid,
 					})))
 				})
 			})
 
 			Context("and an instance is claimed", func() {
 				BeforeEach(func() {
-					err := bbs.ClaimActualLRP(logger, lrpKey, instanceKey)
+					_, err := bbsClient.ClaimActualLRP(processGuid, int(index), instanceKey)
 					Expect(err).NotTo(HaveOccurred())
 				})
 
@@ -152,19 +163,19 @@ var _ = Describe("Route Emitter", func() {
 		Context("an actual lrp starts without a routed desired lrp", func() {
 			BeforeEach(func() {
 				desiredLRP.Routes = nil
-				err := bbs.DesireLRP(logger, desiredLRP)
+				err := legacyBBS.DesireLRP(logger, desiredLRP)
 				Expect(err).NotTo(HaveOccurred())
 
-				err = bbs.StartActualLRP(logger, lrpKey, instanceKey, netInfo)
+				err = legacyBBS.StartActualLRP(logger, legacyLRPKey, legacyInstanceKey, netInfo)
 				Expect(err).NotTo(HaveOccurred())
 			})
 
 			Context("and a route is desired", func() {
 				BeforeEach(func() {
-					update := models.DesiredLRPUpdate{
+					update := oldmodels.DesiredLRPUpdate{
 						Routes: routes,
 					}
-					err := bbs.UpdateDesiredLRP(logger, desiredLRP.ProcessGuid, update)
+					err := legacyBBS.UpdateDesiredLRP(logger, desiredLRP.ProcessGuid, update)
 					Expect(err).NotTo(HaveOccurred())
 				})
 
@@ -174,7 +185,7 @@ var _ = Describe("Route Emitter", func() {
 						Host:              netInfo.Address,
 						Port:              uint16(netInfo.Ports[0].HostPort),
 						App:               desiredLRP.LogGuid,
-						PrivateInstanceId: instanceKey.InstanceGuid,
+						PrivateInstanceId: legacyInstanceKey.InstanceGuid,
 					})))
 				})
 
@@ -258,14 +269,14 @@ var _ = Describe("Route Emitter", func() {
 		})
 	})
 
-	Context("when the bbs has routes to emit in /desired and /actual", func() {
+	Context("when the legacyBBS has routes to emit in /desired and /actual", func() {
 		var emitter ifrit.Process
 
 		BeforeEach(func() {
-			err := bbs.DesireLRP(logger, desiredLRP)
+			err := legacyBBS.DesireLRP(logger, desiredLRP)
 			Expect(err).NotTo(HaveOccurred())
 
-			err = bbs.StartActualLRP(logger, lrpKey, instanceKey, netInfo)
+			err = legacyBBS.StartActualLRP(logger, legacyLRPKey, legacyInstanceKey, netInfo)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -294,12 +305,12 @@ var _ = Describe("Route Emitter", func() {
 
 					hostnames = []string{"route-1", "route-2", "route-3"}
 
-					updateRequest := models.DesiredLRPUpdate{
+					updateRequest := oldmodels.DesiredLRPUpdate{
 						Routes:     newRoutes(hostnames, containerPort),
 						Instances:  &desiredLRP.Instances,
 						Annotation: &desiredLRP.Annotation,
 					}
-					err := bbs.UpdateDesiredLRP(logger, processGuid, updateRequest)
+					err := legacyBBS.UpdateDesiredLRP(logger, processGuid, updateRequest)
 					Expect(err).NotTo(HaveOccurred())
 				})
 
@@ -318,12 +329,12 @@ var _ = Describe("Route Emitter", func() {
 				BeforeEach(func() {
 					Eventually(registeredRoutes).Should(Receive())
 
-					updateRequest := models.DesiredLRPUpdate{
+					updateRequest := oldmodels.DesiredLRPUpdate{
 						Routes:     newRoutes([]string{"route-2"}, containerPort),
 						Instances:  &desiredLRP.Instances,
 						Annotation: &desiredLRP.Annotation,
 					}
-					err := bbs.UpdateDesiredLRP(logger, processGuid, updateRequest)
+					err := legacyBBS.UpdateDesiredLRP(logger, processGuid, updateRequest)
 					Expect(err).NotTo(HaveOccurred())
 				})
 
