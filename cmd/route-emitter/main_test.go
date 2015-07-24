@@ -47,11 +47,11 @@ var _ = Describe("Route Emitter", func() {
 
 		lrpKey      models.ActualLRPKey
 		instanceKey models.ActualLRPInstanceKey
-		// netInfo      oldmodels.ActualLRPNetInfo
+		netInfo     models.ActualLRPNetInfo
 
 		legacyLRPKey      oldmodels.ActualLRPKey
 		legacyInstanceKey oldmodels.ActualLRPInstanceKey
-		netInfo           oldmodels.ActualLRPNetInfo
+		legacyNetInfo     oldmodels.ActualLRPNetInfo
 
 		hostnames     []string
 		containerPort uint16
@@ -89,9 +89,10 @@ var _ = Describe("Route Emitter", func() {
 		legacyInstanceKey = oldmodels.NewActualLRPInstanceKey("iguid1", "cell-id")
 		instanceKey = models.NewActualLRPInstanceKey("iguid1", "cell-id")
 
-		netInfo = oldmodels.NewActualLRPNetInfo("1.2.3.4", []oldmodels.PortMapping{
+		legacyNetInfo = oldmodels.NewActualLRPNetInfo("1.2.3.4", []oldmodels.PortMapping{
 			{ContainerPort: 8080, HostPort: 65100},
 		})
+		netInfo = models.NewActualLRPNetInfo("1.2.3.4", models.NewPortMapping(65100, 8080))
 
 		registeredRoutes = listenForRoutes("router.register")
 		unregisteredRoutes = listenForRoutes("router.unregister")
@@ -133,15 +134,15 @@ var _ = Describe("Route Emitter", func() {
 
 			Context("and an instance starts", func() {
 				BeforeEach(func() {
-					err := legacyBBS.StartActualLRP(logger, legacyLRPKey, legacyInstanceKey, netInfo)
+					_, err := bbsClient.StartActualLRP(&lrpKey, &instanceKey, &netInfo)
 					Expect(err).NotTo(HaveOccurred())
 				})
 
 				It("emits its routes immediately", func() {
 					Eventually(registeredRoutes).Should(Receive(MatchRegistryMessage(routing_table.RegistryMessage{
 						URIs:              hostnames,
-						Host:              netInfo.Address,
-						Port:              uint16(netInfo.Ports[0].HostPort),
+						Host:              legacyNetInfo.Address,
+						Port:              uint16(legacyNetInfo.Ports[0].HostPort),
 						App:               desiredLRP.LogGuid,
 						PrivateInstanceId: legacyInstanceKey.InstanceGuid,
 					})))
@@ -166,7 +167,7 @@ var _ = Describe("Route Emitter", func() {
 				err := legacyBBS.DesireLRP(logger, desiredLRP)
 				Expect(err).NotTo(HaveOccurred())
 
-				err = legacyBBS.StartActualLRP(logger, legacyLRPKey, legacyInstanceKey, netInfo)
+				_, err = bbsClient.StartActualLRP(&lrpKey, &instanceKey, &netInfo)
 				Expect(err).NotTo(HaveOccurred())
 			})
 
@@ -182,8 +183,8 @@ var _ = Describe("Route Emitter", func() {
 				It("emits its routes immediately", func() {
 					Eventually(registeredRoutes).Should(Receive(MatchRegistryMessage(routing_table.RegistryMessage{
 						URIs:              hostnames,
-						Host:              netInfo.Address,
-						Port:              uint16(netInfo.Ports[0].HostPort),
+						Host:              legacyNetInfo.Address,
+						Port:              uint16(legacyNetInfo.Ports[0].HostPort),
 						App:               desiredLRP.LogGuid,
 						PrivateInstanceId: legacyInstanceKey.InstanceGuid,
 					})))
@@ -276,7 +277,7 @@ var _ = Describe("Route Emitter", func() {
 			err := legacyBBS.DesireLRP(logger, desiredLRP)
 			Expect(err).NotTo(HaveOccurred())
 
-			err = legacyBBS.StartActualLRP(logger, legacyLRPKey, legacyInstanceKey, netInfo)
+			_, err = bbsClient.StartActualLRP(&lrpKey, &instanceKey, &netInfo)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
