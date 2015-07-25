@@ -151,7 +151,7 @@ var _ = Describe("Route Emitter", func() {
 
 			Context("and an instance is claimed", func() {
 				BeforeEach(func() {
-					_, err := bbsClient.ClaimActualLRP(processGuid, int(index), instanceKey)
+					_, err := bbsClient.ClaimActualLRP(processGuid, int(index), &instanceKey)
 					Expect(err).NotTo(HaveOccurred())
 				})
 
