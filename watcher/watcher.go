@@ -180,7 +180,7 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 func (watcher *Watcher) emit(logger lager.Logger) {
 	messagesToEmit := watcher.table.MessagesToEmit()
 
-	logger.Info("emitting-messages", lager.Data{"messages": messagesToEmit})
+	logger.Debug("emitting-messages", lager.Data{"messages": messagesToEmit})
 	err := watcher.emitter.Emit(messagesToEmit)
 	if err != nil {
 		logger.Error("failed-to-emit-routes", err)
@@ -466,7 +466,7 @@ func (watcher *Watcher) removeAndEmit(logger lager.Logger, actualLRP receptor.Ac
 
 func (watcher *Watcher) emitMessages(logger lager.Logger, messagesToEmit routing_table.MessagesToEmit) {
 	if watcher.emitter != nil {
-		logger.Info("emitting-messages", lager.Data{"messages": messagesToEmit})
+		logger.Debug("emitting-messages", lager.Data{"messages": messagesToEmit})
 		watcher.emitter.Emit(messagesToEmit)
 		routesRegistered.Add(messagesToEmit.RouteRegistrationCount())
 		routesUnregistered.Add(messagesToEmit.RouteUnregistrationCount())
