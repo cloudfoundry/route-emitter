@@ -112,6 +112,7 @@ var _ = Describe("Watcher", func() {
 		metrics.Initialize(fakeMetricSender, nil)
 
 		nextErr = atomic.Value{}
+		nextErr := nextErr
 		nextEvent.Store(nilEventHolder)
 
 		eventSource.CloseStub = func() error {
