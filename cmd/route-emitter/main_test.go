@@ -134,7 +134,7 @@ var _ = Describe("Route Emitter", func() {
 
 			Context("and an instance starts", func() {
 				BeforeEach(func() {
-					_, err := bbsClient.StartActualLRP(&lrpKey, &instanceKey, &netInfo)
+					err := bbsClient.StartActualLRP(&lrpKey, &instanceKey, &netInfo)
 					Expect(err).NotTo(HaveOccurred())
 				})
 
@@ -151,7 +151,7 @@ var _ = Describe("Route Emitter", func() {
 
 			Context("and an instance is claimed", func() {
 				BeforeEach(func() {
-					_, err := bbsClient.ClaimActualLRP(processGuid, int(index), &instanceKey)
+					err := bbsClient.ClaimActualLRP(processGuid, int(index), &instanceKey)
 					Expect(err).NotTo(HaveOccurred())
 				})
 
@@ -167,7 +167,7 @@ var _ = Describe("Route Emitter", func() {
 				err := legacyBBS.DesireLRP(logger, desiredLRP)
 				Expect(err).NotTo(HaveOccurred())
 
-				_, err = bbsClient.StartActualLRP(&lrpKey, &instanceKey, &netInfo)
+				err = bbsClient.StartActualLRP(&lrpKey, &instanceKey, &netInfo)
 				Expect(err).NotTo(HaveOccurred())
 			})
 
@@ -277,7 +277,7 @@ var _ = Describe("Route Emitter", func() {
 			err := legacyBBS.DesireLRP(logger, desiredLRP)
 			Expect(err).NotTo(HaveOccurred())
 
-			_, err = bbsClient.StartActualLRP(&lrpKey, &instanceKey, &netInfo)
+			err = bbsClient.StartActualLRP(&lrpKey, &instanceKey, &netInfo)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
