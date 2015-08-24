@@ -42,7 +42,7 @@ var _ = Describe("Route Emitter", func() {
 
 		processGuid string
 		domain      string
-		desiredLRP  oldmodels.DesiredLRP
+		desiredLRP  *models.DesiredLRP
 		index       int32
 
 		lrpKey      models.ActualLRPKey
@@ -54,8 +54,8 @@ var _ = Describe("Route Emitter", func() {
 		legacyNetInfo     oldmodels.ActualLRPNetInfo
 
 		hostnames     []string
-		containerPort uint16
-		routes        map[string]*json.RawMessage
+		containerPort uint32
+		routes        *models.Routes
 	)
 
 	BeforeEach(func() {
@@ -66,20 +66,20 @@ var _ = Describe("Route Emitter", func() {
 		containerPort = 8080
 		routes = newRoutes(hostnames, containerPort)
 
-		desiredLRP = oldmodels.DesiredLRP{
+		desiredLRP = &models.DesiredLRP{
 			Domain:      domain,
 			ProcessGuid: processGuid,
-			Ports:       []uint16{containerPort},
+			Ports:       []uint32{containerPort},
 			Routes:      routes,
 			Instances:   5,
-			RootFS:      "some:rootfs",
-			MemoryMB:    1024,
-			DiskMB:      512,
+			RootFs:      "some:rootfs",
+			MemoryMb:    1024,
+			DiskMb:      512,
 			LogGuid:     "some-log-guid",
-			Action: &oldmodels.RunAction{
+			Action: models.WrapAction(&models.RunAction{
 				User: "me",
 				Path: "ls",
-			},
+			}),
 		}
 
 		index = 0
@@ -128,7 +128,7 @@ var _ = Describe("Route Emitter", func() {
 
 		Context("and an lrp with routes is desired", func() {
 			BeforeEach(func() {
-				err := legacyBBS.DesireLRP(logger, desiredLRP)
+				err := bbsClient.DesireLRP(desiredLRP)
 				Expect(err).NotTo(HaveOccurred())
 			})
 
@@ -164,7 +164,7 @@ var _ = Describe("Route Emitter", func() {
 		Context("an actual lrp starts without a routed desired lrp", func() {
 			BeforeEach(func() {
 				desiredLRP.Routes = nil
-				err := legacyBBS.DesireLRP(logger, desiredLRP)
+				err := bbsClient.DesireLRP(desiredLRP)
 				Expect(err).NotTo(HaveOccurred())
 
 				err = bbsClient.StartActualLRP(&lrpKey, &instanceKey, &netInfo)
@@ -173,10 +173,10 @@ var _ = Describe("Route Emitter", func() {
 
 			Context("and a route is desired", func() {
 				BeforeEach(func() {
-					update := oldmodels.DesiredLRPUpdate{
+					update := &models.DesiredLRPUpdate{
 						Routes: routes,
 					}
-					err := legacyBBS.UpdateDesiredLRP(logger, desiredLRP.ProcessGuid, update)
+					err := bbsClient.UpdateDesiredLRP(desiredLRP.ProcessGuid, update)
 					Expect(err).NotTo(HaveOccurred())
 				})
 
@@ -274,7 +274,7 @@ var _ = Describe("Route Emitter", func() {
 		var emitter ifrit.Process
 
 		BeforeEach(func() {
-			err := legacyBBS.DesireLRP(logger, desiredLRP)
+			err := bbsClient.DesireLRP(desiredLRP)
 			Expect(err).NotTo(HaveOccurred())
 
 			err = bbsClient.StartActualLRP(&lrpKey, &instanceKey, &netInfo)
@@ -306,12 +306,12 @@ var _ = Describe("Route Emitter", func() {
 
 					hostnames = []string{"route-1", "route-2", "route-3"}
 
-					updateRequest := oldmodels.DesiredLRPUpdate{
+					updateRequest := &models.DesiredLRPUpdate{
 						Routes:     newRoutes(hostnames, containerPort),
 						Instances:  &desiredLRP.Instances,
 						Annotation: &desiredLRP.Annotation,
 					}
-					err := legacyBBS.UpdateDesiredLRP(logger, processGuid, updateRequest)
+					err := bbsClient.UpdateDesiredLRP(processGuid, updateRequest)
 					Expect(err).NotTo(HaveOccurred())
 				})
 
@@ -330,12 +330,12 @@ var _ = Describe("Route Emitter", func() {
 				BeforeEach(func() {
 					Eventually(registeredRoutes).Should(Receive())
 
-					updateRequest := oldmodels.DesiredLRPUpdate{
+					updateRequest := &models.DesiredLRPUpdate{
 						Routes:     newRoutes([]string{"route-2"}, containerPort),
 						Instances:  &desiredLRP.Instances,
 						Annotation: &desiredLRP.Annotation,
 					}
-					err := legacyBBS.UpdateDesiredLRP(logger, processGuid, updateRequest)
+					err := bbsClient.UpdateDesiredLRP(processGuid, updateRequest)
 					Expect(err).NotTo(HaveOccurred())
 				})
 
@@ -353,16 +353,16 @@ var _ = Describe("Route Emitter", func() {
 	})
 })
 
-func newRoutes(hosts []string, port uint16) map[string]*json.RawMessage {
+func newRoutes(hosts []string, port uint32) *models.Routes {
 	routingInfo := cfroutes.CFRoutes{
-		{Hostnames: hosts, Port: port},
+		{Hostnames: hosts, Port: uint16(port)},
 	}.RoutingInfo()
 
-	routes := map[string]*json.RawMessage{}
+	routes := models.Routes{}
 
 	for key, message := range routingInfo {
 		routes[key] = message
 	}
 
-	return routes
+	return &routes
 }
