@@ -157,7 +157,7 @@ var _ = BeforeEach(func() {
 	bbsRunner = bbstestrunner.New(bbsPath, bbsArgs)
 	bbsProcess = ginkgomon.Invoke(bbsRunner)
 
-	legacyBBS = Bbs.NewBBS(store, consulRunner.NewSession("a-session"), "http://receptor.bogus.com", clock.NewClock(), logger)
+	legacyBBS = Bbs.NewBBS(store, consulRunner.NewSession("a-session"), clock.NewClock(), logger)
 	gnatsdRunner, natsClient = gnatsdrunner.StartGnatsd(natsPort)
 	receptorRunner = ginkgomon.Invoke(testrunner.New(receptorPath, testrunner.Args{
 		Address:       fmt.Sprintf("127.0.0.1:%d", receptorPort),
