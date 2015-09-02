@@ -5,16 +5,16 @@ import (
 	"os"
 	"time"
 
+	"github.com/cloudfoundry-incubator/bbs"
 	"github.com/cloudfoundry-incubator/cf-debug-server"
 	"github.com/cloudfoundry-incubator/cf-lager"
 	"github.com/cloudfoundry-incubator/cf_http"
 	"github.com/cloudfoundry-incubator/consuladapter"
-	"github.com/cloudfoundry-incubator/receptor"
 	"github.com/cloudfoundry-incubator/route-emitter/nats_emitter"
 	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
 	"github.com/cloudfoundry-incubator/route-emitter/syncer"
 	"github.com/cloudfoundry-incubator/route-emitter/watcher"
-	"github.com/cloudfoundry-incubator/runtime-schema/bbs"
+	oldbbs "github.com/cloudfoundry-incubator/runtime-schema/bbs"
 	"github.com/cloudfoundry-incubator/runtime-schema/bbs/lock_bbs"
 	"github.com/cloudfoundry/dropsonde"
 	"github.com/cloudfoundry/gunk/diegonats"
@@ -27,10 +27,10 @@ import (
 	"github.com/tedsuo/ifrit/sigmon"
 )
 
-var diegoAPIURL = flag.String(
-	"diegoAPIURL",
+var bbsAddress = flag.String(
+	"bbsAddress",
 	"",
-	"URL of diego API",
+	"Address of the BBS API Server",
 )
 
 var sessionName = flag.String(
@@ -108,11 +108,11 @@ func main() {
 
 	natsClientRunner := diegonats.NewClientRunner(*natsAddresses, *natsUsername, *natsPassword, logger, natsClient)
 
-	receptorClient := receptor.NewClient(*diegoAPIURL)
+	bbsClient := bbs.NewClient(*bbsAddress)
 	table := initializeRoutingTable()
 	emitter := initializeNatsEmitter(natsClient, logger)
 	watcher := ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
-		return watcher.NewWatcher(receptorClient, clock, table, emitter, syncer.Events(), logger).Run(signals, ready)
+		return watcher.NewWatcher(bbsClient, clock, table, emitter, syncer.Events(), logger).Run(signals, ready)
 	})
 
 	syncRunner := ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
@@ -190,7 +190,7 @@ func initializeLockMaintainer(
 		logger.Fatal("Couldn't generate uuid", err)
 	}
 
-	routeEmitterBBS := bbs.NewRouteEmitterBBS(consulSession, clock, logger)
+	routeEmitterBBS := oldbbs.NewRouteEmitterBBS(consulSession, clock, logger)
 
 	return routeEmitterBBS.NewRouteEmitterLock(uuid.String(), lockRetryInterval)
 }

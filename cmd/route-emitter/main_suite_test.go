@@ -73,7 +73,7 @@ func createEmitterRunner(sessionName string) *ginkgomon.Runner {
 			string(emitterPath),
 			"-sessionName", sessionName,
 			"-natsAddresses", fmt.Sprintf("127.0.0.1:%d", natsPort),
-			"-diegoAPIURL", fmt.Sprintf("http://127.0.0.1:%d", receptorPort),
+			"-bbsAddress", bbsURL.String(),
 			"-communicationTimeout", "100ms",
 			"-syncInterval", syncInterval.String(),
 			"-lockRetryInterval", "1s",

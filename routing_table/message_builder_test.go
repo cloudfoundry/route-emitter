@@ -1,7 +1,7 @@
 package routing_table_test
 
 import (
-	"github.com/cloudfoundry-incubator/receptor"
+	"github.com/cloudfoundry-incubator/bbs/models"
 	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
 	. "github.com/cloudfoundry-incubator/route-emitter/routing_table/matchers"
 
@@ -18,7 +18,7 @@ var _ = Describe("MessagesToEmitBuilder", func() {
 	hostname1 := "foo.example.com"
 	hostname2 := "bar.example.com"
 
-	currentTag := receptor.ModificationTag{Epoch: "abc", Index: 1}
+	currentTag := &models.ModificationTag{Epoch: "abc", Index: 1}
 	endpoint1 := routing_table.Endpoint{InstanceGuid: "ig-1", Host: "1.1.1.1", Port: 11, ContainerPort: 8080, Evacuating: false, ModificationTag: currentTag}
 	endpoint2 := routing_table.Endpoint{InstanceGuid: "ig-2", Host: "2.2.2.2", Port: 22, ContainerPort: 8080, Evacuating: false, ModificationTag: currentTag}
 

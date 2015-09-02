@@ -1,6 +1,6 @@
 package routing_table
 
-import "github.com/cloudfoundry-incubator/receptor"
+import "github.com/cloudfoundry-incubator/bbs/models"
 
 type EndpointKey struct {
 	InstanceGuid string
@@ -10,10 +10,10 @@ type EndpointKey struct {
 type Endpoint struct {
 	InstanceGuid    string
 	Host            string
-	Port            uint16
-	ContainerPort   uint16
+	Port            uint32
+	ContainerPort   uint32
 	Evacuating      bool
-	ModificationTag receptor.ModificationTag
+	ModificationTag *models.ModificationTag
 }
 
 func (e Endpoint) key() EndpointKey {
@@ -23,19 +23,19 @@ func (e Endpoint) key() EndpointKey {
 type Routes struct {
 	Hostnames       []string
 	LogGuid         string
-	ModificationTag receptor.ModificationTag
+	ModificationTag *models.ModificationTag
 }
 
 type RoutableEndpoints struct {
 	Hostnames       map[string]struct{}
 	Endpoints       map[EndpointKey]Endpoint
 	LogGuid         string
-	ModificationTag receptor.ModificationTag
+	ModificationTag *models.ModificationTag
 }
 
 type RoutingKey struct {
 	ProcessGuid   string
-	ContainerPort uint16
+	ContainerPort uint32
 }
 
 func NewRoutableEndpoints() RoutableEndpoints {

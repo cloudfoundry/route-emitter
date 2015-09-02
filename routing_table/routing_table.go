@@ -3,7 +3,7 @@ package routing_table
 import (
 	"sync"
 
-	"github.com/cloudfoundry-incubator/receptor"
+	"github.com/cloudfoundry-incubator/bbs/models"
 )
 
 //go:generate counterfeiter -o fake_routing_table/fake_routing_table.go . RoutingTable
@@ -13,7 +13,7 @@ type RoutingTable interface {
 	Swap(newTable RoutingTable) MessagesToEmit
 
 	SetRoutes(key RoutingKey, routes Routes) MessagesToEmit
-	RemoveRoutes(key RoutingKey, modTag receptor.ModificationTag) MessagesToEmit
+	RemoveRoutes(key RoutingKey, modTag *models.ModificationTag) MessagesToEmit
 	AddEndpoint(key RoutingKey, endpoint Endpoint) MessagesToEmit
 	RemoveEndpoint(key RoutingKey, endpoint Endpoint) MessagesToEmit
 
@@ -134,7 +134,7 @@ func (table *routingTable) SetRoutes(key RoutingKey, routes Routes) MessagesToEm
 	return table.emit(key, currentEntry, newEntry)
 }
 
-func (table *routingTable) RemoveRoutes(key RoutingKey, modTag receptor.ModificationTag) MessagesToEmit {
+func (table *routingTable) RemoveRoutes(key RoutingKey, modTag *models.ModificationTag) MessagesToEmit {
 	table.Lock()
 	defer table.Unlock()
 

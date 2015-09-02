@@ -4,7 +4,7 @@ package fake_routing_table
 import (
 	"sync"
 
-	"github.com/cloudfoundry-incubator/receptor"
+	"github.com/cloudfoundry-incubator/bbs/models"
 	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
 )
 
@@ -12,7 +12,7 @@ type FakeRoutingTable struct {
 	RouteCountStub        func() int
 	routeCountMutex       sync.RWMutex
 	routeCountArgsForCall []struct{}
-	routeCountReturns     struct {
+	routeCountReturns struct {
 		result1 int
 	}
 	SwapStub        func(newTable routing_table.RoutingTable) routing_table.MessagesToEmit
@@ -32,11 +32,11 @@ type FakeRoutingTable struct {
 	setRoutesReturns struct {
 		result1 routing_table.MessagesToEmit
 	}
-	RemoveRoutesStub        func(key routing_table.RoutingKey, modTag receptor.ModificationTag) routing_table.MessagesToEmit
+	RemoveRoutesStub        func(key routing_table.RoutingKey, modTag *models.ModificationTag) routing_table.MessagesToEmit
 	removeRoutesMutex       sync.RWMutex
 	removeRoutesArgsForCall []struct {
 		key    routing_table.RoutingKey
-		modTag receptor.ModificationTag
+		modTag *models.ModificationTag
 	}
 	removeRoutesReturns struct {
 		result1 routing_table.MessagesToEmit
@@ -62,7 +62,7 @@ type FakeRoutingTable struct {
 	MessagesToEmitStub        func() routing_table.MessagesToEmit
 	messagesToEmitMutex       sync.RWMutex
 	messagesToEmitArgsForCall []struct{}
-	messagesToEmitReturns     struct {
+	messagesToEmitReturns struct {
 		result1 routing_table.MessagesToEmit
 	}
 }
@@ -156,11 +156,11 @@ func (fake *FakeRoutingTable) SetRoutesReturns(result1 routing_table.MessagesToE
 	}{result1}
 }
 
-func (fake *FakeRoutingTable) RemoveRoutes(key routing_table.RoutingKey, modTag receptor.ModificationTag) routing_table.MessagesToEmit {
+func (fake *FakeRoutingTable) RemoveRoutes(key routing_table.RoutingKey, modTag *models.ModificationTag) routing_table.MessagesToEmit {
 	fake.removeRoutesMutex.Lock()
 	fake.removeRoutesArgsForCall = append(fake.removeRoutesArgsForCall, struct {
 		key    routing_table.RoutingKey
-		modTag receptor.ModificationTag
+		modTag *models.ModificationTag
 	}{key, modTag})
 	fake.removeRoutesMutex.Unlock()
 	if fake.RemoveRoutesStub != nil {
@@ -176,7 +176,7 @@ func (fake *FakeRoutingTable) RemoveRoutesCallCount() int {
 	return len(fake.removeRoutesArgsForCall)
 }
 
-func (fake *FakeRoutingTable) RemoveRoutesArgsForCall(i int) (routing_table.RoutingKey, receptor.ModificationTag) {
+func (fake *FakeRoutingTable) RemoveRoutesArgsForCall(i int) (routing_table.RoutingKey, *models.ModificationTag) {
 	fake.removeRoutesMutex.RLock()
 	defer fake.removeRoutesMutex.RUnlock()
 	return fake.removeRoutesArgsForCall[i].key, fake.removeRoutesArgsForCall[i].modTag

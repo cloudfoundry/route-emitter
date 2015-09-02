@@ -5,8 +5,8 @@ import (
 	"time"
 
 	"github.com/apcera/nats"
-	"github.com/cloudfoundry-incubator/receptor"
-	"github.com/cloudfoundry-incubator/receptor/fake_receptor"
+	"github.com/cloudfoundry-incubator/bbs/fake_bbs"
+	"github.com/cloudfoundry-incubator/bbs/models"
 	"github.com/cloudfoundry-incubator/route-emitter/cfroutes"
 	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
 	"github.com/cloudfoundry-incubator/route-emitter/syncer"
@@ -32,7 +32,7 @@ var _ = Describe("Syncer", func() {
 	)
 
 	var (
-		receptorClient *fake_receptor.FakeClient
+		bbsClient      *fake_bbs.FakeClient
 		natsClient     *diegonats.FakeNATSClient
 		syncerRunner   *syncer.Syncer
 		process        ifrit.Process
@@ -44,15 +44,15 @@ var _ = Describe("Syncer", func() {
 
 		shutdown chan struct{}
 
-		desiredResponse receptor.DesiredLRPResponse
-		actualResponses []receptor.ActualLRPResponse
+		desiredResponse *models.DesiredLRP
+		actualResponses []*models.ActualLRPGroup
 
 		routerStartMessages chan<- *nats.Msg
 		fakeMetricSender    *fake_metrics_sender.FakeMetricSender
 	)
 
 	BeforeEach(func() {
-		receptorClient = new(fake_receptor.FakeClient)
+		bbsClient = new(fake_bbs.FakeClient)
 		natsClient = diegonats.NewFakeClient()
 
 		clock = fakeclock.NewFakeClock(time.Now())
@@ -86,34 +86,32 @@ var _ = Describe("Syncer", func() {
 			RegistrationMessages: []routing_table.RegistryMessage{dummyMessage},
 		}
 
-		desiredResponse = receptor.DesiredLRPResponse{
+		desiredResponse = &models.DesiredLRP{
 			ProcessGuid: processGuid,
-			Ports:       []uint16{containerPort},
+			Ports:       []uint32{containerPort},
 			Routes:      cfroutes.CFRoutes{{Hostnames: []string{"route-1", "route-2"}, Port: containerPort}}.RoutingInfo(),
 			LogGuid:     logGuid,
 		}
 
-		actualResponses = []receptor.ActualLRPResponse{
+		actualResponses = []*models.ActualLRPGroup{
 			{
-				ProcessGuid:  processGuid,
-				InstanceGuid: instanceGuid,
-				CellID:       "cell-id",
-				Domain:       "domain",
-				Index:        1,
-				Address:      lrpHost,
-				Ports: []receptor.PortMapping{
-					{HostPort: 1234, ContainerPort: containerPort},
+				Instance: &models.ActualLRP{
+					ActualLRPKey:         models.NewActualLRPKey(processGuid, 1, "domain"),
+					ActualLRPInstanceKey: models.NewActualLRPInstanceKey(instanceGuid, "cell-id"),
+					ActualLRPNetInfo:     models.NewActualLRPNetInfo(lrpHost, models.NewPortMapping(1234, containerPort)),
+					State:                models.ActualLRPStateRunning,
 				},
-				State: receptor.ActualLRPStateRunning,
 			},
 			{
-				Index: 0,
-				State: receptor.ActualLRPStateUnclaimed,
+				Instance: &models.ActualLRP{
+					ActualLRPKey: models.NewActualLRPKey("", 1, ""),
+					State:        models.ActualLRPStateUnclaimed,
+				},
 			},
 		}
 
-		receptorClient.DesiredLRPsReturns([]receptor.DesiredLRPResponse{desiredResponse}, nil)
-		receptorClient.ActualLRPsReturns(actualResponses, nil)
+		bbsClient.DesiredLRPsReturns([]*models.DesiredLRP{desiredResponse}, nil)
+		bbsClient.ActualLRPGroupsReturns(actualResponses, nil)
 
 		fakeMetricSender = fake_metrics_sender.NewFakeMetricSender()
 		metrics.Initialize(fakeMetricSender, nil)
@@ -233,7 +231,7 @@ var _ = Describe("Syncer", func() {
 
 	Describe("syncing", func() {
 		BeforeEach(func() {
-			receptorClient.ActualLRPsStub = func() ([]receptor.ActualLRPResponse, error) {
+			bbsClient.ActualLRPGroupsStub = func(f models.ActualLRPFilter) ([]*models.ActualLRPGroup, error) {
 				return nil, nil
 			}
 			syncInterval = 500 * time.Millisecond

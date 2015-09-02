@@ -51,7 +51,6 @@ var _ = Describe("Route Emitter", func() {
 
 		legacyLRPKey      oldmodels.ActualLRPKey
 		legacyInstanceKey oldmodels.ActualLRPInstanceKey
-		legacyNetInfo     oldmodels.ActualLRPNetInfo
 
 		hostnames     []string
 		containerPort uint32
@@ -89,11 +88,7 @@ var _ = Describe("Route Emitter", func() {
 		legacyInstanceKey = oldmodels.NewActualLRPInstanceKey("iguid1", "cell-id")
 		instanceKey = models.NewActualLRPInstanceKey("iguid1", "cell-id")
 
-		legacyNetInfo = oldmodels.NewActualLRPNetInfo("1.2.3.4", []oldmodels.PortMapping{
-			{ContainerPort: 8080, HostPort: 65100},
-		})
 		netInfo = models.NewActualLRPNetInfo("1.2.3.4", models.NewPortMapping(65100, 8080))
-
 		registeredRoutes = listenForRoutes("router.register")
 		unregisteredRoutes = listenForRoutes("router.unregister")
 
@@ -141,8 +136,8 @@ var _ = Describe("Route Emitter", func() {
 				It("emits its routes immediately", func() {
 					Eventually(registeredRoutes).Should(Receive(MatchRegistryMessage(routing_table.RegistryMessage{
 						URIs:              hostnames,
-						Host:              legacyNetInfo.Address,
-						Port:              uint16(legacyNetInfo.Ports[0].HostPort),
+						Host:              netInfo.Address,
+						Port:              netInfo.Ports[0].HostPort,
 						App:               desiredLRP.LogGuid,
 						PrivateInstanceId: legacyInstanceKey.InstanceGuid,
 					})))
@@ -183,8 +178,8 @@ var _ = Describe("Route Emitter", func() {
 				It("emits its routes immediately", func() {
 					Eventually(registeredRoutes).Should(Receive(MatchRegistryMessage(routing_table.RegistryMessage{
 						URIs:              hostnames,
-						Host:              legacyNetInfo.Address,
-						Port:              uint16(legacyNetInfo.Ports[0].HostPort),
+						Host:              netInfo.Address,
+						Port:              netInfo.Ports[0].HostPort,
 						App:               desiredLRP.LogGuid,
 						PrivateInstanceId: legacyInstanceKey.InstanceGuid,
 					})))
@@ -354,12 +349,13 @@ var _ = Describe("Route Emitter", func() {
 })
 
 func newRoutes(hosts []string, port uint32) *models.Routes {
-	routingInfo := cfroutes.CFRoutes{
-		{Hostnames: hosts, Port: uint16(port)},
+	routingInfoPtr := cfroutes.CFRoutes{
+		{Hostnames: hosts, Port: port},
 	}.RoutingInfo()
 
 	routes := models.Routes{}
 
+	routingInfo := *routingInfoPtr
 	for key, message := range routingInfo {
 		routes[key] = message
 	}

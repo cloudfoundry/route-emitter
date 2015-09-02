@@ -1,7 +1,7 @@
 package routing_table_test
 
 import (
-	"github.com/cloudfoundry-incubator/receptor"
+	"github.com/cloudfoundry-incubator/bbs/models"
 	"github.com/cloudfoundry-incubator/route-emitter/cfroutes"
 	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
 
@@ -20,7 +20,7 @@ var _ = Describe("ByRoutingKey", func() {
 				{Hostnames: []string{"baz.com"}, Port: 8080},
 			}
 
-			routes := routing_table.RoutesByRoutingKeyFromDesireds([]receptor.DesiredLRPResponse{
+			routes := routing_table.RoutesByRoutingKeyFromDesireds([]*models.DesiredLRP{
 				{Domain: "tests", ProcessGuid: "abc", Routes: abcRoutes.RoutingInfo(), LogGuid: "abc-guid"},
 				{Domain: "tests", ProcessGuid: "def", Routes: defRoutes.RoutingInfo(), LogGuid: "def-guid"},
 			})
@@ -38,7 +38,7 @@ var _ = Describe("ByRoutingKey", func() {
 
 		Context("when the routing info is nil", func() {
 			It("should not be included in the results", func() {
-				routes := routing_table.RoutesByRoutingKeyFromDesireds([]receptor.DesiredLRPResponse{
+				routes := routing_table.RoutesByRoutingKeyFromDesireds([]*models.DesiredLRP{
 					{Domain: "tests", ProcessGuid: "abc", Routes: nil, LogGuid: "abc-guid"},
 				})
 				Expect(routes).To(HaveLen(0))
@@ -48,19 +48,31 @@ var _ = Describe("ByRoutingKey", func() {
 
 	Describe("EndpointsByRoutingKeyFromActuals", func() {
 		It("should build a map of endpoints, ignoring those without ports", func() {
-			endpoints := routing_table.EndpointsByRoutingKeyFromActuals([]receptor.ActualLRPResponse{
-				{ProcessGuid: "abc", Index: 0, Domain: "domain", Address: "1.1.1.1", Ports: []receptor.PortMapping{
-					{HostPort: 11, ContainerPort: 44},
-					{HostPort: 66, ContainerPort: 99},
-				}},
-				{ProcessGuid: "abc", Index: 1, Domain: "domain", Address: "2.2.2.2", Ports: []receptor.PortMapping{
-					{HostPort: 22, ContainerPort: 44},
-					{HostPort: 88, ContainerPort: 99},
-				}},
-				{ProcessGuid: "def", Index: 0, Domain: "domain", Address: "3.3.3.3", Ports: []receptor.PortMapping{
-					{HostPort: 33, ContainerPort: 55},
-				}},
-				{ProcessGuid: "def", Index: 1, Domain: "domain", Address: "4.4.4.4", Ports: nil},
+			endpoints := routing_table.EndpointsByRoutingKeyFromActuals([]*routing_table.ActualLRPRoutingInfo{
+				{
+					ActualLRP: &models.ActualLRP{
+						ActualLRPKey:     models.NewActualLRPKey("abc", 0, "domain"),
+						ActualLRPNetInfo: models.NewActualLRPNetInfo("1.1.1.1", models.NewPortMapping(11, 44), models.NewPortMapping(66, 99)),
+					},
+				},
+				{
+					ActualLRP: &models.ActualLRP{
+						ActualLRPKey:     models.NewActualLRPKey("abc", 1, "domain"),
+						ActualLRPNetInfo: models.NewActualLRPNetInfo("2.2.2.2", models.NewPortMapping(22, 44), models.NewPortMapping(88, 99)),
+					},
+				},
+				{
+					ActualLRP: &models.ActualLRP{
+						ActualLRPKey:     models.NewActualLRPKey("def", 0, "domain"),
+						ActualLRPNetInfo: models.NewActualLRPNetInfo("3.3.3.3", models.NewPortMapping(33, 55)),
+					},
+				},
+				{
+					ActualLRP: &models.ActualLRP{
+						ActualLRPKey:     models.NewActualLRPKey("def", 1, "domain"),
+						ActualLRPNetInfo: models.NewActualLRPNetInfo("4.4.4.4", nil),
+					},
+				},
 			})
 
 			Expect(endpoints).To(HaveLen(3))
@@ -79,15 +91,11 @@ var _ = Describe("ByRoutingKey", func() {
 
 	Describe("EndpointsFromActual", func() {
 		It("builds a map of container port to endpoint", func() {
-			endpoints, err := routing_table.EndpointsFromActual(receptor.ActualLRPResponse{
-				ProcessGuid:  "process-guid",
-				InstanceGuid: "instance-guid",
-				Index:        0,
-				Domain:       "domain",
-				Address:      "1.1.1.1",
-				Ports: []receptor.PortMapping{
-					{HostPort: 11, ContainerPort: 44},
-					{HostPort: 66, ContainerPort: 99},
+			endpoints, err := routing_table.EndpointsFromActual(&routing_table.ActualLRPRoutingInfo{
+				ActualLRP: &models.ActualLRP{
+					ActualLRPKey:         models.NewActualLRPKey("process-guid", 0, "domain"),
+					ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
+					ActualLRPNetInfo:     models.NewActualLRPNetInfo("1.1.1.1", models.NewPortMapping(11, 44), models.NewPortMapping(66, 99)),
 				},
 				Evacuating: true,
 			})
@@ -97,24 +105,16 @@ var _ = Describe("ByRoutingKey", func() {
 				routing_table.Endpoint{Host: "1.1.1.1", Port: 11, InstanceGuid: "instance-guid", ContainerPort: 44, Evacuating: true},
 				routing_table.Endpoint{Host: "1.1.1.1", Port: 66, InstanceGuid: "instance-guid", ContainerPort: 99, Evacuating: true},
 			}))
-
 		})
 	})
 
 	Describe("RoutingKeysFromActual", func() {
 		It("creates a list of keys for an actual LRP", func() {
-			keys := routing_table.RoutingKeysFromActual(receptor.ActualLRPResponse{
-				ProcessGuid:  "process-guid",
-				InstanceGuid: "instance-guid",
-				Index:        0,
-				Domain:       "domain",
-				Address:      "1.1.1.1",
-				Ports: []receptor.PortMapping{
-					{HostPort: 11, ContainerPort: 44},
-					{HostPort: 66, ContainerPort: 99},
-				},
+			keys := routing_table.RoutingKeysFromActual(&models.ActualLRP{
+				ActualLRPKey:         models.NewActualLRPKey("process-guid", 0, "domain"),
+				ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
+				ActualLRPNetInfo:     models.NewActualLRPNetInfo("1.1.1.1", models.NewPortMapping(11, 44), models.NewPortMapping(66, 99)),
 			})
-
 			Expect(keys).To(HaveLen(2))
 			Expect(keys).To(ContainElement(routing_table.RoutingKey{ProcessGuid: "process-guid", ContainerPort: 44}))
 			Expect(keys).To(ContainElement(routing_table.RoutingKey{ProcessGuid: "process-guid", ContainerPort: 99}))
@@ -122,12 +122,10 @@ var _ = Describe("ByRoutingKey", func() {
 
 		Context("when the actual lrp has no port mappings", func() {
 			It("returns no keys", func() {
-				keys := routing_table.RoutingKeysFromActual(receptor.ActualLRPResponse{
-					ProcessGuid:  "process-guid",
-					InstanceGuid: "instance-guid",
-					Index:        0,
-					Domain:       "domain",
-					Address:      "1.1.1.1",
+				keys := routing_table.RoutingKeysFromActual(&models.ActualLRP{
+					ActualLRPKey:         models.NewActualLRPKey("process-guid", 0, "domain"),
+					ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
+					ActualLRPNetInfo:     models.NewActualLRPNetInfo("1.1.1.1", nil),
 				})
 
 				Expect(keys).To(HaveLen(0))
@@ -142,10 +140,10 @@ var _ = Describe("ByRoutingKey", func() {
 				{Hostnames: []string{"foo.example.com"}, Port: 9090},
 			}
 
-			desired := receptor.DesiredLRPResponse{
+			desired := &models.DesiredLRP{
 				Domain:      "tests",
 				ProcessGuid: "process-guid",
-				Ports:       []uint16{8080, 9090},
+				Ports:       []uint32{8080, 9090},
 				Routes:      routes.RoutingInfo(),
 				LogGuid:     "abc-guid",
 			}
@@ -159,7 +157,7 @@ var _ = Describe("ByRoutingKey", func() {
 
 		Context("when the desired LRP does not define any container ports", func() {
 			It("returns no keys", func() {
-				desired := receptor.DesiredLRPResponse{
+				desired := &models.DesiredLRP{
 					Domain:      "tests",
 					ProcessGuid: "process-guid",
 					Routes:      cfroutes.CFRoutes{{Hostnames: []string{"foo.com", "bar.com"}, Port: 8080}}.RoutingInfo(),

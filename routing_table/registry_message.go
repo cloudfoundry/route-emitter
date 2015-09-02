@@ -2,7 +2,7 @@ package routing_table
 
 type RegistryMessage struct {
 	Host string   `json:"host"`
-	Port uint16   `json:"port"`
+	Port uint32   `json:"port"`
 	URIs []string `json:"uris"`
 	App  string   `json:"app,omitempty"`
 

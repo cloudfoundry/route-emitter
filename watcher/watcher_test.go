@@ -6,9 +6,10 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/cloudfoundry-incubator/bbs/events"
+	"github.com/cloudfoundry-incubator/bbs/events/eventfakes"
+	"github.com/cloudfoundry-incubator/bbs/fake_bbs"
 	"github.com/cloudfoundry-incubator/bbs/models"
-	"github.com/cloudfoundry-incubator/receptor"
-	"github.com/cloudfoundry-incubator/receptor/fake_receptor"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/pivotal-golang/clock/fakeclock"
@@ -28,7 +29,7 @@ import (
 const logGuid = "some-log-guid"
 
 type EventHolder struct {
-	event receptor.Event
+	event models.Event
 }
 
 var nilEventHolder = EventHolder{}
@@ -45,11 +46,11 @@ var _ = Describe("Watcher", func() {
 	)
 
 	var (
-		eventSource    *fake_receptor.FakeEventSource
-		receptorClient *fake_receptor.FakeClient
-		table          *fake_routing_table.FakeRoutingTable
-		emitter        *fake_nats_emitter.FakeNATSEmitter
-		syncEvents     syncer.Events
+		eventSource *eventfakes.FakeEventSource
+		bbsClient   *fake_bbs.FakeClient
+		table       *fake_routing_table.FakeRoutingTable
+		emitter     *fake_nats_emitter.FakeNATSEmitter
+		syncEvents  syncer.Events
 
 		clock          *fakeclock.FakeClock
 		watcherProcess *watcher.Watcher
@@ -73,9 +74,9 @@ var _ = Describe("Watcher", func() {
 	)
 
 	BeforeEach(func() {
-		eventSource = new(fake_receptor.FakeEventSource)
-		receptorClient = new(fake_receptor.FakeClient)
-		receptorClient.SubscribeToEventsReturns(eventSource, nil)
+		eventSource = new(eventfakes.FakeEventSource)
+		bbsClient = new(fake_bbs.FakeClient)
+		bbsClient.SubscribeToEventsReturns(eventSource, nil)
 
 		table = &fake_routing_table.FakeRoutingTable{}
 		emitter = &fake_nats_emitter.FakeNATSEmitter{}
@@ -93,7 +94,7 @@ var _ = Describe("Watcher", func() {
 
 		clock = fakeclock.NewFakeClock(time.Now())
 
-		watcherProcess = watcher.NewWatcher(receptorClient, clock, table, emitter, syncEvents, logger)
+		watcherProcess = watcher.NewWatcher(bbsClient, clock, table, emitter, syncEvents, logger)
 
 		expectedRoutes = []string{"route-1", "route-2"}
 		expectedCFRoute = cfroutes.CFRoute{Hostnames: expectedRoutes, Port: expectedContainerPort}
@@ -120,7 +121,7 @@ var _ = Describe("Watcher", func() {
 			return nil
 		}
 
-		eventSource.NextStub = func() (receptor.Event, error) {
+		eventSource.NextStub = func() (models.Event, error) {
 			time.Sleep(10 * time.Millisecond)
 			if eventHolder := nextEvent.Load(); eventHolder != nil || eventHolder != nilEventHolder {
 				nextEvent.Store(nilEventHolder)
@@ -150,9 +151,9 @@ var _ = Describe("Watcher", func() {
 
 	Context("on startup", func() {
 		It("processes events after the first sync event", func() {
-			Consistently(receptorClient.SubscribeToEventsCallCount).Should(Equal(0))
+			Consistently(bbsClient.SubscribeToEventsCallCount).Should(Equal(0))
 			syncEvents.Sync <- struct{}{}
-			Eventually(receptorClient.SubscribeToEventsCallCount).Should(BeNumerically(">", 0))
+			Eventually(bbsClient.SubscribeToEventsCallCount).Should(BeNumerically(">", 0))
 		})
 	})
 
@@ -163,17 +164,17 @@ var _ = Describe("Watcher", func() {
 		})
 
 		Context("when a create event occurs", func() {
-			var desiredLRP receptor.DesiredLRPResponse
+			var desiredLRP *models.DesiredLRP
 
 			BeforeEach(func() {
-				desiredLRP = receptor.DesiredLRPResponse{
+				desiredLRP = &models.DesiredLRP{
 					Action: models.WrapAction(&models.RunAction{
 						User: "me",
 						Path: "ls",
 					}),
 					Domain:      "tests",
 					ProcessGuid: expectedProcessGuid,
-					Ports:       []uint16{expectedContainerPort},
+					Ports:       []uint32{expectedContainerPort},
 					Routes:      cfroutes.CFRoutes{expectedCFRoute}.RoutingInfo(),
 					LogGuid:     logGuid,
 				}
@@ -182,7 +183,7 @@ var _ = Describe("Watcher", func() {
 			JustBeforeEach(func() {
 				table.SetRoutesReturns(dummyMessagesToEmit)
 
-				nextEvent.Store(EventHolder{receptor.NewDesiredLRPCreatedEvent(desiredLRP)})
+				nextEvent.Store(EventHolder{models.NewDesiredLRPCreatedEvent(desiredLRP)})
 			})
 
 			It("should set the routes on the table", func() {
@@ -213,7 +214,7 @@ var _ = Describe("Watcher", func() {
 
 			Context("when there are multiple CF routes", func() {
 				BeforeEach(func() {
-					desiredLRP.Ports = []uint16{expectedContainerPort, expectedAdditionalContainerPort}
+					desiredLRP.Ports = []uint32{expectedContainerPort, expectedAdditionalContainerPort}
 					desiredLRP.Routes = cfroutes.CFRoutes{expectedCFRoute, expectedAdditionalCFRoute}.RoutingInfo()
 				})
 
@@ -242,13 +243,12 @@ var _ = Describe("Watcher", func() {
 		})
 
 		Context("when a change event occurs", func() {
-			var originalDesiredLRP receptor.DesiredLRPResponse
-			var changedDesiredLRP receptor.DesiredLRPResponse
+			var originalDesiredLRP, changedDesiredLRP *models.DesiredLRP
 
 			BeforeEach(func() {
 				table.SetRoutesReturns(dummyMessagesToEmit)
 
-				originalDesiredLRP = receptor.DesiredLRPResponse{
+				originalDesiredLRP = &models.DesiredLRP{
 					Action: models.WrapAction(&models.RunAction{
 						User: "me",
 						Path: "ls",
@@ -256,9 +256,9 @@ var _ = Describe("Watcher", func() {
 					Domain:      "tests",
 					ProcessGuid: expectedProcessGuid,
 					LogGuid:     logGuid,
-					Ports:       []uint16{expectedContainerPort},
+					Ports:       []uint32{expectedContainerPort},
 				}
-				changedDesiredLRP = receptor.DesiredLRPResponse{
+				changedDesiredLRP = &models.DesiredLRP{
 					Action: models.WrapAction(&models.RunAction{
 						User: "me",
 						Path: "ls",
@@ -266,14 +266,14 @@ var _ = Describe("Watcher", func() {
 					Domain:          "tests",
 					ProcessGuid:     expectedProcessGuid,
 					LogGuid:         logGuid,
-					Ports:           []uint16{expectedContainerPort},
+					Ports:           []uint32{expectedContainerPort},
 					Routes:          cfroutes.CFRoutes{{Hostnames: expectedRoutes, Port: expectedContainerPort}}.RoutingInfo(),
-					ModificationTag: receptor.ModificationTag{Epoch: "abcd", Index: 1},
+					ModificationTag: &models.ModificationTag{Epoch: "abcd", Index: 1},
 				}
 			})
 
 			JustBeforeEach(func() {
-				nextEvent.Store(EventHolder{receptor.NewDesiredLRPChangedEvent(
+				nextEvent.Store(EventHolder{models.NewDesiredLRPChangedEvent(
 					originalDesiredLRP,
 					changedDesiredLRP,
 				)})
@@ -306,7 +306,7 @@ var _ = Describe("Watcher", func() {
 
 			Context("when CF routes are added without an associated container port", func() {
 				BeforeEach(func() {
-					changedDesiredLRP.Ports = []uint16{expectedContainerPort}
+					changedDesiredLRP.Ports = []uint32{expectedContainerPort}
 					changedDesiredLRP.Routes = cfroutes.CFRoutes{expectedCFRoute, expectedAdditionalCFRoute}.RoutingInfo()
 				})
 
@@ -328,7 +328,7 @@ var _ = Describe("Watcher", func() {
 
 			Context("when CF routes and container ports are added", func() {
 				BeforeEach(func() {
-					changedDesiredLRP.Ports = []uint16{expectedContainerPort, expectedAdditionalContainerPort}
+					changedDesiredLRP.Ports = []uint32{expectedContainerPort, expectedAdditionalContainerPort}
 					changedDesiredLRP.Routes = cfroutes.CFRoutes{expectedCFRoute, expectedAdditionalCFRoute}.RoutingInfo()
 				})
 
@@ -357,7 +357,7 @@ var _ = Describe("Watcher", func() {
 
 			Context("when CF routes are removed", func() {
 				BeforeEach(func() {
-					changedDesiredLRP.Ports = []uint16{expectedContainerPort}
+					changedDesiredLRP.Ports = []uint32{expectedContainerPort}
 					changedDesiredLRP.Routes = cfroutes.CFRoutes{}.RoutingInfo()
 
 					table.SetRoutesReturns(routing_table.MessagesToEmit{})
@@ -382,7 +382,7 @@ var _ = Describe("Watcher", func() {
 
 			Context("when container ports are removed", func() {
 				BeforeEach(func() {
-					changedDesiredLRP.Ports = []uint16{}
+					changedDesiredLRP.Ports = []uint32{}
 					changedDesiredLRP.Routes = cfroutes.CFRoutes{expectedCFRoute}.RoutingInfo()
 
 					table.SetRoutesReturns(routing_table.MessagesToEmit{})
@@ -407,27 +407,27 @@ var _ = Describe("Watcher", func() {
 		})
 
 		Context("when a delete event occurs", func() {
-			var desiredLRP receptor.DesiredLRPResponse
+			var desiredLRP *models.DesiredLRP
 
 			BeforeEach(func() {
 				table.RemoveRoutesReturns(dummyMessagesToEmit)
 
-				desiredLRP = receptor.DesiredLRPResponse{
+				desiredLRP = &models.DesiredLRP{
 					Action: models.WrapAction(&models.RunAction{
 						User: "me",
 						Path: "ls",
 					}),
 					Domain:          "tests",
 					ProcessGuid:     expectedProcessGuid,
-					Ports:           []uint16{expectedContainerPort},
+					Ports:           []uint32{expectedContainerPort},
 					Routes:          cfroutes.CFRoutes{expectedCFRoute}.RoutingInfo(),
 					LogGuid:         logGuid,
-					ModificationTag: receptor.ModificationTag{Epoch: "defg", Index: 2},
+					ModificationTag: &models.ModificationTag{Epoch: "defg", Index: 2},
 				}
 			})
 
 			JustBeforeEach(func() {
-				nextEvent.Store(EventHolder{receptor.NewDesiredLRPRemovedEvent(desiredLRP)})
+				nextEvent.Store(EventHolder{models.NewDesiredLRPRemovedEvent(desiredLRP)})
 			})
 
 			It("should remove the routes from the table", func() {
@@ -446,7 +446,7 @@ var _ = Describe("Watcher", func() {
 
 			Context("when there are multiple CF routes", func() {
 				BeforeEach(func() {
-					desiredLRP.Ports = []uint16{expectedContainerPort, expectedAdditionalContainerPort}
+					desiredLRP.Ports = []uint32{expectedContainerPort, expectedAdditionalContainerPort}
 					desiredLRP.Routes = cfroutes.CFRoutes{expectedCFRoute, expectedAdditionalCFRoute}.RoutingInfo()
 				})
 
@@ -485,35 +485,45 @@ var _ = Describe("Watcher", func() {
 		})
 
 		Context("when a create event occurs", func() {
-			var actualLRP receptor.ActualLRPResponse
+			var (
+				actualLRPGroup       *models.ActualLRPGroup
+				actualLRP            *models.ActualLRP
+				actualLRPRoutingInfo *routing_table.ActualLRPRoutingInfo
+			)
 
 			Context("when the resulting LRP is in the RUNNING state", func() {
 				BeforeEach(func() {
-					actualLRP = receptor.ActualLRPResponse{
-						ProcessGuid:  expectedProcessGuid,
-						Index:        1,
-						Domain:       "domain",
-						InstanceGuid: expectedInstanceGuid,
-						CellID:       "cell-id",
-						Address:      expectedHost,
-						Ports: []receptor.PortMapping{
-							{ContainerPort: expectedContainerPort, HostPort: expectedExternalPort},
-							{ContainerPort: expectedAdditionalContainerPort, HostPort: expectedExternalPort},
-						},
-						State: receptor.ActualLRPStateRunning,
+					actualLRP = &models.ActualLRP{
+						ActualLRPKey:         models.NewActualLRPKey(expectedProcessGuid, 1, "domain"),
+						ActualLRPInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGuid, "cell-id"),
+						ActualLRPNetInfo: models.NewActualLRPNetInfo(
+							expectedHost,
+							models.NewPortMapping(expectedExternalPort, expectedContainerPort),
+							models.NewPortMapping(expectedExternalPort, expectedAdditionalContainerPort),
+						),
+						State: models.ActualLRPStateRunning,
+					}
+
+					actualLRPGroup = &models.ActualLRPGroup{
+						Instance: actualLRP,
+					}
+
+					actualLRPRoutingInfo = &routing_table.ActualLRPRoutingInfo{
+						ActualLRP:  actualLRP,
+						Evacuating: false,
 					}
 				})
 
 				JustBeforeEach(func() {
 					table.AddEndpointReturns(dummyMessagesToEmit)
-					nextEvent.Store(EventHolder{receptor.NewActualLRPCreatedEvent(actualLRP)})
+					nextEvent.Store(EventHolder{models.NewActualLRPCreatedEvent(actualLRPGroup)})
 				})
 
 				It("should add/update the endpoints on the table", func() {
 					Eventually(table.AddEndpointCallCount).Should(Equal(2))
 
 					keys := routing_table.RoutingKeysFromActual(actualLRP)
-					endpoints, err := routing_table.EndpointsFromActual(actualLRP)
+					endpoints, err := routing_table.EndpointsFromActual(actualLRPRoutingInfo)
 					Expect(err).NotTo(HaveOccurred())
 
 					key, endpoint := table.AddEndpointArgsForCall(0)
@@ -547,21 +557,21 @@ var _ = Describe("Watcher", func() {
 
 			Context("when the resulting LRP is not in the RUNNING state", func() {
 				JustBeforeEach(func() {
-					actualLRP := receptor.ActualLRPResponse{
-						ProcessGuid:  expectedProcessGuid,
-						Index:        1,
-						Domain:       "domain",
-						InstanceGuid: expectedInstanceGuid,
-						CellID:       "cell-id",
-						Address:      expectedHost,
-						Ports: []receptor.PortMapping{
-							{ContainerPort: expectedContainerPort, HostPort: expectedExternalPort},
-							{ContainerPort: expectedAdditionalContainerPort, HostPort: expectedExternalPort},
-						},
-						State: receptor.ActualLRPStateUnclaimed,
+					actualLRP = &models.ActualLRP{
+						ActualLRPKey:         models.NewActualLRPKey(expectedProcessGuid, 1, "domain"),
+						ActualLRPInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGuid, "cell-id"),
+						ActualLRPNetInfo: models.NewActualLRPNetInfo(
+							expectedHost,
+							models.NewPortMapping(expectedExternalPort, expectedContainerPort),
+							models.NewPortMapping(expectedExternalPort, expectedAdditionalContainerPort),
+						),
+						State: models.ActualLRPStateUnclaimed,
 					}
 
-					nextEvent.Store(EventHolder{receptor.NewActualLRPCreatedEvent(actualLRP)})
+					actualLRPGroup = &models.ActualLRPGroup{
+						Instance: actualLRP,
+					}
+					nextEvent.Store(EventHolder{models.NewActualLRPCreatedEvent(actualLRPGroup)})
 				})
 
 				It("doesn't add/update the endpoint on the table", func() {
@@ -581,29 +591,27 @@ var _ = Describe("Watcher", func() {
 				})
 
 				JustBeforeEach(func() {
-					beforeActualLRP := receptor.ActualLRPResponse{
-						ProcessGuid:  expectedProcessGuid,
-						Index:        1,
-						Domain:       "domain",
-						InstanceGuid: expectedInstanceGuid,
-						CellID:       "cell-id",
-						State:        receptor.ActualLRPStateClaimed,
-					}
-					afterActualLRP := receptor.ActualLRPResponse{
-						ProcessGuid:  expectedProcessGuid,
-						Index:        1,
-						Domain:       "domain",
-						InstanceGuid: expectedInstanceGuid,
-						CellID:       "cell-id",
-						Address:      expectedHost,
-						Ports: []receptor.PortMapping{
-							{ContainerPort: expectedContainerPort, HostPort: expectedExternalPort},
-							{ContainerPort: expectedAdditionalContainerPort, HostPort: expectedAdditionalExternalPort},
+					beforeActualLRP := &models.ActualLRPGroup{
+						Instance: &models.ActualLRP{
+							ActualLRPKey:         models.NewActualLRPKey(expectedProcessGuid, 1, "domain"),
+							ActualLRPInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGuid, "cell-id"),
+							State:                models.ActualLRPStateClaimed,
 						},
-						State: receptor.ActualLRPStateRunning,
+					}
+					afterActualLRP := &models.ActualLRPGroup{
+						Instance: &models.ActualLRP{
+							ActualLRPKey:         models.NewActualLRPKey(expectedProcessGuid, 1, "domain"),
+							ActualLRPInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGuid, "cell-id"),
+							ActualLRPNetInfo: models.NewActualLRPNetInfo(
+								expectedHost,
+								models.NewPortMapping(expectedExternalPort, expectedContainerPort),
+								models.NewPortMapping(expectedAdditionalExternalPort, expectedAdditionalContainerPort),
+							),
+							State: models.ActualLRPStateRunning,
+						},
 					}
 
-					nextEvent.Store(EventHolder{receptor.NewActualLRPChangedEvent(beforeActualLRP, afterActualLRP)})
+					nextEvent.Store(EventHolder{models.NewActualLRPChangedEvent(beforeActualLRP, afterActualLRP)})
 				})
 
 				It("should add/update the endpoint on the table", func() {
@@ -649,31 +657,29 @@ var _ = Describe("Watcher", func() {
 				})
 			})
 
-			Context("when the resulting LRP transitions away form the RUNNING state", func() {
+			Context("when the resulting LRP transitions away from the RUNNING state", func() {
 				JustBeforeEach(func() {
 					table.RemoveEndpointReturns(dummyMessagesToEmit)
-
-					beforeActualLRP := receptor.ActualLRPResponse{
-						ProcessGuid:  expectedProcessGuid,
-						Index:        1,
-						Domain:       "domain",
-						InstanceGuid: expectedInstanceGuid,
-						CellID:       "cell-id",
-						Address:      expectedHost,
-						Ports: []receptor.PortMapping{
-							{ContainerPort: expectedContainerPort, HostPort: expectedExternalPort},
-							{ContainerPort: expectedAdditionalContainerPort, HostPort: expectedAdditionalExternalPort},
+					beforeActualLRP := &models.ActualLRPGroup{
+						Instance: &models.ActualLRP{
+							ActualLRPKey:         models.NewActualLRPKey(expectedProcessGuid, 1, "domain"),
+							ActualLRPInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGuid, "cell-id"),
+							ActualLRPNetInfo: models.NewActualLRPNetInfo(
+								expectedHost,
+								models.NewPortMapping(expectedExternalPort, expectedContainerPort),
+								models.NewPortMapping(expectedAdditionalExternalPort, expectedAdditionalContainerPort),
+							),
+							State: models.ActualLRPStateRunning,
 						},
-						State: receptor.ActualLRPStateRunning,
 					}
-					afterActualLRP := receptor.ActualLRPResponse{
-						ProcessGuid: expectedProcessGuid,
-						Index:       1,
-						Domain:      "domain",
-						State:       receptor.ActualLRPStateUnclaimed,
+					afterActualLRP := &models.ActualLRPGroup{
+						Instance: &models.ActualLRP{
+							ActualLRPKey: models.NewActualLRPKey(expectedProcessGuid, 1, "domain"),
+							State:        models.ActualLRPStateUnclaimed,
+						},
 					}
 
-					nextEvent.Store(EventHolder{receptor.NewActualLRPChangedEvent(beforeActualLRP, afterActualLRP)})
+					nextEvent.Store(EventHolder{models.NewActualLRPChangedEvent(beforeActualLRP, afterActualLRP)})
 				})
 
 				It("should remove the endpoint from the table", func() {
@@ -709,22 +715,20 @@ var _ = Describe("Watcher", func() {
 
 			Context("when the endpoint neither starts nor ends in the RUNNING state", func() {
 				JustBeforeEach(func() {
-					beforeActualLRP := receptor.ActualLRPResponse{
-						ProcessGuid: expectedProcessGuid,
-						Index:       1,
-						Domain:      "domain",
-						State:       receptor.ActualLRPStateUnclaimed,
+					beforeActualLRP := &models.ActualLRPGroup{
+						Instance: &models.ActualLRP{
+							ActualLRPKey: models.NewActualLRPKey(expectedProcessGuid, 1, "domain"),
+							State:        models.ActualLRPStateUnclaimed,
+						},
 					}
-					afterActualLRP := receptor.ActualLRPResponse{
-						ProcessGuid:  expectedProcessGuid,
-						Index:        1,
-						Domain:       "domain",
-						InstanceGuid: expectedInstanceGuid,
-						CellID:       "cell-id",
-						State:        receptor.ActualLRPStateClaimed,
+					afterActualLRP := &models.ActualLRPGroup{
+						Instance: &models.ActualLRP{
+							ActualLRPKey:         models.NewActualLRPKey(expectedProcessGuid, 1, "domain"),
+							ActualLRPInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGuid, "cell-id"),
+							State:                models.ActualLRPStateClaimed,
+						},
 					}
-
-					nextEvent.Store(EventHolder{receptor.NewActualLRPChangedEvent(beforeActualLRP, afterActualLRP)})
+					nextEvent.Store(EventHolder{models.NewActualLRPChangedEvent(beforeActualLRP, afterActualLRP)})
 				})
 
 				It("should not remove the endpoint", func() {
@@ -748,21 +752,20 @@ var _ = Describe("Watcher", func() {
 				})
 
 				JustBeforeEach(func() {
-					actualLRP := receptor.ActualLRPResponse{
-						ProcessGuid:  expectedProcessGuid,
-						Index:        1,
-						Domain:       "domain",
-						InstanceGuid: expectedInstanceGuid,
-						CellID:       "cell-id",
-						Address:      expectedHost,
-						Ports: []receptor.PortMapping{
-							{ContainerPort: expectedContainerPort, HostPort: expectedExternalPort},
-							{ContainerPort: expectedAdditionalContainerPort, HostPort: expectedAdditionalExternalPort},
+					actualLRP := &models.ActualLRPGroup{
+						Instance: &models.ActualLRP{
+							ActualLRPKey:         models.NewActualLRPKey(expectedProcessGuid, 1, "domain"),
+							ActualLRPInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGuid, "cell-id"),
+							ActualLRPNetInfo: models.NewActualLRPNetInfo(
+								expectedHost,
+								models.NewPortMapping(expectedExternalPort, expectedContainerPort),
+								models.NewPortMapping(expectedAdditionalExternalPort, expectedAdditionalContainerPort),
+							),
+							State: models.ActualLRPStateRunning,
 						},
-						State: receptor.ActualLRPStateRunning,
 					}
 
-					nextEvent.Store(EventHolder{receptor.NewActualLRPRemovedEvent(actualLRP)})
+					nextEvent.Store(EventHolder{models.NewActualLRPRemovedEvent(actualLRP)})
 				})
 
 				It("should remove the endpoint from the table", func() {
@@ -801,14 +804,14 @@ var _ = Describe("Watcher", func() {
 
 			Context("when the actual is not in the RUNNING state", func() {
 				JustBeforeEach(func() {
-					actualLRP := receptor.ActualLRPResponse{
-						ProcessGuid: expectedProcessGuid,
-						Index:       1,
-						Domain:      "domain",
-						State:       receptor.ActualLRPStateCrashed,
+					actualLRP := &models.ActualLRPGroup{
+						Instance: &models.ActualLRP{
+							ActualLRPKey: models.NewActualLRPKey(expectedProcessGuid, 1, "domain"),
+							State:        models.ActualLRPStateCrashed,
+						},
 					}
 
-					nextEvent.Store(EventHolder{receptor.NewActualLRPRemovedEvent(actualLRP)})
+					nextEvent.Store(EventHolder{models.NewActualLRPRemovedEvent(actualLRP)})
 				})
 
 				It("doesn't remove the endpoint from the table", func() {
@@ -824,7 +827,7 @@ var _ = Describe("Watcher", func() {
 
 	Describe("Unrecognized events", func() {
 		BeforeEach(func() {
-			nextEvent.Store(EventHolder{unrecognizedEvent{}})
+			nextEvent.Store(EventHolder{&unrecognizedEvent{}})
 		})
 
 		JustBeforeEach(func() {
@@ -843,14 +846,14 @@ var _ = Describe("Watcher", func() {
 		BeforeEach(func() {
 			subscribeErr = errors.New("subscribe-error")
 
-			receptorClient.SubscribeToEventsStub = func() (receptor.EventSource, error) {
-				if receptorClient.SubscribeToEventsCallCount() == 1 {
+			bbsClient.SubscribeToEventsStub = func() (events.EventSource, error) {
+				if bbsClient.SubscribeToEventsCallCount() == 1 {
 					return eventSource, nil
 				}
 				return nil, subscribeErr
 			}
 
-			eventSource.NextStub = func() (receptor.Event, error) {
+			eventSource.NextStub = func() (models.Event, error) {
 				return nil, errors.New("next-error")
 			}
 		})
@@ -860,7 +863,7 @@ var _ = Describe("Watcher", func() {
 		})
 
 		It("re-subscribes", func() {
-			Eventually(receptorClient.SubscribeToEventsCallCount, 2*time.Second).Should(BeNumerically(">", 5))
+			Eventually(bbsClient.SubscribeToEventsCallCount, 2*time.Second).Should(BeNumerically(">", 5))
 		})
 
 		It("does not exit", func() {
@@ -876,14 +879,14 @@ var _ = Describe("Watcher", func() {
 	})
 
 	Describe("Sync Events", func() {
-		var nextEvent chan receptor.Event
+		var nextEvent chan models.Event
 
 		BeforeEach(func() {
-			nextEvent = make(chan receptor.Event)
+			nextEvent = make(chan models.Event)
 
 			nextEvent := nextEvent
 			nextErr := nextErr
-			eventSource.NextStub = func() (receptor.Event, error) {
+			eventSource.NextStub = func() (models.Event, error) {
 				select {
 				case e := <-nextEvent:
 					return e, nil
@@ -924,20 +927,20 @@ var _ = Describe("Watcher", func() {
 		})
 
 		Context("Begin & End events", func() {
-			currentTag := receptor.ModificationTag{Epoch: "abc", Index: 1}
+			currentTag := &models.ModificationTag{Epoch: "abc", Index: 1}
 			hostname1 := "foo.example.com"
 			hostname2 := "bar.example.com"
 			endpoint1 := routing_table.Endpoint{InstanceGuid: "ig-1", Host: "1.1.1.1", Port: 11, ContainerPort: 8080, Evacuating: false, ModificationTag: currentTag}
 			endpoint2 := routing_table.Endpoint{InstanceGuid: "ig-2", Host: "2.2.2.2", Port: 22, ContainerPort: 8080, Evacuating: false, ModificationTag: currentTag}
 
-			desiredLRP1 := receptor.DesiredLRPResponse{
+			desiredLRP1 := &models.DesiredLRP{
 				Action: models.WrapAction(&models.RunAction{
 					User: "me",
 					Path: "ls",
 				}),
 				Domain:      "tests",
 				ProcessGuid: "pg-1",
-				Ports:       []uint16{8080},
+				Ports:       []uint32{8080},
 				Routes: cfroutes.CFRoutes{
 					cfroutes.CFRoute{
 						Hostnames: []string{hostname1},
@@ -947,14 +950,14 @@ var _ = Describe("Watcher", func() {
 				LogGuid: "lg1",
 			}
 
-			desiredLRP2 := receptor.DesiredLRPResponse{
+			desiredLRP2 := &models.DesiredLRP{
 				Action: models.WrapAction(&models.RunAction{
 					User: "me",
 					Path: "ls",
 				}),
 				Domain:      "tests",
 				ProcessGuid: "pg-2",
-				Ports:       []uint16{8080},
+				Ports:       []uint32{8080},
 				Routes: cfroutes.CFRoutes{
 					cfroutes.CFRoute{
 						Hostnames: []string{hostname2},
@@ -964,34 +967,26 @@ var _ = Describe("Watcher", func() {
 				LogGuid: "lg2",
 			}
 
-			actualLRP1 := receptor.ActualLRPResponse{
-				ProcessGuid:  "pg-1",
-				Index:        1,
-				Domain:       "domain",
-				InstanceGuid: endpoint1.InstanceGuid,
-				CellID:       "cell-id",
-				Address:      endpoint1.Host,
-				Ports: []receptor.PortMapping{
-					{ContainerPort: endpoint1.ContainerPort, HostPort: endpoint1.Port},
+			actualLRPGroup1 := &models.ActualLRPGroup{
+				Instance: &models.ActualLRP{
+					ActualLRPKey:         models.NewActualLRPKey("pg-1", 1, "domain"),
+					ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint1.InstanceGuid, "cell-id"),
+					ActualLRPNetInfo:     models.NewActualLRPNetInfo(endpoint1.Host, models.NewPortMapping(endpoint1.Port, endpoint1.ContainerPort)),
+					State:                models.ActualLRPStateRunning,
 				},
-				State: receptor.ActualLRPStateRunning,
 			}
 
-			actualLRP2 := receptor.ActualLRPResponse{
-				ProcessGuid:  "pg-2",
-				Index:        1,
-				Domain:       "domain",
-				InstanceGuid: endpoint2.InstanceGuid,
-				CellID:       "cell-id",
-				Address:      endpoint2.Host,
-				Ports: []receptor.PortMapping{
-					{ContainerPort: endpoint2.ContainerPort, HostPort: endpoint2.Port},
+			actualLRPGroup2 := &models.ActualLRPGroup{
+				Instance: &models.ActualLRP{
+					ActualLRPKey:         models.NewActualLRPKey("pg-2", 1, "domain"),
+					ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint2.InstanceGuid, "cell-id"),
+					ActualLRPNetInfo:     models.NewActualLRPNetInfo(endpoint2.Host, models.NewPortMapping(endpoint2.Port, endpoint2.ContainerPort)),
+					State:                models.ActualLRPStateRunning,
 				},
-				State: receptor.ActualLRPStateRunning,
 			}
 
 			sendEvent := func() {
-				nextEvent <- receptor.NewActualLRPRemovedEvent(actualLRP1)
+				nextEvent <- models.NewActualLRPRemovedEvent(actualLRPGroup1)
 			}
 
 			Context("when sync begins", func() {
@@ -1007,7 +1002,7 @@ var _ = Describe("Watcher", func() {
 						ready = make(chan struct{})
 						count = 0
 
-						receptorClient.ActualLRPsStub = func() ([]receptor.ActualLRPResponse, error) {
+						bbsClient.ActualLRPGroupsStub = func(filter models.ActualLRPFilter) ([]*models.ActualLRPGroup, error) {
 							defer GinkgoRecover()
 
 							atomic.AddInt32(&count, 1)
@@ -1045,24 +1040,24 @@ var _ = Describe("Watcher", func() {
 					BeforeEach(func() {
 						returnError = 1
 
-						receptorClient.ActualLRPsStub = func() ([]receptor.ActualLRPResponse, error) {
+						bbsClient.ActualLRPGroupsStub = func(filter models.ActualLRPFilter) ([]*models.ActualLRPGroup, error) {
 							if atomic.LoadInt32(&returnError) == 1 {
 								return nil, errors.New("bam")
 							}
 
-							return []receptor.ActualLRPResponse{}, nil
+							return []*models.ActualLRPGroup{}, nil
 						}
 					})
 
 					It("should not call sync until the error resolves", func() {
-						Eventually(receptorClient.ActualLRPsCallCount).Should(Equal(1))
+						Eventually(bbsClient.ActualLRPGroupsCallCount).Should(Equal(1))
 						Consistently(table.SwapCallCount).Should(Equal(0))
 
 						atomic.StoreInt32(&returnError, 0)
 						syncEvents.Sync <- struct{}{}
 
 						Eventually(table.SwapCallCount).Should(Equal(1))
-						Expect(receptorClient.ActualLRPsCallCount()).To(Equal(2))
+						Expect(bbsClient.ActualLRPGroupsCallCount()).To(Equal(2))
 					})
 				})
 
@@ -1072,34 +1067,37 @@ var _ = Describe("Watcher", func() {
 					BeforeEach(func() {
 						returnError = 1
 
-						receptorClient.DesiredLRPsStub = func() ([]receptor.DesiredLRPResponse, error) {
+						bbsClient.DesiredLRPsStub = func(filter models.DesiredLRPFilter) ([]*models.DesiredLRP, error) {
 							if atomic.LoadInt32(&returnError) == 1 {
 								return nil, errors.New("bam")
 							}
 
-							return []receptor.DesiredLRPResponse{}, nil
+							return []*models.DesiredLRP{}, nil
 						}
 					})
 
 					It("should not call sync until the error resolves", func() {
-						Eventually(receptorClient.DesiredLRPsCallCount).Should(Equal(1))
+						Eventually(bbsClient.DesiredLRPsCallCount).Should(Equal(1))
 						Consistently(table.SwapCallCount).Should(Equal(0))
 
 						atomic.StoreInt32(&returnError, 0)
 						syncEvents.Sync <- struct{}{}
 
 						Eventually(table.SwapCallCount).Should(Equal(1))
-						Expect(receptorClient.DesiredLRPsCallCount()).To(Equal(2))
+						Expect(bbsClient.DesiredLRPsCallCount()).To(Equal(2))
 					})
 				})
 			})
 
 			Context("when syncing ends", func() {
 				BeforeEach(func() {
-					receptorClient.ActualLRPsStub = func() ([]receptor.ActualLRPResponse, error) {
+					bbsClient.ActualLRPGroupsStub = func(f models.ActualLRPFilter) ([]*models.ActualLRPGroup, error) {
 						clock.IncrementBySeconds(1)
 
-						return []receptor.ActualLRPResponse{actualLRP1, actualLRP2}, nil
+						return []*models.ActualLRPGroup{
+							actualLRPGroup1,
+							actualLRPGroup2,
+						}, nil
 					}
 				})
 
@@ -1117,23 +1115,36 @@ var _ = Describe("Watcher", func() {
 					BeforeEach(func() {
 						ready = make(chan struct{})
 
+						actualLRPRoutingInfo1 := &routing_table.ActualLRPRoutingInfo{
+							ActualLRP:  actualLRPGroup1.Instance,
+							Evacuating: false,
+						}
+
+						actualLRPRoutingInfo2 := &routing_table.ActualLRPRoutingInfo{
+							ActualLRP:  actualLRPGroup2.Instance,
+							Evacuating: false,
+						}
+
 						tempTable := routing_table.NewTempTable(
-							routing_table.RoutesByRoutingKeyFromDesireds([]receptor.DesiredLRPResponse{desiredLRP1, desiredLRP2}),
-							routing_table.EndpointsByRoutingKeyFromActuals([]receptor.ActualLRPResponse{actualLRP1, actualLRP2}),
+							routing_table.RoutesByRoutingKeyFromDesireds([]*models.DesiredLRP{desiredLRP1, desiredLRP2}),
+							routing_table.EndpointsByRoutingKeyFromActuals([]*routing_table.ActualLRPRoutingInfo{
+								actualLRPRoutingInfo1,
+								actualLRPRoutingInfo2,
+							}),
 						)
 
 						table := routing_table.NewTable()
 						table.Swap(tempTable)
 
-						watcherProcess = watcher.NewWatcher(receptorClient, clock, table, emitter, syncEvents, logger)
+						watcherProcess = watcher.NewWatcher(bbsClient, clock, table, emitter, syncEvents, logger)
 
-						receptorClient.DesiredLRPsStub = func() ([]receptor.DesiredLRPResponse, error) {
+						bbsClient.DesiredLRPsStub = func(f models.DesiredLRPFilter) ([]*models.DesiredLRP, error) {
 							defer GinkgoRecover()
 
 							ready <- struct{}{}
 							Eventually(ready).Should(Receive())
 
-							return []receptor.DesiredLRPResponse{desiredLRP1, desiredLRP2}, nil
+							return []*models.DesiredLRP{desiredLRP1, desiredLRP2}, nil
 						}
 					})
 
@@ -1172,10 +1183,8 @@ var _ = Describe("Watcher", func() {
 
 type unrecognizedEvent struct{}
 
-func (u unrecognizedEvent) EventType() receptor.EventType {
-	return "unrecognized-event"
-}
-
-func (u unrecognizedEvent) Key() string {
-	return ""
-}
+func (u *unrecognizedEvent) EventType() string { return "unrecognized-event" }
+func (u *unrecognizedEvent) Key() string       { return "" }
+func (u *unrecognizedEvent) Reset()            {}
+func (u *unrecognizedEvent) ProtoMessage()     {}
+func (u *unrecognizedEvent) String() string    { return "unrecognized-event" }
