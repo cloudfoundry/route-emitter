@@ -994,7 +994,7 @@ var _ = Describe("Watcher", func() {
 					syncEvents.Sync <- struct{}{}
 				})
 
-				Describe("receptor events", func() {
+				Describe("bbs events", func() {
 					var ready chan struct{}
 					var count int32
 
