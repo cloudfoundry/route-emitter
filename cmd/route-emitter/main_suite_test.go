@@ -143,6 +143,7 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 
 	bbsArgs = bbstestrunner.Args{
 		Address:           bbsAddress,
+		AdvertiseURL:      bbsURL.String(),
 		AuctioneerAddress: "some-address",
 		EtcdCluster:       strings.Join(etcdRunner.NodeURLS(), ","),
 		ConsulCluster:     consulRunner.ConsulCluster(),
