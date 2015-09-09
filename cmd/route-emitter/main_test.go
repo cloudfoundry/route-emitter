@@ -9,7 +9,6 @@ import (
 	"github.com/cloudfoundry-incubator/route-emitter/cfroutes"
 	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
 	. "github.com/cloudfoundry-incubator/route-emitter/routing_table/matchers"
-	oldmodels "github.com/cloudfoundry-incubator/runtime-schema/models"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gbytes"
@@ -49,9 +48,6 @@ var _ = Describe("Route Emitter", func() {
 		instanceKey models.ActualLRPInstanceKey
 		netInfo     models.ActualLRPNetInfo
 
-		legacyLRPKey      oldmodels.ActualLRPKey
-		legacyInstanceKey oldmodels.ActualLRPInstanceKey
-
 		hostnames     []string
 		containerPort uint32
 		routes        *models.Routes
@@ -83,9 +79,6 @@ var _ = Describe("Route Emitter", func() {
 
 		index = 0
 		lrpKey = models.NewActualLRPKey(processGuid, index, domain)
-		legacyLRPKey = oldmodels.NewActualLRPKey(processGuid, int(index), domain)
-
-		legacyInstanceKey = oldmodels.NewActualLRPInstanceKey("iguid1", "cell-id")
 		instanceKey = models.NewActualLRPInstanceKey("iguid1", "cell-id")
 
 		netInfo = models.NewActualLRPNetInfo("1.2.3.4", models.NewPortMapping(65100, 8080))
@@ -139,7 +132,7 @@ var _ = Describe("Route Emitter", func() {
 						Host:              netInfo.Address,
 						Port:              netInfo.Ports[0].HostPort,
 						App:               desiredLRP.LogGuid,
-						PrivateInstanceId: legacyInstanceKey.InstanceGuid,
+						PrivateInstanceId: instanceKey.InstanceGuid,
 					})))
 				})
 			})
@@ -181,7 +174,7 @@ var _ = Describe("Route Emitter", func() {
 						Host:              netInfo.Address,
 						Port:              netInfo.Ports[0].HostPort,
 						App:               desiredLRP.LogGuid,
-						PrivateInstanceId: legacyInstanceKey.InstanceGuid,
+						PrivateInstanceId: instanceKey.InstanceGuid,
 					})))
 				})
 
