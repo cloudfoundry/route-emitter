@@ -156,7 +156,7 @@ var _ = Describe("ByRoutingKey", func() {
 		})
 
 		Context("when the desired LRP does not define any container ports", func() {
-			It("returns no keys", func() {
+			It("still uses the routes property", func() {
 				desired := &models.DesiredLRP{
 					Domain:      "tests",
 					ProcessGuid: "process-guid",
@@ -165,7 +165,8 @@ var _ = Describe("ByRoutingKey", func() {
 				}
 
 				keys := routing_table.RoutingKeysFromDesired(desired)
-				Expect(keys).To(HaveLen(0))
+			Expect(keys).To(HaveLen(1))
+			Expect(keys).To(ContainElement(routing_table.RoutingKey{ProcessGuid: "process-guid", ContainerPort: 8080}))
 			})
 		})
 	})

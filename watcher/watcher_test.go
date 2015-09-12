@@ -214,7 +214,6 @@ var _ = Describe("Watcher", func() {
 
 			Context("when there are multiple CF routes", func() {
 				BeforeEach(func() {
-					desiredLRP.Ports = []uint32{expectedContainerPort, expectedAdditionalContainerPort}
 					desiredLRP.Routes = cfroutes.CFRoutes{expectedCFRoute, expectedAdditionalCFRoute}.RoutingInfo()
 				})
 
@@ -256,7 +255,7 @@ var _ = Describe("Watcher", func() {
 					Domain:      "tests",
 					ProcessGuid: expectedProcessGuid,
 					LogGuid:     logGuid,
-					Ports:       []uint32{expectedContainerPort},
+					Routes:      cfroutes.CFRoutes{{Hostnames: expectedRoutes, Port: expectedContainerPort}}.RoutingInfo(),
 				}
 				changedDesiredLRP = &models.DesiredLRP{
 					Action: models.WrapAction(&models.RunAction{
@@ -266,7 +265,6 @@ var _ = Describe("Watcher", func() {
 					Domain:          "tests",
 					ProcessGuid:     expectedProcessGuid,
 					LogGuid:         logGuid,
-					Ports:           []uint32{expectedContainerPort},
 					Routes:          cfroutes.CFRoutes{{Hostnames: expectedRoutes, Port: expectedContainerPort}}.RoutingInfo(),
 					ModificationTag: &models.ModificationTag{Epoch: "abcd", Index: 1},
 				}
@@ -306,12 +304,11 @@ var _ = Describe("Watcher", func() {
 
 			Context("when CF routes are added without an associated container port", func() {
 				BeforeEach(func() {
-					changedDesiredLRP.Ports = []uint32{expectedContainerPort}
 					changedDesiredLRP.Routes = cfroutes.CFRoutes{expectedCFRoute, expectedAdditionalCFRoute}.RoutingInfo()
 				})
 
 				It("registers all of the routes associated with a port on the table", func() {
-					Eventually(table.SetRoutesCallCount).Should(Equal(1))
+					Eventually(table.SetRoutesCallCount).Should(Equal(2))
 
 					key, routes := table.SetRoutesArgsForCall(0)
 					Expect(key).To(Equal(expectedRoutingKey))
@@ -319,16 +316,15 @@ var _ = Describe("Watcher", func() {
 				})
 
 				It("emits whatever the table tells it to emit", func() {
-					Eventually(emitter.EmitCallCount).Should(Equal(2))
+					Eventually(emitter.EmitCallCount).Should(Equal(3))
 
-					messagesToEmit := emitter.EmitArgsForCall(1)
+					messagesToEmit := emitter.EmitArgsForCall(2)
 					Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
 				})
 			})
 
 			Context("when CF routes and container ports are added", func() {
 				BeforeEach(func() {
-					changedDesiredLRP.Ports = []uint32{expectedContainerPort, expectedAdditionalContainerPort}
 					changedDesiredLRP.Routes = cfroutes.CFRoutes{expectedCFRoute, expectedAdditionalCFRoute}.RoutingInfo()
 				})
 
@@ -357,33 +353,7 @@ var _ = Describe("Watcher", func() {
 
 			Context("when CF routes are removed", func() {
 				BeforeEach(func() {
-					changedDesiredLRP.Ports = []uint32{expectedContainerPort}
 					changedDesiredLRP.Routes = cfroutes.CFRoutes{}.RoutingInfo()
-
-					table.SetRoutesReturns(routing_table.MessagesToEmit{})
-					table.RemoveRoutesReturns(dummyMessagesToEmit)
-				})
-
-				It("deletes the routes for the missng key", func() {
-					Eventually(table.RemoveRoutesCallCount).Should(Equal(1))
-
-					key, modTag := table.RemoveRoutesArgsForCall(0)
-					Expect(key).To(Equal(expectedRoutingKey))
-					Expect(modTag).To(Equal(changedDesiredLRP.ModificationTag))
-				})
-
-				It("emits whatever the table tells it to emit", func() {
-					Eventually(emitter.EmitCallCount).Should(Equal(2))
-
-					messagesToEmit := emitter.EmitArgsForCall(1)
-					Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
-				})
-			})
-
-			Context("when container ports are removed", func() {
-				BeforeEach(func() {
-					changedDesiredLRP.Ports = []uint32{}
-					changedDesiredLRP.Routes = cfroutes.CFRoutes{expectedCFRoute}.RoutingInfo()
 
 					table.SetRoutesReturns(routing_table.MessagesToEmit{})
 					table.RemoveRoutesReturns(dummyMessagesToEmit)
@@ -446,7 +416,6 @@ var _ = Describe("Watcher", func() {
 
 			Context("when there are multiple CF routes", func() {
 				BeforeEach(func() {
-					desiredLRP.Ports = []uint32{expectedContainerPort, expectedAdditionalContainerPort}
 					desiredLRP.Routes = cfroutes.CFRoutes{expectedCFRoute, expectedAdditionalCFRoute}.RoutingInfo()
 				})
 

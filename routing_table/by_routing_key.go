@@ -82,9 +82,12 @@ func RoutingKeysFromActual(actual *models.ActualLRP) []RoutingKey {
 
 func RoutingKeysFromDesired(desired *models.DesiredLRP) []RoutingKey {
 	keys := []RoutingKey{}
-	for _, containerPort := range desired.Ports {
-		keys = append(keys, RoutingKey{ProcessGuid: desired.ProcessGuid, ContainerPort: uint32(containerPort)})
-	}
 
+	routes, err := cfroutes.CFRoutesFromRoutingInfo(desired.Routes)
+	if err == nil && len(routes) > 0 {
+		for _, cfRoute := range routes {
+			keys = append(keys, RoutingKey{ProcessGuid: desired.ProcessGuid, ContainerPort: cfRoute.Port})
+		}
+	}
 	return keys
 }

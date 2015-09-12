@@ -482,7 +482,6 @@ func desiredLRPData(lrp *models.DesiredLRP) lager.Data {
 	return lager.Data{
 		"process-guid": lrp.ProcessGuid,
 		"routes":       lrp.Routes,
-		"ports":        lrp.Ports,
 	}
 }
 
@@ -495,7 +494,6 @@ func actualLRPData(lrpRoutingInfo *routing_table.ActualLRPRoutingInfo) lager.Dat
 		"instance-guid": lrp.InstanceGuid,
 		"cell-id":       lrp.ActualLRPInstanceKey.CellId,
 		"address":       lrp.Address,
-		"ports":         lrp.Ports,
 		"evacuating":    lrpRoutingInfo.Evacuating,
 	}
 }
