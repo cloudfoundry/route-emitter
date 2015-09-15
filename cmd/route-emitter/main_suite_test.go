@@ -18,7 +18,6 @@ import (
 	"github.com/onsi/ginkgo/config"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gexec"
-	"github.com/pivotal-golang/clock"
 	"github.com/pivotal-golang/lager/lagertest"
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/ifrit/ginkgomon"
@@ -26,7 +25,6 @@ import (
 	"github.com/cloudfoundry-incubator/bbs"
 	bbstestrunner "github.com/cloudfoundry-incubator/bbs/cmd/bbs/testrunner"
 	"github.com/cloudfoundry-incubator/consuladapter/consulrunner"
-	Bbs "github.com/cloudfoundry-incubator/runtime-schema/bbs"
 )
 
 const heartbeatInterval = 1 * time.Second
@@ -51,7 +49,6 @@ var consulRunner *consulrunner.ClusterRunner
 var gnatsdRunner ifrit.Process
 var natsClient diegonats.NATSClient
 var store storeadapter.StoreAdapter
-var legacyBBS *Bbs.BBS
 var bbsClient bbs.Client
 var logger *lagertest.TestLogger
 var syncInterval time.Duration
@@ -147,7 +144,6 @@ var _ = BeforeEach(func() {
 	bbsRunner = bbstestrunner.New(bbsPath, bbsArgs)
 	bbsProcess = ginkgomon.Invoke(bbsRunner)
 
-	legacyBBS = Bbs.NewBBS(store, consulRunner.NewSession("a-session"), clock.NewClock(), logger)
 	gnatsdRunner, natsClient = gnatsdrunner.StartGnatsd(natsPort)
 })
 

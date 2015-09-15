@@ -189,7 +189,7 @@ func initializeLockMaintainer(
 		logger.Fatal("Couldn't generate uuid", err)
 	}
 
-	locketClient := locket.New(consulSession, clock, logger)
+	locketClient := locket.NewClient(consulSession, clock, logger)
 
 	return locketClient.NewRouteEmitterLock(uuid.String(), lockRetryInterval)
 }
