@@ -10,12 +10,11 @@ import (
 	"github.com/cloudfoundry-incubator/cf-lager"
 	"github.com/cloudfoundry-incubator/cf_http"
 	"github.com/cloudfoundry-incubator/consuladapter"
+	"github.com/cloudfoundry-incubator/locket"
 	"github.com/cloudfoundry-incubator/route-emitter/nats_emitter"
 	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
 	"github.com/cloudfoundry-incubator/route-emitter/syncer"
 	"github.com/cloudfoundry-incubator/route-emitter/watcher"
-	oldbbs "github.com/cloudfoundry-incubator/runtime-schema/bbs"
-	"github.com/cloudfoundry-incubator/runtime-schema/bbs/lock_bbs"
 	"github.com/cloudfoundry/dropsonde"
 	"github.com/cloudfoundry/gunk/diegonats"
 	"github.com/cloudfoundry/gunk/workpool"
@@ -47,13 +46,13 @@ var consulCluster = flag.String(
 
 var lockTTL = flag.Duration(
 	"lockTTL",
-	lock_bbs.LockTTL,
+	locket.LockTTL,
 	"TTL for service lock",
 )
 
 var lockRetryInterval = flag.Duration(
 	"lockRetryInterval",
-	lock_bbs.RetryInterval,
+	locket.RetryInterval,
 	"interval to wait before retrying a failed lock acquisition",
 )
 
@@ -190,7 +189,7 @@ func initializeLockMaintainer(
 		logger.Fatal("Couldn't generate uuid", err)
 	}
 
-	routeEmitterBBS := oldbbs.NewRouteEmitterBBS(consulSession, clock, logger)
+	locketClient := locket.New(consulSession, clock, logger)
 
-	return routeEmitterBBS.NewRouteEmitterLock(uuid.String(), lockRetryInterval)
+	return locketClient.NewRouteEmitterLock(uuid.String(), lockRetryInterval)
 }
