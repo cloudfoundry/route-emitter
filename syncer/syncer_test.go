@@ -44,8 +44,8 @@ var _ = Describe("Syncer", func() {
 
 		shutdown chan struct{}
 
-		desiredResponse *models.DesiredLRP
-		actualResponses []*models.ActualLRPGroup
+		schedulingInfoResponse *models.DesiredLRPSchedulingInfo
+		actualResponses        []*models.ActualLRPGroup
 
 		routerStartMessages chan<- *nats.Msg
 		fakeMetricSender    *fake_metrics_sender.FakeMetricSender
@@ -86,11 +86,9 @@ var _ = Describe("Syncer", func() {
 			RegistrationMessages: []routing_table.RegistryMessage{dummyMessage},
 		}
 
-		desiredResponse = &models.DesiredLRP{
-			ProcessGuid: processGuid,
-			Ports:       []uint32{containerPort},
-			Routes:      cfroutes.CFRoutes{{Hostnames: []string{"route-1", "route-2"}, Port: containerPort}}.RoutingInfo(),
-			LogGuid:     logGuid,
+		schedulingInfoResponse = &models.DesiredLRPSchedulingInfo{
+			DesiredLRPKey: models.NewDesiredLRPKey(processGuid, "domain", logGuid),
+			Routes:        cfroutes.CFRoutes{{Hostnames: []string{"route-1", "route-2"}, Port: containerPort}}.RoutingInfo(),
 		}
 
 		actualResponses = []*models.ActualLRPGroup{
@@ -110,7 +108,7 @@ var _ = Describe("Syncer", func() {
 			},
 		}
 
-		bbsClient.DesiredLRPsReturns([]*models.DesiredLRP{desiredResponse}, nil)
+		bbsClient.DesiredLRPSchedulingInfosReturns([]*models.DesiredLRPSchedulingInfo{schedulingInfoResponse}, nil)
 		bbsClient.ActualLRPGroupsReturns(actualResponses, nil)
 
 		fakeMetricSender = fake_metrics_sender.NewFakeMetricSender()

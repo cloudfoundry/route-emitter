@@ -16,20 +16,20 @@ type CFRoute struct {
 	Port      uint32   `json:"port"`
 }
 
-func (c CFRoutes) RoutingInfo() *models.Routes {
+func (c CFRoutes) RoutingInfo() models.Routes {
 	data, _ := json.Marshal(c)
 	routingInfo := json.RawMessage(data)
-	return &models.Routes{
+	return models.Routes{
 		CF_ROUTER: &routingInfo,
 	}
 }
 
-func CFRoutesFromRoutingInfo(routingInfo *models.Routes) (CFRoutes, error) {
+func CFRoutesFromRoutingInfo(routingInfo models.Routes) (CFRoutes, error) {
 	if routingInfo == nil {
 		return nil, nil
 	}
 
-	routes := *routingInfo
+	routes := routingInfo
 	data, found := routes[CF_ROUTER]
 	if !found {
 		return nil, nil

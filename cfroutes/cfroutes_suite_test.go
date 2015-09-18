@@ -9,5 +9,5 @@ import (
 
 func TestCfroutes(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Cfroutes Suite")
+	RunSpecs(t, "CF Routes Suite")
 }

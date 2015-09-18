@@ -342,13 +342,12 @@ var _ = Describe("Route Emitter", func() {
 })
 
 func newRoutes(hosts []string, port uint32) *models.Routes {
-	routingInfoPtr := cfroutes.CFRoutes{
+	routingInfo := cfroutes.CFRoutes{
 		{Hostnames: hosts, Port: port},
 	}.RoutingInfo()
 
 	routes := models.Routes{}
 
-	routingInfo := *routingInfoPtr
 	for key, message := range routingInfo {
 		routes[key] = message
 	}

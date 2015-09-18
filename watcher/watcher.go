@@ -202,8 +202,8 @@ func (watcher *Watcher) sync(logger lager.Logger, syncEndChan chan syncEndEvent)
 
 	var runningActualLRPs []*routing_table.ActualLRPRoutingInfo
 	var getActualLRPsErr error
-	var desiredLRPs []*models.DesiredLRP
-	var getDesiredLRPsErr error
+	var schedulingInfos []*models.DesiredLRPSchedulingInfo
+	var getSchedulingInfosErr error
 
 	wg := sync.WaitGroup{}
 
@@ -237,24 +237,24 @@ func (watcher *Watcher) sync(logger lager.Logger, syncEndChan chan syncEndEvent)
 		var err error
 		defer wg.Done()
 
-		logger.Debug("getting-desired-lrps")
-		desiredLRPs, err = watcher.bbsClient.DesiredLRPs(models.DesiredLRPFilter{})
+		logger.Debug("getting-scheduling-infos")
+		schedulingInfos, err = watcher.bbsClient.DesiredLRPSchedulingInfos(models.DesiredLRPFilter{})
 		if err != nil {
 			logger.Error("failed-getting-desired-lrps", err)
-			getDesiredLRPsErr = err
+			getSchedulingInfosErr = err
 			return
 		}
-		logger.Debug("succeeded-getting-desired-lrps", lager.Data{"num-desired-responses": len(desiredLRPs)})
+		logger.Debug("succeeded-getting-scheduling-infos", lager.Data{"num-desired-responses": len(schedulingInfos)})
 	}()
 
 	wg.Wait()
 
-	if getActualLRPsErr != nil || getDesiredLRPsErr != nil {
+	if getActualLRPsErr != nil || getSchedulingInfosErr != nil {
 		return
 	}
 
 	newTable := routing_table.NewTempTable(
-		routing_table.RoutesByRoutingKeyFromDesireds(desiredLRPs),
+		routing_table.RoutesByRoutingKeyFromSchedulingInfos(schedulingInfos),
 		routing_table.EndpointsByRoutingKeyFromActuals(runningActualLRPs),
 	)
 
@@ -313,11 +313,15 @@ func (watcher *Watcher) completeSync(syncEnd syncEndEvent, cachedEvents map[stri
 func (watcher *Watcher) handleEvent(logger lager.Logger, event models.Event) {
 	switch event := event.(type) {
 	case *models.DesiredLRPCreatedEvent:
-		watcher.handleDesiredCreate(logger, event.DesiredLrp)
+		schedulingInfo := event.DesiredLrp.DesiredLRPSchedulingInfo()
+		watcher.handleDesiredCreate(logger, &schedulingInfo)
 	case *models.DesiredLRPChangedEvent:
-		watcher.handleDesiredUpdate(logger, event.Before, event.After)
+		before := event.Before.DesiredLRPSchedulingInfo()
+		after := event.After.DesiredLRPSchedulingInfo()
+		watcher.handleDesiredUpdate(logger, &before, &after)
 	case *models.DesiredLRPRemovedEvent:
-		watcher.handleDesiredDelete(logger, event.DesiredLrp)
+		schedulingInfo := event.DesiredLrp.DesiredLRPSchedulingInfo()
+		watcher.handleDesiredDelete(logger, &schedulingInfo)
 	case *models.ActualLRPCreatedEvent:
 		watcher.handleActualCreate(logger, routing_table.NewActualLRPRoutingInfo(event.ActualLrpGroup))
 	case *models.ActualLRPChangedEvent:
@@ -332,15 +336,15 @@ func (watcher *Watcher) handleEvent(logger lager.Logger, event models.Event) {
 	}
 }
 
-func (watcher *Watcher) handleDesiredCreate(logger lager.Logger, desiredLRP *models.DesiredLRP) {
-	logger = logger.Session("handle-desired-create", desiredLRPData(desiredLRP))
+func (watcher *Watcher) handleDesiredCreate(logger lager.Logger, schedulingInfo *models.DesiredLRPSchedulingInfo) {
+	logger = logger.Session("handle-desired-create", desiredLRPData(schedulingInfo))
 	logger.Info("starting")
 	defer logger.Info("complete")
 
-	watcher.setRoutesForDesired(logger, desiredLRP)
+	watcher.setRoutesForDesired(logger, schedulingInfo)
 }
 
-func (watcher *Watcher) handleDesiredUpdate(logger lager.Logger, before, after *models.DesiredLRP) {
+func (watcher *Watcher) handleDesiredUpdate(logger lager.Logger, before, after *models.DesiredLRPSchedulingInfo) {
 	logger = logger.Session("handling-desired-update", lager.Data{
 		"before": desiredLRPData(before),
 		"after":  desiredLRPData(after),
@@ -350,7 +354,7 @@ func (watcher *Watcher) handleDesiredUpdate(logger lager.Logger, before, after *
 
 	afterKeysSet := watcher.setRoutesForDesired(logger, after)
 
-	beforeRoutingKeys := routing_table.RoutingKeysFromDesired(before)
+	beforeRoutingKeys := routing_table.RoutingKeysFromSchedulingInfo(before)
 	afterRoutes, _ := cfroutes.CFRoutesFromRoutingInfo(after.Routes)
 
 	afterContainerPorts := set{}
@@ -360,15 +364,15 @@ func (watcher *Watcher) handleDesiredUpdate(logger lager.Logger, before, after *
 
 	for _, key := range beforeRoutingKeys {
 		if !afterKeysSet.contains(key) || !afterContainerPorts.contains(key.ContainerPort) {
-			messagesToEmit := watcher.table.RemoveRoutes(key, after.ModificationTag)
+			messagesToEmit := watcher.table.RemoveRoutes(key, &after.ModificationTag)
 			watcher.emitMessages(logger, messagesToEmit)
 		}
 	}
 }
 
-func (watcher *Watcher) setRoutesForDesired(logger lager.Logger, desiredLRP *models.DesiredLRP) set {
-	routingKeys := routing_table.RoutingKeysFromDesired(desiredLRP)
-	routes, _ := cfroutes.CFRoutesFromRoutingInfo(desiredLRP.Routes)
+func (watcher *Watcher) setRoutesForDesired(logger lager.Logger, schedulingInfo *models.DesiredLRPSchedulingInfo) set {
+	routingKeys := routing_table.RoutingKeysFromSchedulingInfo(schedulingInfo)
+	routes, _ := cfroutes.CFRoutesFromRoutingInfo(schedulingInfo.Routes)
 	routingKeySet := set{}
 
 	for _, key := range routingKeys {
@@ -377,7 +381,7 @@ func (watcher *Watcher) setRoutesForDesired(logger lager.Logger, desiredLRP *mod
 			if key.ContainerPort == route.Port {
 				messagesToEmit := watcher.table.SetRoutes(key, routing_table.Routes{
 					Hostnames: route.Hostnames,
-					LogGuid:   desiredLRP.LogGuid,
+					LogGuid:   schedulingInfo.LogGuid,
 				})
 				watcher.emitMessages(logger, messagesToEmit)
 			}
@@ -387,13 +391,13 @@ func (watcher *Watcher) setRoutesForDesired(logger lager.Logger, desiredLRP *mod
 	return routingKeySet
 }
 
-func (watcher *Watcher) handleDesiredDelete(logger lager.Logger, desiredLRP *models.DesiredLRP) {
-	logger = logger.Session("handling-desired-delete", desiredLRPData(desiredLRP))
+func (watcher *Watcher) handleDesiredDelete(logger lager.Logger, schedulingInfo *models.DesiredLRPSchedulingInfo) {
+	logger = logger.Session("handling-desired-delete", desiredLRPData(schedulingInfo))
 	logger.Info("starting")
 	defer logger.Info("complete")
 
-	for _, key := range routing_table.RoutingKeysFromDesired(desiredLRP) {
-		messagesToEmit := watcher.table.RemoveRoutes(key, desiredLRP.ModificationTag)
+	for _, key := range routing_table.RoutingKeysFromSchedulingInfo(schedulingInfo) {
+		messagesToEmit := watcher.table.RemoveRoutes(key, &schedulingInfo.ModificationTag)
 
 		watcher.emitMessages(logger, messagesToEmit)
 	}
@@ -478,10 +482,10 @@ func (watcher *Watcher) emitMessages(logger lager.Logger, messagesToEmit routing
 	}
 }
 
-func desiredLRPData(lrp *models.DesiredLRP) lager.Data {
+func desiredLRPData(schedulingInfo *models.DesiredLRPSchedulingInfo) lager.Data {
 	return lager.Data{
-		"process-guid": lrp.ProcessGuid,
-		"routes":       lrp.Routes,
+		"process-guid": schedulingInfo.ProcessGuid,
+		"routes":       schedulingInfo.Routes,
 	}
 }
 

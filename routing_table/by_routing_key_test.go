@@ -20,9 +20,9 @@ var _ = Describe("ByRoutingKey", func() {
 				{Hostnames: []string{"baz.com"}, Port: 8080},
 			}
 
-			routes := routing_table.RoutesByRoutingKeyFromDesireds([]*models.DesiredLRP{
-				{Domain: "tests", ProcessGuid: "abc", Routes: abcRoutes.RoutingInfo(), LogGuid: "abc-guid"},
-				{Domain: "tests", ProcessGuid: "def", Routes: defRoutes.RoutingInfo(), LogGuid: "def-guid"},
+			routes := routing_table.RoutesByRoutingKeyFromSchedulingInfos([]*models.DesiredLRPSchedulingInfo{
+				{DesiredLRPKey: models.NewDesiredLRPKey("abc", "tests", "abc-guid"), Routes: abcRoutes.RoutingInfo()},
+				{DesiredLRPKey: models.NewDesiredLRPKey("def", "tests", "def-guid"), Routes: defRoutes.RoutingInfo()},
 			})
 
 			Expect(routes).To(HaveLen(3))
@@ -38,8 +38,8 @@ var _ = Describe("ByRoutingKey", func() {
 
 		Context("when the routing info is nil", func() {
 			It("should not be included in the results", func() {
-				routes := routing_table.RoutesByRoutingKeyFromDesireds([]*models.DesiredLRP{
-					{Domain: "tests", ProcessGuid: "abc", Routes: nil, LogGuid: "abc-guid"},
+				routes := routing_table.RoutesByRoutingKeyFromSchedulingInfos([]*models.DesiredLRPSchedulingInfo{
+					{DesiredLRPKey: models.NewDesiredLRPKey("abc", "tests", "abc-guid"), Routes: nil},
 				})
 				Expect(routes).To(HaveLen(0))
 			})
@@ -140,15 +140,12 @@ var _ = Describe("ByRoutingKey", func() {
 				{Hostnames: []string{"foo.example.com"}, Port: 9090},
 			}
 
-			desired := &models.DesiredLRP{
-				Domain:      "tests",
-				ProcessGuid: "process-guid",
-				Ports:       []uint32{8080, 9090},
-				Routes:      routes.RoutingInfo(),
-				LogGuid:     "abc-guid",
+			schedulingInfo := &models.DesiredLRPSchedulingInfo{
+				DesiredLRPKey: models.NewDesiredLRPKey("process-guid", "tests", "abc-guid"),
+				Routes:        routes.RoutingInfo(),
 			}
 
-			keys := routing_table.RoutingKeysFromDesired(desired)
+			keys := routing_table.RoutingKeysFromSchedulingInfo(schedulingInfo)
 
 			Expect(keys).To(HaveLen(2))
 			Expect(keys).To(ContainElement(routing_table.RoutingKey{ProcessGuid: "process-guid", ContainerPort: 8080}))
@@ -157,16 +154,14 @@ var _ = Describe("ByRoutingKey", func() {
 
 		Context("when the desired LRP does not define any container ports", func() {
 			It("still uses the routes property", func() {
-				desired := &models.DesiredLRP{
-					Domain:      "tests",
-					ProcessGuid: "process-guid",
-					Routes:      cfroutes.CFRoutes{{Hostnames: []string{"foo.com", "bar.com"}, Port: 8080}}.RoutingInfo(),
-					LogGuid:     "abc-guid",
+				schedulingInfo := &models.DesiredLRPSchedulingInfo{
+					DesiredLRPKey: models.NewDesiredLRPKey("process-guid", "tests", "abc-guid"),
+					Routes:        cfroutes.CFRoutes{{Hostnames: []string{"foo.com", "bar.com"}, Port: 8080}}.RoutingInfo(),
 				}
 
-				keys := routing_table.RoutingKeysFromDesired(desired)
-			Expect(keys).To(HaveLen(1))
-			Expect(keys).To(ContainElement(routing_table.RoutingKey{ProcessGuid: "process-guid", ContainerPort: 8080}))
+				keys := routing_table.RoutingKeysFromSchedulingInfo(schedulingInfo)
+				Expect(keys).To(HaveLen(1))
+				Expect(keys).To(ContainElement(routing_table.RoutingKey{ProcessGuid: "process-guid", ContainerPort: 8080}))
 			})
 		})
 	})

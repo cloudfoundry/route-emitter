@@ -40,8 +40,7 @@ var _ = Describe("RoutingInfoHelpers", func() {
 		var routingInfo models.Routes
 
 		JustBeforeEach(func() {
-			routingInfoPtr := routes.RoutingInfo()
-			routingInfo = *routingInfoPtr
+			routingInfo = routes.RoutingInfo()
 		})
 
 		It("wraps the serialized routes with the correct key", func() {
@@ -73,7 +72,7 @@ var _ = Describe("RoutingInfoHelpers", func() {
 			routesResult    cfroutes.CFRoutes
 			conversionError error
 
-			routingInfo *models.Routes
+			routingInfo models.Routes
 		)
 
 		JustBeforeEach(func() {
@@ -91,7 +90,7 @@ var _ = Describe("RoutingInfoHelpers", func() {
 
 			Context("when the CF routes are nil", func() {
 				BeforeEach(func() {
-					routingInfo = &models.Routes{cfroutes.CF_ROUTER: nil}
+					routingInfo = models.Routes{cfroutes.CF_ROUTER: nil}
 				})
 
 				It("returns nil routes", func() {
@@ -103,7 +102,7 @@ var _ = Describe("RoutingInfoHelpers", func() {
 
 		Context("when CF routes are not present in the routing info", func() {
 			BeforeEach(func() {
-				routingInfo = &models.Routes{}
+				routingInfo = models.Routes{}
 			})
 
 			It("returns nil routes", func() {

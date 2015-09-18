@@ -9,5 +9,5 @@ import (
 
 func TestNatsEmitter(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "NatsEmitter Suite")
+	RunSpecs(t, "NATS Emitter Suite")
 }

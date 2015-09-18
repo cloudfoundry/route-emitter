@@ -10,9 +10,9 @@ import (
 type RoutesByRoutingKey map[RoutingKey]Routes
 type EndpointsByRoutingKey map[RoutingKey][]Endpoint
 
-func RoutesByRoutingKeyFromDesireds(desireds []*models.DesiredLRP) RoutesByRoutingKey {
+func RoutesByRoutingKeyFromSchedulingInfos(schedulingInfos []*models.DesiredLRPSchedulingInfo) RoutesByRoutingKey {
 	routesByRoutingKey := RoutesByRoutingKey{}
-	for _, desired := range desireds {
+	for _, desired := range schedulingInfos {
 		routes, err := cfroutes.CFRoutesFromRoutingInfo(desired.Routes)
 		if err == nil && len(routes) > 0 {
 			for _, cfRoute := range routes {
@@ -80,13 +80,13 @@ func RoutingKeysFromActual(actual *models.ActualLRP) []RoutingKey {
 	return keys
 }
 
-func RoutingKeysFromDesired(desired *models.DesiredLRP) []RoutingKey {
+func RoutingKeysFromSchedulingInfo(schedulingInfo *models.DesiredLRPSchedulingInfo) []RoutingKey {
 	keys := []RoutingKey{}
 
-	routes, err := cfroutes.CFRoutesFromRoutingInfo(desired.Routes)
+	routes, err := cfroutes.CFRoutesFromRoutingInfo(schedulingInfo.Routes)
 	if err == nil && len(routes) > 0 {
 		for _, cfRoute := range routes {
-			keys = append(keys, RoutingKey{ProcessGuid: desired.ProcessGuid, ContainerPort: cfRoute.Port})
+			keys = append(keys, RoutingKey{ProcessGuid: schedulingInfo.ProcessGuid, ContainerPort: cfRoute.Port})
 		}
 	}
 	return keys

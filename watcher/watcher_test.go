@@ -167,6 +167,7 @@ var _ = Describe("Watcher", func() {
 			var desiredLRP *models.DesiredLRP
 
 			BeforeEach(func() {
+				routes := cfroutes.CFRoutes{expectedCFRoute}.RoutingInfo()
 				desiredLRP = &models.DesiredLRP{
 					Action: models.WrapAction(&models.RunAction{
 						User: "me",
@@ -175,7 +176,7 @@ var _ = Describe("Watcher", func() {
 					Domain:      "tests",
 					ProcessGuid: expectedProcessGuid,
 					Ports:       []uint32{expectedContainerPort},
-					Routes:      cfroutes.CFRoutes{expectedCFRoute}.RoutingInfo(),
+					Routes:      &routes,
 					LogGuid:     logGuid,
 				}
 			})
@@ -214,7 +215,8 @@ var _ = Describe("Watcher", func() {
 
 			Context("when there are multiple CF routes", func() {
 				BeforeEach(func() {
-					desiredLRP.Routes = cfroutes.CFRoutes{expectedCFRoute, expectedAdditionalCFRoute}.RoutingInfo()
+					routes := cfroutes.CFRoutes{expectedCFRoute, expectedAdditionalCFRoute}.RoutingInfo()
+					desiredLRP.Routes = &routes
 				})
 
 				It("registers all of the routes on the table", func() {
@@ -246,6 +248,7 @@ var _ = Describe("Watcher", func() {
 
 			BeforeEach(func() {
 				table.SetRoutesReturns(dummyMessagesToEmit)
+				routes := cfroutes.CFRoutes{{Hostnames: expectedRoutes, Port: expectedContainerPort}}.RoutingInfo()
 
 				originalDesiredLRP = &models.DesiredLRP{
 					Action: models.WrapAction(&models.RunAction{
@@ -255,7 +258,7 @@ var _ = Describe("Watcher", func() {
 					Domain:      "tests",
 					ProcessGuid: expectedProcessGuid,
 					LogGuid:     logGuid,
-					Routes:      cfroutes.CFRoutes{{Hostnames: expectedRoutes, Port: expectedContainerPort}}.RoutingInfo(),
+					Routes:      &routes,
 				}
 				changedDesiredLRP = &models.DesiredLRP{
 					Action: models.WrapAction(&models.RunAction{
@@ -265,7 +268,7 @@ var _ = Describe("Watcher", func() {
 					Domain:          "tests",
 					ProcessGuid:     expectedProcessGuid,
 					LogGuid:         logGuid,
-					Routes:          cfroutes.CFRoutes{{Hostnames: expectedRoutes, Port: expectedContainerPort}}.RoutingInfo(),
+					Routes:          &routes,
 					ModificationTag: &models.ModificationTag{Epoch: "abcd", Index: 1},
 				}
 			})
@@ -304,7 +307,8 @@ var _ = Describe("Watcher", func() {
 
 			Context("when CF routes are added without an associated container port", func() {
 				BeforeEach(func() {
-					changedDesiredLRP.Routes = cfroutes.CFRoutes{expectedCFRoute, expectedAdditionalCFRoute}.RoutingInfo()
+					routes := cfroutes.CFRoutes{expectedCFRoute, expectedAdditionalCFRoute}.RoutingInfo()
+					changedDesiredLRP.Routes = &routes
 				})
 
 				It("registers all of the routes associated with a port on the table", func() {
@@ -325,7 +329,8 @@ var _ = Describe("Watcher", func() {
 
 			Context("when CF routes and container ports are added", func() {
 				BeforeEach(func() {
-					changedDesiredLRP.Routes = cfroutes.CFRoutes{expectedCFRoute, expectedAdditionalCFRoute}.RoutingInfo()
+					routes := cfroutes.CFRoutes{expectedCFRoute, expectedAdditionalCFRoute}.RoutingInfo()
+					changedDesiredLRP.Routes = &routes
 				})
 
 				It("registers all of the routes on the table", func() {
@@ -353,7 +358,8 @@ var _ = Describe("Watcher", func() {
 
 			Context("when CF routes are removed", func() {
 				BeforeEach(func() {
-					changedDesiredLRP.Routes = cfroutes.CFRoutes{}.RoutingInfo()
+					routes := cfroutes.CFRoutes{}.RoutingInfo()
+					changedDesiredLRP.Routes = &routes
 
 					table.SetRoutesReturns(routing_table.MessagesToEmit{})
 					table.RemoveRoutesReturns(dummyMessagesToEmit)
@@ -381,7 +387,7 @@ var _ = Describe("Watcher", func() {
 
 			BeforeEach(func() {
 				table.RemoveRoutesReturns(dummyMessagesToEmit)
-
+				routes := cfroutes.CFRoutes{expectedCFRoute}.RoutingInfo()
 				desiredLRP = &models.DesiredLRP{
 					Action: models.WrapAction(&models.RunAction{
 						User: "me",
@@ -390,7 +396,7 @@ var _ = Describe("Watcher", func() {
 					Domain:          "tests",
 					ProcessGuid:     expectedProcessGuid,
 					Ports:           []uint32{expectedContainerPort},
-					Routes:          cfroutes.CFRoutes{expectedCFRoute}.RoutingInfo(),
+					Routes:          &routes,
 					LogGuid:         logGuid,
 					ModificationTag: &models.ModificationTag{Epoch: "defg", Index: 2},
 				}
@@ -416,7 +422,8 @@ var _ = Describe("Watcher", func() {
 
 			Context("when there are multiple CF routes", func() {
 				BeforeEach(func() {
-					desiredLRP.Routes = cfroutes.CFRoutes{expectedCFRoute, expectedAdditionalCFRoute}.RoutingInfo()
+					routes := cfroutes.CFRoutes{expectedCFRoute, expectedAdditionalCFRoute}.RoutingInfo()
+					desiredLRP.Routes = &routes
 				})
 
 				It("should remove the routes from the table", func() {
@@ -902,38 +909,24 @@ var _ = Describe("Watcher", func() {
 			endpoint1 := routing_table.Endpoint{InstanceGuid: "ig-1", Host: "1.1.1.1", Port: 11, ContainerPort: 8080, Evacuating: false, ModificationTag: currentTag}
 			endpoint2 := routing_table.Endpoint{InstanceGuid: "ig-2", Host: "2.2.2.2", Port: 22, ContainerPort: 8080, Evacuating: false, ModificationTag: currentTag}
 
-			desiredLRP1 := &models.DesiredLRP{
-				Action: models.WrapAction(&models.RunAction{
-					User: "me",
-					Path: "ls",
-				}),
-				Domain:      "tests",
-				ProcessGuid: "pg-1",
-				Ports:       []uint32{8080},
+			schedulingInfo1 := &models.DesiredLRPSchedulingInfo{
+				DesiredLRPKey: models.NewDesiredLRPKey("pg-1", "tests", "lg1"),
 				Routes: cfroutes.CFRoutes{
 					cfroutes.CFRoute{
 						Hostnames: []string{hostname1},
 						Port:      8080,
 					},
 				}.RoutingInfo(),
-				LogGuid: "lg1",
 			}
 
-			desiredLRP2 := &models.DesiredLRP{
-				Action: models.WrapAction(&models.RunAction{
-					User: "me",
-					Path: "ls",
-				}),
-				Domain:      "tests",
-				ProcessGuid: "pg-2",
-				Ports:       []uint32{8080},
+			schedulingInfo2 := &models.DesiredLRPSchedulingInfo{
+				DesiredLRPKey: models.NewDesiredLRPKey("pg-2", "tests", "lg2"),
 				Routes: cfroutes.CFRoutes{
 					cfroutes.CFRoute{
 						Hostnames: []string{hostname2},
 						Port:      8080,
 					},
 				}.RoutingInfo(),
-				LogGuid: "lg2",
 			}
 
 			actualLRPGroup1 := &models.ActualLRPGroup{
@@ -1036,24 +1029,24 @@ var _ = Describe("Watcher", func() {
 					BeforeEach(func() {
 						returnError = 1
 
-						bbsClient.DesiredLRPsStub = func(filter models.DesiredLRPFilter) ([]*models.DesiredLRP, error) {
+						bbsClient.DesiredLRPSchedulingInfosStub = func(filter models.DesiredLRPFilter) ([]*models.DesiredLRPSchedulingInfo, error) {
 							if atomic.LoadInt32(&returnError) == 1 {
 								return nil, errors.New("bam")
 							}
 
-							return []*models.DesiredLRP{}, nil
+							return []*models.DesiredLRPSchedulingInfo{}, nil
 						}
 					})
 
 					It("should not call sync until the error resolves", func() {
-						Eventually(bbsClient.DesiredLRPsCallCount).Should(Equal(1))
+						Eventually(bbsClient.DesiredLRPSchedulingInfosCallCount).Should(Equal(1))
 						Consistently(table.SwapCallCount).Should(Equal(0))
 
 						atomic.StoreInt32(&returnError, 0)
 						syncEvents.Sync <- struct{}{}
 
 						Eventually(table.SwapCallCount).Should(Equal(1))
-						Expect(bbsClient.DesiredLRPsCallCount()).To(Equal(2))
+						Expect(bbsClient.DesiredLRPSchedulingInfosCallCount()).To(Equal(2))
 					})
 				})
 			})
@@ -1095,7 +1088,7 @@ var _ = Describe("Watcher", func() {
 						}
 
 						tempTable := routing_table.NewTempTable(
-							routing_table.RoutesByRoutingKeyFromDesireds([]*models.DesiredLRP{desiredLRP1, desiredLRP2}),
+							routing_table.RoutesByRoutingKeyFromSchedulingInfos([]*models.DesiredLRPSchedulingInfo{schedulingInfo1, schedulingInfo2}),
 							routing_table.EndpointsByRoutingKeyFromActuals([]*routing_table.ActualLRPRoutingInfo{
 								actualLRPRoutingInfo1,
 								actualLRPRoutingInfo2,
@@ -1107,13 +1100,13 @@ var _ = Describe("Watcher", func() {
 
 						watcherProcess = watcher.NewWatcher(bbsClient, clock, table, emitter, syncEvents, logger)
 
-						bbsClient.DesiredLRPsStub = func(f models.DesiredLRPFilter) ([]*models.DesiredLRP, error) {
+						bbsClient.DesiredLRPSchedulingInfosStub = func(f models.DesiredLRPFilter) ([]*models.DesiredLRPSchedulingInfo, error) {
 							defer GinkgoRecover()
 
 							ready <- struct{}{}
 							Eventually(ready).Should(Receive())
 
-							return []*models.DesiredLRP{desiredLRP1, desiredLRP2}, nil
+							return []*models.DesiredLRPSchedulingInfo{schedulingInfo1, schedulingInfo2}, nil
 						}
 					})
 
