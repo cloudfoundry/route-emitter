@@ -83,7 +83,7 @@ var syncInterval = flag.Duration(
 
 var communicationTimeout = flag.Duration(
 	"communicationTimeout",
-	10*time.Second,
+	30*time.Second,
 	"Timeout applied to all HTTP requests.",
 )
 
