@@ -11,8 +11,9 @@ const CF_ROUTER = "cf-router"
 type CFRoutes []CFRoute
 
 type CFRoute struct {
-	Hostnames []string `json:"hostnames"`
-	Port      uint32   `json:"port"`
+	Hostnames       []string `json:"hostnames"`
+	Port            uint32   `json:"port"`
+	RouteServiceUrl string   `json:"route_service_url,omitempty"`
 }
 
 func (c CFRoutes) RoutingInfo() models.Routes {
