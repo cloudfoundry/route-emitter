@@ -12,6 +12,7 @@ import (
 	"github.com/cloudfoundry-incubator/cf_http"
 	"github.com/cloudfoundry-incubator/consuladapter"
 	"github.com/cloudfoundry-incubator/locket"
+	route_emitter "github.com/cloudfoundry-incubator/route-emitter"
 	"github.com/cloudfoundry-incubator/route-emitter/nats_emitter"
 	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
 	"github.com/cloudfoundry-incubator/route-emitter/syncer"
@@ -219,9 +220,9 @@ func initializeLockMaintainer(
 		logger.Fatal("Couldn't generate uuid", err)
 	}
 
-	locketClient := locket.NewClient(consulSession, clock, logger)
+	serviceClient := route_emitter.NewServiceClient(consulSession, clock)
 
-	return locketClient.NewRouteEmitterLock(uuid.String(), lockRetryInterval)
+	return serviceClient.NewRouteEmitterLockRunner(logger, uuid.String(), lockRetryInterval)
 }
 
 func initializeBBSClient(logger lager.Logger) bbs.Client {
