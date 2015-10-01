@@ -19,6 +19,7 @@ var _ = Describe("RegistryMessage", func() {
 			URIs:              []string{"host-1.example.com", "host-2.example.com"},
 			App:               "app-guid",
 			PrivateInstanceId: "instance-guid",
+			RouteServiceUrl:   "https://hello.com",
 		}
 	})
 
@@ -31,7 +32,8 @@ var _ = Describe("RegistryMessage", func() {
 				"port": 61001,
 				"uris": ["host-1.example.com", "host-2.example.com"],
 				"app" : "app-guid",
-				"private_instance_id": "instance-guid"
+				"private_instance_id": "instance-guid",
+				"route_service_url": "https://hello.com"
 			}`
 		})
 
@@ -60,8 +62,9 @@ var _ = Describe("RegistryMessage", func() {
 				ContainerPort: 11,
 			}
 			routes := routing_table.Routes{
-				Hostnames: []string{"host-1.example.com", "host-2.example.com"},
-				LogGuid:   "app-guid",
+				Hostnames:       []string{"host-1.example.com", "host-2.example.com"},
+				LogGuid:         "app-guid",
+				RouteServiceUrl: "https://hello.com",
 			}
 
 			message := routing_table.RegistryMessageFor(endpoint, routes)

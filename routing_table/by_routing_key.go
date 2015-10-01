@@ -18,8 +18,9 @@ func RoutesByRoutingKeyFromSchedulingInfos(schedulingInfos []*models.DesiredLRPS
 			for _, cfRoute := range routes {
 				key := RoutingKey{ProcessGuid: desired.ProcessGuid, ContainerPort: cfRoute.Port}
 				routesByRoutingKey[key] = Routes{
-					Hostnames: cfRoute.Hostnames,
-					LogGuid:   desired.LogGuid,
+					Hostnames:       cfRoute.Hostnames,
+					LogGuid:         desired.LogGuid,
+					RouteServiceUrl: cfRoute.RouteServiceUrl,
 				}
 			}
 		}

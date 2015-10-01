@@ -26,7 +26,7 @@ func (MessagesToEmitBuilder) RegistrationsFor(existingEntry *RoutableEndpoints, 
 		return messagesToEmit
 	}
 
-	if existingEntry == nil || hostnamesHaveChanged(existingEntry, newEntry) {
+	if existingEntry == nil || hostnamesHaveChanged(existingEntry, newEntry) || routeServiceUrlHasChanged(existingEntry, newEntry) {
 		for _, endpoint := range newEntry.Endpoints {
 			message := RegistryMessageFor(endpoint, newEntry.routes())
 			messagesToEmit.RegistrationMessages = append(messagesToEmit.RegistrationMessages, message)
@@ -97,4 +97,8 @@ func hostnamesHaveChanged(existingEntry *RoutableEndpoints, newEntry *RoutableEn
 	}
 
 	return false
+}
+
+func routeServiceUrlHasChanged(existingEntry *RoutableEndpoints, newEntry *RoutableEndpoints) bool {
+	return newEntry.RouteServiceUrl != existingEntry.RouteServiceUrl
 }

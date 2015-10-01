@@ -59,7 +59,7 @@ var _ = Describe("Route Emitter", func() {
 
 		hostnames = []string{"route-1", "route-2"}
 		containerPort = 8080
-		routes = newRoutes(hostnames, containerPort)
+		routes = newRoutes(hostnames, containerPort, "")
 
 		desiredLRP = &models.DesiredLRP{
 			Domain:      domain,
@@ -115,13 +115,13 @@ var _ = Describe("Route Emitter", func() {
 		})
 
 		Context("and an lrp with routes is desired", func() {
-			BeforeEach(func() {
+			JustBeforeEach(func() {
 				err := bbsClient.DesireLRP(desiredLRP)
 				Expect(err).NotTo(HaveOccurred())
 			})
 
 			Context("and an instance starts", func() {
-				BeforeEach(func() {
+				JustBeforeEach(func() {
 					err := bbsClient.StartActualLRP(&lrpKey, &instanceKey, &netInfo)
 					Expect(err).NotTo(HaveOccurred())
 				})
@@ -135,10 +135,28 @@ var _ = Describe("Route Emitter", func() {
 						PrivateInstanceId: instanceKey.InstanceGuid,
 					})))
 				})
+
+				Context("and the instance has a route with a route service url", func() {
+					BeforeEach(func() {
+						routes := newRoutes(hostnames, containerPort, "https://awesome.com")
+						desiredLRP.Routes = routes
+					})
+
+					It("emits routes immediately including the route service url", func() {
+						Eventually(registeredRoutes).Should(Receive(MatchRegistryMessage(routing_table.RegistryMessage{
+							URIs:              hostnames,
+							Host:              netInfo.Address,
+							Port:              netInfo.Ports[0].HostPort,
+							App:               desiredLRP.LogGuid,
+							PrivateInstanceId: instanceKey.InstanceGuid,
+							RouteServiceUrl:   "https://awesome.com",
+						})))
+					})
+				})
 			})
 
 			Context("and an instance is claimed", func() {
-				BeforeEach(func() {
+				JustBeforeEach(func() {
 					err := bbsClient.ClaimActualLRP(processGuid, int(index), &instanceKey)
 					Expect(err).NotTo(HaveOccurred())
 				})
@@ -295,7 +313,7 @@ var _ = Describe("Route Emitter", func() {
 					hostnames = []string{"route-1", "route-2", "route-3"}
 
 					updateRequest := &models.DesiredLRPUpdate{
-						Routes:     newRoutes(hostnames, containerPort),
+						Routes:     newRoutes(hostnames, containerPort, ""),
 						Instances:  &desiredLRP.Instances,
 						Annotation: &desiredLRP.Annotation,
 					}
@@ -319,7 +337,7 @@ var _ = Describe("Route Emitter", func() {
 					Eventually(registeredRoutes).Should(Receive())
 
 					updateRequest := &models.DesiredLRPUpdate{
-						Routes:     newRoutes([]string{"route-2"}, containerPort),
+						Routes:     newRoutes([]string{"route-2"}, containerPort, ""),
 						Instances:  &desiredLRP.Instances,
 						Annotation: &desiredLRP.Annotation,
 					}
@@ -341,9 +359,9 @@ var _ = Describe("Route Emitter", func() {
 	})
 })
 
-func newRoutes(hosts []string, port uint32) *models.Routes {
+func newRoutes(hosts []string, port uint32, routeServiceUrl string) *models.Routes {
 	routingInfo := cfroutes.CFRoutes{
-		{Hostnames: hosts, Port: port},
+		{Hostnames: hosts, Port: port, RouteServiceUrl: routeServiceUrl},
 	}.RoutingInfo()
 
 	routes := models.Routes{}

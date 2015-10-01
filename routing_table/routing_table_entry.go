@@ -23,6 +23,7 @@ func (e Endpoint) key() EndpointKey {
 type Routes struct {
 	Hostnames       []string
 	LogGuid         string
+	RouteServiceUrl string
 	ModificationTag *models.ModificationTag
 }
 
@@ -31,6 +32,7 @@ type RoutableEndpoints struct {
 	Endpoints       map[EndpointKey]Endpoint
 	LogGuid         string
 	ModificationTag *models.ModificationTag
+	RouteServiceUrl string
 }
 
 type RoutingKey struct {
@@ -66,6 +68,7 @@ func (entry RoutableEndpoints) copy() RoutableEndpoints {
 		Endpoints:       map[EndpointKey]Endpoint{},
 		LogGuid:         entry.LogGuid,
 		ModificationTag: entry.ModificationTag,
+		RouteServiceUrl: entry.RouteServiceUrl,
 	}
 
 	for k, v := range entry.Hostnames {
@@ -89,8 +92,9 @@ func (entry RoutableEndpoints) routes() Routes {
 	}
 
 	return Routes{
-		Hostnames: hostnames,
-		LogGuid:   entry.LogGuid,
+		Hostnames:       hostnames,
+		LogGuid:         entry.LogGuid,
+		RouteServiceUrl: entry.RouteServiceUrl,
 	}
 }
 
