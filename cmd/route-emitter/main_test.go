@@ -59,7 +59,7 @@ var _ = Describe("Route Emitter", func() {
 
 		hostnames = []string{"route-1", "route-2"}
 		containerPort = 8080
-		routes = newRoutes(hostnames, containerPort, "")
+		routes = newRoutes(hostnames, containerPort, "https://awesome.com")
 
 		desiredLRP = &models.DesiredLRP{
 			Domain:      domain,
@@ -115,13 +115,13 @@ var _ = Describe("Route Emitter", func() {
 		})
 
 		Context("and an lrp with routes is desired", func() {
-			JustBeforeEach(func() {
+			BeforeEach(func() {
 				err := bbsClient.DesireLRP(desiredLRP)
 				Expect(err).NotTo(HaveOccurred())
 			})
 
 			Context("and an instance starts", func() {
-				JustBeforeEach(func() {
+				BeforeEach(func() {
 					err := bbsClient.StartActualLRP(&lrpKey, &instanceKey, &netInfo)
 					Expect(err).NotTo(HaveOccurred())
 				})
@@ -133,30 +133,13 @@ var _ = Describe("Route Emitter", func() {
 						Port:              netInfo.Ports[0].HostPort,
 						App:               desiredLRP.LogGuid,
 						PrivateInstanceId: instanceKey.InstanceGuid,
+						RouteServiceUrl:   "https://awesome.com",
 					})))
-				})
-
-				Context("and the instance has a route with a route service url", func() {
-					BeforeEach(func() {
-						routes := newRoutes(hostnames, containerPort, "https://awesome.com")
-						desiredLRP.Routes = routes
-					})
-
-					It("emits routes immediately including the route service url", func() {
-						Eventually(registeredRoutes).Should(Receive(MatchRegistryMessage(routing_table.RegistryMessage{
-							URIs:              hostnames,
-							Host:              netInfo.Address,
-							Port:              netInfo.Ports[0].HostPort,
-							App:               desiredLRP.LogGuid,
-							PrivateInstanceId: instanceKey.InstanceGuid,
-							RouteServiceUrl:   "https://awesome.com",
-						})))
-					})
 				})
 			})
 
 			Context("and an instance is claimed", func() {
-				JustBeforeEach(func() {
+				BeforeEach(func() {
 					err := bbsClient.ClaimActualLRP(processGuid, int(index), &instanceKey)
 					Expect(err).NotTo(HaveOccurred())
 				})
@@ -193,6 +176,7 @@ var _ = Describe("Route Emitter", func() {
 						Port:              netInfo.Ports[0].HostPort,
 						App:               desiredLRP.LogGuid,
 						PrivateInstanceId: instanceKey.InstanceGuid,
+						RouteServiceUrl:   "https://awesome.com",
 					})))
 				})
 
@@ -303,6 +287,7 @@ var _ = Describe("Route Emitter", func() {
 					Port:              65100,
 					App:               "some-log-guid",
 					PrivateInstanceId: "iguid1",
+					RouteServiceUrl:   "https://awesome.com",
 				})))
 			})
 
