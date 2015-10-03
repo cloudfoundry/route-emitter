@@ -380,8 +380,9 @@ func (watcher *Watcher) setRoutesForDesired(logger lager.Logger, schedulingInfo 
 		for _, route := range routes {
 			if key.ContainerPort == route.Port {
 				messagesToEmit := watcher.table.SetRoutes(key, routing_table.Routes{
-					Hostnames: route.Hostnames,
-					LogGuid:   schedulingInfo.LogGuid,
+					Hostnames:       route.Hostnames,
+					LogGuid:         schedulingInfo.LogGuid,
+					RouteServiceUrl: route.RouteServiceUrl,
 				})
 				watcher.emitMessages(logger, messagesToEmit)
 			}

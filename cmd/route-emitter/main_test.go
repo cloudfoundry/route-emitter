@@ -59,7 +59,7 @@ var _ = Describe("Route Emitter", func() {
 
 		hostnames = []string{"route-1", "route-2"}
 		containerPort = 8080
-		routes = newRoutes(hostnames, containerPort)
+		routes = newRoutes(hostnames, containerPort, "https://awesome.com")
 
 		desiredLRP = &models.DesiredLRP{
 			Domain:      domain,
@@ -133,6 +133,7 @@ var _ = Describe("Route Emitter", func() {
 						Port:              netInfo.Ports[0].HostPort,
 						App:               desiredLRP.LogGuid,
 						PrivateInstanceId: instanceKey.InstanceGuid,
+						RouteServiceUrl:   "https://awesome.com",
 					})))
 				})
 			})
@@ -175,6 +176,7 @@ var _ = Describe("Route Emitter", func() {
 						Port:              netInfo.Ports[0].HostPort,
 						App:               desiredLRP.LogGuid,
 						PrivateInstanceId: instanceKey.InstanceGuid,
+						RouteServiceUrl:   "https://awesome.com",
 					})))
 				})
 
@@ -285,6 +287,7 @@ var _ = Describe("Route Emitter", func() {
 					Port:              65100,
 					App:               "some-log-guid",
 					PrivateInstanceId: "iguid1",
+					RouteServiceUrl:   "https://awesome.com",
 				})))
 			})
 
@@ -295,7 +298,7 @@ var _ = Describe("Route Emitter", func() {
 					hostnames = []string{"route-1", "route-2", "route-3"}
 
 					updateRequest := &models.DesiredLRPUpdate{
-						Routes:     newRoutes(hostnames, containerPort),
+						Routes:     newRoutes(hostnames, containerPort, ""),
 						Instances:  &desiredLRP.Instances,
 						Annotation: &desiredLRP.Annotation,
 					}
@@ -319,7 +322,7 @@ var _ = Describe("Route Emitter", func() {
 					Eventually(registeredRoutes).Should(Receive())
 
 					updateRequest := &models.DesiredLRPUpdate{
-						Routes:     newRoutes([]string{"route-2"}, containerPort),
+						Routes:     newRoutes([]string{"route-2"}, containerPort, ""),
 						Instances:  &desiredLRP.Instances,
 						Annotation: &desiredLRP.Annotation,
 					}
@@ -341,9 +344,9 @@ var _ = Describe("Route Emitter", func() {
 	})
 })
 
-func newRoutes(hosts []string, port uint32) *models.Routes {
+func newRoutes(hosts []string, port uint32, routeServiceUrl string) *models.Routes {
 	routingInfo := cfroutes.CFRoutes{
-		{Hostnames: hosts, Port: port},
+		{Hostnames: hosts, Port: port, RouteServiceUrl: routeServiceUrl},
 	}.RoutingInfo()
 
 	routes := models.Routes{}

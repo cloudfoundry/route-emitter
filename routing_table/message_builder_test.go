@@ -72,6 +72,25 @@ var _ = Describe("MessagesToEmitBuilder", func() {
 				})
 			})
 
+			Context("when route service url changes", func() {
+				BeforeEach(func() {
+					existingEntry = &routing_table.RoutableEndpoints{
+						Hostnames:       map[string]struct{}{hostname1: struct{}{}},
+						Endpoints:       routing_table.EndpointsAsMap([]routing_table.Endpoint{endpoint1}),
+						RouteServiceUrl: "https://new-rs-url.com",
+					}
+				})
+
+				It("emits a registration", func() {
+					expected := routing_table.MessagesToEmit{
+						RegistrationMessages: []routing_table.RegistryMessage{
+							routing_table.RegistryMessageFor(endpoint1, routing_table.Routes{Hostnames: []string{hostname1}}),
+						},
+					}
+					Expect(messages).To(MatchMessagesToEmit(expected))
+				})
+			})
+
 			Context("when hostnames change", func() {
 				BeforeEach(func() {
 					existingEntry = &routing_table.RoutableEndpoints{

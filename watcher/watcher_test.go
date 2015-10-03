@@ -43,6 +43,7 @@ var _ = Describe("Watcher", func() {
 		expectedAdditionalExternalPort  = 22000
 		expectedContainerPort           = 11
 		expectedAdditionalContainerPort = 22
+		expectedRouteServiceUrl         = "https://so.good.com"
 	)
 
 	var (
@@ -97,7 +98,7 @@ var _ = Describe("Watcher", func() {
 		watcherProcess = watcher.NewWatcher(bbsClient, clock, table, emitter, syncEvents, logger)
 
 		expectedRoutes = []string{"route-1", "route-2"}
-		expectedCFRoute = cfroutes.CFRoute{Hostnames: expectedRoutes, Port: expectedContainerPort}
+		expectedCFRoute = cfroutes.CFRoute{Hostnames: expectedRoutes, Port: expectedContainerPort, RouteServiceUrl: expectedRouteServiceUrl}
 		expectedRoutingKey = routing_table.RoutingKey{
 			ProcessGuid:   expectedProcessGuid,
 			ContainerPort: expectedContainerPort,
@@ -192,7 +193,7 @@ var _ = Describe("Watcher", func() {
 
 				key, routes := table.SetRoutesArgsForCall(0)
 				Expect(key).To(Equal(expectedRoutingKey))
-				Expect(routes).To(Equal(routing_table.Routes{Hostnames: expectedRoutes, LogGuid: logGuid}))
+				Expect(routes).To(Equal(routing_table.Routes{Hostnames: expectedRoutes, LogGuid: logGuid, RouteServiceUrl: expectedRouteServiceUrl}))
 			})
 
 			It("sends a 'routes registered' metric", func() {
@@ -224,7 +225,7 @@ var _ = Describe("Watcher", func() {
 
 					key, routes := table.SetRoutesArgsForCall(0)
 					Expect(key).To(Equal(expectedRoutingKey))
-					Expect(routes).To(Equal(routing_table.Routes{Hostnames: expectedRoutes, LogGuid: logGuid}))
+					Expect(routes).To(Equal(routing_table.Routes{Hostnames: expectedRoutes, LogGuid: logGuid, RouteServiceUrl: expectedRouteServiceUrl}))
 
 					key, routes = table.SetRoutesArgsForCall(1)
 					Expect(key).To(Equal(expectedAdditionalRoutingKey))
@@ -316,7 +317,7 @@ var _ = Describe("Watcher", func() {
 
 					key, routes := table.SetRoutesArgsForCall(0)
 					Expect(key).To(Equal(expectedRoutingKey))
-					Expect(routes).To(Equal(routing_table.Routes{Hostnames: expectedRoutes, LogGuid: logGuid}))
+					Expect(routes).To(Equal(routing_table.Routes{Hostnames: expectedRoutes, LogGuid: logGuid, RouteServiceUrl: expectedRouteServiceUrl}))
 				})
 
 				It("emits whatever the table tells it to emit", func() {
@@ -338,7 +339,7 @@ var _ = Describe("Watcher", func() {
 
 					key, routes := table.SetRoutesArgsForCall(0)
 					Expect(key).To(Equal(expectedRoutingKey))
-					Expect(routes).To(Equal(routing_table.Routes{Hostnames: expectedRoutes, LogGuid: logGuid}))
+					Expect(routes).To(Equal(routing_table.Routes{Hostnames: expectedRoutes, LogGuid: logGuid, RouteServiceUrl: expectedRouteServiceUrl}))
 
 					key, routes = table.SetRoutesArgsForCall(1)
 					Expect(key).To(Equal(expectedAdditionalRoutingKey))
@@ -913,8 +914,9 @@ var _ = Describe("Watcher", func() {
 				DesiredLRPKey: models.NewDesiredLRPKey("pg-1", "tests", "lg1"),
 				Routes: cfroutes.CFRoutes{
 					cfroutes.CFRoute{
-						Hostnames: []string{hostname1},
-						Port:      8080,
+						Hostnames:       []string{hostname1},
+						Port:            8080,
+						RouteServiceUrl: "https://rs.example.com",
 					},
 				}.RoutingInfo(),
 			}
@@ -1122,7 +1124,7 @@ var _ = Describe("Watcher", func() {
 								routing_table.RegistryMessageFor(endpoint2, routing_table.Routes{Hostnames: []string{hostname2}, LogGuid: "lg2"}),
 							},
 							UnregistrationMessages: []routing_table.RegistryMessage{
-								routing_table.RegistryMessageFor(endpoint1, routing_table.Routes{Hostnames: []string{hostname1}, LogGuid: "lg1"}),
+								routing_table.RegistryMessageFor(endpoint1, routing_table.Routes{Hostnames: []string{hostname1}, LogGuid: "lg1", RouteServiceUrl: "https://rs.example.com"}),
 							},
 						}))
 					})

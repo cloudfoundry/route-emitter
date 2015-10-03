@@ -13,7 +13,7 @@ var _ = Describe("ByRoutingKey", func() {
 	Describe("RoutesByRoutingKeyFromDesireds", func() {
 		It("should build a map of routes", func() {
 			abcRoutes := cfroutes.CFRoutes{
-				{Hostnames: []string{"foo.com", "bar.com"}, Port: 8080},
+				{Hostnames: []string{"foo.com", "bar.com"}, Port: 8080, RouteServiceUrl: "https://something.creative"},
 				{Hostnames: []string{"foo.example.com"}, Port: 9090},
 			}
 			defRoutes := cfroutes.CFRoutes{
@@ -28,6 +28,7 @@ var _ = Describe("ByRoutingKey", func() {
 			Expect(routes).To(HaveLen(3))
 			Expect(routes[routing_table.RoutingKey{ProcessGuid: "abc", ContainerPort: 8080}].Hostnames).To(Equal([]string{"foo.com", "bar.com"}))
 			Expect(routes[routing_table.RoutingKey{ProcessGuid: "abc", ContainerPort: 8080}].LogGuid).To(Equal("abc-guid"))
+			Expect(routes[routing_table.RoutingKey{ProcessGuid: "abc", ContainerPort: 8080}].RouteServiceUrl).To(Equal("https://something.creative"))
 
 			Expect(routes[routing_table.RoutingKey{ProcessGuid: "abc", ContainerPort: 9090}].Hostnames).To(Equal([]string{"foo.example.com"}))
 			Expect(routes[routing_table.RoutingKey{ProcessGuid: "abc", ContainerPort: 9090}].LogGuid).To(Equal("abc-guid"))

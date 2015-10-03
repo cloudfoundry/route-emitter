@@ -155,6 +155,37 @@ var _ = Describe("RoutingTable", func() {
 			})
 		})
 
+		Context("when there is an existing routing key with a route service url", func() {
+			BeforeEach(func() {
+				tempTable := routing_table.NewTempTable(
+					routing_table.RoutesByRoutingKey{key: routing_table.Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid, RouteServiceUrl: "https://rs.example.com"}},
+					routing_table.EndpointsByRoutingKey{key: {endpoint1, endpoint2}},
+				)
+				table.Swap(tempTable)
+			})
+
+			Context("when the route service url changes", func() {
+				BeforeEach(func() {
+					tempTable := routing_table.NewTempTable(
+						routing_table.RoutesByRoutingKey{key: routing_table.Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid, RouteServiceUrl: "https://rs.new.example.com"}},
+						routing_table.EndpointsByRoutingKey{key: {endpoint1, endpoint2}},
+					)
+					messagesToEmit = table.Swap(tempTable)
+				})
+
+				It("emits all registrations and no unregistration", func() {
+					expected := routing_table.MessagesToEmit{
+						RegistrationMessages: []routing_table.RegistryMessage{
+							routing_table.RegistryMessageFor(endpoint1, routing_table.Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid, RouteServiceUrl: "https://rs.new.example.com"}),
+							routing_table.RegistryMessageFor(endpoint2, routing_table.Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid, RouteServiceUrl: "https://rs.new.example.com"}),
+						},
+					}
+					Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
+				})
+
+			})
+		})
+
 		Context("when there is an existing routing key", func() {
 			BeforeEach(func() {
 				tempTable := routing_table.NewTempTable(
@@ -202,6 +233,27 @@ var _ = Describe("RoutingTable", func() {
 					}
 					Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
 				})
+			})
+
+			Context("when the routing key without any route service url gets routes with a new route service url", func() {
+				BeforeEach(func() {
+					tempTable := routing_table.NewTempTable(
+						routing_table.RoutesByRoutingKey{key: routing_table.Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid, RouteServiceUrl: "https://rs.example.com"}},
+						routing_table.EndpointsByRoutingKey{key: {endpoint1, endpoint2}},
+					)
+					messagesToEmit = table.Swap(tempTable)
+				})
+
+				It("emits all registrations and no unregistration", func() {
+					expected := routing_table.MessagesToEmit{
+						RegistrationMessages: []routing_table.RegistryMessage{
+							routing_table.RegistryMessageFor(endpoint1, routing_table.Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid, RouteServiceUrl: "https://rs.example.com"}),
+							routing_table.RegistryMessageFor(endpoint2, routing_table.Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid, RouteServiceUrl: "https://rs.example.com"}),
+						},
+					}
+					Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
+				})
+
 			})
 
 			Context("when the routing key gets new endpoints", func() {
@@ -515,8 +567,20 @@ var _ = Describe("RoutingTable", func() {
 
 			Describe("SetRoutes", func() {
 				It("emits nothing when the route's hostnames do not change", func() {
-					messagesToEmit = table.SetRoutes(key, routing_table.Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid, ModificationTag: currentTag})
+					messagesToEmit = table.SetRoutes(key, routing_table.Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid, ModificationTag: newerTag})
 					Expect(messagesToEmit).To(BeZero())
+				})
+
+				It("emits registrations when route's hostnames do not change but the route service url does", func() {
+					messagesToEmit = table.SetRoutes(key, routing_table.Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid, ModificationTag: newerTag, RouteServiceUrl: "https://rs.example.com"})
+
+					expected := routing_table.MessagesToEmit{
+						RegistrationMessages: []routing_table.RegistryMessage{
+							routing_table.RegistryMessageFor(endpoint1, routing_table.Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid, RouteServiceUrl: "https://rs.example.com"}),
+							routing_table.RegistryMessageFor(endpoint2, routing_table.Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid, RouteServiceUrl: "https://rs.example.com"}),
+						},
+					}
+					Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
 				})
 
 				It("emits nothing when a hostname is added to a route with an older tag", func() {
@@ -593,7 +657,7 @@ var _ = Describe("RoutingTable", func() {
 				})
 
 				It("emits unregistrations with the same tag", func() {
-					messagesToEmit = table.RemoveRoutes(key, newerTag)
+					messagesToEmit = table.RemoveRoutes(key, currentTag)
 
 					expected := routing_table.MessagesToEmit{
 						UnregistrationMessages: []routing_table.RegistryMessage{
@@ -733,7 +797,7 @@ var _ = Describe("RoutingTable", func() {
 
 		Context("when there are only routes in the table", func() {
 			BeforeEach(func() {
-				table.SetRoutes(key, routing_table.Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid})
+				table.SetRoutes(key, routing_table.Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid, RouteServiceUrl: "https://rs.example.com"})
 			})
 
 			Context("When setting routes", func() {
@@ -756,7 +820,7 @@ var _ = Describe("RoutingTable", func() {
 
 					expected := routing_table.MessagesToEmit{
 						RegistrationMessages: []routing_table.RegistryMessage{
-							routing_table.RegistryMessageFor(endpoint1, routing_table.Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}),
+							routing_table.RegistryMessageFor(endpoint1, routing_table.Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid, RouteServiceUrl: "https://rs.example.com"}),
 						},
 					}
 					Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
@@ -772,12 +836,12 @@ var _ = Describe("RoutingTable", func() {
 
 			Context("When setting routes", func() {
 				It("emits registrations", func() {
-					messagesToEmit = table.SetRoutes(key, routing_table.Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid, ModificationTag: currentTag})
+					messagesToEmit = table.SetRoutes(key, routing_table.Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid, ModificationTag: currentTag, RouteServiceUrl: "https://rs.example.com"})
 
 					expected := routing_table.MessagesToEmit{
 						RegistrationMessages: []routing_table.RegistryMessage{
-							routing_table.RegistryMessageFor(endpoint1, routing_table.Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}),
-							routing_table.RegistryMessageFor(endpoint2, routing_table.Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}),
+							routing_table.RegistryMessageFor(endpoint1, routing_table.Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid, RouteServiceUrl: "https://rs.example.com"}),
+							routing_table.RegistryMessageFor(endpoint2, routing_table.Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid, RouteServiceUrl: "https://rs.example.com"}),
 						},
 					}
 					Expect(messagesToEmit).To(MatchMessagesToEmit(expected))

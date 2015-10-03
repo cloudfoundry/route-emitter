@@ -36,8 +36,9 @@ func NewTempTable(routes RoutesByRoutingKey, endpoints EndpointsByRoutingKey) Ro
 
 	for key, entry := range routes {
 		entries[key] = RoutableEndpoints{
-			Hostnames: routesAsMap(entry.Hostnames),
-			LogGuid:   entry.LogGuid,
+			Hostnames:       routesAsMap(entry.Hostnames),
+			LogGuid:         entry.LogGuid,
+			RouteServiceUrl: entry.RouteServiceUrl,
 		}
 	}
 
@@ -128,6 +129,7 @@ func (table *routingTable) SetRoutes(key RoutingKey, routes Routes) MessagesToEm
 	newEntry.Hostnames = routesAsMap(routes.Hostnames)
 	newEntry.LogGuid = routes.LogGuid
 	newEntry.ModificationTag = routes.ModificationTag
+	newEntry.RouteServiceUrl = routes.RouteServiceUrl
 
 	table.entries[key] = newEntry
 
