@@ -118,6 +118,12 @@ var bbsMaxIdleConnsPerHost = flag.Int(
 	"Controls the maximum number of idle (keep-alive) connctions per host. If zero, golang's default will be used",
 )
 
+var routeEmittingWorkers = flag.Int(
+	"routeEmittingWorkers",
+	20,
+	"Max concurrency for sending route messages",
+)
+
 const (
 	dropsondeDestination = "localhost:3457"
 	dropsondeOrigin      = "route_emitter"
@@ -187,9 +193,9 @@ func initializeDropsonde(logger lager.Logger) {
 }
 
 func initializeNatsEmitter(natsClient diegonats.NATSClient, logger lager.Logger) nats_emitter.NATSEmitter {
-	workPool, err := workpool.NewWorkPool(20)
+	workPool, err := workpool.NewWorkPool(*routeEmittingWorkers)
 	if err != nil {
-		logger.Fatal("failed-to-construct-nats-emitter-workpool", err, lager.Data{"num-workers": 20}) // should never happen
+		logger.Fatal("failed-to-construct-nats-emitter-workpool", err, lager.Data{"num-workers": *routeEmittingWorkers}) // should never happen
 	}
 
 	return nats_emitter.New(natsClient, workPool, logger)
