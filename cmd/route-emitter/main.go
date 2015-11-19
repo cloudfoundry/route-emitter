@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"net/url"
 	"os"
 	"time"
@@ -82,6 +83,12 @@ var syncInterval = flag.Duration(
 	"the interval between syncs of the routing table from etcd",
 )
 
+var dropsondePort = flag.Int(
+	"dropsondePort",
+	3457,
+	"port the local metron agent is listening on",
+)
+
 var communicationTimeout = flag.Duration(
 	"communicationTimeout",
 	30*time.Second,
@@ -125,8 +132,7 @@ var routeEmittingWorkers = flag.Int(
 )
 
 const (
-	dropsondeDestination = "localhost:3457"
-	dropsondeOrigin      = "route_emitter"
+	dropsondeOrigin = "route_emitter"
 )
 
 func main() {
@@ -186,6 +192,7 @@ func main() {
 }
 
 func initializeDropsonde(logger lager.Logger) {
+	dropsondeDestination := fmt.Sprint("localhost:", *dropsondePort)
 	err := dropsonde.Initialize(dropsondeDestination, dropsondeOrigin)
 	if err != nil {
 		logger.Error("failed to initialize dropsonde: %v", err)
