@@ -1,6 +1,7 @@
 package watcher_test
 
 import (
+	"encoding/json"
 	"errors"
 	"os"
 	"sync/atomic"
@@ -16,12 +17,12 @@ import (
 	"github.com/pivotal-golang/lager/lagertest"
 	"github.com/tedsuo/ifrit"
 
-	"github.com/cloudfoundry-incubator/routing-info/cfroutes"
 	"github.com/cloudfoundry-incubator/route-emitter/nats_emitter/fake_nats_emitter"
 	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
 	"github.com/cloudfoundry-incubator/route-emitter/routing_table/fake_routing_table"
 	"github.com/cloudfoundry-incubator/route-emitter/syncer"
 	"github.com/cloudfoundry-incubator/route-emitter/watcher"
+	"github.com/cloudfoundry-incubator/routing-info/cfroutes"
 	fake_metrics_sender "github.com/cloudfoundry/dropsonde/metric_sender/fake"
 	"github.com/cloudfoundry/dropsonde/metrics"
 )
@@ -214,6 +215,39 @@ var _ = Describe("Watcher", func() {
 				Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
 			})
 
+			Context("when there are diego ssh-keys on the route", func() {
+				var (
+					foundRoutes bool
+				)
+
+				BeforeEach(func() {
+					diegoSSHInfo := json.RawMessage([]byte(`{"ssh-key": "ssh-value"}`))
+
+					routes := cfroutes.CFRoutes{expectedCFRoute}.RoutingInfo()
+					routes["diego-ssh"] = &diegoSSHInfo
+
+					desiredLRP.Routes = &routes
+				})
+
+				It("does not log them", func() {
+					Eventually(table.SetRoutesCallCount).Should(Equal(1))
+					logs := logger.Logs()
+
+					for _, log := range logs {
+						if log.Data["routes"] != nil {
+							Expect(log.Data["routes"]).ToNot(HaveKey("diego-ssh"))
+							Expect(log.Data["routes"]).To(HaveKey("cf-router"))
+							foundRoutes = true
+						}
+					}
+					if !foundRoutes {
+						Fail("Expected to find diego-ssh routes on desiredLRP")
+					}
+
+					Expect(len(*desiredLRP.Routes)).To(Equal(2))
+				})
+			})
+
 			Context("when there are multiple CF routes", func() {
 				BeforeEach(func() {
 					routes := cfroutes.CFRoutes{expectedCFRoute, expectedAdditionalCFRoute}.RoutingInfo()
@@ -304,6 +338,41 @@ var _ = Describe("Watcher", func() {
 				Eventually(emitter.EmitCallCount).Should(Equal(2))
 				messagesToEmit := emitter.EmitArgsForCall(1)
 				Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
+			})
+
+			Context("when there are diego ssh-keys on the route", func() {
+				var foundRoutes bool
+
+				BeforeEach(func() {
+					diegoSSHInfo := json.RawMessage([]byte(`{"ssh-key": "ssh-value"}`))
+
+					routes := cfroutes.CFRoutes{expectedCFRoute}.RoutingInfo()
+					routes["diego-ssh"] = &diegoSSHInfo
+
+					changedDesiredLRP.Routes = &routes
+				})
+
+				It("does not log them", func() {
+					Eventually(table.SetRoutesCallCount).Should(Equal(1))
+					logs := logger.Logs()
+
+					for _, log := range logs {
+						if after, ok := log.Data["after"]; ok {
+							afterData := after.(map[string]interface{})
+
+							if afterData["routes"] != nil {
+								Expect(afterData["routes"]).ToNot(HaveKey("diego-ssh"))
+								Expect(afterData["routes"]).To(HaveKey("cf-router"))
+								foundRoutes = true
+							}
+						}
+					}
+					if !foundRoutes {
+						Fail("Expected to find diego-ssh routes on desiredLRP")
+					}
+
+					Expect(len(*changedDesiredLRP.Routes)).To(Equal(2))
+				})
 			})
 
 			Context("when CF routes are added without an associated container port", func() {
@@ -419,6 +488,39 @@ var _ = Describe("Watcher", func() {
 
 				messagesToEmit := emitter.EmitArgsForCall(1)
 				Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
+			})
+
+			Context("when there are diego ssh-keys on the route", func() {
+				var (
+					foundRoutes bool
+				)
+
+				BeforeEach(func() {
+					diegoSSHInfo := json.RawMessage([]byte(`{"ssh-key": "ssh-value"}`))
+
+					routes := cfroutes.CFRoutes{expectedCFRoute}.RoutingInfo()
+					routes["diego-ssh"] = &diegoSSHInfo
+
+					desiredLRP.Routes = &routes
+				})
+
+				It("does not log them", func() {
+					Eventually(table.RemoveRoutesCallCount).Should(Equal(1))
+					logs := logger.Logs()
+
+					for _, log := range logs {
+						if log.Data["routes"] != nil {
+							Expect(log.Data["routes"]).ToNot(HaveKey("diego-ssh"))
+							Expect(log.Data["routes"]).To(HaveKey("cf-router"))
+							foundRoutes = true
+						}
+					}
+					if !foundRoutes {
+						Fail("Expected to find diego-ssh routes on desiredLRP")
+					}
+
+					Expect(len(*desiredLRP.Routes)).To(Equal(2))
+				})
 			})
 
 			Context("when there are multiple CF routes", func() {

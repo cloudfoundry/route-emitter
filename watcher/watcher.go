@@ -9,10 +9,10 @@ import (
 	"github.com/cloudfoundry-incubator/bbs"
 	"github.com/cloudfoundry-incubator/bbs/events"
 	"github.com/cloudfoundry-incubator/bbs/models"
-	"github.com/cloudfoundry-incubator/routing-info/cfroutes"
 	"github.com/cloudfoundry-incubator/route-emitter/nats_emitter"
 	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
 	"github.com/cloudfoundry-incubator/route-emitter/syncer"
+	"github.com/cloudfoundry-incubator/routing-info/cfroutes"
 	"github.com/cloudfoundry-incubator/runtime-schema/metric"
 	"github.com/pivotal-golang/clock"
 	"github.com/pivotal-golang/lager"
@@ -484,9 +484,12 @@ func (watcher *Watcher) emitMessages(logger lager.Logger, messagesToEmit routing
 }
 
 func desiredLRPData(schedulingInfo *models.DesiredLRPSchedulingInfo) lager.Data {
+	logRoutes := make(models.Routes)
+	logRoutes[cfroutes.CF_ROUTER] = schedulingInfo.Routes[cfroutes.CF_ROUTER]
+
 	return lager.Data{
 		"process-guid": schedulingInfo.ProcessGuid,
-		"routes":       schedulingInfo.Routes,
+		"routes":       logRoutes,
 	}
 }
 
