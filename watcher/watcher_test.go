@@ -37,6 +37,7 @@ var nilEventHolder = EventHolder{}
 
 var _ = Describe("Watcher", func() {
 	const (
+		expectedDomain                  = "domain"
 		expectedProcessGuid             = "process-guid"
 		expectedInstanceGuid            = "instance-guid"
 		expectedHost                    = "1.1.1.1"
@@ -79,6 +80,7 @@ var _ = Describe("Watcher", func() {
 		eventSource = new(eventfakes.FakeEventSource)
 		bbsClient = new(fake_bbs.FakeClient)
 		bbsClient.SubscribeToEventsReturns(eventSource, nil)
+		bbsClient.DomainsReturns([]string{expectedDomain}, nil)
 
 		table = &fake_routing_table.FakeRoutingTable{}
 		emitter = &fake_nats_emitter.FakeNATSEmitter{}
@@ -701,6 +703,7 @@ var _ = Describe("Watcher", func() {
 					Expect(endpoint).To(Equal(routing_table.Endpoint{
 						InstanceGuid:  expectedInstanceGuid,
 						Host:          expectedHost,
+						Domain:        expectedDomain,
 						Port:          expectedExternalPort,
 						ContainerPort: expectedContainerPort,
 					}))
@@ -710,6 +713,7 @@ var _ = Describe("Watcher", func() {
 					Expect(endpoint).To(Equal(routing_table.Endpoint{
 						InstanceGuid:  expectedInstanceGuid,
 						Host:          expectedHost,
+						Domain:        expectedDomain,
 						Port:          expectedAdditionalExternalPort,
 						ContainerPort: expectedAdditionalContainerPort,
 					}))
@@ -769,6 +773,7 @@ var _ = Describe("Watcher", func() {
 					Expect(endpoint).To(Equal(routing_table.Endpoint{
 						InstanceGuid:  expectedInstanceGuid,
 						Host:          expectedHost,
+						Domain:        expectedDomain,
 						Port:          expectedExternalPort,
 						ContainerPort: expectedContainerPort,
 					}))
@@ -778,6 +783,7 @@ var _ = Describe("Watcher", func() {
 					Expect(endpoint).To(Equal(routing_table.Endpoint{
 						InstanceGuid:  expectedInstanceGuid,
 						Host:          expectedHost,
+						Domain:        expectedDomain,
 						Port:          expectedAdditionalExternalPort,
 						ContainerPort: expectedAdditionalContainerPort,
 					}))
@@ -855,6 +861,7 @@ var _ = Describe("Watcher", func() {
 					Expect(endpoint).To(Equal(routing_table.Endpoint{
 						InstanceGuid:  expectedInstanceGuid,
 						Host:          expectedHost,
+						Domain:        expectedDomain,
 						Port:          expectedExternalPort,
 						ContainerPort: expectedContainerPort,
 					}))
@@ -864,6 +871,7 @@ var _ = Describe("Watcher", func() {
 					Expect(endpoint).To(Equal(routing_table.Endpoint{
 						InstanceGuid:  expectedInstanceGuid,
 						Host:          expectedHost,
+						Domain:        expectedDomain,
 						Port:          expectedAdditionalExternalPort,
 						ContainerPort: expectedAdditionalContainerPort,
 					}))
@@ -1199,8 +1207,9 @@ var _ = Describe("Watcher", func() {
 							}),
 						)
 
+						domains := models.NewDomainSet([]string{"domain"})
 						table := routing_table.NewTable()
-						table.Swap(tempTable)
+						table.Swap(tempTable, domains)
 
 						watcherProcess = watcher.NewWatcher(bbsClient, clock, table, emitter, syncEvents, logger)
 

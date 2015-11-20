@@ -12,13 +12,14 @@ type FakeRoutingTable struct {
 	RouteCountStub        func() int
 	routeCountMutex       sync.RWMutex
 	routeCountArgsForCall []struct{}
-	routeCountReturns struct {
+	routeCountReturns     struct {
 		result1 int
 	}
-	SwapStub        func(newTable routing_table.RoutingTable) routing_table.MessagesToEmit
+	SwapStub        func(newTable routing_table.RoutingTable, domains models.DomainSet) routing_table.MessagesToEmit
 	swapMutex       sync.RWMutex
 	swapArgsForCall []struct {
 		newTable routing_table.RoutingTable
+		domains  models.DomainSet
 	}
 	swapReturns struct {
 		result1 routing_table.MessagesToEmit
@@ -62,7 +63,7 @@ type FakeRoutingTable struct {
 	MessagesToEmitStub        func() routing_table.MessagesToEmit
 	messagesToEmitMutex       sync.RWMutex
 	messagesToEmitArgsForCall []struct{}
-	messagesToEmitReturns struct {
+	messagesToEmitReturns     struct {
 		result1 routing_table.MessagesToEmit
 	}
 }
@@ -91,14 +92,15 @@ func (fake *FakeRoutingTable) RouteCountReturns(result1 int) {
 	}{result1}
 }
 
-func (fake *FakeRoutingTable) Swap(newTable routing_table.RoutingTable) routing_table.MessagesToEmit {
+func (fake *FakeRoutingTable) Swap(newTable routing_table.RoutingTable, domains models.DomainSet) routing_table.MessagesToEmit {
 	fake.swapMutex.Lock()
 	fake.swapArgsForCall = append(fake.swapArgsForCall, struct {
 		newTable routing_table.RoutingTable
-	}{newTable})
+		domains  models.DomainSet
+	}{newTable, domains})
 	fake.swapMutex.Unlock()
 	if fake.SwapStub != nil {
-		return fake.SwapStub(newTable)
+		return fake.SwapStub(newTable, domains)
 	} else {
 		return fake.swapReturns.result1
 	}
@@ -110,10 +112,10 @@ func (fake *FakeRoutingTable) SwapCallCount() int {
 	return len(fake.swapArgsForCall)
 }
 
-func (fake *FakeRoutingTable) SwapArgsForCall(i int) routing_table.RoutingTable {
+func (fake *FakeRoutingTable) SwapArgsForCall(i int) (routing_table.RoutingTable, models.DomainSet) {
 	fake.swapMutex.RLock()
 	defer fake.swapMutex.RUnlock()
-	return fake.swapArgsForCall[i].newTable
+	return fake.swapArgsForCall[i].newTable, fake.swapArgsForCall[i].domains
 }
 
 func (fake *FakeRoutingTable) SwapReturns(result1 routing_table.MessagesToEmit) {

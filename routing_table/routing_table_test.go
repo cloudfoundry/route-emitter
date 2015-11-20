@@ -21,23 +21,99 @@ var _ = Describe("RoutingTable", func() {
 	hostname2 := "bar.example.com"
 	hostname3 := "baz.example.com"
 
+	domain := "domain"
+
 	olderTag := &models.ModificationTag{Epoch: "abc", Index: 0}
 	currentTag := &models.ModificationTag{Epoch: "abc", Index: 1}
 	newerTag := &models.ModificationTag{Epoch: "def", Index: 0}
 
-	endpoint1 := routing_table.Endpoint{InstanceGuid: "ig-1", Host: "1.1.1.1", Port: 11, ContainerPort: 8080, Evacuating: false, ModificationTag: currentTag}
-	endpoint2 := routing_table.Endpoint{InstanceGuid: "ig-2", Host: "2.2.2.2", Port: 22, ContainerPort: 8080, Evacuating: false, ModificationTag: currentTag}
-	endpoint3 := routing_table.Endpoint{InstanceGuid: "ig-3", Host: "3.3.3.3", Port: 33, ContainerPort: 8080, Evacuating: false, ModificationTag: currentTag}
+	endpoint1 := routing_table.Endpoint{InstanceGuid: "ig-1", Host: "1.1.1.1", Domain: domain, Port: 11, ContainerPort: 8080, Evacuating: false, ModificationTag: currentTag}
+	endpoint2 := routing_table.Endpoint{InstanceGuid: "ig-2", Host: "2.2.2.2", Domain: domain, Port: 22, ContainerPort: 8080, Evacuating: false, ModificationTag: currentTag}
+	endpoint3 := routing_table.Endpoint{InstanceGuid: "ig-3", Host: "3.3.3.3", Domain: domain, Port: 33, ContainerPort: 8080, Evacuating: false, ModificationTag: currentTag}
 
-	evacuating1 := routing_table.Endpoint{InstanceGuid: "ig-1", Host: "1.1.1.1", Port: 11, ContainerPort: 8080, Evacuating: true, ModificationTag: currentTag}
+	evacuating1 := routing_table.Endpoint{InstanceGuid: "ig-1", Host: "1.1.1.1", Domain: domain, Port: 11, ContainerPort: 8080, Evacuating: true, ModificationTag: currentTag}
 
 	logGuid := "some-log-guid"
+
+	domains := models.NewDomainSet([]string{domain})
+	noFreshDomains := models.NewDomainSet([]string{})
 
 	BeforeEach(func() {
 		table = routing_table.NewTable()
 	})
 
 	Describe("Swap", func() {
+
+		Context("when we have existing stuff in the table", func() {
+			BeforeEach(func() {
+				tempTable := routing_table.NewTempTable(
+					routing_table.RoutesByRoutingKey{key: routing_table.Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}},
+					routing_table.EndpointsByRoutingKey{key: {endpoint1}},
+				)
+
+				messagesToEmit = table.Swap(tempTable, domains)
+
+				tempTable = routing_table.NewTempTable(
+					routing_table.RoutesByRoutingKey{key: routing_table.Routes{Hostnames: []string{hostname1, hostname3}, LogGuid: logGuid}},
+					routing_table.EndpointsByRoutingKey{key: {endpoint1}},
+				)
+
+				messagesToEmit = table.Swap(tempTable, noFreshDomains)
+			})
+
+			It("emits all three routes", func() {
+				expected := routing_table.MessagesToEmit{
+					RegistrationMessages: []routing_table.RegistryMessage{
+						routing_table.RegistryMessageFor(endpoint1, routing_table.Routes{Hostnames: []string{hostname1, hostname2, hostname3}, LogGuid: logGuid}),
+					},
+				}
+				Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
+			})
+
+			Context("subsequent swaps with still not fresh", func() {
+				BeforeEach(func() {
+					tempTable := routing_table.NewTempTable(
+						routing_table.RoutesByRoutingKey{key: routing_table.Routes{Hostnames: []string{hostname1, hostname3}, LogGuid: logGuid}},
+						routing_table.EndpointsByRoutingKey{key: {endpoint1}},
+					)
+
+					messagesToEmit = table.Swap(tempTable, noFreshDomains)
+				})
+
+				It("emits all three routes", func() {
+					expected := routing_table.MessagesToEmit{
+						RegistrationMessages: []routing_table.RegistryMessage{
+							routing_table.RegistryMessageFor(endpoint1, routing_table.Routes{Hostnames: []string{hostname1, hostname2, hostname3}, LogGuid: logGuid}),
+						},
+					}
+					Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
+				})
+			})
+
+			Context("subsequent swaps with fresh", func() {
+				BeforeEach(func() {
+					tempTable := routing_table.NewTempTable(
+						routing_table.RoutesByRoutingKey{key: routing_table.Routes{Hostnames: []string{hostname1, hostname3}, LogGuid: logGuid}},
+						routing_table.EndpointsByRoutingKey{key: {endpoint1}},
+					)
+
+					messagesToEmit = table.Swap(tempTable, domains)
+				})
+
+				It("emits two routes and unregisters the old route", func() {
+					expected := routing_table.MessagesToEmit{
+						RegistrationMessages: []routing_table.RegistryMessage{
+							routing_table.RegistryMessageFor(endpoint1, routing_table.Routes{Hostnames: []string{hostname1, hostname3}, LogGuid: logGuid}),
+						},
+						UnregistrationMessages: []routing_table.RegistryMessage{
+							routing_table.RegistryMessageFor(endpoint1, routing_table.Routes{Hostnames: []string{hostname2}, LogGuid: logGuid}),
+						},
+					}
+					Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
+				})
+			})
+		})
+
 		Context("when a new routing key arrives", func() {
 			Context("when the routing key has both routes and endpoints", func() {
 				BeforeEach(func() {
@@ -46,7 +122,7 @@ var _ = Describe("RoutingTable", func() {
 						routing_table.EndpointsByRoutingKey{key: {endpoint1, endpoint2}},
 					)
 
-					messagesToEmit = table.Swap(tempTable)
+					messagesToEmit = table.Swap(tempTable, domains)
 				})
 
 				It("emits registrations for each pairing", func() {
@@ -66,7 +142,7 @@ var _ = Describe("RoutingTable", func() {
 						routing_table.RoutesByRoutingKey{key: routing_table.Routes{Hostnames: []string{hostname1}, LogGuid: logGuid}},
 						routing_table.EndpointsByRoutingKey{},
 					)
-					messagesToEmit = table.Swap(tempTable)
+					messagesToEmit = table.Swap(tempTable, domains)
 				})
 
 				It("should not emit a registration", func() {
@@ -79,7 +155,7 @@ var _ = Describe("RoutingTable", func() {
 							routing_table.RoutesByRoutingKey{key: routing_table.Routes{Hostnames: []string{hostname1}, LogGuid: logGuid}},
 							routing_table.EndpointsByRoutingKey{key: {endpoint1}},
 						)
-						messagesToEmit = table.Swap(tempTable)
+						messagesToEmit = table.Swap(tempTable, domains)
 					})
 
 					It("emits registrations for each pairing", func() {
@@ -98,7 +174,7 @@ var _ = Describe("RoutingTable", func() {
 							routing_table.RoutesByRoutingKey{},
 							routing_table.EndpointsByRoutingKey{},
 						)
-						messagesToEmit = table.Swap(tempTable)
+						messagesToEmit = table.Swap(tempTable, domains)
 					})
 
 					It("emits nothing", func() {
@@ -113,7 +189,7 @@ var _ = Describe("RoutingTable", func() {
 						routing_table.RoutesByRoutingKey{},
 						routing_table.EndpointsByRoutingKey{key: {endpoint1}},
 					)
-					messagesToEmit = table.Swap(tempTable)
+					messagesToEmit = table.Swap(tempTable, domains)
 				})
 
 				It("should not emit a registration", func() {
@@ -126,7 +202,7 @@ var _ = Describe("RoutingTable", func() {
 							routing_table.RoutesByRoutingKey{key: routing_table.Routes{Hostnames: []string{hostname1}, LogGuid: logGuid}},
 							routing_table.EndpointsByRoutingKey{key: {endpoint1}},
 						)
-						messagesToEmit = table.Swap(tempTable)
+						messagesToEmit = table.Swap(tempTable, domains)
 					})
 
 					It("emits registrations for each pairing", func() {
@@ -145,7 +221,7 @@ var _ = Describe("RoutingTable", func() {
 							routing_table.RoutesByRoutingKey{},
 							routing_table.EndpointsByRoutingKey{},
 						)
-						messagesToEmit = table.Swap(tempTable)
+						messagesToEmit = table.Swap(tempTable, domains)
 					})
 
 					It("emits nothing", func() {
@@ -161,7 +237,7 @@ var _ = Describe("RoutingTable", func() {
 					routing_table.RoutesByRoutingKey{key: routing_table.Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid, RouteServiceUrl: "https://rs.example.com"}},
 					routing_table.EndpointsByRoutingKey{key: {endpoint1, endpoint2}},
 				)
-				table.Swap(tempTable)
+				table.Swap(tempTable, domains)
 			})
 
 			Context("when the route service url changes", func() {
@@ -170,7 +246,7 @@ var _ = Describe("RoutingTable", func() {
 						routing_table.RoutesByRoutingKey{key: routing_table.Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid, RouteServiceUrl: "https://rs.new.example.com"}},
 						routing_table.EndpointsByRoutingKey{key: {endpoint1, endpoint2}},
 					)
-					messagesToEmit = table.Swap(tempTable)
+					messagesToEmit = table.Swap(tempTable, domains)
 				})
 
 				It("emits all registrations and no unregistration", func() {
@@ -192,7 +268,7 @@ var _ = Describe("RoutingTable", func() {
 					routing_table.RoutesByRoutingKey{key: routing_table.Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}},
 					routing_table.EndpointsByRoutingKey{key: {endpoint1, endpoint2}},
 				)
-				table.Swap(tempTable)
+				table.Swap(tempTable, domains)
 			})
 
 			Context("when nothing changes", func() {
@@ -201,7 +277,7 @@ var _ = Describe("RoutingTable", func() {
 						routing_table.RoutesByRoutingKey{key: routing_table.Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}},
 						routing_table.EndpointsByRoutingKey{key: {endpoint1, endpoint2}},
 					)
-					messagesToEmit = table.Swap(tempTable)
+					messagesToEmit = table.Swap(tempTable, domains)
 				})
 
 				It("emits all registrations and no unregisration", func() {
@@ -221,10 +297,10 @@ var _ = Describe("RoutingTable", func() {
 						routing_table.RoutesByRoutingKey{key: routing_table.Routes{Hostnames: []string{hostname1, hostname2, hostname3}, LogGuid: logGuid}},
 						routing_table.EndpointsByRoutingKey{key: {endpoint1, endpoint2}},
 					)
-					messagesToEmit = table.Swap(tempTable)
+					messagesToEmit = table.Swap(tempTable, domains)
 				})
 
-				It("emits all registrations and no unregisration", func() {
+				It("emits all registrations and no unregistration", func() {
 					expected := routing_table.MessagesToEmit{
 						RegistrationMessages: []routing_table.RegistryMessage{
 							routing_table.RegistryMessageFor(endpoint1, routing_table.Routes{Hostnames: []string{hostname1, hostname2, hostname3}, LogGuid: logGuid}),
@@ -241,7 +317,7 @@ var _ = Describe("RoutingTable", func() {
 						routing_table.RoutesByRoutingKey{key: routing_table.Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid, RouteServiceUrl: "https://rs.example.com"}},
 						routing_table.EndpointsByRoutingKey{key: {endpoint1, endpoint2}},
 					)
-					messagesToEmit = table.Swap(tempTable)
+					messagesToEmit = table.Swap(tempTable, domains)
 				})
 
 				It("emits all registrations and no unregistration", func() {
@@ -262,10 +338,10 @@ var _ = Describe("RoutingTable", func() {
 						routing_table.RoutesByRoutingKey{key: routing_table.Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}},
 						routing_table.EndpointsByRoutingKey{key: {endpoint1, endpoint2, endpoint3}},
 					)
-					messagesToEmit = table.Swap(tempTable)
+					messagesToEmit = table.Swap(tempTable, domains)
 				})
 
-				It("emits all registrations and no unregisration", func() {
+				It("emits all registrations and no unregistration", func() {
 					expected := routing_table.MessagesToEmit{
 						RegistrationMessages: []routing_table.RegistryMessage{
 							routing_table.RegistryMessageFor(endpoint1, routing_table.Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}),
@@ -283,7 +359,7 @@ var _ = Describe("RoutingTable", func() {
 						routing_table.RoutesByRoutingKey{key: routing_table.Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}},
 						routing_table.EndpointsByRoutingKey{key: {endpoint1, endpoint2, evacuating1}},
 					)
-					messagesToEmit = table.Swap(tempTable)
+					messagesToEmit = table.Swap(tempTable, domains)
 				})
 
 				It("emits all registrations and no unregisration", func() {
@@ -304,13 +380,13 @@ var _ = Describe("RoutingTable", func() {
 						routing_table.RoutesByRoutingKey{key: routing_table.Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}},
 						routing_table.EndpointsByRoutingKey{key: {endpoint1, endpoint2, evacuating1}},
 					)
-					table.Swap(tempTable)
+					table.Swap(tempTable, domains)
 
 					tempTable = routing_table.NewTempTable(
 						routing_table.RoutesByRoutingKey{key: routing_table.Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}},
 						routing_table.EndpointsByRoutingKey{key: {endpoint2, evacuating1}},
 					)
-					messagesToEmit = table.Swap(tempTable)
+					messagesToEmit = table.Swap(tempTable, domains)
 				})
 
 				It("should not emit an unregistration ", func() {
@@ -330,7 +406,7 @@ var _ = Describe("RoutingTable", func() {
 						routing_table.RoutesByRoutingKey{key: routing_table.Routes{Hostnames: []string{hostname1, hostname2, hostname3}, LogGuid: logGuid}},
 						routing_table.EndpointsByRoutingKey{key: {endpoint1, endpoint2, endpoint3}},
 					)
-					messagesToEmit = table.Swap(tempTable)
+					messagesToEmit = table.Swap(tempTable, domains)
 				})
 
 				It("emits all registrations and no unregisration", func() {
@@ -351,7 +427,7 @@ var _ = Describe("RoutingTable", func() {
 						routing_table.RoutesByRoutingKey{key: routing_table.Routes{Hostnames: []string{hostname1}, LogGuid: logGuid}},
 						routing_table.EndpointsByRoutingKey{key: {endpoint1, endpoint2}},
 					)
-					messagesToEmit = table.Swap(tempTable)
+					messagesToEmit = table.Swap(tempTable, domains)
 				})
 
 				It("emits all registrations and the relevant unregisrations", func() {
@@ -375,7 +451,7 @@ var _ = Describe("RoutingTable", func() {
 						routing_table.RoutesByRoutingKey{key: routing_table.Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}},
 						routing_table.EndpointsByRoutingKey{key: {endpoint1}},
 					)
-					messagesToEmit = table.Swap(tempTable)
+					messagesToEmit = table.Swap(tempTable, domains)
 				})
 
 				It("emits all registrations and the relevant unregisrations", func() {
@@ -397,7 +473,7 @@ var _ = Describe("RoutingTable", func() {
 						routing_table.RoutesByRoutingKey{key: routing_table.Routes{Hostnames: []string{hostname1}, LogGuid: logGuid}},
 						routing_table.EndpointsByRoutingKey{key: {endpoint1}},
 					)
-					messagesToEmit = table.Swap(tempTable)
+					messagesToEmit = table.Swap(tempTable, domains)
 				})
 
 				It("emits all registrations and the relevant unregisrations", func() {
@@ -420,7 +496,7 @@ var _ = Describe("RoutingTable", func() {
 						routing_table.RoutesByRoutingKey{key: routing_table.Routes{Hostnames: []string{hostname1, hostname2, hostname3}, LogGuid: logGuid}},
 						routing_table.EndpointsByRoutingKey{key: {endpoint1}},
 					)
-					messagesToEmit = table.Swap(tempTable)
+					messagesToEmit = table.Swap(tempTable, domains)
 				})
 
 				It("emits all registrations and the relevant unregisrations", func() {
@@ -442,7 +518,7 @@ var _ = Describe("RoutingTable", func() {
 						routing_table.RoutesByRoutingKey{key: routing_table.Routes{Hostnames: []string{hostname1}, LogGuid: logGuid}},
 						routing_table.EndpointsByRoutingKey{key: {endpoint1, endpoint2, endpoint3}},
 					)
-					messagesToEmit = table.Swap(tempTable)
+					messagesToEmit = table.Swap(tempTable, domains)
 				})
 
 				It("emits all registrations and the relevant unregisrations", func() {
@@ -462,22 +538,74 @@ var _ = Describe("RoutingTable", func() {
 			})
 
 			Context("when the routing key disappears entirely", func() {
+				var tempTable routing_table.RoutingTable
+				var domainSet models.DomainSet
+
 				BeforeEach(func() {
-					tempTable := routing_table.NewTempTable(
+					tempTable = routing_table.NewTempTable(
 						routing_table.RoutesByRoutingKey{},
 						routing_table.EndpointsByRoutingKey{},
 					)
-					messagesToEmit = table.Swap(tempTable)
 				})
 
-				It("should unregister the missing guids", func() {
-					expected := routing_table.MessagesToEmit{
-						UnregistrationMessages: []routing_table.RegistryMessage{
-							routing_table.RegistryMessageFor(endpoint1, routing_table.Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}),
-							routing_table.RegistryMessageFor(endpoint2, routing_table.Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}),
-						},
-					}
-					Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
+				JustBeforeEach(func() {
+					messagesToEmit = table.Swap(tempTable, domainSet)
+				})
+
+				Context("when the domain is fresh", func() {
+					BeforeEach(func() {
+						domainSet = domains
+					})
+
+					It("should unregister the missing guids", func() {
+						expected := routing_table.MessagesToEmit{
+							UnregistrationMessages: []routing_table.RegistryMessage{
+								routing_table.RegistryMessageFor(endpoint1, routing_table.Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}),
+								routing_table.RegistryMessageFor(endpoint2, routing_table.Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}),
+							},
+						}
+						Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
+					})
+				})
+
+				Context("when the domain is not fresh", func() {
+					BeforeEach(func() {
+						domainSet = noFreshDomains
+					})
+
+					It("should register the missing guids", func() {
+						expected := routing_table.MessagesToEmit{
+							RegistrationMessages: []routing_table.RegistryMessage{
+								routing_table.RegistryMessageFor(endpoint1, routing_table.Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}),
+								routing_table.RegistryMessageFor(endpoint2, routing_table.Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}),
+							},
+						}
+						Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
+					})
+
+					Context("when the domain is repeatedly not fresh", func() {
+						BeforeEach(func() {
+							tempTable = routing_table.NewTempTable(
+								routing_table.RoutesByRoutingKey{},
+								routing_table.EndpointsByRoutingKey{},
+							)
+						})
+
+						JustBeforeEach(func() {
+							// doing another swap to make sure the old table is still good
+							messagesToEmit = table.Swap(tempTable, domainSet)
+						})
+
+						It("should register the missing guids", func() {
+							expected := routing_table.MessagesToEmit{
+								RegistrationMessages: []routing_table.RegistryMessage{
+									routing_table.RegistryMessageFor(endpoint1, routing_table.Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}),
+									routing_table.RegistryMessageFor(endpoint2, routing_table.Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}),
+								},
+							}
+							Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
+						})
+					})
 				})
 			})
 
@@ -489,13 +617,13 @@ var _ = Describe("RoutingTable", func() {
 							routing_table.RoutesByRoutingKey{},
 							routing_table.EndpointsByRoutingKey{key: {endpoint1, endpoint2}},
 						)
-						table.Swap(tempTable)
+						table.Swap(tempTable, domains)
 
 						tempTable = routing_table.NewTempTable(
 							routing_table.RoutesByRoutingKey{key: {}},
 							routing_table.EndpointsByRoutingKey{key: {endpoint1}},
 						)
-						messagesToEmit = table.Swap(tempTable)
+						messagesToEmit = table.Swap(tempTable, domains)
 					})
 
 					It("emits nothing", func() {
@@ -510,13 +638,13 @@ var _ = Describe("RoutingTable", func() {
 							routing_table.RoutesByRoutingKey{key: routing_table.Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}},
 							routing_table.EndpointsByRoutingKey{},
 						)
-						table.Swap(tempTable)
+						table.Swap(tempTable, domains)
 
 						tempTable = routing_table.NewTempTable(
 							routing_table.RoutesByRoutingKey{key: routing_table.Routes{Hostnames: []string{hostname1}, LogGuid: logGuid}},
 							routing_table.EndpointsByRoutingKey{},
 						)
-						messagesToEmit = table.Swap(tempTable)
+						messagesToEmit = table.Swap(tempTable, domains)
 					})
 
 					It("emits nothing", func() {
@@ -632,6 +760,7 @@ var _ = Describe("RoutingTable", func() {
 					expected := routing_table.MessagesToEmit{
 						RegistrationMessages: []routing_table.RegistryMessage{
 							routing_table.RegistryMessageFor(endpoint1, routing_table.Routes{Hostnames: []string{hostname1, hostname3}, LogGuid: logGuid}),
+							// pollProcess = ginkgomon.Invoke(performPollTestApp())
 							routing_table.RegistryMessageFor(endpoint2, routing_table.Routes{Hostnames: []string{hostname1, hostname3}, LogGuid: logGuid}),
 						},
 						UnregistrationMessages: []routing_table.RegistryMessage{

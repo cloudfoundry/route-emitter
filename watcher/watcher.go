@@ -39,6 +39,7 @@ type Watcher struct {
 
 type syncEndEvent struct {
 	table    routing_table.RoutingTable
+	domains  models.DomainSet
 	callback func(routing_table.RoutingTable)
 
 	logger lager.Logger
@@ -204,6 +205,8 @@ func (watcher *Watcher) sync(logger lager.Logger, syncEndChan chan syncEndEvent)
 	var getActualLRPsErr error
 	var schedulingInfos []*models.DesiredLRPSchedulingInfo
 	var getSchedulingInfosErr error
+	var domains models.DomainSet
+	var getDomainErr error
 
 	wg := sync.WaitGroup{}
 
@@ -247,9 +250,24 @@ func (watcher *Watcher) sync(logger lager.Logger, syncEndChan chan syncEndEvent)
 		logger.Debug("succeeded-getting-scheduling-infos", lager.Data{"num-desired-responses": len(schedulingInfos)})
 	}()
 
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+
+		logger.Debug("getting-domains")
+		domainArray, err := watcher.bbsClient.Domains()
+		if err != nil {
+			logger.Error("failed-getting-domains", err)
+			getDomainErr = err
+			return
+		}
+		domains = models.NewDomainSet(domainArray)
+		logger.Debug("succeeded-getting-domains", lager.Data{"num-domains": len(domains)})
+	}()
+
 	wg.Wait()
 
-	if getActualLRPsErr != nil || getSchedulingInfosErr != nil {
+	if getActualLRPsErr != nil || getSchedulingInfosErr != nil || getDomainErr != nil {
 		return
 	}
 
@@ -259,6 +277,7 @@ func (watcher *Watcher) sync(logger lager.Logger, syncEndChan chan syncEndEvent)
 	)
 
 	endEvent.table = newTable
+	endEvent.domains = domains
 	endEvent.callback = func(table routing_table.RoutingTable) {
 		after := watcher.clock.Now()
 		routeSyncDuration.Send(after.Sub(before))
@@ -294,7 +313,7 @@ func (watcher *Watcher) completeSync(syncEnd syncEndEvent, cachedEvents map[stri
 	watcher.table = table
 	watcher.emitter = emitter
 
-	messages := watcher.table.Swap(syncEnd.table)
+	messages := watcher.table.Swap(syncEnd.table, syncEnd.domains)
 	logger.Debug("emitting-messages", lager.Data{
 		"num-registration-messages":   len(messages.RegistrationMessages),
 		"num-unregistration-messages": len(messages.UnregistrationMessages),

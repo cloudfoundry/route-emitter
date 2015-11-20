@@ -2,8 +2,8 @@ package routing_table_test
 
 import (
 	"github.com/cloudfoundry-incubator/bbs/models"
-	"github.com/cloudfoundry-incubator/routing-info/cfroutes"
 	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
+	"github.com/cloudfoundry-incubator/routing-info/cfroutes"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -78,15 +78,15 @@ var _ = Describe("ByRoutingKey", func() {
 
 			Expect(endpoints).To(HaveLen(3))
 			Expect(endpoints[routing_table.RoutingKey{ProcessGuid: "abc", ContainerPort: 44}]).To(HaveLen(2))
-			Expect(endpoints[routing_table.RoutingKey{ProcessGuid: "abc", ContainerPort: 44}]).To(ContainElement(routing_table.Endpoint{Host: "1.1.1.1", Port: 11, ContainerPort: 44}))
-			Expect(endpoints[routing_table.RoutingKey{ProcessGuid: "abc", ContainerPort: 44}]).To(ContainElement(routing_table.Endpoint{Host: "2.2.2.2", Port: 22, ContainerPort: 44}))
+			Expect(endpoints[routing_table.RoutingKey{ProcessGuid: "abc", ContainerPort: 44}]).To(ContainElement(routing_table.Endpoint{Host: "1.1.1.1", Domain: "domain", Port: 11, ContainerPort: 44}))
+			Expect(endpoints[routing_table.RoutingKey{ProcessGuid: "abc", ContainerPort: 44}]).To(ContainElement(routing_table.Endpoint{Host: "2.2.2.2", Domain: "domain", Port: 22, ContainerPort: 44}))
 
 			Expect(endpoints[routing_table.RoutingKey{ProcessGuid: "abc", ContainerPort: 99}]).To(HaveLen(2))
-			Expect(endpoints[routing_table.RoutingKey{ProcessGuid: "abc", ContainerPort: 99}]).To(ContainElement(routing_table.Endpoint{Host: "1.1.1.1", Port: 66, ContainerPort: 99}))
-			Expect(endpoints[routing_table.RoutingKey{ProcessGuid: "abc", ContainerPort: 99}]).To(ContainElement(routing_table.Endpoint{Host: "2.2.2.2", Port: 88, ContainerPort: 99}))
+			Expect(endpoints[routing_table.RoutingKey{ProcessGuid: "abc", ContainerPort: 99}]).To(ContainElement(routing_table.Endpoint{Host: "1.1.1.1", Domain: "domain", Port: 66, ContainerPort: 99}))
+			Expect(endpoints[routing_table.RoutingKey{ProcessGuid: "abc", ContainerPort: 99}]).To(ContainElement(routing_table.Endpoint{Host: "2.2.2.2", Domain: "domain", Port: 88, ContainerPort: 99}))
 
 			Expect(endpoints[routing_table.RoutingKey{ProcessGuid: "def", ContainerPort: 55}]).To(HaveLen(1))
-			Expect(endpoints[routing_table.RoutingKey{ProcessGuid: "def", ContainerPort: 55}]).To(ContainElement(routing_table.Endpoint{Host: "3.3.3.3", Port: 33, ContainerPort: 55}))
+			Expect(endpoints[routing_table.RoutingKey{ProcessGuid: "def", ContainerPort: 55}]).To(ContainElement(routing_table.Endpoint{Host: "3.3.3.3", Domain: "domain", Port: 33, ContainerPort: 55}))
 		})
 	})
 
@@ -103,8 +103,8 @@ var _ = Describe("ByRoutingKey", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(endpoints).To(ConsistOf([]routing_table.Endpoint{
-				routing_table.Endpoint{Host: "1.1.1.1", Port: 11, InstanceGuid: "instance-guid", ContainerPort: 44, Evacuating: true},
-				routing_table.Endpoint{Host: "1.1.1.1", Port: 66, InstanceGuid: "instance-guid", ContainerPort: 99, Evacuating: true},
+				routing_table.Endpoint{Host: "1.1.1.1", Domain: "domain", Port: 11, InstanceGuid: "instance-guid", ContainerPort: 44, Evacuating: true},
+				routing_table.Endpoint{Host: "1.1.1.1", Domain: "domain", Port: 66, InstanceGuid: "instance-guid", ContainerPort: 99, Evacuating: true},
 			}))
 		})
 	})

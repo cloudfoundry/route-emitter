@@ -6,9 +6,9 @@ import (
 
 	"github.com/apcera/nats"
 	"github.com/cloudfoundry-incubator/bbs/models"
-	"github.com/cloudfoundry-incubator/routing-info/cfroutes"
 	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
 	. "github.com/cloudfoundry-incubator/route-emitter/routing_table/matchers"
+	"github.com/cloudfoundry-incubator/routing-info/cfroutes"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gbytes"
@@ -330,7 +330,8 @@ var _ = Describe("Route Emitter", func() {
 					Expect(err).NotTo(HaveOccurred())
 				})
 
-				It("immediately emits router.unregister", func() {
+				It("immediately emits router.unregister when domain is fresh", func() {
+					bbsClient.UpsertDomain(domain, 2*time.Second)
 					Eventually(unregisteredRoutes).Should(Receive(MatchRegistryMessage(routing_table.RegistryMessage{
 						URIs:              []string{"route-1"},
 						Host:              "1.2.3.4",

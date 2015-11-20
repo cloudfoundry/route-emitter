@@ -10,7 +10,7 @@ import (
 type RoutingTable interface {
 	RouteCount() int
 
-	Swap(newTable RoutingTable) MessagesToEmit
+	Swap(newTable RoutingTable, domains models.DomainSet) MessagesToEmit
 
 	SetRoutes(key RoutingKey, routes Routes) MessagesToEmit
 	RemoveRoutes(key RoutingKey, modTag *models.ModificationTag) MessagesToEmit
@@ -78,7 +78,7 @@ func (table *routingTable) RouteCount() int {
 	return count
 }
 
-func (table *routingTable) Swap(t RoutingTable) MessagesToEmit {
+func (table *routingTable) Swap(t RoutingTable, domains models.DomainSet) MessagesToEmit {
 	messagesToEmit := MessagesToEmit{}
 
 	newTable, ok := t.(*routingTable)
@@ -86,19 +86,33 @@ func (table *routingTable) Swap(t RoutingTable) MessagesToEmit {
 		return messagesToEmit
 	}
 	newEntries := newTable.entries
+	updatedEntries := make(map[RoutingKey]RoutableEndpoints)
 
 	table.Lock()
-	for _, newEntry := range newEntries {
-		//always register everything on sync
-		messagesToEmit = messagesToEmit.merge(table.messageBuilder.RegistrationsFor(nil, &newEntry))
+	for key, newEntry := range newEntries {
+		// See if we have a match
+		existingEntry, _ := table.entries[key]
+
+		//always register everything on sync  NOTE if a merge does occur we may return an altered newEntry
+		messagesToEmit = messagesToEmit.merge(table.messageBuilder.MergedRegistrations(&existingEntry, &newEntry, domains))
+		updatedEntries[key] = newEntry
 	}
 
 	for key, existingEntry := range table.entries {
-		newEntry := newEntries[key]
-		messagesToEmit = messagesToEmit.merge(table.messageBuilder.UnregistrationsFor(&existingEntry, &newEntry))
+		newEntry, ok := newEntries[key]
+		messagesToEmit = messagesToEmit.merge(table.messageBuilder.UnregistrationsFor(&existingEntry, &newEntry, domains))
+
+		// maybe reemit old ones no longer found in the new table
+		if !ok {
+			unfreshRegistrations := table.messageBuilder.UnfreshRegistrations(&existingEntry, domains)
+			if len(unfreshRegistrations.RegistrationMessages) > 0 {
+				updatedEntries[key] = existingEntry
+				messagesToEmit = messagesToEmit.merge(unfreshRegistrations)
+			}
+		}
 	}
 
-	table.entries = newEntries
+	table.entries = updatedEntries
 	table.Unlock()
 
 	return messagesToEmit
@@ -185,7 +199,7 @@ func (table *routingTable) RemoveEndpoint(key RoutingKey, endpoint Endpoint) Mes
 
 func (table *routingTable) emit(key RoutingKey, oldEntry RoutableEndpoints, newEntry RoutableEndpoints) MessagesToEmit {
 	messagesToEmit := table.messageBuilder.RegistrationsFor(&oldEntry, &newEntry)
-	messagesToEmit = messagesToEmit.merge(table.messageBuilder.UnregistrationsFor(&oldEntry, &newEntry))
+	messagesToEmit = messagesToEmit.merge(table.messageBuilder.UnregistrationsFor(&oldEntry, &newEntry, nil))
 
 	return messagesToEmit
 }

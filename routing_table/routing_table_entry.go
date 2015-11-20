@@ -10,6 +10,7 @@ type EndpointKey struct {
 type Endpoint struct {
 	InstanceGuid    string
 	Host            string
+	Domain          string
 	Port            uint32
 	ContainerPort   uint32
 	Evacuating      bool
