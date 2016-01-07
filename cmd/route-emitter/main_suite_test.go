@@ -12,7 +12,6 @@ import (
 
 	"github.com/cloudfoundry/gunk/diegonats"
 	"github.com/cloudfoundry/gunk/diegonats/gnatsdrunner"
-	"github.com/cloudfoundry/storeadapter"
 	"github.com/cloudfoundry/storeadapter/storerunner/etcdstorerunner"
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/config"
@@ -48,7 +47,6 @@ var etcdRunner *etcdstorerunner.ETCDClusterRunner
 var consulRunner *consulrunner.ClusterRunner
 var gnatsdRunner ifrit.Process
 var natsClient diegonats.NATSClient
-var store storeadapter.StoreAdapter
 var bbsClient bbs.Client
 var logger *lagertest.TestLogger
 var syncInterval time.Duration
@@ -105,7 +103,6 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 	etcdRunner = etcdstorerunner.NewETCDClusterRunner(etcdPort, 1, nil)
 
 	emitterPath = string(binaries["emitter"])
-	store = etcdRunner.Adapter(nil)
 
 	consulRunner = consulrunner.NewClusterRunner(
 		9001+config.GinkgoConfig.ParallelNode*consulrunner.PortOffsetLength,
