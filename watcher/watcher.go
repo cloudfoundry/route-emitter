@@ -190,7 +190,10 @@ func (watcher *Watcher) emit(logger lager.Logger) {
 	}
 
 	routesSynced.Add(messagesToEmit.RouteRegistrationCount())
-	routesTotal.Send(watcher.table.RouteCount())
+	err = routesTotal.Send(watcher.table.RouteCount())
+	if err != nil {
+		logger.Error("failed-to-send-routes-total-metric", err)
+	}
 }
 
 func (watcher *Watcher) sync(logger lager.Logger, syncEndChan chan syncEndEvent) {
@@ -280,7 +283,10 @@ func (watcher *Watcher) sync(logger lager.Logger, syncEndChan chan syncEndEvent)
 	endEvent.domains = domains
 	endEvent.callback = func(table routing_table.RoutingTable) {
 		after := watcher.clock.Now()
-		routeSyncDuration.Send(after.Sub(before))
+		err := routeSyncDuration.Send(after.Sub(before))
+		if err != nil {
+			logger.Error("failed-to-send-route-sync-duration-metric", err)
+		}
 	}
 }
 
