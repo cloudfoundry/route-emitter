@@ -98,6 +98,7 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 
 			for {
 				if atomic.LoadInt32(&stopEventSource) == 1 {
+					watcher.logger.Info("stop-event-source-received")
 					return
 				}
 
@@ -107,6 +108,7 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 					continue
 				}
 
+				watcher.logger.Info("succeeded-subscribing-to-events")
 				eventSource.Store(es)
 
 				var event models.Event
@@ -320,7 +322,7 @@ func (watcher *Watcher) completeSync(syncEnd syncEndEvent, cachedEvents map[stri
 	watcher.emitter = emitter
 
 	messages := watcher.table.Swap(syncEnd.table, syncEnd.domains)
-	logger.Debug("emitting-messages", lager.Data{
+	logger.Debug("start-emitting-messages", lager.Data{
 		"num-registration-messages":   len(messages.RegistrationMessages),
 		"num-unregistration-messages": len(messages.UnregistrationMessages),
 	})
@@ -501,7 +503,7 @@ func (watcher *Watcher) removeAndEmit(logger lager.Logger, actualLRPInfo *routin
 
 func (watcher *Watcher) emitMessages(logger lager.Logger, messagesToEmit routing_table.MessagesToEmit) {
 	if watcher.emitter != nil {
-		logger.Debug("emitting-messages", lager.Data{"messages": messagesToEmit})
+		logger.Debug("emit-messages", lager.Data{"messages": messagesToEmit})
 		watcher.emitter.Emit(messagesToEmit)
 		routesRegistered.Add(messagesToEmit.RouteRegistrationCount())
 		routesUnregistered.Add(messagesToEmit.RouteUnregistrationCount())

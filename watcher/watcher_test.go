@@ -127,7 +127,7 @@ var _ = Describe("Watcher", func() {
 
 		eventSource.NextStub = func() (models.Event, error) {
 			time.Sleep(10 * time.Millisecond)
-			if eventHolder := nextEvent.Load(); eventHolder != nil || eventHolder != nilEventHolder {
+			if eventHolder := nextEvent.Load(); eventHolder != nil && eventHolder != nilEventHolder {
 				nextEvent.Store(nilEventHolder)
 
 				eh := eventHolder.(EventHolder)
