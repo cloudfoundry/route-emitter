@@ -468,6 +468,7 @@ func (watcher *Watcher) handleActualDelete(logger lager.Logger, actualLRPInfo *r
 }
 
 func (watcher *Watcher) addAndEmit(logger lager.Logger, actualLRPInfo *routing_table.ActualLRPRoutingInfo) {
+	logger.Info("watcher-add-and-emit", lager.Data{"net_info": actualLRPInfo.ActualLRP.ActualLRPNetInfo})
 	endpoints, err := routing_table.EndpointsFromActual(actualLRPInfo)
 	if err != nil {
 		logger.Error("failed-to-extract-endpoint-from-actual", err)
@@ -485,6 +486,7 @@ func (watcher *Watcher) addAndEmit(logger lager.Logger, actualLRPInfo *routing_t
 }
 
 func (watcher *Watcher) removeAndEmit(logger lager.Logger, actualLRPInfo *routing_table.ActualLRPRoutingInfo) {
+	logger.Info("watcher-remove-and-emit", lager.Data{"net_info": actualLRPInfo.ActualLRP.ActualLRPNetInfo})
 	endpoints, err := routing_table.EndpointsFromActual(actualLRPInfo)
 	if err != nil {
 		logger.Error("failed-to-extract-endpoint-from-actual", err)

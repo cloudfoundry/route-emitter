@@ -3,6 +3,7 @@ package watcher_test
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"sync/atomic"
 	"time"
@@ -13,6 +14,7 @@ import (
 	"github.com/cloudfoundry-incubator/bbs/models"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	. "github.com/onsi/gomega/gbytes"
 	"github.com/pivotal-golang/clock/fakeclock"
 	"github.com/pivotal-golang/lager/lagertest"
 	"github.com/tedsuo/ifrit"
@@ -600,6 +602,19 @@ var _ = Describe("Watcher", func() {
 					nextEvent.Store(EventHolder{models.NewActualLRPCreatedEvent(actualLRPGroup)})
 				})
 
+				It("should log the net info", func() {
+					Eventually(logger).Should(Say(
+						fmt.Sprintf(
+							`"net_info":\{"address":"%s","ports":\[\{"container_port":%d,"host_port":%d\},\{"container_port":%d,"host_port":%d\}\]\}`,
+							expectedHost,
+							expectedContainerPort,
+							expectedExternalPort,
+							expectedAdditionalContainerPort,
+							expectedExternalPort,
+						),
+					))
+				})
+
 				It("should add/update the endpoints on the table", func() {
 					Eventually(table.AddEndpointCallCount).Should(Equal(2))
 
@@ -655,6 +670,19 @@ var _ = Describe("Watcher", func() {
 					nextEvent.Store(EventHolder{models.NewActualLRPCreatedEvent(actualLRPGroup)})
 				})
 
+				It("should NOT log the net info", func() {
+					Consistently(logger).ShouldNot(Say(
+						fmt.Sprintf(
+							`"net_info":\{"address":"%s","ports":\[\{"container_port":%d,"host_port":%d\},\{"container_port":%d,"host_port":%d\}\]\}`,
+							expectedHost,
+							expectedContainerPort,
+							expectedExternalPort,
+							expectedAdditionalContainerPort,
+							expectedExternalPort,
+						),
+					))
+				})
+
 				It("doesn't add/update the endpoint on the table", func() {
 					Consistently(table.AddEndpointCallCount).Should(Equal(0))
 				})
@@ -693,6 +721,19 @@ var _ = Describe("Watcher", func() {
 					}
 
 					nextEvent.Store(EventHolder{models.NewActualLRPChangedEvent(beforeActualLRP, afterActualLRP)})
+				})
+
+				It("should log the new net info", func() {
+					Eventually(logger).Should(Say(
+						fmt.Sprintf(
+							`"net_info":\{"address":"%s","ports":\[\{"container_port":%d,"host_port":%d\},\{"container_port":%d,"host_port":%d\}\]\}`,
+							expectedHost,
+							expectedContainerPort,
+							expectedExternalPort,
+							expectedAdditionalContainerPort,
+							expectedAdditionalExternalPort,
+						),
+					))
 				})
 
 				It("should add/update the endpoint on the table", func() {
@@ -765,6 +806,19 @@ var _ = Describe("Watcher", func() {
 					nextEvent.Store(EventHolder{models.NewActualLRPChangedEvent(beforeActualLRP, afterActualLRP)})
 				})
 
+				It("should log the previous net info", func() {
+					Eventually(logger).Should(Say(
+						fmt.Sprintf(
+							`"net_info":\{"address":"%s","ports":\[\{"container_port":%d,"host_port":%d\},\{"container_port":%d,"host_port":%d\}\]\}`,
+							expectedHost,
+							expectedContainerPort,
+							expectedExternalPort,
+							expectedAdditionalContainerPort,
+							expectedAdditionalExternalPort,
+						),
+					))
+				})
+
 				It("should remove the endpoint from the table", func() {
 					Eventually(table.RemoveEndpointCallCount).Should(Equal(2))
 
@@ -816,6 +870,19 @@ var _ = Describe("Watcher", func() {
 					nextEvent.Store(EventHolder{models.NewActualLRPChangedEvent(beforeActualLRP, afterActualLRP)})
 				})
 
+				It("should NOT log the net info", func() {
+					Consistently(logger).ShouldNot(Say(
+						fmt.Sprintf(
+							`"net_info":\{"address":"%s","ports":\[\{"container_port":%d,"host_port":%d\},\{"container_port":%d,"host_port":%d\}\]\}`,
+							expectedHost,
+							expectedContainerPort,
+							expectedExternalPort,
+							expectedAdditionalContainerPort,
+							expectedExternalPort,
+						),
+					))
+				})
+
 				It("should not remove the endpoint", func() {
 					Consistently(table.RemoveEndpointCallCount).Should(BeZero())
 				})
@@ -851,6 +918,19 @@ var _ = Describe("Watcher", func() {
 					}
 
 					nextEvent.Store(EventHolder{models.NewActualLRPRemovedEvent(actualLRP)})
+				})
+
+				It("should log the previous net info", func() {
+					Eventually(logger).Should(Say(
+						fmt.Sprintf(
+							`"net_info":\{"address":"%s","ports":\[\{"container_port":%d,"host_port":%d\},\{"container_port":%d,"host_port":%d\}\]\}`,
+							expectedHost,
+							expectedContainerPort,
+							expectedExternalPort,
+							expectedAdditionalContainerPort,
+							expectedAdditionalExternalPort,
+						),
+					))
 				})
 
 				It("should remove the endpoint from the table", func() {
@@ -899,6 +979,19 @@ var _ = Describe("Watcher", func() {
 					}
 
 					nextEvent.Store(EventHolder{models.NewActualLRPRemovedEvent(actualLRP)})
+				})
+
+				It("should NOT log the net info", func() {
+					Consistently(logger).ShouldNot(Say(
+						fmt.Sprintf(
+							`"net_info":\{"address":"%s","ports":\[\{"container_port":%d,"host_port":%d\},\{"container_port":%d,"host_port":%d\}\]\}`,
+							expectedHost,
+							expectedContainerPort,
+							expectedExternalPort,
+							expectedAdditionalContainerPort,
+							expectedExternalPort,
+						),
+					))
 				})
 
 				It("doesn't remove the endpoint from the table", func() {
