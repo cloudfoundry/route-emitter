@@ -222,19 +222,17 @@ func initializeLockMaintainer(
 	if err != nil {
 		logger.Fatal("new-client-failed", err)
 	}
-	consulSession, err := consuladapter.NewSession(sessionName, lockTTL, consuladapter.NewConsulClient(client))
-	if err != nil {
-		logger.Fatal("consul-session-failed", err)
-	}
+
+	consulClient := consuladapter.NewConsulClient(client)
 
 	uuid, err := uuid.NewV4()
 	if err != nil {
 		logger.Fatal("Couldn't generate uuid", err)
 	}
 
-	serviceClient := route_emitter.NewServiceClient(consulSession, clock)
+	serviceClient := route_emitter.NewServiceClient(consulClient, clock)
 
-	return serviceClient.NewRouteEmitterLockRunner(logger, uuid.String(), lockRetryInterval)
+	return serviceClient.NewRouteEmitterLockRunner(logger, uuid.String(), lockRetryInterval, lockTTL)
 }
 
 func initializeBBSClient(logger lager.Logger) bbs.Client {
