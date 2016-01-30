@@ -218,12 +218,10 @@ func initializeLockMaintainer(
 	lockTTL, lockRetryInterval time.Duration,
 	clock clock.Clock,
 ) ifrit.Runner {
-	client, err := consuladapter.NewClient(consulCluster)
+	consulClient, err := consuladapter.NewClientFromUrl(consulCluster)
 	if err != nil {
 		logger.Fatal("new-client-failed", err)
 	}
-
-	consulClient := consuladapter.NewConsulClient(client)
 
 	uuid, err := uuid.NewV4()
 	if err != nil {
