@@ -134,6 +134,7 @@ var _ = Describe("Route Emitter", func() {
 						App:               desiredLRP.LogGuid,
 						PrivateInstanceId: instanceKey.InstanceGuid,
 						RouteServiceUrl:   "https://awesome.com",
+						Tags:              map[string]string{"component": "route-emitter"},
 					})))
 				})
 			})
@@ -177,6 +178,7 @@ var _ = Describe("Route Emitter", func() {
 						App:               desiredLRP.LogGuid,
 						PrivateInstanceId: instanceKey.InstanceGuid,
 						RouteServiceUrl:   "https://awesome.com",
+						Tags:              map[string]string{"component": "route-emitter"},
 					})))
 				})
 
@@ -288,6 +290,7 @@ var _ = Describe("Route Emitter", func() {
 					App:               "some-log-guid",
 					PrivateInstanceId: "iguid1",
 					RouteServiceUrl:   "https://awesome.com",
+					Tags:              map[string]string{"component": "route-emitter"},
 				})))
 			})
 
@@ -313,6 +316,7 @@ var _ = Describe("Route Emitter", func() {
 						Port:              65100,
 						App:               "some-log-guid",
 						PrivateInstanceId: "iguid1",
+						Tags:              map[string]string{"component": "route-emitter"},
 					})))
 				})
 			})
@@ -338,6 +342,7 @@ var _ = Describe("Route Emitter", func() {
 						Port:              65100,
 						App:               "some-log-guid",
 						PrivateInstanceId: "iguid1",
+						Tags:              map[string]string{"component": "route-emitter"},
 					})))
 				})
 			})

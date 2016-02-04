@@ -20,6 +20,7 @@ var _ = Describe("RegistryMessage", func() {
 			App:               "app-guid",
 			PrivateInstanceId: "instance-guid",
 			RouteServiceUrl:   "https://hello.com",
+			Tags:              map[string]string{"component": "route-emitter"},
 		}
 	})
 
@@ -33,7 +34,8 @@ var _ = Describe("RegistryMessage", func() {
 				"uris": ["host-1.example.com", "host-2.example.com"],
 				"app" : "app-guid",
 				"private_instance_id": "instance-guid",
-				"route_service_url": "https://hello.com"
+				"route_service_url": "https://hello.com",
+				"tags": {"component":"route-emitter"}
 			}`
 		})
 

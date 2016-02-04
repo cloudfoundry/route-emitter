@@ -92,6 +92,7 @@ var _ = Describe("NatsEmitter", func() {
         }
       `)))
 
+			Expect(fakeMetricSender.GetCounter("MessagesEmitted")).To(BeEquivalentTo(4))
 		})
 
 		Context("when the nats client errors", func() {

@@ -5,10 +5,13 @@ import (
 	"sync"
 
 	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
+	"github.com/cloudfoundry-incubator/runtime-schema/metric"
 	"github.com/cloudfoundry/gunk/diegonats"
 	"github.com/cloudfoundry/gunk/workpool"
 	"github.com/pivotal-golang/lager"
 )
+
+var messagesEmitted = metric.Counter("MessagesEmitted")
 
 //go:generate counterfeiter -o fake_nats_emitter/fake_nats_emitter.go . NATSEmitter
 type NATSEmitter interface {
@@ -49,6 +52,9 @@ func (n *natsEmitter) Emit(messagesToEmit routing_table.MessagesToEmit) error {
 		return finalError
 	default:
 	}
+
+	numberOfMessages := uint64(len(messagesToEmit.RegistrationMessages) + len(messagesToEmit.UnregistrationMessages))
+	messagesEmitted.Add(numberOfMessages)
 
 	return nil
 }
