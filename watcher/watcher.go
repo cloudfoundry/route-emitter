@@ -136,6 +136,8 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 			if syncing == false {
 				logger := watcher.logger.Session("sync")
 				logger.Info("starting")
+
+				cachedEvents = make(map[string]models.Event)
 				syncing = true
 
 				if !startedEventSource {
@@ -143,7 +145,6 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 					startEventSource()
 				}
 
-				cachedEvents = make(map[string]models.Event)
 				go watcher.sync(logger, syncEndChan)
 			}
 

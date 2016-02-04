@@ -4,7 +4,11 @@ import (
 	"sync"
 
 	"github.com/cloudfoundry-incubator/bbs/models"
+	"github.com/cloudfoundry-incubator/runtime-schema/metric"
+	"github.com/pivotal-golang/lager"
 )
+
+var addressCollisions = metric.Counter("AddressCollisions")
 
 //go:generate counterfeiter -o fake_routing_table/fake_routing_table.go . RoutingTable
 type RoutingTable interface {
@@ -26,13 +30,16 @@ func (noopLocker) Lock()   {}
 func (noopLocker) Unlock() {}
 
 type routingTable struct {
-	entries map[RoutingKey]RoutableEndpoints
+	entries        map[RoutingKey]RoutableEndpoints
+	addressEntries map[Address]EndpointKey // for collision detection
 	sync.Locker
 	messageBuilder MessageBuilder
+	logger         lager.Logger
 }
 
-func NewTempTable(routes RoutesByRoutingKey, endpoints EndpointsByRoutingKey) RoutingTable {
+func NewTempTable(routes RoutesByRoutingKey, endpointsByKey EndpointsByRoutingKey) RoutingTable {
 	entries := make(map[RoutingKey]RoutableEndpoints)
+	addressEntries := make(map[Address]EndpointKey)
 
 	for key, entry := range routes {
 		entries[key] = RoutableEndpoints{
@@ -42,27 +49,33 @@ func NewTempTable(routes RoutesByRoutingKey, endpoints EndpointsByRoutingKey) Ro
 		}
 	}
 
-	for key, endpoints := range endpoints {
+	for key, endpoints := range endpointsByKey {
 		entry, ok := entries[key]
 		if !ok {
 			entry = RoutableEndpoints{}
 		}
 		entry.Endpoints = EndpointsAsMap(endpoints)
 		entries[key] = entry
+		for _, endpoint := range endpoints {
+			addressEntries[endpoint.address()] = endpoint.key()
+		}
 	}
 
 	return &routingTable{
 		entries:        entries,
+		addressEntries: addressEntries,
 		Locker:         noopLocker{},
 		messageBuilder: NoopMessageBuilder{},
 	}
 }
 
-func NewTable() RoutingTable {
+func NewTable(logger lager.Logger) RoutingTable {
 	return &routingTable{
 		entries:        make(map[RoutingKey]RoutableEndpoints),
+		addressEntries: make(map[Address]EndpointKey),
 		Locker:         &sync.Mutex{},
 		messageBuilder: MessagesToEmitBuilder{},
+		logger:         logger,
 	}
 }
 
@@ -87,6 +100,7 @@ func (table *routingTable) Swap(t RoutingTable, domains models.DomainSet) Messag
 	}
 	newEntries := newTable.entries
 	updatedEntries := make(map[RoutingKey]RoutableEndpoints)
+	updatedAddressEntries := make(map[Address]EndpointKey)
 
 	table.Lock()
 	for key, newEntry := range newEntries {
@@ -96,6 +110,9 @@ func (table *routingTable) Swap(t RoutingTable, domains models.DomainSet) Messag
 		//always register everything on sync  NOTE if a merge does occur we may return an altered newEntry
 		messagesToEmit = messagesToEmit.merge(table.messageBuilder.MergedRegistrations(&existingEntry, &newEntry, domains))
 		updatedEntries[key] = newEntry
+		for _, endpoint := range newEntry.Endpoints {
+			updatedAddressEntries[endpoint.address()] = endpoint.key()
+		}
 	}
 
 	for key, existingEntry := range table.entries {
@@ -107,12 +124,16 @@ func (table *routingTable) Swap(t RoutingTable, domains models.DomainSet) Messag
 			unfreshRegistrations := table.messageBuilder.UnfreshRegistrations(&existingEntry, domains)
 			if len(unfreshRegistrations.RegistrationMessages) > 0 {
 				updatedEntries[key] = existingEntry
+				for _, endpoint := range existingEntry.Endpoints {
+					updatedAddressEntries[endpoint.address()] = endpoint.key()
+				}
 				messagesToEmit = messagesToEmit.merge(unfreshRegistrations)
 			}
 		}
 	}
 
 	table.entries = updatedEntries
+	table.addressEntries = updatedAddressEntries
 	table.Unlock()
 
 	return messagesToEmit
@@ -176,6 +197,18 @@ func (table *routingTable) AddEndpoint(key RoutingKey, endpoint Endpoint) Messag
 	newEntry.Endpoints[endpoint.key()] = endpoint
 	table.entries[key] = newEntry
 
+	address := endpoint.address()
+	if existingEndpointKey, ok := table.addressEntries[address]; ok {
+		if existingEndpointKey != endpoint.key() {
+			addressCollisions.Add(1)
+			table.logger.Info("collision-detected-with-endpoint", lager.Data{
+				"instance_guid_a": existingEndpointKey.InstanceGuid,
+				"instance_guid_b": endpoint.InstanceGuid,
+			})
+		}
+	}
+	table.addressEntries[address] = endpoint.key()
+
 	return table.emit(key, currentEntry, newEntry)
 }
 
@@ -193,6 +226,8 @@ func (table *routingTable) RemoveEndpoint(key RoutingKey, endpoint Endpoint) Mes
 	newEntry := currentEntry.copy()
 	delete(newEntry.Endpoints, endpointKey)
 	table.entries[key] = newEntry
+
+	delete(table.addressEntries, endpoint.address())
 
 	return table.emit(key, currentEntry, newEntry)
 }

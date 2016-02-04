@@ -1,18 +1,23 @@
 package routing_table_test
 
 import (
+	"fmt"
+
 	"github.com/cloudfoundry-incubator/bbs/models"
 	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
+	"github.com/pivotal-golang/lager/lagertest"
 
 	. "github.com/cloudfoundry-incubator/route-emitter/routing_table/matchers"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	. "github.com/onsi/gomega/gbytes"
 )
 
 var _ = Describe("RoutingTable", func() {
 	var (
 		table          routing_table.RoutingTable
 		messagesToEmit routing_table.MessagesToEmit
+		logger         *lagertest.TestLogger
 	)
 
 	key := routing_table.RoutingKey{ProcessGuid: "some-process-guid", ContainerPort: 8080}
@@ -30,6 +35,15 @@ var _ = Describe("RoutingTable", func() {
 	endpoint1 := routing_table.Endpoint{InstanceGuid: "ig-1", Host: "1.1.1.1", Domain: domain, Port: 11, ContainerPort: 8080, Evacuating: false, ModificationTag: currentTag}
 	endpoint2 := routing_table.Endpoint{InstanceGuid: "ig-2", Host: "2.2.2.2", Domain: domain, Port: 22, ContainerPort: 8080, Evacuating: false, ModificationTag: currentTag}
 	endpoint3 := routing_table.Endpoint{InstanceGuid: "ig-3", Host: "3.3.3.3", Domain: domain, Port: 33, ContainerPort: 8080, Evacuating: false, ModificationTag: currentTag}
+	collisionEndpoint := routing_table.Endpoint{
+		InstanceGuid:    "ig-4",
+		Host:            "1.1.1.1",
+		Domain:          domain,
+		Port:            11,
+		ContainerPort:   8080,
+		Evacuating:      false,
+		ModificationTag: currentTag,
+	}
 
 	evacuating1 := routing_table.Endpoint{InstanceGuid: "ig-1", Host: "1.1.1.1", Domain: domain, Port: 11, ContainerPort: 8080, Evacuating: true, ModificationTag: currentTag}
 
@@ -39,7 +53,8 @@ var _ = Describe("RoutingTable", func() {
 	noFreshDomains := models.NewDomainSet([]string{})
 
 	BeforeEach(func() {
-		table = routing_table.NewTable()
+		logger = lagertest.NewTestLogger("test-route-emitter")
+		table = routing_table.NewTable(logger)
 	})
 
 	Describe("Swap", func() {
@@ -68,6 +83,19 @@ var _ = Describe("RoutingTable", func() {
 					},
 				}
 				Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
+			})
+
+			Context("when an endpoint is added that is a collision", func() {
+				It("logs the collision", func() {
+					table.AddEndpoint(key, collisionEndpoint)
+					Eventually(logger).Should(Say(
+						fmt.Sprintf(
+							`\{"instance_guid_a":"%s","instance_guid_b":"%s"\}`,
+							endpoint1.InstanceGuid,
+							collisionEndpoint.InstanceGuid,
+						),
+					))
+				})
 			})
 
 			Context("subsequent swaps with still not fresh", func() {
@@ -596,6 +624,17 @@ var _ = Describe("RoutingTable", func() {
 							messagesToEmit = table.Swap(tempTable, domainSet)
 						})
 
+						It("logs the collision", func() {
+							table.AddEndpoint(key, collisionEndpoint)
+							Eventually(logger).Should(Say(
+								fmt.Sprintf(
+									`\{"instance_guid_a":"%s","instance_guid_b":"%s"\}`,
+									endpoint1.InstanceGuid,
+									collisionEndpoint.InstanceGuid,
+								),
+							))
+						})
+
 						It("should register the missing guids", func() {
 							expected := routing_table.MessagesToEmit{
 								RegistrationMessages: []routing_table.RegistryMessage{
@@ -836,6 +875,24 @@ var _ = Describe("RoutingTable", func() {
 					Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
 				})
 
+				It("does not log a collision", func() {
+					table.AddEndpoint(key, endpoint3)
+					Consistently(logger).ShouldNot(Say("collision-detected-with-endpoint"))
+				})
+
+				Context("when adding an endpoint with IP and port that collide with existing endpoint", func() {
+					It("logs the collision", func() {
+						table.AddEndpoint(key, collisionEndpoint)
+						Eventually(logger).Should(Say(
+							fmt.Sprintf(
+								`\{"instance_guid_a":"%s","instance_guid_b":"%s"\}`,
+								endpoint1.InstanceGuid,
+								collisionEndpoint.InstanceGuid,
+							),
+						))
+					})
+				})
+
 				Context("when an evacuating endpoint is added for an instance that already exists", func() {
 					It("emits nothing", func() {
 						messagesToEmit = table.AddEndpoint(key, evacuating1)
@@ -853,22 +910,9 @@ var _ = Describe("RoutingTable", func() {
 						Expect(messagesToEmit).To(BeZero())
 					})
 				})
-
-				Context("when the endpoint does not already exist", func() {
-					It("emits registrations", func() {
-						messagesToEmit = table.AddEndpoint(key, endpoint3)
-
-						expected := routing_table.MessagesToEmit{
-							RegistrationMessages: []routing_table.RegistryMessage{
-								routing_table.RegistryMessageFor(endpoint3, routing_table.Routes{Hostnames: []string{hostname1, hostname2}, LogGuid: logGuid}),
-							},
-						}
-						Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
-					})
-				})
 			})
 
-			Context("when removing endpoints", func() {
+			Context("RemoveEndpoint", func() {
 				It("emits unregistrations with the same tag", func() {
 					messagesToEmit = table.RemoveEndpoint(key, endpoint2)
 
@@ -919,6 +963,14 @@ var _ = Describe("RoutingTable", func() {
 					It("emits nothing", func() {
 						messagesToEmit = table.AddEndpoint(key, endpoint1)
 						Expect(messagesToEmit).To(BeZero())
+					})
+				})
+
+				Context("when a collision is avoided because the endpoint has already been removed", func() {
+					It("does not log the collision", func() {
+						table.RemoveEndpoint(key, endpoint1)
+						table.AddEndpoint(key, collisionEndpoint)
+						Consistently(logger).ShouldNot(Say("collision-detected-with-endpoint"))
 					})
 				})
 			})

@@ -7,6 +7,11 @@ type EndpointKey struct {
 	Evacuating   bool
 }
 
+type Address struct {
+	Host string
+	Port uint32
+}
+
 type Endpoint struct {
 	InstanceGuid    string
 	Host            string
@@ -19,6 +24,10 @@ type Endpoint struct {
 
 func (e Endpoint) key() EndpointKey {
 	return EndpointKey{InstanceGuid: e.InstanceGuid, Evacuating: e.Evacuating}
+}
+
+func (e Endpoint) address() Address {
+	return Address{Host: e.Host, Port: e.Port}
 }
 
 type Routes struct {

@@ -1301,7 +1301,7 @@ var _ = Describe("Watcher", func() {
 						)
 
 						domains := models.NewDomainSet([]string{"domain"})
-						table := routing_table.NewTable()
+						table := routing_table.NewTable(logger)
 						table.Swap(tempTable, domains)
 
 						watcherProcess = watcher.NewWatcher(bbsClient, clock, table, emitter, syncEvents, logger)

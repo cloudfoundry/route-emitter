@@ -151,7 +151,7 @@ func main() {
 
 	natsClientRunner := diegonats.NewClientRunner(*natsAddresses, *natsUsername, *natsPassword, logger, natsClient)
 
-	table := initializeRoutingTable()
+	table := initializeRoutingTable(logger)
 	emitter := initializeNatsEmitter(natsClient, logger)
 	watcher := ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
 		return watcher.NewWatcher(initializeBBSClient(logger), clock, table, emitter, syncer.Events(), logger).Run(signals, ready)
@@ -208,8 +208,8 @@ func initializeNatsEmitter(natsClient diegonats.NATSClient, logger lager.Logger)
 	return nats_emitter.New(natsClient, workPool, logger)
 }
 
-func initializeRoutingTable() routing_table.RoutingTable {
-	return routing_table.NewTable()
+func initializeRoutingTable(logger lager.Logger) routing_table.RoutingTable {
+	return routing_table.NewTable(logger)
 }
 
 func initializeLockMaintainer(
