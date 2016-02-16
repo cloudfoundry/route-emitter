@@ -90,7 +90,9 @@ var _ = Describe("RoutingTable", func() {
 					table.AddEndpoint(key, collisionEndpoint)
 					Eventually(logger).Should(Say(
 						fmt.Sprintf(
-							`\{"instance_guid_a":"%s","instance_guid_b":"%s"\}`,
+							`\{"Address":\{"Host":"%s","Port":%d\},"instance_guid_a":"%s","instance_guid_b":"%s"\}`,
+							endpoint1.Host,
+							endpoint1.Port,
 							endpoint1.InstanceGuid,
 							collisionEndpoint.InstanceGuid,
 						),
@@ -628,7 +630,9 @@ var _ = Describe("RoutingTable", func() {
 							table.AddEndpoint(key, collisionEndpoint)
 							Eventually(logger).Should(Say(
 								fmt.Sprintf(
-									`\{"instance_guid_a":"%s","instance_guid_b":"%s"\}`,
+									`\{"Address":\{"Host":"%s","Port":%d\},"instance_guid_a":"%s","instance_guid_b":"%s"\}`,
+									endpoint1.Host,
+									endpoint1.Port,
 									endpoint1.InstanceGuid,
 									collisionEndpoint.InstanceGuid,
 								),
@@ -885,7 +889,9 @@ var _ = Describe("RoutingTable", func() {
 						table.AddEndpoint(key, collisionEndpoint)
 						Eventually(logger).Should(Say(
 							fmt.Sprintf(
-								`\{"instance_guid_a":"%s","instance_guid_b":"%s"\}`,
+								`\{"Address":\{"Host":"%s","Port":%d\},"instance_guid_a":"%s","instance_guid_b":"%s"\}`,
+								endpoint1.Host,
+								endpoint1.Port,
 								endpoint1.InstanceGuid,
 								collisionEndpoint.InstanceGuid,
 							),

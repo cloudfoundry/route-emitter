@@ -204,6 +204,7 @@ func (table *routingTable) AddEndpoint(key RoutingKey, endpoint Endpoint) Messag
 			table.logger.Info("collision-detected-with-endpoint", lager.Data{
 				"instance_guid_a": existingEndpointKey.InstanceGuid,
 				"instance_guid_b": endpoint.InstanceGuid,
+				"Address":         endpoint.address(),
 			})
 		}
 	}
