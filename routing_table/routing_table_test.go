@@ -828,6 +828,11 @@ var _ = Describe("RoutingTable", func() {
 					Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
 				})
 
+				It("updates routing table with a newer tag", func() {
+					table.RemoveRoutes(key, newerTag)
+					Expect(table.RouteCount()).To(Equal(0))
+				})
+
 				It("emits unregistrations with the same tag", func() {
 					messagesToEmit = table.RemoveRoutes(key, currentTag)
 
@@ -840,9 +845,20 @@ var _ = Describe("RoutingTable", func() {
 					Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
 				})
 
+				It("updates routing table with a same tag", func() {
+					table.RemoveRoutes(key, currentTag)
+					Expect(table.RouteCount()).To(Equal(0))
+				})
+
 				It("emits nothing when the tag is older", func() {
 					messagesToEmit = table.RemoveRoutes(key, olderTag)
 					Expect(messagesToEmit).To(BeZero())
+				})
+
+				It("does NOT update routing table with an older tag", func() {
+					beforeRouteCount := table.RouteCount()
+					table.RemoveRoutes(key, olderTag)
+					Expect(table.RouteCount()).To(Equal(beforeRouteCount))
 				})
 			})
 

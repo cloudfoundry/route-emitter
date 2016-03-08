@@ -183,7 +183,7 @@ func (table *routingTable) RemoveRoutes(key RoutingKey, modTag *models.Modificat
 	newEntry := NewRoutableEndpoints()
 	newEntry.Endpoints = currentEntry.Endpoints
 
-	table.entries[key] = currentEntry
+	table.entries[key] = newEntry
 
 	return table.emit(key, currentEntry, newEntry)
 }
