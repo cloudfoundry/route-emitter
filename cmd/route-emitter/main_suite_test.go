@@ -47,7 +47,7 @@ var etcdRunner *etcdstorerunner.ETCDClusterRunner
 var consulRunner *consulrunner.ClusterRunner
 var gnatsdRunner ifrit.Process
 var natsClient diegonats.NATSClient
-var bbsClient bbs.Client
+var bbsClient bbs.InternalClient
 var logger *lagertest.TestLogger
 var syncInterval time.Duration
 
