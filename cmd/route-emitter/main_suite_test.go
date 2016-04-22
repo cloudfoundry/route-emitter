@@ -13,6 +13,7 @@ import (
 	"github.com/cloudfoundry/gunk/diegonats"
 	"github.com/cloudfoundry/gunk/diegonats/gnatsdrunner"
 	"github.com/cloudfoundry/storeadapter/storerunner/etcdstorerunner"
+	"github.com/cloudfoundry/storeadapter/storerunner/mysqlrunner"
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/config"
 	. "github.com/onsi/gomega"
@@ -30,26 +31,27 @@ const heartbeatInterval = 1 * time.Second
 
 var (
 	emitterPath string
+	etcdPort    int
+	natsPort    int
 
-	etcdPort int
+	bbsPath    string
+	bbsURL     *url.URL
+	bbsArgs    bbstestrunner.Args
+	bbsRunner  *ginkgomon.Runner
+	bbsProcess ifrit.Process
 
-	natsPort int
+	etcdRunner   *etcdstorerunner.ETCDClusterRunner
+	consulRunner *consulrunner.ClusterRunner
+	gnatsdRunner ifrit.Process
+	natsClient   diegonats.NATSClient
+	bbsClient    bbs.InternalClient
+	logger       *lagertest.TestLogger
+	syncInterval time.Duration
 
-	bbsPath string
-	bbsURL  *url.URL
+	mySQLProcess ifrit.Process
+	mySQLRunner  *mysqlrunner.MySQLRunner
+	useSQL       bool
 )
-
-var bbsArgs bbstestrunner.Args
-var bbsRunner *ginkgomon.Runner
-var bbsProcess ifrit.Process
-
-var etcdRunner *etcdstorerunner.ETCDClusterRunner
-var consulRunner *consulrunner.ClusterRunner
-var gnatsdRunner ifrit.Process
-var natsClient diegonats.NATSClient
-var bbsClient bbs.InternalClient
-var logger *lagertest.TestLogger
-var syncInterval time.Duration
 
 func TestRouteEmitter(t *testing.T) {
 	RegisterFailHandler(Fail)
@@ -92,6 +94,7 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 
 	return payload
 }, func(payload []byte) {
+	useSQL = os.Getenv("USE_SQL") != ""
 	binaries := map[string]string{}
 
 	err := json.Unmarshal(payload, &binaries)
@@ -103,6 +106,11 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 	etcdRunner = etcdstorerunner.NewETCDClusterRunner(etcdPort, 1, nil)
 
 	emitterPath = string(binaries["emitter"])
+
+	if useSQL {
+		mySQLRunner = mysqlrunner.NewMySQLRunner(fmt.Sprintf("diego_%d", GinkgoParallelNode()))
+		mySQLProcess = ginkgomon.Invoke(mySQLRunner)
+	}
 
 	consulRunner = consulrunner.NewClusterRunner(
 		9001+config.GinkgoConfig.ParallelNode*consulrunner.PortOffsetLength,
@@ -134,6 +142,11 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 		EncryptionKeys: []string{"label:key"},
 		ActiveKeyLabel: "label",
 	}
+
+	if useSQL {
+		bbsArgs.DatabaseDriver = "mysql"
+		bbsArgs.DatabaseConnectionString = mySQLRunner.ConnectionString()
+	}
 })
 
 var _ = BeforeEach(func() {
@@ -153,9 +166,15 @@ var _ = AfterEach(func() {
 	consulRunner.Stop()
 	gnatsdRunner.Signal(os.Interrupt)
 	Eventually(gnatsdRunner.Wait(), 5).Should(Receive())
+
+	if useSQL {
+		mySQLRunner.Reset()
+	}
 })
 
 var _ = SynchronizedAfterSuite(func() {
+	ginkgomon.Kill(mySQLProcess)
+
 	if etcdRunner != nil {
 		etcdRunner.Stop()
 	}
