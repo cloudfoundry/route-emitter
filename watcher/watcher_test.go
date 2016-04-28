@@ -52,7 +52,7 @@ var _ = Describe("Watcher", func() {
 
 	var (
 		eventSource *eventfakes.FakeEventSource
-		bbsClient   *fake_bbs.FakeClient
+		bbsClient   *fake_bbs.FakeInternalClient
 		table       *fake_routing_table.FakeRoutingTable
 		emitter     *fake_nats_emitter.FakeNATSEmitter
 		syncEvents  syncer.Events
@@ -80,7 +80,7 @@ var _ = Describe("Watcher", func() {
 
 	BeforeEach(func() {
 		eventSource = new(eventfakes.FakeEventSource)
-		bbsClient = new(fake_bbs.FakeClient)
+		bbsClient = new(fake_bbs.FakeInternalClient)
 		bbsClient.SubscribeToEventsReturns(eventSource, nil)
 		bbsClient.DomainsReturns([]string{expectedDomain}, nil)
 

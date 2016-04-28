@@ -32,7 +32,7 @@ var _ = Describe("Syncer", func() {
 	)
 
 	var (
-		bbsClient      *fake_bbs.FakeClient
+		bbsClient      *fake_bbs.FakeInternalClient
 		natsClient     *diegonats.FakeNATSClient
 		syncerRunner   *syncer.Syncer
 		process        ifrit.Process
@@ -52,7 +52,7 @@ var _ = Describe("Syncer", func() {
 	)
 
 	BeforeEach(func() {
-		bbsClient = new(fake_bbs.FakeClient)
+		bbsClient = new(fake_bbs.FakeInternalClient)
 		natsClient = diegonats.NewFakeClient()
 
 		clock = fakeclock.NewFakeClock(time.Now())
