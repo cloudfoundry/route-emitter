@@ -14,6 +14,7 @@ import (
 	"github.com/cloudfoundry/dropsonde/metrics"
 	"github.com/cloudfoundry/gunk/diegonats"
 	"github.com/pivotal-golang/clock/fakeclock"
+	"github.com/pivotal-golang/lager"
 	"github.com/pivotal-golang/lager/lagertest"
 	"github.com/tedsuo/ifrit"
 
@@ -32,7 +33,7 @@ var _ = Describe("Syncer", func() {
 	)
 
 	var (
-		bbsClient      *fake_bbs.FakeInternalClient
+		bbsClient      *fake_bbs.FakeClient
 		natsClient     *diegonats.FakeNATSClient
 		syncerRunner   *syncer.Syncer
 		process        ifrit.Process
@@ -52,7 +53,7 @@ var _ = Describe("Syncer", func() {
 	)
 
 	BeforeEach(func() {
-		bbsClient = new(fake_bbs.FakeInternalClient)
+		bbsClient = new(fake_bbs.FakeClient)
 		natsClient = diegonats.NewFakeClient()
 
 		clock = fakeclock.NewFakeClock(time.Now())
@@ -229,7 +230,7 @@ var _ = Describe("Syncer", func() {
 
 	Describe("syncing", func() {
 		BeforeEach(func() {
-			bbsClient.ActualLRPGroupsStub = func(f models.ActualLRPFilter) ([]*models.ActualLRPGroup, error) {
+			bbsClient.ActualLRPGroupsStub = func(logger lager.Logger, f models.ActualLRPFilter) ([]*models.ActualLRPGroup, error) {
 				return nil, nil
 			}
 			syncInterval = 500 * time.Millisecond

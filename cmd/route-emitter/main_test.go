@@ -116,13 +116,13 @@ var _ = Describe("Route Emitter", func() {
 
 		Context("and an lrp with routes is desired", func() {
 			BeforeEach(func() {
-				err := bbsClient.DesireLRP(desiredLRP)
+				err := bbsClient.DesireLRP(logger, desiredLRP)
 				Expect(err).NotTo(HaveOccurred())
 			})
 
 			Context("and an instance starts", func() {
 				BeforeEach(func() {
-					err := bbsClient.StartActualLRP(&lrpKey, &instanceKey, &netInfo)
+					err := bbsClient.StartActualLRP(logger, &lrpKey, &instanceKey, &netInfo)
 					Expect(err).NotTo(HaveOccurred())
 				})
 
@@ -141,7 +141,7 @@ var _ = Describe("Route Emitter", func() {
 
 			Context("and an instance is claimed", func() {
 				BeforeEach(func() {
-					err := bbsClient.ClaimActualLRP(processGuid, int(index), &instanceKey)
+					err := bbsClient.ClaimActualLRP(logger, processGuid, int(index), &instanceKey)
 					Expect(err).NotTo(HaveOccurred())
 				})
 
@@ -154,10 +154,10 @@ var _ = Describe("Route Emitter", func() {
 		Context("an actual lrp starts without a routed desired lrp", func() {
 			BeforeEach(func() {
 				desiredLRP.Routes = nil
-				err := bbsClient.DesireLRP(desiredLRP)
+				err := bbsClient.DesireLRP(logger, desiredLRP)
 				Expect(err).NotTo(HaveOccurred())
 
-				err = bbsClient.StartActualLRP(&lrpKey, &instanceKey, &netInfo)
+				err = bbsClient.StartActualLRP(logger, &lrpKey, &instanceKey, &netInfo)
 				Expect(err).NotTo(HaveOccurred())
 			})
 
@@ -166,7 +166,7 @@ var _ = Describe("Route Emitter", func() {
 					update := &models.DesiredLRPUpdate{
 						Routes: routes,
 					}
-					err := bbsClient.UpdateDesiredLRP(desiredLRP.ProcessGuid, update)
+					err := bbsClient.UpdateDesiredLRP(logger, desiredLRP.ProcessGuid, update)
 					Expect(err).NotTo(HaveOccurred())
 				})
 
@@ -266,10 +266,10 @@ var _ = Describe("Route Emitter", func() {
 		var emitter ifrit.Process
 
 		BeforeEach(func() {
-			err := bbsClient.DesireLRP(desiredLRP)
+			err := bbsClient.DesireLRP(logger, desiredLRP)
 			Expect(err).NotTo(HaveOccurred())
 
-			err = bbsClient.StartActualLRP(&lrpKey, &instanceKey, &netInfo)
+			err = bbsClient.StartActualLRP(logger, &lrpKey, &instanceKey, &netInfo)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -305,7 +305,7 @@ var _ = Describe("Route Emitter", func() {
 						Instances:  &desiredLRP.Instances,
 						Annotation: &desiredLRP.Annotation,
 					}
-					err := bbsClient.UpdateDesiredLRP(processGuid, updateRequest)
+					err := bbsClient.UpdateDesiredLRP(logger, processGuid, updateRequest)
 					Expect(err).NotTo(HaveOccurred())
 				})
 
@@ -330,12 +330,12 @@ var _ = Describe("Route Emitter", func() {
 						Instances:  &desiredLRP.Instances,
 						Annotation: &desiredLRP.Annotation,
 					}
-					err := bbsClient.UpdateDesiredLRP(processGuid, updateRequest)
+					err := bbsClient.UpdateDesiredLRP(logger, processGuid, updateRequest)
 					Expect(err).NotTo(HaveOccurred())
 				})
 
 				It("immediately emits router.unregister when domain is fresh", func() {
-					bbsClient.UpsertDomain(domain, 2*time.Second)
+					bbsClient.UpsertDomain(logger, domain, 2*time.Second)
 					Eventually(unregisteredRoutes).Should(Receive(MatchRegistryMessage(routing_table.RegistryMessage{
 						URIs:              []string{"route-1"},
 						Host:              "1.2.3.4",

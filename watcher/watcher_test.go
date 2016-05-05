@@ -16,6 +16,7 @@ import (
 	. "github.com/onsi/gomega"
 	. "github.com/onsi/gomega/gbytes"
 	"github.com/pivotal-golang/clock/fakeclock"
+	"github.com/pivotal-golang/lager"
 	"github.com/pivotal-golang/lager/lagertest"
 	"github.com/tedsuo/ifrit"
 
@@ -52,7 +53,7 @@ var _ = Describe("Watcher", func() {
 
 	var (
 		eventSource *eventfakes.FakeEventSource
-		bbsClient   *fake_bbs.FakeInternalClient
+		bbsClient   *fake_bbs.FakeClient
 		table       *fake_routing_table.FakeRoutingTable
 		emitter     *fake_nats_emitter.FakeNATSEmitter
 		syncEvents  syncer.Events
@@ -80,7 +81,7 @@ var _ = Describe("Watcher", func() {
 
 	BeforeEach(func() {
 		eventSource = new(eventfakes.FakeEventSource)
-		bbsClient = new(fake_bbs.FakeInternalClient)
+		bbsClient = new(fake_bbs.FakeClient)
 		bbsClient.SubscribeToEventsReturns(eventSource, nil)
 		bbsClient.DomainsReturns([]string{expectedDomain}, nil)
 
@@ -1026,7 +1027,7 @@ var _ = Describe("Watcher", func() {
 		BeforeEach(func() {
 			subscribeErr = errors.New("subscribe-error")
 
-			bbsClient.SubscribeToEventsStub = func() (events.EventSource, error) {
+			bbsClient.SubscribeToEventsStub = func(lager.Logger) (events.EventSource, error) {
 				if bbsClient.SubscribeToEventsCallCount() == 1 {
 					return eventSource, nil
 				}
@@ -1169,7 +1170,7 @@ var _ = Describe("Watcher", func() {
 						ready = make(chan struct{})
 						count = 0
 
-						bbsClient.ActualLRPGroupsStub = func(filter models.ActualLRPFilter) ([]*models.ActualLRPGroup, error) {
+						bbsClient.ActualLRPGroupsStub = func(logger lager.Logger, filter models.ActualLRPFilter) ([]*models.ActualLRPGroup, error) {
 							defer GinkgoRecover()
 
 							atomic.AddInt32(&count, 1)
@@ -1207,7 +1208,7 @@ var _ = Describe("Watcher", func() {
 					BeforeEach(func() {
 						returnError = 1
 
-						bbsClient.ActualLRPGroupsStub = func(filter models.ActualLRPFilter) ([]*models.ActualLRPGroup, error) {
+						bbsClient.ActualLRPGroupsStub = func(logger lager.Logger, filter models.ActualLRPFilter) ([]*models.ActualLRPGroup, error) {
 							if atomic.LoadInt32(&returnError) == 1 {
 								return nil, errors.New("bam")
 							}
@@ -1234,7 +1235,7 @@ var _ = Describe("Watcher", func() {
 					BeforeEach(func() {
 						returnError = 1
 
-						bbsClient.DesiredLRPSchedulingInfosStub = func(filter models.DesiredLRPFilter) ([]*models.DesiredLRPSchedulingInfo, error) {
+						bbsClient.DesiredLRPSchedulingInfosStub = func(logger lager.Logger, filter models.DesiredLRPFilter) ([]*models.DesiredLRPSchedulingInfo, error) {
 							if atomic.LoadInt32(&returnError) == 1 {
 								return nil, errors.New("bam")
 							}
@@ -1258,7 +1259,7 @@ var _ = Describe("Watcher", func() {
 
 			Context("when syncing ends", func() {
 				BeforeEach(func() {
-					bbsClient.ActualLRPGroupsStub = func(f models.ActualLRPFilter) ([]*models.ActualLRPGroup, error) {
+					bbsClient.ActualLRPGroupsStub = func(logger lager.Logger, f models.ActualLRPFilter) ([]*models.ActualLRPGroup, error) {
 						clock.IncrementBySeconds(1)
 
 						return []*models.ActualLRPGroup{
@@ -1306,7 +1307,7 @@ var _ = Describe("Watcher", func() {
 
 						watcherProcess = watcher.NewWatcher(bbsClient, clock, table, emitter, syncEvents, logger)
 
-						bbsClient.DesiredLRPSchedulingInfosStub = func(f models.DesiredLRPFilter) ([]*models.DesiredLRPSchedulingInfo, error) {
+						bbsClient.DesiredLRPSchedulingInfosStub = func(logger lager.Logger, f models.DesiredLRPFilter) ([]*models.DesiredLRPSchedulingInfo, error) {
 							defer GinkgoRecover()
 
 							ready <- struct{}{}

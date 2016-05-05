@@ -102,7 +102,7 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 					return
 				}
 
-				es, err = watcher.bbsClient.SubscribeToEvents()
+				es, err = watcher.bbsClient.SubscribeToEvents(watcher.logger)
 				if err != nil {
 					watcher.logger.Error("failed-subscribing-to-events", err)
 					continue
@@ -221,7 +221,7 @@ func (watcher *Watcher) sync(logger lager.Logger, syncEndChan chan syncEndEvent)
 		defer wg.Done()
 
 		logger.Debug("getting-actual-lrps")
-		actualLRPGroups, err := watcher.bbsClient.ActualLRPGroups(models.ActualLRPFilter{})
+		actualLRPGroups, err := watcher.bbsClient.ActualLRPGroups(logger, models.ActualLRPFilter{})
 		if err != nil {
 			logger.Error("failed-getting-actual-lrps", err)
 			getActualLRPsErr = err
@@ -247,7 +247,7 @@ func (watcher *Watcher) sync(logger lager.Logger, syncEndChan chan syncEndEvent)
 		defer wg.Done()
 
 		logger.Debug("getting-scheduling-infos")
-		schedulingInfos, err = watcher.bbsClient.DesiredLRPSchedulingInfos(models.DesiredLRPFilter{})
+		schedulingInfos, err = watcher.bbsClient.DesiredLRPSchedulingInfos(logger, models.DesiredLRPFilter{})
 		if err != nil {
 			logger.Error("failed-getting-desired-lrps", err)
 			getSchedulingInfosErr = err
@@ -261,7 +261,7 @@ func (watcher *Watcher) sync(logger lager.Logger, syncEndChan chan syncEndEvent)
 		defer wg.Done()
 
 		logger.Debug("getting-domains")
-		domainArray, err := watcher.bbsClient.Domains()
+		domainArray, err := watcher.bbsClient.Domains(logger)
 		if err != nil {
 			logger.Error("failed-getting-domains", err)
 			getDomainErr = err
