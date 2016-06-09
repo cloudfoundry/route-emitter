@@ -7,7 +7,6 @@ import (
 	"github.com/apcera/nats"
 	"github.com/cloudfoundry-incubator/bbs/fake_bbs"
 	"github.com/cloudfoundry-incubator/bbs/models"
-	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
 	"github.com/cloudfoundry-incubator/route-emitter/syncer"
 	"github.com/cloudfoundry-incubator/routing-info/cfroutes"
 	fake_metrics_sender "github.com/cloudfoundry/dropsonde/metric_sender/fake"
@@ -33,15 +32,13 @@ var _ = Describe("Syncer", func() {
 	)
 
 	var (
-		bbsClient      *fake_bbs.FakeClient
-		natsClient     *diegonats.FakeNATSClient
-		syncerRunner   *syncer.Syncer
-		process        ifrit.Process
-		syncMessages   routing_table.MessagesToEmit
-		messagesToEmit routing_table.MessagesToEmit
-		clock          *fakeclock.FakeClock
-		clockStep      time.Duration
-		syncInterval   time.Duration
+		bbsClient    *fake_bbs.FakeClient
+		natsClient   *diegonats.FakeNATSClient
+		syncerRunner *syncer.Syncer
+		process      ifrit.Process
+		clock        *fakeclock.FakeClock
+		clockStep    time.Duration
+		syncInterval time.Duration
 
 		shutdown chan struct{}
 
@@ -72,20 +69,6 @@ var _ = Describe("Syncer", func() {
 
 			return nil
 		})
-
-		//what follows is fake data to distinguish between
-		//the "sync" and "emit" codepaths
-		dummyEndpoint := routing_table.Endpoint{InstanceGuid: "instance-guid-1", Host: "1.1.1.1", Port: 11, ContainerPort: 1111}
-		dummyMessage := routing_table.RegistryMessageFor(dummyEndpoint, routing_table.Routes{Hostnames: []string{"foo.com", "bar.com"}, LogGuid: logGuid})
-		syncMessages = routing_table.MessagesToEmit{
-			RegistrationMessages: []routing_table.RegistryMessage{dummyMessage},
-		}
-
-		dummyEndpoint = routing_table.Endpoint{InstanceGuid: "instance-guid-2", Host: "2.2.2.2", Port: 22, ContainerPort: 2222}
-		dummyMessage = routing_table.RegistryMessageFor(dummyEndpoint, routing_table.Routes{Hostnames: []string{"baz.com"}, LogGuid: logGuid})
-		messagesToEmit = routing_table.MessagesToEmit{
-			RegistrationMessages: []routing_table.RegistryMessage{dummyMessage},
-		}
 
 		schedulingInfoResponse = &models.DesiredLRPSchedulingInfo{
 			DesiredLRPKey: models.NewDesiredLRPKey(processGuid, "domain", logGuid),
