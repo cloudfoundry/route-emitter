@@ -13,7 +13,6 @@ import (
 	"github.com/cloudfoundry/gunk/diegonats"
 	"github.com/cloudfoundry/gunk/diegonats/gnatsdrunner"
 	"github.com/cloudfoundry/storeadapter/storerunner/etcdstorerunner"
-	"github.com/cloudfoundry/storeadapter/storerunner/mysqlrunner"
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/config"
 	. "github.com/onsi/gomega"
@@ -24,6 +23,8 @@ import (
 
 	"github.com/cloudfoundry-incubator/bbs"
 	bbstestrunner "github.com/cloudfoundry-incubator/bbs/cmd/bbs/testrunner"
+	"github.com/cloudfoundry-incubator/bbs/test_helpers"
+	"github.com/cloudfoundry-incubator/bbs/test_helpers/sqlrunner"
 	"github.com/cloudfoundry-incubator/consuladapter/consulrunner"
 )
 
@@ -48,9 +49,8 @@ var (
 	logger       *lagertest.TestLogger
 	syncInterval time.Duration
 
-	mySQLProcess ifrit.Process
-	mySQLRunner  *mysqlrunner.MySQLRunner
-	useSQL       bool
+	sqlProcess ifrit.Process
+	sqlRunner  sqlrunner.SQLRunner
 )
 
 func TestRouteEmitter(t *testing.T) {
@@ -94,7 +94,6 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 
 	return payload
 }, func(payload []byte) {
-	useSQL = os.Getenv("USE_SQL") != ""
 	binaries := map[string]string{}
 
 	err := json.Unmarshal(payload, &binaries)
@@ -107,9 +106,10 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 
 	emitterPath = string(binaries["emitter"])
 
-	if useSQL {
-		mySQLRunner = mysqlrunner.NewMySQLRunner(fmt.Sprintf("diego_%d", GinkgoParallelNode()))
-		mySQLProcess = ginkgomon.Invoke(mySQLRunner)
+	if test_helpers.UseSQL() {
+		dbName := fmt.Sprintf("diego_%d", GinkgoParallelNode())
+		sqlRunner = test_helpers.NewSQLRunner(dbName)
+		sqlProcess = ginkgomon.Invoke(sqlRunner)
 	}
 
 	consulRunner = consulrunner.NewClusterRunner(
@@ -147,9 +147,9 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 		ActiveKeyLabel: "label",
 	}
 
-	if useSQL {
-		bbsArgs.DatabaseDriver = "mysql"
-		bbsArgs.DatabaseConnectionString = mySQLRunner.ConnectionString()
+	if test_helpers.UseSQL() {
+		bbsArgs.DatabaseDriver = sqlRunner.DriverName()
+		bbsArgs.DatabaseConnectionString = sqlRunner.ConnectionString()
 	}
 })
 
@@ -171,13 +171,13 @@ var _ = AfterEach(func() {
 	gnatsdRunner.Signal(os.Interrupt)
 	Eventually(gnatsdRunner.Wait(), 5).Should(Receive())
 
-	if useSQL {
-		mySQLRunner.Reset()
+	if test_helpers.UseSQL() {
+		sqlRunner.Reset()
 	}
 })
 
 var _ = SynchronizedAfterSuite(func() {
-	ginkgomon.Kill(mySQLProcess)
+	ginkgomon.Kill(sqlProcess)
 
 	if etcdRunner != nil {
 		etcdRunner.Stop()
