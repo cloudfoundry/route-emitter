@@ -3,7 +3,7 @@ package routing_table_test
 import (
 	"fmt"
 
-	"github.com/cloudfoundry-incubator/bbs/models"
+	"code.cloudfoundry.org/bbs/models"
 	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
 	"github.com/pivotal-golang/lager/lagertest"
 

@@ -3,7 +3,7 @@ package cfroutes
 import (
 	"encoding/json"
 
-	"github.com/cloudfoundry-incubator/bbs/models"
+	"code.cloudfoundry.org/bbs/models"
 )
 
 const CF_ROUTER = "cf-router"

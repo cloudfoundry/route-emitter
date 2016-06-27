@@ -4,7 +4,7 @@ package fake_routing_table
 import (
 	"sync"
 
-	"github.com/cloudfoundry-incubator/bbs/models"
+	"code.cloudfoundry.org/bbs/models"
 	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
 )
 

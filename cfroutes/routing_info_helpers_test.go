@@ -3,7 +3,7 @@ package cfroutes_test
 import (
 	"encoding/json"
 
-	"github.com/cloudfoundry-incubator/bbs/models"
+	"code.cloudfoundry.org/bbs/models"
 	"github.com/cloudfoundry-incubator/routing-info/cfroutes"
 
 	. "github.com/onsi/ginkgo"

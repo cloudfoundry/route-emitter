@@ -1,7 +1,7 @@
 package routing_table_test
 
 import (
-	"github.com/cloudfoundry-incubator/bbs/models"
+	"code.cloudfoundry.org/bbs/models"
 	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
 	. "github.com/cloudfoundry-incubator/route-emitter/routing_table/matchers"
 

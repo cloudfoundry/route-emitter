@@ -1,6 +1,6 @@
 package routing_table
 
-import "github.com/cloudfoundry-incubator/bbs/models"
+import "code.cloudfoundry.org/bbs/models"
 
 type EndpointKey struct {
 	InstanceGuid string

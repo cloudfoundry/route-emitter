@@ -21,10 +21,10 @@ import (
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/ifrit/ginkgomon"
 
-	"github.com/cloudfoundry-incubator/bbs"
-	bbstestrunner "github.com/cloudfoundry-incubator/bbs/cmd/bbs/testrunner"
-	"github.com/cloudfoundry-incubator/bbs/test_helpers"
-	"github.com/cloudfoundry-incubator/bbs/test_helpers/sqlrunner"
+	"code.cloudfoundry.org/bbs"
+	bbstestrunner "code.cloudfoundry.org/bbs/cmd/bbs/testrunner"
+	"code.cloudfoundry.org/bbs/test_helpers"
+	"code.cloudfoundry.org/bbs/test_helpers/sqlrunner"
 	"github.com/cloudfoundry-incubator/consuladapter/consulrunner"
 )
 
@@ -82,7 +82,7 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 	emitter, err := gexec.Build("github.com/cloudfoundry-incubator/route-emitter/cmd/route-emitter", "-race")
 	Expect(err).NotTo(HaveOccurred())
 
-	bbs, err := gexec.Build("github.com/cloudfoundry-incubator/bbs/cmd/bbs", "-race")
+	bbs, err := gexec.Build("code.cloudfoundry.org/bbs/cmd/bbs", "-race")
 	Expect(err).NotTo(HaveOccurred())
 
 	payload, err := json.Marshal(map[string]string{
