@@ -9,10 +9,10 @@ import (
 
 	"code.cloudfoundry.org/bbs"
 	"code.cloudfoundry.org/consuladapter"
+	"code.cloudfoundry.org/locket"
 	"github.com/cloudfoundry-incubator/cf-debug-server"
 	"github.com/cloudfoundry-incubator/cf-lager"
 	"github.com/cloudfoundry-incubator/cf_http"
-	"github.com/cloudfoundry-incubator/locket"
 	route_emitter "github.com/cloudfoundry-incubator/route-emitter"
 	"github.com/cloudfoundry-incubator/route-emitter/nats_emitter"
 	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
