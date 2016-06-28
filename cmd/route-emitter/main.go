@@ -8,10 +8,10 @@ import (
 	"time"
 
 	"code.cloudfoundry.org/bbs"
+	"code.cloudfoundry.org/consuladapter"
 	"github.com/cloudfoundry-incubator/cf-debug-server"
 	"github.com/cloudfoundry-incubator/cf-lager"
 	"github.com/cloudfoundry-incubator/cf_http"
-	"github.com/cloudfoundry-incubator/consuladapter"
 	"github.com/cloudfoundry-incubator/locket"
 	route_emitter "github.com/cloudfoundry-incubator/route-emitter"
 	"github.com/cloudfoundry-incubator/route-emitter/nats_emitter"
