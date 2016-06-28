@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"sync"
 
-	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
-	"github.com/cloudfoundry-incubator/runtime-schema/metric"
+	"code.cloudfoundry.org/route-emitter/routing_table"
+	"code.cloudfoundry.org/runtimeschema/metric"
 	"github.com/cloudfoundry/gunk/diegonats"
 	"github.com/cloudfoundry/gunk/workpool"
 	"github.com/pivotal-golang/lager"

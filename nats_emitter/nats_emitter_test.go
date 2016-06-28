@@ -3,9 +3,9 @@ package nats_emitter_test
 import (
 	"errors"
 
+	"code.cloudfoundry.org/route-emitter/nats_emitter"
+	"code.cloudfoundry.org/route-emitter/routing_table"
 	"github.com/apcera/nats"
-	"github.com/cloudfoundry-incubator/route-emitter/nats_emitter"
-	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
 	fake_metrics_sender "github.com/cloudfoundry/dropsonde/metric_sender/fake"
 	"github.com/cloudfoundry/dropsonde/metrics"
 	"github.com/cloudfoundry/gunk/diegonats"

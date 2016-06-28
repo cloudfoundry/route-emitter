@@ -1,7 +1,7 @@
 package routing_table_test
 
 import (
-	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
+	"code.cloudfoundry.org/route-emitter/routing_table"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"

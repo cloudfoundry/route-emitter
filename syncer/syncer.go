@@ -5,8 +5,8 @@ import (
 	"os"
 	"time"
 
+	"code.cloudfoundry.org/route-emitter/routing_table"
 	"github.com/apcera/nats"
-	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
 	"github.com/cloudfoundry/gunk/diegonats"
 	uuid "github.com/nu7hatch/gouuid"
 	"github.com/pivotal-golang/clock"

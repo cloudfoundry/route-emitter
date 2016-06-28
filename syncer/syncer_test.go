@@ -6,8 +6,8 @@ import (
 
 	"code.cloudfoundry.org/bbs/fake_bbs"
 	"code.cloudfoundry.org/bbs/models"
+	"code.cloudfoundry.org/route-emitter/syncer"
 	"github.com/apcera/nats"
-	"github.com/cloudfoundry-incubator/route-emitter/syncer"
 	"github.com/cloudfoundry-incubator/routing-info/cfroutes"
 	fake_metrics_sender "github.com/cloudfoundry/dropsonde/metric_sender/fake"
 	"github.com/cloudfoundry/dropsonde/metrics"

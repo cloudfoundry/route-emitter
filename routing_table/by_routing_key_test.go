@@ -2,7 +2,7 @@ package routing_table_test
 
 import (
 	"code.cloudfoundry.org/bbs/models"
-	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
+	"code.cloudfoundry.org/route-emitter/routing_table"
 	"github.com/cloudfoundry-incubator/routing-info/cfroutes"
 
 	. "github.com/onsi/ginkgo"

@@ -4,8 +4,8 @@ package fake_nats_emitter
 import (
 	"sync"
 
-	"github.com/cloudfoundry-incubator/route-emitter/nats_emitter"
-	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
+	"code.cloudfoundry.org/route-emitter/nats_emitter"
+	"code.cloudfoundry.org/route-emitter/routing_table"
 )
 
 type FakeNATSEmitter struct {

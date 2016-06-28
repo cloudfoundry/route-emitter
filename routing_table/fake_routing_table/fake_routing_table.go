@@ -5,7 +5,7 @@ import (
 	"sync"
 
 	"code.cloudfoundry.org/bbs/models"
-	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
+	"code.cloudfoundry.org/route-emitter/routing_table"
 )
 
 type FakeRoutingTable struct {

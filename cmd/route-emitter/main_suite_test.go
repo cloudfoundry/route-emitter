@@ -79,7 +79,7 @@ func createEmitterRunner(sessionName string) *ginkgomon.Runner {
 }
 
 var _ = SynchronizedBeforeSuite(func() []byte {
-	emitter, err := gexec.Build("github.com/cloudfoundry-incubator/route-emitter/cmd/route-emitter", "-race")
+	emitter, err := gexec.Build("code.cloudfoundry.org/route-emitter/cmd/route-emitter", "-race")
 	Expect(err).NotTo(HaveOccurred())
 
 	bbs, err := gexec.Build("code.cloudfoundry.org/bbs/cmd/bbs", "-race")

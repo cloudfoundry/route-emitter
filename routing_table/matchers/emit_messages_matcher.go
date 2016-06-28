@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"sort"
 
-	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
+	"code.cloudfoundry.org/route-emitter/routing_table"
 	"github.com/onsi/gomega/format"
 )
 
