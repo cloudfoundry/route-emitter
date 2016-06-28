@@ -8,11 +8,11 @@ import (
 	"time"
 
 	"code.cloudfoundry.org/bbs"
+	"code.cloudfoundry.org/cfhttp"
 	"code.cloudfoundry.org/cflager"
 	"code.cloudfoundry.org/consuladapter"
 	"code.cloudfoundry.org/debugserver"
 	"code.cloudfoundry.org/locket"
-	"github.com/cloudfoundry-incubator/cf_http"
 	route_emitter "github.com/cloudfoundry-incubator/route-emitter"
 	"github.com/cloudfoundry-incubator/route-emitter/nats_emitter"
 	"github.com/cloudfoundry-incubator/route-emitter/routing_table"
@@ -140,7 +140,7 @@ func main() {
 	cflager.AddFlags(flag.CommandLine)
 	flag.Parse()
 
-	cf_http.Initialize(*communicationTimeout)
+	cfhttp.Initialize(*communicationTimeout)
 
 	logger, reconfigurableSink := cflager.New(*sessionName)
 	natsClient := diegonats.NewClient()
