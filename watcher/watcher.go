@@ -277,9 +277,14 @@ func (watcher *Watcher) sync(logger lager.Logger, syncEndChan chan syncEndEvent)
 		return
 	}
 
+	schedInfoMap := make(map[string]*models.DesiredLRPSchedulingInfo)
+	for _, schedInfo := range schedulingInfos {
+		schedInfoMap[schedInfo.ProcessGuid] = schedInfo
+	}
+
 	newTable := routing_table.NewTempTable(
 		routing_table.RoutesByRoutingKeyFromSchedulingInfos(schedulingInfos),
-		routing_table.EndpointsByRoutingKeyFromActuals(runningActualLRPs),
+		routing_table.EndpointsByRoutingKeyFromActuals(runningActualLRPs, schedInfoMap),
 	)
 
 	endEvent.table = newTable
@@ -388,6 +393,22 @@ func (watcher *Watcher) handleDesiredUpdate(logger lager.Logger, before, after *
 	afterContainerPorts := set{}
 	for _, route := range afterRoutes {
 		afterContainerPorts.add(route.Port)
+	}
+
+	// in case of scale down, remove endpoints
+	requestedInstances := after.Instances - before.Instances
+	if requestedInstances < 0 {
+		logger.Info("removing-endpoints", lager.Data{"count": -1 * requestedInstances})
+		// fetch actual LRPs corresponding to the removed instances (if any still running)
+		for i := before.Instances; i > after.Instances; i-- {
+			actualLRPGroup, err := watcher.bbsClient.ActualLRPGroupByProcessGuidAndIndex(logger, before.ProcessGuid, int(i-1))
+			if err != nil {
+				logger.Error("failed-to-fetch-actuallrp", err)
+				continue
+			}
+			actualLRPRoutingInfo := routing_table.NewActualLRPRoutingInfo(actualLRPGroup)
+			watcher.removeAndEmit(logger, actualLRPRoutingInfo)
+		}
 	}
 
 	for _, key := range beforeRoutingKeys {

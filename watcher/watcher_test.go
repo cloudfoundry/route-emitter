@@ -299,6 +299,7 @@ var _ = Describe("Watcher", func() {
 					ProcessGuid: expectedProcessGuid,
 					LogGuid:     logGuid,
 					Routes:      &routes,
+					Instances:   3,
 				}
 				changedDesiredLRP = &models.DesiredLRP{
 					Action: models.WrapAction(&models.RunAction{
@@ -310,6 +311,7 @@ var _ = Describe("Watcher", func() {
 					LogGuid:         logGuid,
 					Routes:          &routes,
 					ModificationTag: &models.ModificationTag{Epoch: "abcd", Index: 1},
+					Instances:       3,
 				}
 			})
 
@@ -318,6 +320,51 @@ var _ = Describe("Watcher", func() {
 					originalDesiredLRP,
 					changedDesiredLRP,
 				)})
+			})
+
+			Context("when scaling down the number of LRP instances", func() {
+				BeforeEach(func() {
+					changedDesiredLRP.Instances = 1
+				})
+
+				Context("when the corresponding actual LRPs are found", func() {
+					BeforeEach(func() {
+						actualLRP := &models.ActualLRP{
+							ActualLRPKey:         models.NewActualLRPKey(expectedProcessGuid, 1, "domain"),
+							ActualLRPInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGuid, "cell-id"),
+							ActualLRPNetInfo: models.NewActualLRPNetInfo(
+								expectedHost,
+								models.NewPortMapping(expectedExternalPort, expectedContainerPort),
+								models.NewPortMapping(expectedExternalPort, expectedAdditionalContainerPort),
+							),
+							State: models.ActualLRPStateRunning,
+						}
+
+						actualLRPGroup := &models.ActualLRPGroup{
+							Instance: actualLRP,
+						}
+
+						bbsClient.ActualLRPGroupByProcessGuidAndIndexReturns(actualLRPGroup, nil)
+					})
+
+					It("unregisters route endpoints for instances that are no longer desired", func() {
+						Eventually(table.RemoveEndpointCallCount).Should(Equal(4)) // 2 routes for each instance multiplied by 2 instances disappearing
+					})
+				})
+
+				Context("when the corresponding actual LRPs are not found", func() {
+					BeforeEach(func() {
+						bbsClient.ActualLRPGroupByProcessGuidAndIndexReturns(nil, models.ConvertError(errors.New("something bad")))
+					})
+
+					It("logs the error", func() {
+						Eventually(logger).Should(Say("something bad"))
+					})
+
+					It("does not attempt to remove the endpoint", func() {
+						Consistently(table.RemoveEndpointCallCount).Should(Equal(0))
+					})
+				})
 			})
 
 			It("should set the routes on the table", func() {
@@ -1113,6 +1160,7 @@ var _ = Describe("Watcher", func() {
 			hostname2 := "bar.example.com"
 			endpoint1 := routing_table.Endpoint{InstanceGuid: "ig-1", Host: "1.1.1.1", Port: 11, ContainerPort: 8080, Evacuating: false, ModificationTag: currentTag}
 			endpoint2 := routing_table.Endpoint{InstanceGuid: "ig-2", Host: "2.2.2.2", Port: 22, ContainerPort: 8080, Evacuating: false, ModificationTag: currentTag}
+			endpoint3 := routing_table.Endpoint{InstanceGuid: "ig-3", Host: "2.2.2.2", Port: 23, ContainerPort: 8080, Evacuating: false, ModificationTag: currentTag}
 
 			schedulingInfo1 := &models.DesiredLRPSchedulingInfo{
 				DesiredLRPKey: models.NewDesiredLRPKey("pg-1", "tests", "lg1"),
@@ -1123,6 +1171,7 @@ var _ = Describe("Watcher", func() {
 						RouteServiceUrl: "https://rs.example.com",
 					},
 				}.RoutingInfo(),
+				Instances: 1,
 			}
 
 			schedulingInfo2 := &models.DesiredLRPSchedulingInfo{
@@ -1133,11 +1182,12 @@ var _ = Describe("Watcher", func() {
 						Port:      8080,
 					},
 				}.RoutingInfo(),
+				Instances: 1,
 			}
 
 			actualLRPGroup1 := &models.ActualLRPGroup{
 				Instance: &models.ActualLRP{
-					ActualLRPKey:         models.NewActualLRPKey("pg-1", 1, "domain"),
+					ActualLRPKey:         models.NewActualLRPKey("pg-1", 0, "domain"),
 					ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint1.InstanceGuid, "cell-id"),
 					ActualLRPNetInfo:     models.NewActualLRPNetInfo(endpoint1.Host, models.NewPortMapping(endpoint1.Port, endpoint1.ContainerPort)),
 					State:                models.ActualLRPStateRunning,
@@ -1146,9 +1196,18 @@ var _ = Describe("Watcher", func() {
 
 			actualLRPGroup2 := &models.ActualLRPGroup{
 				Instance: &models.ActualLRP{
-					ActualLRPKey:         models.NewActualLRPKey("pg-2", 1, "domain"),
+					ActualLRPKey:         models.NewActualLRPKey("pg-2", 0, "domain"),
 					ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint2.InstanceGuid, "cell-id"),
 					ActualLRPNetInfo:     models.NewActualLRPNetInfo(endpoint2.Host, models.NewPortMapping(endpoint2.Port, endpoint2.ContainerPort)),
+					State:                models.ActualLRPStateRunning,
+				},
+			}
+
+			actualLRPGroup3 := &models.ActualLRPGroup{
+				Instance: &models.ActualLRP{
+					ActualLRPKey:         models.NewActualLRPKey("pg-2", 1, "domain"),
+					ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint3.InstanceGuid, "cell-id"),
+					ActualLRPNetInfo:     models.NewActualLRPNetInfo(endpoint3.Host, models.NewPortMapping(endpoint3.Port, endpoint3.ContainerPort)),
 					State:                models.ActualLRPStateRunning,
 				},
 			}
@@ -1265,6 +1324,7 @@ var _ = Describe("Watcher", func() {
 						return []*models.ActualLRPGroup{
 							actualLRPGroup1,
 							actualLRPGroup2,
+							actualLRPGroup3,
 						}, nil
 					}
 				})
@@ -1292,13 +1352,15 @@ var _ = Describe("Watcher", func() {
 							ActualLRP:  actualLRPGroup2.Instance,
 							Evacuating: false,
 						}
-
 						tempTable := routing_table.NewTempTable(
 							routing_table.RoutesByRoutingKeyFromSchedulingInfos([]*models.DesiredLRPSchedulingInfo{schedulingInfo1, schedulingInfo2}),
 							routing_table.EndpointsByRoutingKeyFromActuals([]*routing_table.ActualLRPRoutingInfo{
 								actualLRPRoutingInfo1,
 								actualLRPRoutingInfo2,
-							}),
+							},
+								map[string]*models.DesiredLRPSchedulingInfo{
+									schedulingInfo1.ProcessGuid: schedulingInfo1,
+									schedulingInfo2.ProcessGuid: schedulingInfo2}),
 						)
 
 						domains := models.NewDomainSet([]string{"domain"})

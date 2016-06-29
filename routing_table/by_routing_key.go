@@ -29,9 +29,16 @@ func RoutesByRoutingKeyFromSchedulingInfos(schedulingInfos []*models.DesiredLRPS
 	return routesByRoutingKey
 }
 
-func EndpointsByRoutingKeyFromActuals(actuals []*ActualLRPRoutingInfo) EndpointsByRoutingKey {
+func EndpointsByRoutingKeyFromActuals(actuals []*ActualLRPRoutingInfo, schedInfos map[string]*models.DesiredLRPSchedulingInfo) EndpointsByRoutingKey {
 	endpointsByRoutingKey := EndpointsByRoutingKey{}
 	for _, actual := range actuals {
+		if schedInfo, ok := schedInfos[actual.ActualLRP.ProcessGuid]; ok {
+			// Check whether this actual is desired
+			if actual.ActualLRP.Index > schedInfo.Instances-1 {
+				continue
+			}
+		}
+
 		endpoints, err := EndpointsFromActual(actual)
 		if err != nil {
 			continue
