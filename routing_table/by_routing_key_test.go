@@ -2,6 +2,7 @@ package routing_table_test
 
 import (
 	"code.cloudfoundry.org/bbs/models"
+	"code.cloudfoundry.org/bbs/models/test/model_helpers"
 	"code.cloudfoundry.org/route-emitter/routing_table"
 	"github.com/cloudfoundry-incubator/routing-info/cfroutes"
 
@@ -48,46 +49,110 @@ var _ = Describe("ByRoutingKey", func() {
 	})
 
 	Describe("EndpointsByRoutingKeyFromActuals", func() {
-		It("should build a map of endpoints, ignoring those without ports", func() {
-			endpoints := routing_table.EndpointsByRoutingKeyFromActuals([]*routing_table.ActualLRPRoutingInfo{
-				{
-					ActualLRP: &models.ActualLRP{
-						ActualLRPKey:     models.NewActualLRPKey("abc", 0, "domain"),
-						ActualLRPNetInfo: models.NewActualLRPNetInfo("1.1.1.1", models.NewPortMapping(11, 44), models.NewPortMapping(66, 99)),
+		Context("when some actuals don't have port mappings", func() {
+			var endpoints routing_table.EndpointsByRoutingKey
+
+			BeforeEach(func() {
+				schedInfo1 := model_helpers.NewValidDesiredLRP("abc").DesiredLRPSchedulingInfo()
+				schedInfo1.Instances = 2
+				schedInfo2 := model_helpers.NewValidDesiredLRP("def").DesiredLRPSchedulingInfo()
+				schedInfo2.Instances = 2
+
+				endpoints = routing_table.EndpointsByRoutingKeyFromActuals([]*routing_table.ActualLRPRoutingInfo{
+					{
+						ActualLRP: &models.ActualLRP{
+							ActualLRPKey:     models.NewActualLRPKey(schedInfo1.ProcessGuid, 0, "domain"),
+							ActualLRPNetInfo: models.NewActualLRPNetInfo("1.1.1.1", models.NewPortMapping(11, 44), models.NewPortMapping(66, 99)),
+						},
 					},
-				},
-				{
-					ActualLRP: &models.ActualLRP{
-						ActualLRPKey:     models.NewActualLRPKey("abc", 1, "domain"),
-						ActualLRPNetInfo: models.NewActualLRPNetInfo("2.2.2.2", models.NewPortMapping(22, 44), models.NewPortMapping(88, 99)),
+					{
+						ActualLRP: &models.ActualLRP{
+							ActualLRPKey:     models.NewActualLRPKey(schedInfo1.ProcessGuid, 1, "domain"),
+							ActualLRPNetInfo: models.NewActualLRPNetInfo("2.2.2.2", models.NewPortMapping(22, 44), models.NewPortMapping(88, 99)),
+						},
 					},
-				},
-				{
-					ActualLRP: &models.ActualLRP{
-						ActualLRPKey:     models.NewActualLRPKey("def", 0, "domain"),
-						ActualLRPNetInfo: models.NewActualLRPNetInfo("3.3.3.3", models.NewPortMapping(33, 55)),
+					{
+						ActualLRP: &models.ActualLRP{
+							ActualLRPKey:     models.NewActualLRPKey(schedInfo2.ProcessGuid, 0, "domain"),
+							ActualLRPNetInfo: models.NewActualLRPNetInfo("3.3.3.3", models.NewPortMapping(33, 55)),
+						},
 					},
-				},
-				{
-					ActualLRP: &models.ActualLRP{
-						ActualLRPKey:     models.NewActualLRPKey("def", 1, "domain"),
-						ActualLRPNetInfo: models.NewActualLRPNetInfo("4.4.4.4", nil),
+					{
+						ActualLRP: &models.ActualLRP{
+							ActualLRPKey:     models.NewActualLRPKey(schedInfo2.ProcessGuid, 1, "domain"),
+							ActualLRPNetInfo: models.NewActualLRPNetInfo("4.4.4.4", nil),
+						},
 					},
+				}, map[string]*models.DesiredLRPSchedulingInfo{
+					schedInfo1.ProcessGuid: &schedInfo1,
+					schedInfo2.ProcessGuid: &schedInfo2,
 				},
+				)
 			})
 
-			Expect(endpoints).To(HaveLen(3))
-			Expect(endpoints[routing_table.RoutingKey{ProcessGuid: "abc", ContainerPort: 44}]).To(HaveLen(2))
-			Expect(endpoints[routing_table.RoutingKey{ProcessGuid: "abc", ContainerPort: 44}]).To(ContainElement(routing_table.Endpoint{Host: "1.1.1.1", Domain: "domain", Port: 11, ContainerPort: 44}))
-			Expect(endpoints[routing_table.RoutingKey{ProcessGuid: "abc", ContainerPort: 44}]).To(ContainElement(routing_table.Endpoint{Host: "2.2.2.2", Domain: "domain", Port: 22, ContainerPort: 44}))
+			It("should build a map of endpoints, ignoring those without ports", func() {
+				Expect(endpoints).To(HaveLen(3))
 
-			Expect(endpoints[routing_table.RoutingKey{ProcessGuid: "abc", ContainerPort: 99}]).To(HaveLen(2))
-			Expect(endpoints[routing_table.RoutingKey{ProcessGuid: "abc", ContainerPort: 99}]).To(ContainElement(routing_table.Endpoint{Host: "1.1.1.1", Domain: "domain", Port: 66, ContainerPort: 99}))
-			Expect(endpoints[routing_table.RoutingKey{ProcessGuid: "abc", ContainerPort: 99}]).To(ContainElement(routing_table.Endpoint{Host: "2.2.2.2", Domain: "domain", Port: 88, ContainerPort: 99}))
+				Expect(endpoints[routing_table.RoutingKey{ProcessGuid: "abc", ContainerPort: 44}]).To(ConsistOf([]routing_table.Endpoint{
+					routing_table.Endpoint{Host: "1.1.1.1", Domain: "domain", Port: 11, ContainerPort: 44},
+					routing_table.Endpoint{Host: "2.2.2.2", Domain: "domain", Port: 22, ContainerPort: 44}}))
 
-			Expect(endpoints[routing_table.RoutingKey{ProcessGuid: "def", ContainerPort: 55}]).To(HaveLen(1))
-			Expect(endpoints[routing_table.RoutingKey{ProcessGuid: "def", ContainerPort: 55}]).To(ContainElement(routing_table.Endpoint{Host: "3.3.3.3", Domain: "domain", Port: 33, ContainerPort: 55}))
+				Expect(endpoints[routing_table.RoutingKey{ProcessGuid: "abc", ContainerPort: 99}]).To(ConsistOf([]routing_table.Endpoint{
+					routing_table.Endpoint{Host: "1.1.1.1", Domain: "domain", Port: 66, ContainerPort: 99},
+					routing_table.Endpoint{Host: "2.2.2.2", Domain: "domain", Port: 88, ContainerPort: 99}}))
+
+				Expect(endpoints[routing_table.RoutingKey{ProcessGuid: "def", ContainerPort: 55}]).To(ConsistOf([]routing_table.Endpoint{
+					routing_table.Endpoint{Host: "3.3.3.3", Domain: "domain", Port: 33, ContainerPort: 55}}))
+			})
 		})
+
+		Context("when not all running actuals are desired", func() {
+			var endpoints routing_table.EndpointsByRoutingKey
+
+			BeforeEach(func() {
+				schedInfo1 := model_helpers.NewValidDesiredLRP("abc").DesiredLRPSchedulingInfo()
+				schedInfo1.Instances = 1
+				schedInfo2 := model_helpers.NewValidDesiredLRP("def").DesiredLRPSchedulingInfo()
+				schedInfo2.Instances = 1
+
+				endpoints = routing_table.EndpointsByRoutingKeyFromActuals([]*routing_table.ActualLRPRoutingInfo{
+					{
+						ActualLRP: &models.ActualLRP{
+							ActualLRPKey:     models.NewActualLRPKey("abc", 0, "domain"),
+							ActualLRPNetInfo: models.NewActualLRPNetInfo("1.1.1.1", models.NewPortMapping(11, 44), models.NewPortMapping(66, 99)),
+						},
+					},
+					{
+						ActualLRP: &models.ActualLRP{
+							ActualLRPKey:     models.NewActualLRPKey("abc", 1, "domain"),
+							ActualLRPNetInfo: models.NewActualLRPNetInfo("2.2.2.2", models.NewPortMapping(22, 55), models.NewPortMapping(88, 99)),
+						},
+					},
+					{
+						ActualLRP: &models.ActualLRP{
+							ActualLRPKey:     models.NewActualLRPKey("def", 0, "domain"),
+							ActualLRPNetInfo: models.NewActualLRPNetInfo("3.3.3.3", models.NewPortMapping(33, 55)),
+						},
+					},
+				}, map[string]*models.DesiredLRPSchedulingInfo{
+					"abc": &schedInfo1,
+					"def": &schedInfo2,
+				},
+				)
+			})
+
+			It("should build a map of endpoints, excluding actuals that aren't desired", func() {
+				Expect(endpoints).To(HaveLen(3))
+
+				Expect(endpoints[routing_table.RoutingKey{ProcessGuid: "abc", ContainerPort: 44}]).To(ConsistOf([]routing_table.Endpoint{
+					routing_table.Endpoint{Host: "1.1.1.1", Domain: "domain", Port: 11, ContainerPort: 44}}))
+				Expect(endpoints[routing_table.RoutingKey{ProcessGuid: "abc", ContainerPort: 99}]).To(ConsistOf([]routing_table.Endpoint{
+					routing_table.Endpoint{Host: "1.1.1.1", Domain: "domain", Port: 66, ContainerPort: 99}}))
+				Expect(endpoints[routing_table.RoutingKey{ProcessGuid: "def", ContainerPort: 55}]).To(ConsistOf([]routing_table.Endpoint{
+					routing_table.Endpoint{Host: "3.3.3.3", Domain: "domain", Port: 33, ContainerPort: 55}}))
+			})
+		})
+
 	})
 
 	Describe("EndpointsFromActual", func() {
