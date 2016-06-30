@@ -9,12 +9,12 @@ import (
 	"code.cloudfoundry.org/bbs"
 	"code.cloudfoundry.org/bbs/events"
 	"code.cloudfoundry.org/bbs/models"
+	"code.cloudfoundry.org/clock"
 	"code.cloudfoundry.org/route-emitter/nats_emitter"
 	"code.cloudfoundry.org/route-emitter/routing_table"
 	"code.cloudfoundry.org/route-emitter/syncer"
 	"code.cloudfoundry.org/runtimeschema/metric"
 	"github.com/cloudfoundry-incubator/routing-info/cfroutes"
-	"github.com/pivotal-golang/clock"
 	"github.com/pivotal-golang/lager"
 )
 
