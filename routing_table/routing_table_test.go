@@ -4,8 +4,8 @@ import (
 	"fmt"
 
 	"code.cloudfoundry.org/bbs/models"
+	"code.cloudfoundry.org/lager/lagertest"
 	"code.cloudfoundry.org/route-emitter/routing_table"
-	"github.com/pivotal-golang/lager/lagertest"
 
 	. "code.cloudfoundry.org/route-emitter/routing_table/matchers"
 	. "github.com/onsi/ginkgo"

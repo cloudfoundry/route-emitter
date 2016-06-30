@@ -4,8 +4,8 @@ import (
 	"sync"
 
 	"code.cloudfoundry.org/bbs/models"
+	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/runtimeschema/metric"
-	"github.com/pivotal-golang/lager"
 )
 
 var addressCollisions = metric.Counter("AddressCollisions")

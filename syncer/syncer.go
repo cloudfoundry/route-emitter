@@ -6,11 +6,11 @@ import (
 	"time"
 
 	"code.cloudfoundry.org/clock"
+	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/route-emitter/routing_table"
 	"github.com/apcera/nats"
 	"github.com/cloudfoundry/gunk/diegonats"
 	uuid "github.com/nu7hatch/gouuid"
-	"github.com/pivotal-golang/lager"
 )
 
 type Syncer struct {

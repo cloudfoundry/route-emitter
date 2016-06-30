@@ -3,6 +3,7 @@ package nats_emitter_test
 import (
 	"errors"
 
+	"code.cloudfoundry.org/lager/lagertest"
 	"code.cloudfoundry.org/route-emitter/nats_emitter"
 	"code.cloudfoundry.org/route-emitter/routing_table"
 	"github.com/apcera/nats"
@@ -10,7 +11,6 @@ import (
 	"github.com/cloudfoundry/dropsonde/metrics"
 	"github.com/cloudfoundry/gunk/diegonats"
 	"github.com/cloudfoundry/gunk/workpool"
-	"github.com/pivotal-golang/lager/lagertest"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"

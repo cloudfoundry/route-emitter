@@ -4,11 +4,11 @@ import (
 	"encoding/json"
 	"sync"
 
+	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/route-emitter/routing_table"
 	"code.cloudfoundry.org/runtimeschema/metric"
 	"github.com/cloudfoundry/gunk/diegonats"
 	"github.com/cloudfoundry/gunk/workpool"
-	"github.com/pivotal-golang/lager"
 )
 
 var messagesEmitted = metric.Counter("MessagesEmitted")
