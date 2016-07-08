@@ -420,22 +420,19 @@ func (watcher *Watcher) handleDesiredUpdate(logger lager.Logger, before, after *
 }
 
 func (watcher *Watcher) setRoutesForDesired(logger lager.Logger, schedulingInfo *models.DesiredLRPSchedulingInfo) set {
-	routingKeys := routing_table.RoutingKeysFromSchedulingInfo(schedulingInfo)
 	routes, _ := cfroutes.CFRoutesFromRoutingInfo(schedulingInfo.Routes)
 	routingKeySet := set{}
 
-	for _, key := range routingKeys {
+	for _, route := range routes {
+		key := routing_table.RoutingKey{ProcessGuid: schedulingInfo.ProcessGuid, ContainerPort: route.Port}
 		routingKeySet.add(key)
-		for _, route := range routes {
-			if key.ContainerPort == route.Port {
-				messagesToEmit := watcher.table.SetRoutes(key, routing_table.Routes{
-					Hostnames:       route.Hostnames,
-					LogGuid:         schedulingInfo.LogGuid,
-					RouteServiceUrl: route.RouteServiceUrl,
-				})
-				watcher.emitMessages(logger, messagesToEmit)
-			}
-		}
+
+		messagesToEmit := watcher.table.SetRoutes(key, routing_table.Routes{
+			Hostnames:       route.Hostnames,
+			LogGuid:         schedulingInfo.LogGuid,
+			RouteServiceUrl: route.RouteServiceUrl,
+		})
+		watcher.emitMessages(logger, messagesToEmit)
 	}
 
 	return routingKeySet
