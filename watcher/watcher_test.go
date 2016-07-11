@@ -787,26 +787,33 @@ var _ = Describe("Watcher", func() {
 				It("should add/update the endpoint on the table", func() {
 					Eventually(table.AddEndpointCallCount).Should(Equal(2))
 
+					// Verify the arguments that were passed to AddEndpoint independent of which call was made first.
+					type endpointArgs struct {
+						key      routing_table.RoutingKey
+						endpoint routing_table.Endpoint
+					}
+					args := make([]endpointArgs, 2)
 					key, endpoint := table.AddEndpointArgsForCall(0)
-					Expect(key).To(Equal(expectedRoutingKey))
-					Expect(endpoint).To(Equal(routing_table.Endpoint{
-						InstanceGuid:  expectedInstanceGuid,
-						Host:          expectedHost,
-						Domain:        expectedDomain,
-						Port:          expectedExternalPort,
-						ContainerPort: expectedContainerPort,
-					}))
-
+					args[0] = endpointArgs{key, endpoint}
 					key, endpoint = table.AddEndpointArgsForCall(1)
-					Expect(key).To(Equal(expectedAdditionalRoutingKey))
-					Expect(endpoint).To(Equal(routing_table.Endpoint{
-						InstanceGuid:  expectedInstanceGuid,
-						Host:          expectedHost,
-						Domain:        expectedDomain,
-						Port:          expectedAdditionalExternalPort,
-						ContainerPort: expectedAdditionalContainerPort,
-					}))
+					args[1] = endpointArgs{key, endpoint}
 
+					Expect(args).To(ConsistOf([]endpointArgs{
+						endpointArgs{expectedRoutingKey, routing_table.Endpoint{
+							InstanceGuid:  expectedInstanceGuid,
+							Host:          expectedHost,
+							Domain:        expectedDomain,
+							Port:          expectedExternalPort,
+							ContainerPort: expectedContainerPort,
+						}},
+						endpointArgs{expectedAdditionalRoutingKey, routing_table.Endpoint{
+							InstanceGuid:  expectedInstanceGuid,
+							Host:          expectedHost,
+							Domain:        expectedDomain,
+							Port:          expectedAdditionalExternalPort,
+							ContainerPort: expectedAdditionalContainerPort,
+						}},
+					}))
 				})
 
 				It("should emit whatever the table tells it to emit", func() {

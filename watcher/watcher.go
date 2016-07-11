@@ -494,13 +494,10 @@ func (watcher *Watcher) addAndEmit(logger lager.Logger, actualLRPInfo *routing_t
 		return
 	}
 
-	for _, key := range routing_table.RoutingKeysFromActual(actualLRPInfo.ActualLRP) {
-		for _, endpoint := range endpoints {
-			if key.ContainerPort == endpoint.ContainerPort {
-				messagesToEmit := watcher.table.AddEndpoint(key, endpoint)
-				watcher.emitMessages(logger, messagesToEmit)
-			}
-		}
+	for _, endpoint := range endpoints {
+		key := routing_table.RoutingKey{ProcessGuid: actualLRPInfo.ActualLRP.ProcessGuid, ContainerPort: uint32(endpoint.ContainerPort)}
+		messagesToEmit := watcher.table.AddEndpoint(key, endpoint)
+		watcher.emitMessages(logger, messagesToEmit)
 	}
 }
 
