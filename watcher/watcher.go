@@ -535,6 +535,7 @@ func desiredLRPData(schedulingInfo *models.DesiredLRPSchedulingInfo) lager.Data 
 	return lager.Data{
 		"process-guid": schedulingInfo.ProcessGuid,
 		"routes":       logRoutes,
+		"instances":    schedulingInfo.GetInstances(),
 	}
 }
 
