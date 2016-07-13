@@ -32,12 +32,13 @@ var _ = Describe("RoutingTable", func() {
 	currentTag := &models.ModificationTag{Epoch: "abc", Index: 1}
 	newerTag := &models.ModificationTag{Epoch: "def", Index: 0}
 
-	endpoint1 := routing_table.Endpoint{InstanceGuid: "ig-1", Host: "1.1.1.1", Domain: domain, Port: 11, ContainerPort: 8080, Evacuating: false, ModificationTag: currentTag}
-	endpoint2 := routing_table.Endpoint{InstanceGuid: "ig-2", Host: "2.2.2.2", Domain: domain, Port: 22, ContainerPort: 8080, Evacuating: false, ModificationTag: currentTag}
-	endpoint3 := routing_table.Endpoint{InstanceGuid: "ig-3", Host: "3.3.3.3", Domain: domain, Port: 33, ContainerPort: 8080, Evacuating: false, ModificationTag: currentTag}
+	endpoint1 := routing_table.Endpoint{InstanceGuid: "ig-1", Host: "1.1.1.1", Index: 0, Domain: domain, Port: 11, ContainerPort: 8080, Evacuating: false, ModificationTag: currentTag}
+	endpoint2 := routing_table.Endpoint{InstanceGuid: "ig-2", Host: "2.2.2.2", Index: 1, Domain: domain, Port: 22, ContainerPort: 8080, Evacuating: false, ModificationTag: currentTag}
+	endpoint3 := routing_table.Endpoint{InstanceGuid: "ig-3", Host: "3.3.3.3", Index: 2, Domain: domain, Port: 33, ContainerPort: 8080, Evacuating: false, ModificationTag: currentTag}
 	collisionEndpoint := routing_table.Endpoint{
 		InstanceGuid:    "ig-4",
 		Host:            "1.1.1.1",
+		Index:           3,
 		Domain:          domain,
 		Port:            11,
 		ContainerPort:   8080,
@@ -45,7 +46,7 @@ var _ = Describe("RoutingTable", func() {
 		ModificationTag: currentTag,
 	}
 
-	evacuating1 := routing_table.Endpoint{InstanceGuid: "ig-1", Host: "1.1.1.1", Domain: domain, Port: 11, ContainerPort: 8080, Evacuating: true, ModificationTag: currentTag}
+	evacuating1 := routing_table.Endpoint{InstanceGuid: "ig-1", Host: "1.1.1.1", Index: 0, Domain: domain, Port: 11, ContainerPort: 8080, Evacuating: true, ModificationTag: currentTag}
 
 	logGuid := "some-log-guid"
 
@@ -1123,6 +1124,17 @@ var _ = Describe("RoutingTable", func() {
 				}
 				Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
 			})
+		})
+	})
+
+	Describe("EndpointsForIndex", func() {
+		It("returns endpoints for evacuation and non-evacuating instances", func() {
+			table.SetRoutes(routing_table.RoutingKey{ProcessGuid: "fake-process-guid"}, routing_table.Routes{Hostnames: []string{"fake-route-url"}, LogGuid: logGuid})
+			table.AddEndpoint(key, endpoint1)
+			table.AddEndpoint(key, endpoint2)
+			table.AddEndpoint(key, evacuating1)
+
+			Expect(table.EndpointsForIndex(key, 0)).To(ConsistOf([]routing_table.Endpoint{endpoint1, evacuating1}))
 		})
 	})
 

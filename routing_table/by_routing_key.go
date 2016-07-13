@@ -65,6 +65,7 @@ func EndpointsFromActual(actualLRPInfo *ActualLRPRoutingInfo) (map[uint32]Endpoi
 		if portMapping != nil {
 			endpoint := Endpoint{
 				InstanceGuid:  actual.InstanceGuid,
+				Index:         actual.Index,
 				Host:          actual.Address,
 				Domain:        actual.Domain,
 				Port:          portMapping.HostPort,

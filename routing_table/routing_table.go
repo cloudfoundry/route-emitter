@@ -11,6 +11,7 @@ import (
 var addressCollisions = metric.Counter("AddressCollisions")
 
 //go:generate counterfeiter -o fake_routing_table/fake_routing_table.go . RoutingTable
+
 type RoutingTable interface {
 	RouteCount() int
 
@@ -20,6 +21,7 @@ type RoutingTable interface {
 	RemoveRoutes(key RoutingKey, modTag *models.ModificationTag) MessagesToEmit
 	AddEndpoint(key RoutingKey, endpoint Endpoint) MessagesToEmit
 	RemoveEndpoint(key RoutingKey, endpoint Endpoint) MessagesToEmit
+	EndpointsForIndex(key RoutingKey, index int32) []Endpoint
 
 	MessagesToEmit() MessagesToEmit
 }
@@ -77,6 +79,26 @@ func NewTable(logger lager.Logger) RoutingTable {
 		messageBuilder: MessagesToEmitBuilder{},
 		logger:         logger,
 	}
+}
+
+func (table *routingTable) EndpointsForIndex(key RoutingKey, index int32) []Endpoint {
+	table.Lock()
+	defer table.Unlock()
+
+	endpointsForIndex := make([]Endpoint, 0, 2)
+	endpointsForKey := table.entries[key].Endpoints
+	endpointKey := EndpointKey{Index: index, Evacuating: true}
+
+	if endpoint, ok := endpointsForKey[endpointKey]; ok {
+		endpointsForIndex = append(endpointsForIndex, endpoint)
+	}
+
+	endpointKey.Evacuating = false
+	if endpoint, ok := endpointsForKey[endpointKey]; ok {
+		endpointsForIndex = append(endpointsForIndex, endpoint)
+	}
+
+	return endpointsForIndex
 }
 
 func (table *routingTable) RouteCount() int {
@@ -201,8 +223,9 @@ func (table *routingTable) AddEndpoint(key RoutingKey, endpoint Endpoint) Messag
 	if existingEndpointKey, ok := table.addressEntries[address]; ok {
 		if existingEndpointKey != endpoint.key() {
 			addressCollisions.Add(1)
+			existingInstanceGuid := currentEntry.Endpoints[existingEndpointKey].InstanceGuid
 			table.logger.Info("collision-detected-with-endpoint", lager.Data{
-				"instance_guid_a": existingEndpointKey.InstanceGuid,
+				"instance_guid_a": existingInstanceGuid,
 				"instance_guid_b": endpoint.InstanceGuid,
 				"Address":         endpoint.address(),
 			})

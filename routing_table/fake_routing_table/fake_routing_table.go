@@ -60,6 +60,15 @@ type FakeRoutingTable struct {
 	removeEndpointReturns struct {
 		result1 routing_table.MessagesToEmit
 	}
+	EndpointsForIndexStub        func(key routing_table.RoutingKey, index int32) []routing_table.Endpoint
+	endpointsForIndexMutex       sync.RWMutex
+	endpointsForIndexArgsForCall []struct {
+		key   routing_table.RoutingKey
+		index int32
+	}
+	endpointsForIndexReturns struct {
+		result1 []routing_table.Endpoint
+	}
 	MessagesToEmitStub        func() routing_table.MessagesToEmit
 	messagesToEmitMutex       sync.RWMutex
 	messagesToEmitArgsForCall []struct{}
@@ -254,6 +263,39 @@ func (fake *FakeRoutingTable) RemoveEndpointReturns(result1 routing_table.Messag
 	fake.RemoveEndpointStub = nil
 	fake.removeEndpointReturns = struct {
 		result1 routing_table.MessagesToEmit
+	}{result1}
+}
+
+func (fake *FakeRoutingTable) EndpointsForIndex(key routing_table.RoutingKey, index int32) []routing_table.Endpoint {
+	fake.endpointsForIndexMutex.Lock()
+	fake.endpointsForIndexArgsForCall = append(fake.endpointsForIndexArgsForCall, struct {
+		key   routing_table.RoutingKey
+		index int32
+	}{key, index})
+	fake.endpointsForIndexMutex.Unlock()
+	if fake.EndpointsForIndexStub != nil {
+		return fake.EndpointsForIndexStub(key, index)
+	} else {
+		return fake.endpointsForIndexReturns.result1
+	}
+}
+
+func (fake *FakeRoutingTable) EndpointsForIndexCallCount() int {
+	fake.endpointsForIndexMutex.RLock()
+	defer fake.endpointsForIndexMutex.RUnlock()
+	return len(fake.endpointsForIndexArgsForCall)
+}
+
+func (fake *FakeRoutingTable) EndpointsForIndexArgsForCall(i int) (routing_table.RoutingKey, int32) {
+	fake.endpointsForIndexMutex.RLock()
+	defer fake.endpointsForIndexMutex.RUnlock()
+	return fake.endpointsForIndexArgsForCall[i].key, fake.endpointsForIndexArgsForCall[i].index
+}
+
+func (fake *FakeRoutingTable) EndpointsForIndexReturns(result1 []routing_table.Endpoint) {
+	fake.EndpointsForIndexStub = nil
+	fake.endpointsForIndexReturns = struct {
+		result1 []routing_table.Endpoint
 	}{result1}
 }
 

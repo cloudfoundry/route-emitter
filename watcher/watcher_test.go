@@ -43,6 +43,7 @@ var _ = Describe("Watcher", func() {
 		expectedDomain                  = "domain"
 		expectedProcessGuid             = "process-guid"
 		expectedInstanceGuid            = "instance-guid"
+		expectedIndex                   = 0
 		expectedHost                    = "1.1.1.1"
 		expectedExternalPort            = 11000
 		expectedAdditionalExternalPort  = 22000
@@ -93,7 +94,7 @@ var _ = Describe("Watcher", func() {
 		}
 		logger = lagertest.NewTestLogger("test")
 
-		dummyEndpoint := routing_table.Endpoint{InstanceGuid: expectedInstanceGuid, Host: expectedHost, Port: expectedContainerPort}
+		dummyEndpoint := routing_table.Endpoint{InstanceGuid: expectedInstanceGuid, Index: expectedIndex, Host: expectedHost, Port: expectedContainerPort}
 		dummyMessage := routing_table.RegistryMessageFor(dummyEndpoint, routing_table.Routes{Hostnames: []string{"foo.com", "bar.com"}, LogGuid: logGuid})
 		dummyMessagesToEmit = routing_table.MessagesToEmit{
 			RegistrationMessages: []routing_table.RegistryMessage{dummyMessage},
@@ -210,7 +211,7 @@ var _ = Describe("Watcher", func() {
 
 			It("sends a 'routes unregistered' metric", func() {
 				Eventually(func() uint64 {
-					return fakeMetricSender.GetCounter("RoutesUnRegistered")
+					return fakeMetricSender.GetCounter("RoutesUnregistered")
 				}).Should(BeEquivalentTo(0))
 			})
 
@@ -325,45 +326,24 @@ var _ = Describe("Watcher", func() {
 			Context("when scaling down the number of LRP instances", func() {
 				BeforeEach(func() {
 					changedDesiredLRP.Instances = 1
-				})
 
-				Context("when the corresponding actual LRPs are found", func() {
-					BeforeEach(func() {
-						actualLRP := &models.ActualLRP{
-							ActualLRPKey:         models.NewActualLRPKey(expectedProcessGuid, 1, "domain"),
-							ActualLRPInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGuid, "cell-id"),
-							ActualLRPNetInfo: models.NewActualLRPNetInfo(
-								expectedHost,
-								models.NewPortMapping(expectedExternalPort, expectedContainerPort),
-								models.NewPortMapping(expectedExternalPort, expectedAdditionalContainerPort),
-							),
-							State: models.ActualLRPStateRunning,
+					table.EndpointsForIndexStub = func(key routing_table.RoutingKey, index int32) []routing_table.Endpoint {
+						endpoint := routing_table.Endpoint{
+							InstanceGuid:  fmt.Sprintf("instance-guid-%d", index),
+							Index:         index,
+							Host:          fmt.Sprintf("1.1.1.%d", index),
+							Domain:        "domain",
+							Port:          expectedExternalPort,
+							ContainerPort: expectedContainerPort,
+							Evacuating:    false,
 						}
 
-						actualLRPGroup := &models.ActualLRPGroup{
-							Instance: actualLRP,
-						}
-
-						bbsClient.ActualLRPGroupByProcessGuidAndIndexReturns(actualLRPGroup, nil)
-					})
-
-					It("unregisters route endpoints for instances that are no longer desired", func() {
-						Eventually(table.RemoveEndpointCallCount).Should(Equal(4)) // 2 routes for each instance multiplied by 2 instances disappearing
-					})
+						return []routing_table.Endpoint{endpoint}
+					}
 				})
 
-				Context("when the corresponding actual LRPs are not found", func() {
-					BeforeEach(func() {
-						bbsClient.ActualLRPGroupByProcessGuidAndIndexReturns(nil, models.ConvertError(errors.New("something bad")))
-					})
-
-					It("logs the error", func() {
-						Eventually(logger).Should(Say("something bad"))
-					})
-
-					It("does not attempt to remove the endpoint", func() {
-						Consistently(table.RemoveEndpointCallCount).Should(Equal(0))
-					})
+				It("removes route endpoints for instances that are no longer desired", func() {
+					Eventually(table.RemoveEndpointCallCount).Should(Equal(2))
 				})
 			})
 
@@ -382,7 +362,7 @@ var _ = Describe("Watcher", func() {
 
 			It("sends a 'routes unregistered' metric", func() {
 				Eventually(func() uint64 {
-					return fakeMetricSender.GetCounter("RoutesUnRegistered")
+					return fakeMetricSender.GetCounter("RoutesUnregistered")
 				}).Should(BeEquivalentTo(0))
 			})
 
@@ -625,7 +605,7 @@ var _ = Describe("Watcher", func() {
 			Context("when the resulting LRP is in the RUNNING state", func() {
 				BeforeEach(func() {
 					actualLRP = &models.ActualLRP{
-						ActualLRPKey:         models.NewActualLRPKey(expectedProcessGuid, 1, "domain"),
+						ActualLRPKey:         models.NewActualLRPKey(expectedProcessGuid, expectedIndex, "domain"),
 						ActualLRPInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGuid, "cell-id"),
 						ActualLRPNetInfo: models.NewActualLRPNetInfo(
 							expectedHost,
@@ -694,7 +674,7 @@ var _ = Describe("Watcher", func() {
 
 				It("sends a 'routes unregistered' metric", func() {
 					Eventually(func() uint64 {
-						return fakeMetricSender.GetCounter("RoutesUnRegistered")
+						return fakeMetricSender.GetCounter("RoutesUnregistered")
 					}).Should(BeEquivalentTo(0))
 				})
 			})
@@ -702,7 +682,7 @@ var _ = Describe("Watcher", func() {
 			Context("when the resulting LRP is not in the RUNNING state", func() {
 				JustBeforeEach(func() {
 					actualLRP = &models.ActualLRP{
-						ActualLRPKey:         models.NewActualLRPKey(expectedProcessGuid, 1, "domain"),
+						ActualLRPKey:         models.NewActualLRPKey(expectedProcessGuid, expectedIndex, "domain"),
 						ActualLRPInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGuid, "cell-id"),
 						ActualLRPNetInfo: models.NewActualLRPNetInfo(
 							expectedHost,
@@ -750,14 +730,14 @@ var _ = Describe("Watcher", func() {
 				JustBeforeEach(func() {
 					beforeActualLRP := &models.ActualLRPGroup{
 						Instance: &models.ActualLRP{
-							ActualLRPKey:         models.NewActualLRPKey(expectedProcessGuid, 1, "domain"),
+							ActualLRPKey:         models.NewActualLRPKey(expectedProcessGuid, expectedIndex, "domain"),
 							ActualLRPInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGuid, "cell-id"),
 							State:                models.ActualLRPStateClaimed,
 						},
 					}
 					afterActualLRP := &models.ActualLRPGroup{
 						Instance: &models.ActualLRP{
-							ActualLRPKey:         models.NewActualLRPKey(expectedProcessGuid, 1, "domain"),
+							ActualLRPKey:         models.NewActualLRPKey(expectedProcessGuid, expectedIndex, "domain"),
 							ActualLRPInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGuid, "cell-id"),
 							ActualLRPNetInfo: models.NewActualLRPNetInfo(
 								expectedHost,
@@ -801,6 +781,7 @@ var _ = Describe("Watcher", func() {
 					Expect(args).To(ConsistOf([]endpointArgs{
 						endpointArgs{expectedRoutingKey, routing_table.Endpoint{
 							InstanceGuid:  expectedInstanceGuid,
+							Index:         expectedIndex,
 							Host:          expectedHost,
 							Domain:        expectedDomain,
 							Port:          expectedExternalPort,
@@ -808,6 +789,7 @@ var _ = Describe("Watcher", func() {
 						}},
 						endpointArgs{expectedAdditionalRoutingKey, routing_table.Endpoint{
 							InstanceGuid:  expectedInstanceGuid,
+							Index:         expectedIndex,
 							Host:          expectedHost,
 							Domain:        expectedDomain,
 							Port:          expectedAdditionalExternalPort,
@@ -831,7 +813,7 @@ var _ = Describe("Watcher", func() {
 
 				It("sends a 'routes unregistered' metric", func() {
 					Eventually(func() uint64 {
-						return fakeMetricSender.GetCounter("RoutesUnRegistered")
+						return fakeMetricSender.GetCounter("RoutesUnregistered")
 					}).Should(BeEquivalentTo(0))
 				})
 			})
@@ -841,7 +823,7 @@ var _ = Describe("Watcher", func() {
 					table.RemoveEndpointReturns(dummyMessagesToEmit)
 					beforeActualLRP := &models.ActualLRPGroup{
 						Instance: &models.ActualLRP{
-							ActualLRPKey:         models.NewActualLRPKey(expectedProcessGuid, 1, "domain"),
+							ActualLRPKey:         models.NewActualLRPKey(expectedProcessGuid, expectedIndex, "domain"),
 							ActualLRPInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGuid, "cell-id"),
 							ActualLRPNetInfo: models.NewActualLRPNetInfo(
 								expectedHost,
@@ -853,7 +835,7 @@ var _ = Describe("Watcher", func() {
 					}
 					afterActualLRP := &models.ActualLRPGroup{
 						Instance: &models.ActualLRP{
-							ActualLRPKey: models.NewActualLRPKey(expectedProcessGuid, 1, "domain"),
+							ActualLRPKey: models.NewActualLRPKey(expectedProcessGuid, expectedIndex, "domain"),
 							State:        models.ActualLRPStateUnclaimed,
 						},
 					}
@@ -881,6 +863,7 @@ var _ = Describe("Watcher", func() {
 					Expect(key).To(Equal(expectedRoutingKey))
 					Expect(endpoint).To(Equal(routing_table.Endpoint{
 						InstanceGuid:  expectedInstanceGuid,
+						Index:         expectedIndex,
 						Host:          expectedHost,
 						Domain:        expectedDomain,
 						Port:          expectedExternalPort,
@@ -891,6 +874,7 @@ var _ = Describe("Watcher", func() {
 					Expect(key).To(Equal(expectedAdditionalRoutingKey))
 					Expect(endpoint).To(Equal(routing_table.Endpoint{
 						InstanceGuid:  expectedInstanceGuid,
+						Index:         expectedIndex,
 						Host:          expectedHost,
 						Domain:        expectedDomain,
 						Port:          expectedAdditionalExternalPort,
@@ -911,13 +895,13 @@ var _ = Describe("Watcher", func() {
 				JustBeforeEach(func() {
 					beforeActualLRP := &models.ActualLRPGroup{
 						Instance: &models.ActualLRP{
-							ActualLRPKey: models.NewActualLRPKey(expectedProcessGuid, 1, "domain"),
+							ActualLRPKey: models.NewActualLRPKey(expectedProcessGuid, expectedIndex, "domain"),
 							State:        models.ActualLRPStateUnclaimed,
 						},
 					}
 					afterActualLRP := &models.ActualLRPGroup{
 						Instance: &models.ActualLRP{
-							ActualLRPKey:         models.NewActualLRPKey(expectedProcessGuid, 1, "domain"),
+							ActualLRPKey:         models.NewActualLRPKey(expectedProcessGuid, expectedIndex, "domain"),
 							ActualLRPInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGuid, "cell-id"),
 							State:                models.ActualLRPStateClaimed,
 						},
@@ -961,7 +945,7 @@ var _ = Describe("Watcher", func() {
 				JustBeforeEach(func() {
 					actualLRP := &models.ActualLRPGroup{
 						Instance: &models.ActualLRP{
-							ActualLRPKey:         models.NewActualLRPKey(expectedProcessGuid, 1, "domain"),
+							ActualLRPKey:         models.NewActualLRPKey(expectedProcessGuid, expectedIndex, "domain"),
 							ActualLRPInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGuid, "cell-id"),
 							ActualLRPNetInfo: models.NewActualLRPNetInfo(
 								expectedHost,
@@ -995,6 +979,7 @@ var _ = Describe("Watcher", func() {
 					Expect(key).To(Equal(expectedRoutingKey))
 					Expect(endpoint).To(Equal(routing_table.Endpoint{
 						InstanceGuid:  expectedInstanceGuid,
+						Index:         expectedIndex,
 						Host:          expectedHost,
 						Domain:        expectedDomain,
 						Port:          expectedExternalPort,
@@ -1005,6 +990,7 @@ var _ = Describe("Watcher", func() {
 					Expect(key).To(Equal(expectedAdditionalRoutingKey))
 					Expect(endpoint).To(Equal(routing_table.Endpoint{
 						InstanceGuid:  expectedInstanceGuid,
+						Index:         expectedIndex,
 						Host:          expectedHost,
 						Domain:        expectedDomain,
 						Port:          expectedAdditionalExternalPort,
@@ -1028,7 +1014,7 @@ var _ = Describe("Watcher", func() {
 				JustBeforeEach(func() {
 					actualLRP := &models.ActualLRPGroup{
 						Instance: &models.ActualLRP{
-							ActualLRPKey: models.NewActualLRPKey(expectedProcessGuid, 1, "domain"),
+							ActualLRPKey: models.NewActualLRPKey(expectedProcessGuid, expectedIndex, "domain"),
 							State:        models.ActualLRPStateCrashed,
 						},
 					}
@@ -1165,9 +1151,9 @@ var _ = Describe("Watcher", func() {
 			currentTag := &models.ModificationTag{Epoch: "abc", Index: 1}
 			hostname1 := "foo.example.com"
 			hostname2 := "bar.example.com"
-			endpoint1 := routing_table.Endpoint{InstanceGuid: "ig-1", Host: "1.1.1.1", Port: 11, ContainerPort: 8080, Evacuating: false, ModificationTag: currentTag}
-			endpoint2 := routing_table.Endpoint{InstanceGuid: "ig-2", Host: "2.2.2.2", Port: 22, ContainerPort: 8080, Evacuating: false, ModificationTag: currentTag}
-			endpoint3 := routing_table.Endpoint{InstanceGuid: "ig-3", Host: "2.2.2.2", Port: 23, ContainerPort: 8080, Evacuating: false, ModificationTag: currentTag}
+			endpoint1 := routing_table.Endpoint{InstanceGuid: "ig-1", Host: "1.1.1.1", Index: 0, Port: 11, ContainerPort: 8080, Evacuating: false, ModificationTag: currentTag}
+			endpoint2 := routing_table.Endpoint{InstanceGuid: "ig-2", Host: "2.2.2.2", Index: 0, Port: 22, ContainerPort: 8080, Evacuating: false, ModificationTag: currentTag}
+			endpoint3 := routing_table.Endpoint{InstanceGuid: "ig-3", Host: "2.2.2.2", Index: 1, Port: 23, ContainerPort: 8080, Evacuating: false, ModificationTag: currentTag}
 
 			schedulingInfo1 := &models.DesiredLRPSchedulingInfo{
 				DesiredLRPKey: models.NewDesiredLRPKey("pg-1", "tests", "lg1"),

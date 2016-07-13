@@ -59,6 +59,7 @@ var _ = Describe("RegistryMessage", func() {
 		It("creates a valid message from an endpoint and routes", func() {
 			endpoint := routing_table.Endpoint{
 				InstanceGuid:  "instance-guid",
+				Index:         0,
 				Host:          "1.1.1.1",
 				Port:          61001,
 				ContainerPort: 11,

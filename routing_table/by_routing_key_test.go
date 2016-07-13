@@ -94,15 +94,15 @@ var _ = Describe("ByRoutingKey", func() {
 				Expect(endpoints).To(HaveLen(3))
 
 				Expect(endpoints[routing_table.RoutingKey{ProcessGuid: "abc", ContainerPort: 44}]).To(ConsistOf([]routing_table.Endpoint{
-					routing_table.Endpoint{Host: "1.1.1.1", Domain: "domain", Port: 11, ContainerPort: 44},
-					routing_table.Endpoint{Host: "2.2.2.2", Domain: "domain", Port: 22, ContainerPort: 44}}))
+					routing_table.Endpoint{Host: "1.1.1.1", Index: 0, Domain: "domain", Port: 11, ContainerPort: 44},
+					routing_table.Endpoint{Host: "2.2.2.2", Index: 1, Domain: "domain", Port: 22, ContainerPort: 44}}))
 
 				Expect(endpoints[routing_table.RoutingKey{ProcessGuid: "abc", ContainerPort: 99}]).To(ConsistOf([]routing_table.Endpoint{
-					routing_table.Endpoint{Host: "1.1.1.1", Domain: "domain", Port: 66, ContainerPort: 99},
-					routing_table.Endpoint{Host: "2.2.2.2", Domain: "domain", Port: 88, ContainerPort: 99}}))
+					routing_table.Endpoint{Host: "1.1.1.1", Index: 0, Domain: "domain", Port: 66, ContainerPort: 99},
+					routing_table.Endpoint{Host: "2.2.2.2", Index: 1, Domain: "domain", Port: 88, ContainerPort: 99}}))
 
 				Expect(endpoints[routing_table.RoutingKey{ProcessGuid: "def", ContainerPort: 55}]).To(ConsistOf([]routing_table.Endpoint{
-					routing_table.Endpoint{Host: "3.3.3.3", Domain: "domain", Port: 33, ContainerPort: 55}}))
+					routing_table.Endpoint{Host: "3.3.3.3", Index: 0, Domain: "domain", Port: 33, ContainerPort: 55}}))
 			})
 		})
 
@@ -168,8 +168,8 @@ var _ = Describe("ByRoutingKey", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(endpoints).To(ConsistOf([]routing_table.Endpoint{
-				routing_table.Endpoint{Host: "1.1.1.1", Domain: "domain", Port: 11, InstanceGuid: "instance-guid", ContainerPort: 44, Evacuating: true},
-				routing_table.Endpoint{Host: "1.1.1.1", Domain: "domain", Port: 66, InstanceGuid: "instance-guid", ContainerPort: 99, Evacuating: true},
+				routing_table.Endpoint{Host: "1.1.1.1", Domain: "domain", Port: 11, InstanceGuid: "instance-guid", ContainerPort: 44, Evacuating: true, Index: 0},
+				routing_table.Endpoint{Host: "1.1.1.1", Domain: "domain", Port: 66, InstanceGuid: "instance-guid", ContainerPort: 99, Evacuating: true, Index: 0},
 			}))
 		})
 	})

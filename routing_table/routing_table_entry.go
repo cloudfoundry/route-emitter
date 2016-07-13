@@ -3,8 +3,8 @@ package routing_table
 import "code.cloudfoundry.org/bbs/models"
 
 type EndpointKey struct {
-	InstanceGuid string
-	Evacuating   bool
+	Index      int32
+	Evacuating bool
 }
 
 type Address struct {
@@ -14,6 +14,7 @@ type Address struct {
 
 type Endpoint struct {
 	InstanceGuid    string
+	Index           int32
 	Host            string
 	Domain          string
 	Port            uint32
@@ -23,7 +24,7 @@ type Endpoint struct {
 }
 
 func (e Endpoint) key() EndpointKey {
-	return EndpointKey{InstanceGuid: e.InstanceGuid, Evacuating: e.Evacuating}
+	return EndpointKey{Index: e.Index, Evacuating: e.Evacuating}
 }
 
 func (e Endpoint) address() Address {

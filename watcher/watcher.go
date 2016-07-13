@@ -395,26 +395,26 @@ func (watcher *Watcher) handleDesiredUpdate(logger lager.Logger, before, after *
 		afterContainerPorts.add(route.Port)
 	}
 
-	// in case of scale down, remove endpoints
 	requestedInstances := after.Instances - before.Instances
-	if requestedInstances < 0 {
-		logger.Info("removing-endpoints", lager.Data{"count": -1 * requestedInstances})
-		// fetch actual LRPs corresponding to the removed instances (if any still running)
-		for i := before.Instances; i > after.Instances; i-- {
-			actualLRPGroup, err := watcher.bbsClient.ActualLRPGroupByProcessGuidAndIndex(logger, before.ProcessGuid, int(i-1))
-			if err != nil {
-				logger.Error("failed-to-fetch-actuallrp", err)
-				continue
-			}
-			actualLRPRoutingInfo := routing_table.NewActualLRPRoutingInfo(actualLRPGroup)
-			watcher.removeAndEmit(logger, actualLRPRoutingInfo)
-		}
-	}
 
 	for _, key := range beforeRoutingKeys {
 		if !afterKeysSet.contains(key) || !afterContainerPorts.contains(key.ContainerPort) {
 			messagesToEmit := watcher.table.RemoveRoutes(key, &after.ModificationTag)
 			watcher.emitMessages(logger, messagesToEmit)
+		}
+
+		// in case of scale down, remove endpoints
+		if requestedInstances < 0 {
+			logger.Info("removing-endpoints", lager.Data{"removal_count": -1 * requestedInstances, "routing_key": key})
+
+			for index := before.Instances - 1; index >= after.Instances; index-- {
+				endpoints := watcher.table.EndpointsForIndex(key, index)
+
+				for i, _ := range endpoints {
+					messagesToEmit := watcher.table.RemoveEndpoint(key, endpoints[i])
+					watcher.emitMessages(logger, messagesToEmit)
+				}
+			}
 		}
 	}
 }
