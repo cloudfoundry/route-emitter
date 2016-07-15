@@ -45,6 +45,7 @@ var _ = Describe("RoutingTable", func() {
 		Evacuating:      false,
 		ModificationTag: currentTag,
 	}
+	newInstanceEndpointAfterEvacuation := routing_table.Endpoint{InstanceGuid: "ig-5", Host: "5.5.5.5", Index: 0, Domain: domain, Port: 55, ContainerPort: 8080, Evacuating: false, ModificationTag: currentTag}
 
 	evacuating1 := routing_table.Endpoint{InstanceGuid: "ig-1", Host: "1.1.1.1", Index: 0, Domain: domain, Port: 11, ContainerPort: 8080, Evacuating: true, ModificationTag: currentTag}
 
@@ -56,6 +57,47 @@ var _ = Describe("RoutingTable", func() {
 	BeforeEach(func() {
 		logger = lagertest.NewTestLogger("test-route-emitter")
 		table = routing_table.NewTable(logger)
+	})
+
+	Describe("Evacuating endpoints", func() {
+		BeforeEach(func() {
+			messagesToEmit = table.SetRoutes(key, routing_table.Routes{Hostnames: []string{hostname1}, LogGuid: logGuid, ModificationTag: currentTag})
+			Expect(messagesToEmit).To(BeZero())
+
+			messagesToEmit = table.AddEndpoint(key, endpoint1)
+			expected := routing_table.MessagesToEmit{
+				RegistrationMessages: []routing_table.RegistryMessage{
+					routing_table.RegistryMessageFor(endpoint1, routing_table.Routes{Hostnames: []string{hostname1}, LogGuid: logGuid}),
+				},
+			}
+			Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
+
+			messagesToEmit = table.AddEndpoint(key, evacuating1)
+			Expect(messagesToEmit).To(BeZero())
+
+			messagesToEmit = table.RemoveEndpoint(key, endpoint1)
+			Expect(messagesToEmit).To(BeZero())
+		})
+
+		Context("when we have an evacuating endpoint and we add an instance for that added", func() {
+			It("emits a registration for the instance and a unregister for the evacuating", func() {
+				messagesToEmit = table.AddEndpoint(key, newInstanceEndpointAfterEvacuation)
+				expected := routing_table.MessagesToEmit{
+					RegistrationMessages: []routing_table.RegistryMessage{
+						routing_table.RegistryMessageFor(newInstanceEndpointAfterEvacuation, routing_table.Routes{Hostnames: []string{hostname1}, LogGuid: logGuid}),
+					},
+				}
+				Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
+
+				messagesToEmit = table.RemoveEndpoint(key, evacuating1)
+				expected = routing_table.MessagesToEmit{
+					UnregistrationMessages: []routing_table.RegistryMessage{
+						routing_table.RegistryMessageFor(evacuating1, routing_table.Routes{Hostnames: []string{hostname1}, LogGuid: logGuid}),
+					},
+				}
+				Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
+			})
+		})
 	})
 
 	Describe("Swap", func() {

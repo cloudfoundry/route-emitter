@@ -87,15 +87,12 @@ func (table *routingTable) EndpointsForIndex(key RoutingKey, index int32) []Endp
 
 	endpointsForIndex := make([]Endpoint, 0, 2)
 	endpointsForKey := table.entries[key].Endpoints
-	endpointKey := EndpointKey{Index: index, Evacuating: true}
 
-	if endpoint, ok := endpointsForKey[endpointKey]; ok {
-		endpointsForIndex = append(endpointsForIndex, endpoint)
-	}
-
-	endpointKey.Evacuating = false
-	if endpoint, ok := endpointsForKey[endpointKey]; ok {
-		endpointsForIndex = append(endpointsForIndex, endpoint)
+	for i := range endpointsForKey {
+		endpoint := endpointsForKey[i]
+		if endpoint.Index == index {
+			endpointsForIndex = append(endpointsForIndex, endpoint)
+		}
 	}
 
 	return endpointsForIndex
@@ -220,6 +217,7 @@ func (table *routingTable) AddEndpoint(key RoutingKey, endpoint Endpoint) Messag
 	table.entries[key] = newEntry
 
 	address := endpoint.address()
+
 	if existingEndpointKey, ok := table.addressEntries[address]; ok {
 		if existingEndpointKey != endpoint.key() {
 			addressCollisions.Add(1)
@@ -231,6 +229,7 @@ func (table *routingTable) AddEndpoint(key RoutingKey, endpoint Endpoint) Messag
 			})
 		}
 	}
+
 	table.addressEntries[address] = endpoint.key()
 
 	return table.emit(key, currentEntry, newEntry)
