@@ -79,6 +79,10 @@ var _ = Describe("RoutingTable", func() {
 			Expect(messagesToEmit).To(BeZero())
 		})
 
+		It("does not log an address collision", func() {
+			Consistently(logger).ShouldNot(Say("collision-detected-with-endpoint"))
+		})
+
 		Context("when we have an evacuating endpoint and we add an instance for that added", func() {
 			It("emits a registration for the instance and a unregister for the evacuating", func() {
 				messagesToEmit = table.AddEndpoint(key, newInstanceEndpointAfterEvacuation)
