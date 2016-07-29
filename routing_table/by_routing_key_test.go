@@ -11,7 +11,7 @@ import (
 )
 
 var _ = Describe("ByRoutingKey", func() {
-	Describe("RoutesByRoutingKeyFromDesireds", func() {
+	Describe("RoutesByRoutingKeyFromSchedulingInfos", func() {
 		It("should build a map of routes", func() {
 			abcRoutes := cfroutes.CFRoutes{
 				{Hostnames: []string{"foo.com", "bar.com"}, Port: 8080, RouteServiceUrl: "https://something.creative"},
@@ -27,17 +27,49 @@ var _ = Describe("ByRoutingKey", func() {
 			})
 
 			Expect(routes).To(HaveLen(3))
-			Expect(routes[routing_table.RoutingKey{ProcessGuid: "abc", ContainerPort: 8080}].Hostnames).To(Equal([]string{"foo.com", "bar.com"}))
-			Expect(routes[routing_table.RoutingKey{ProcessGuid: "abc", ContainerPort: 8080}].LogGuid).To(Equal("abc-guid"))
-			Expect(routes[routing_table.RoutingKey{ProcessGuid: "abc", ContainerPort: 8080}].RouteServiceUrl).To(Equal("https://something.creative"))
+			Expect(routes[routing_table.RoutingKey{ProcessGuid: "abc", ContainerPort: 8080}][0].Hostname).To(Equal("foo.com"))
+			Expect(routes[routing_table.RoutingKey{ProcessGuid: "abc", ContainerPort: 8080}][0].LogGuid).To(Equal("abc-guid"))
+			Expect(routes[routing_table.RoutingKey{ProcessGuid: "abc", ContainerPort: 8080}][0].RouteServiceUrl).To(Equal("https://something.creative"))
 
-			Expect(routes[routing_table.RoutingKey{ProcessGuid: "abc", ContainerPort: 9090}].Hostnames).To(Equal([]string{"foo.example.com"}))
-			Expect(routes[routing_table.RoutingKey{ProcessGuid: "abc", ContainerPort: 9090}].LogGuid).To(Equal("abc-guid"))
+			Expect(routes[routing_table.RoutingKey{ProcessGuid: "abc", ContainerPort: 8080}][1].Hostname).To(Equal("bar.com"))
+			Expect(routes[routing_table.RoutingKey{ProcessGuid: "abc", ContainerPort: 8080}][1].LogGuid).To(Equal("abc-guid"))
+			Expect(routes[routing_table.RoutingKey{ProcessGuid: "abc", ContainerPort: 8080}][1].RouteServiceUrl).To(Equal("https://something.creative"))
 
-			Expect(routes[routing_table.RoutingKey{ProcessGuid: "def", ContainerPort: 8080}].Hostnames).To(Equal([]string{"baz.com"}))
-			Expect(routes[routing_table.RoutingKey{ProcessGuid: "def", ContainerPort: 8080}].LogGuid).To(Equal("def-guid"))
+			Expect(routes[routing_table.RoutingKey{ProcessGuid: "abc", ContainerPort: 9090}][0].Hostname).To(Equal("foo.example.com"))
+			Expect(routes[routing_table.RoutingKey{ProcessGuid: "abc", ContainerPort: 9090}][0].LogGuid).To(Equal("abc-guid"))
+
+			Expect(routes[routing_table.RoutingKey{ProcessGuid: "def", ContainerPort: 8080}][0].Hostname).To(Equal("baz.com"))
+			Expect(routes[routing_table.RoutingKey{ProcessGuid: "def", ContainerPort: 8080}][0].LogGuid).To(Equal("def-guid"))
 		})
 
+		Context("when multiple hosts have the same key, but one hostname is bound to a route service and the other is not", func() {
+			It("should build a map of routes", func() {
+				abcRoutes := cfroutes.CFRoutes{
+					{Hostnames: []string{"foo.com"}, Port: 8080, RouteServiceUrl: "https://something.creative"},
+					{Hostnames: []string{"bar.com"}, Port: 8080},
+				}
+				defRoutes := cfroutes.CFRoutes{
+					{Hostnames: []string{"baz.com"}, Port: 8080},
+				}
+
+				routes := routing_table.RoutesByRoutingKeyFromSchedulingInfos([]*models.DesiredLRPSchedulingInfo{
+					{DesiredLRPKey: models.NewDesiredLRPKey("abc", "tests", "abc-guid"), Routes: abcRoutes.RoutingInfo()},
+					{DesiredLRPKey: models.NewDesiredLRPKey("def", "tests", "def-guid"), Routes: defRoutes.RoutingInfo()},
+				})
+
+				Expect(routes).To(HaveLen(2))
+				Expect(routes[routing_table.RoutingKey{ProcessGuid: "abc", ContainerPort: 8080}][0].Hostname).To(Equal("foo.com"))
+				Expect(routes[routing_table.RoutingKey{ProcessGuid: "abc", ContainerPort: 8080}][0].LogGuid).To(Equal("abc-guid"))
+				Expect(routes[routing_table.RoutingKey{ProcessGuid: "abc", ContainerPort: 8080}][0].RouteServiceUrl).To(Equal("https://something.creative"))
+
+				Expect(routes[routing_table.RoutingKey{ProcessGuid: "abc", ContainerPort: 8080}][1].Hostname).To(Equal("bar.com"))
+				Expect(routes[routing_table.RoutingKey{ProcessGuid: "abc", ContainerPort: 8080}][1].LogGuid).To(Equal("abc-guid"))
+				Expect(routes[routing_table.RoutingKey{ProcessGuid: "abc", ContainerPort: 8080}][1].RouteServiceUrl).To(Equal(""))
+
+				Expect(routes[routing_table.RoutingKey{ProcessGuid: "def", ContainerPort: 8080}][0].Hostname).To(Equal("baz.com"))
+				Expect(routes[routing_table.RoutingKey{ProcessGuid: "def", ContainerPort: 8080}][0].LogGuid).To(Equal("def-guid"))
+			})
+		})
 		Context("when the routing info is nil", func() {
 			It("should not be included in the results", func() {
 				routes := routing_table.RoutesByRoutingKeyFromSchedulingInfos([]*models.DesiredLRPSchedulingInfo{

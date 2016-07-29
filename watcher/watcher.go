@@ -423,15 +423,23 @@ func (watcher *Watcher) setRoutesForDesired(logger lager.Logger, schedulingInfo 
 	routes, _ := cfroutes.CFRoutesFromRoutingInfo(schedulingInfo.Routes)
 	routingKeySet := set{}
 
+	routeEntries := make(map[routing_table.RoutingKey][]routing_table.Route)
 	for _, route := range routes {
 		key := routing_table.RoutingKey{ProcessGuid: schedulingInfo.ProcessGuid, ContainerPort: route.Port}
 		routingKeySet.add(key)
 
-		messagesToEmit := watcher.table.SetRoutes(key, routing_table.Routes{
-			Hostnames:       route.Hostnames,
-			LogGuid:         schedulingInfo.LogGuid,
-			RouteServiceUrl: route.RouteServiceUrl,
-		})
+		routes := []routing_table.Route{}
+		for _, hostname := range route.Hostnames {
+			routes = append(routes, routing_table.Route{
+				Hostname:        hostname,
+				LogGuid:         schedulingInfo.LogGuid,
+				RouteServiceUrl: route.RouteServiceUrl,
+			})
+		}
+		routeEntries[key] = append(routeEntries[key], routes...)
+	}
+	for key := range routeEntries {
+		messagesToEmit := watcher.table.SetRoutes(key, routeEntries[key], nil)
 		watcher.emitMessages(logger, messagesToEmit)
 	}
 
@@ -496,6 +504,7 @@ func (watcher *Watcher) addAndEmit(logger lager.Logger, actualLRPInfo *routing_t
 
 	for _, endpoint := range endpoints {
 		key := routing_table.RoutingKey{ProcessGuid: actualLRPInfo.ActualLRP.ProcessGuid, ContainerPort: uint32(endpoint.ContainerPort)}
+
 		messagesToEmit := watcher.table.AddEndpoint(key, endpoint)
 		watcher.emitMessages(logger, messagesToEmit)
 	}

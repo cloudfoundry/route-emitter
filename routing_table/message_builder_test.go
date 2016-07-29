@@ -34,7 +34,10 @@ var _ = Describe("MessagesToEmitBuilder", func() {
 	Describe("UnfreshRegistrations", func() {
 		BeforeEach(func() {
 			existingEntry = &routing_table.RoutableEndpoints{
-				Hostnames: map[string]struct{}{hostname1: struct{}{}, hostname2: struct{}{}},
+				Routes: []routing_table.Route{
+					routing_table.Route{Hostname: hostname1},
+					routing_table.Route{Hostname: hostname2},
+				},
 				Endpoints: routing_table.EndpointsAsMap([]routing_table.Endpoint{endpoint1}),
 			}
 		})
@@ -61,7 +64,8 @@ var _ = Describe("MessagesToEmitBuilder", func() {
 			It("does emits a registration", func() {
 				expected := routing_table.MessagesToEmit{
 					RegistrationMessages: []routing_table.RegistryMessage{
-						routing_table.RegistryMessageFor(endpoint1, routing_table.Routes{Hostnames: []string{hostname1, hostname2}}),
+						routing_table.RegistryMessageFor(endpoint1, routing_table.Route{Hostname: hostname1}),
+						routing_table.RegistryMessageFor(endpoint1, routing_table.Route{Hostname: hostname2}),
 					},
 				}
 				Expect(messages).To(MatchMessagesToEmit(expected))
@@ -72,7 +76,10 @@ var _ = Describe("MessagesToEmitBuilder", func() {
 	Describe("MergedRegistrations", func() {
 		BeforeEach(func() {
 			existingEntry = &routing_table.RoutableEndpoints{
-				Hostnames: map[string]struct{}{hostname1: struct{}{}, hostname2: struct{}{}},
+				Routes: []routing_table.Route{
+					routing_table.Route{Hostname: hostname1},
+					routing_table.Route{Hostname: hostname2},
+				},
 				Endpoints: routing_table.EndpointsAsMap([]routing_table.Endpoint{endpoint1}),
 			}
 		})
@@ -89,7 +96,10 @@ var _ = Describe("MessagesToEmitBuilder", func() {
 			Context("when reemitting the previous endpoints", func() {
 				BeforeEach(func() {
 					newEntry = &routing_table.RoutableEndpoints{
-						Hostnames: map[string]struct{}{hostname1: struct{}{}, hostname2: struct{}{}},
+						Routes: []routing_table.Route{
+							routing_table.Route{Hostname: hostname1},
+							routing_table.Route{Hostname: hostname3},
+						},
 						Endpoints: routing_table.EndpointsAsMap([]routing_table.Endpoint{endpoint1}),
 					}
 				})
@@ -97,17 +107,28 @@ var _ = Describe("MessagesToEmitBuilder", func() {
 				It("does emits a registration", func() {
 					expected := routing_table.MessagesToEmit{
 						RegistrationMessages: []routing_table.RegistryMessage{
-							routing_table.RegistryMessageFor(endpoint1, routing_table.Routes{Hostnames: []string{hostname1, hostname2}}),
+							routing_table.RegistryMessageFor(endpoint1, routing_table.Route{Hostname: hostname1}),
+							routing_table.RegistryMessageFor(endpoint1, routing_table.Route{Hostname: hostname3}),
 						},
 					}
 					Expect(messages).To(MatchMessagesToEmit(expected))
+				})
+
+				It("modifies the passed in new entry with the same routes", func() {
+					Expect(newEntry.Routes).To(ConsistOf(
+						routing_table.Route{Hostname: hostname1},
+						routing_table.Route{Hostname: hostname3},
+					))
 				})
 			})
 
 			Context("when reemitting change to previous endpoints", func() {
 				BeforeEach(func() {
 					newEntry = &routing_table.RoutableEndpoints{
-						Hostnames: map[string]struct{}{hostname1: struct{}{}, hostname3: struct{}{}},
+						Routes: []routing_table.Route{
+							routing_table.Route{Hostname: hostname1},
+							routing_table.Route{Hostname: hostname3},
+						},
 						Endpoints: routing_table.EndpointsAsMap([]routing_table.Endpoint{endpoint1}),
 					}
 				})
@@ -115,10 +136,18 @@ var _ = Describe("MessagesToEmitBuilder", func() {
 				It("emits a registration", func() {
 					expected := routing_table.MessagesToEmit{
 						RegistrationMessages: []routing_table.RegistryMessage{
-							routing_table.RegistryMessageFor(endpoint1, routing_table.Routes{Hostnames: []string{hostname1, hostname3}}),
+							routing_table.RegistryMessageFor(endpoint1, routing_table.Route{Hostname: hostname1}),
+							routing_table.RegistryMessageFor(endpoint1, routing_table.Route{Hostname: hostname3}),
 						},
 					}
 					Expect(messages).To(MatchMessagesToEmit(expected))
+				})
+
+				It("modifies the passed in new entry with the same routes", func() {
+					Expect(newEntry.Routes).To(ConsistOf(
+						routing_table.Route{Hostname: hostname1},
+						routing_table.Route{Hostname: hostname3},
+					))
 				})
 			})
 		})
@@ -131,7 +160,10 @@ var _ = Describe("MessagesToEmitBuilder", func() {
 			Context("when reemitting the previous endpoints", func() {
 				BeforeEach(func() {
 					newEntry = &routing_table.RoutableEndpoints{
-						Hostnames: map[string]struct{}{hostname1: struct{}{}, hostname2: struct{}{}},
+						Routes: []routing_table.Route{
+							routing_table.Route{Hostname: hostname1},
+							routing_table.Route{Hostname: hostname2},
+						},
 						Endpoints: routing_table.EndpointsAsMap([]routing_table.Endpoint{endpoint1}),
 					}
 				})
@@ -139,17 +171,28 @@ var _ = Describe("MessagesToEmitBuilder", func() {
 				It("does emits an registration", func() {
 					expected := routing_table.MessagesToEmit{
 						RegistrationMessages: []routing_table.RegistryMessage{
-							routing_table.RegistryMessageFor(endpoint1, routing_table.Routes{Hostnames: []string{hostname1, hostname2}}),
+							routing_table.RegistryMessageFor(endpoint1, routing_table.Route{Hostname: hostname1}),
+							routing_table.RegistryMessageFor(endpoint1, routing_table.Route{Hostname: hostname2}),
 						},
 					}
 					Expect(messages).To(MatchMessagesToEmit(expected))
+				})
+
+				It("modifies the passed in new entry with the same routes", func() {
+					Expect(newEntry.Routes).To(ConsistOf(
+						routing_table.Route{Hostname: hostname1},
+						routing_table.Route{Hostname: hostname2},
+					))
 				})
 			})
 
 			Context("when reemitting change to previous endpoints", func() {
 				BeforeEach(func() {
 					newEntry = &routing_table.RoutableEndpoints{
-						Hostnames: map[string]struct{}{hostname1: struct{}{}, hostname3: struct{}{}},
+						Routes: []routing_table.Route{
+							routing_table.Route{Hostname: hostname1},
+							routing_table.Route{Hostname: hostname3},
+						},
 						Endpoints: routing_table.EndpointsAsMap([]routing_table.Endpoint{endpoint1}),
 					}
 				})
@@ -157,10 +200,20 @@ var _ = Describe("MessagesToEmitBuilder", func() {
 				It("emits a merged registration", func() {
 					expected := routing_table.MessagesToEmit{
 						RegistrationMessages: []routing_table.RegistryMessage{
-							routing_table.RegistryMessageFor(endpoint1, routing_table.Routes{Hostnames: []string{hostname1, hostname2, hostname3}}),
+							routing_table.RegistryMessageFor(endpoint1, routing_table.Route{Hostname: hostname1}),
+							routing_table.RegistryMessageFor(endpoint1, routing_table.Route{Hostname: hostname2}),
+							routing_table.RegistryMessageFor(endpoint1, routing_table.Route{Hostname: hostname3}),
 						},
 					}
 					Expect(messages).To(MatchMessagesToEmit(expected))
+				})
+
+				It("modifies the passed in entry with the merged routes", func() {
+					Expect(newEntry.Routes).To(ConsistOf(
+						routing_table.Route{Hostname: hostname1},
+						routing_table.Route{Hostname: hostname2},
+						routing_table.Route{Hostname: hostname3},
+					))
 				})
 			})
 		})
@@ -171,7 +224,9 @@ var _ = Describe("MessagesToEmitBuilder", func() {
 			existingEntry = nil
 
 			newEntry = &routing_table.RoutableEndpoints{
-				Hostnames: map[string]struct{}{hostname1: struct{}{}},
+				Routes: []routing_table.Route{
+					routing_table.Route{Hostname: hostname1},
+				},
 				Endpoints: routing_table.EndpointsAsMap([]routing_table.Endpoint{endpoint1}),
 			}
 		})
@@ -184,7 +239,7 @@ var _ = Describe("MessagesToEmitBuilder", func() {
 			It("emits a registration", func() {
 				expected := routing_table.MessagesToEmit{
 					RegistrationMessages: []routing_table.RegistryMessage{
-						routing_table.RegistryMessageFor(endpoint1, routing_table.Routes{Hostnames: []string{hostname1}}),
+						routing_table.RegistryMessageFor(endpoint1, routing_table.Route{Hostname: hostname1}),
 					},
 				}
 				Expect(messages).To(MatchMessagesToEmit(expected))
@@ -193,7 +248,7 @@ var _ = Describe("MessagesToEmitBuilder", func() {
 
 		Context("when new entry has no hostnames", func() {
 			BeforeEach(func() {
-				newEntry.Hostnames = make(map[string]struct{})
+				newEntry.Routes = []routing_table.Route{}
 			})
 
 			It("emits nothing", func() {
@@ -215,16 +270,20 @@ var _ = Describe("MessagesToEmitBuilder", func() {
 			Context("when route service url changes", func() {
 				BeforeEach(func() {
 					existingEntry = &routing_table.RoutableEndpoints{
-						Hostnames:       map[string]struct{}{hostname1: struct{}{}},
-						Endpoints:       routing_table.EndpointsAsMap([]routing_table.Endpoint{endpoint1}),
-						RouteServiceUrl: "https://new-rs-url.com",
+						Routes: []routing_table.Route{
+							routing_table.Route{
+								Hostname:        hostname1,
+								RouteServiceUrl: "https://new-rs-url.com",
+							},
+						},
+						Endpoints: routing_table.EndpointsAsMap([]routing_table.Endpoint{endpoint1}),
 					}
 				})
 
 				It("emits a registration", func() {
 					expected := routing_table.MessagesToEmit{
 						RegistrationMessages: []routing_table.RegistryMessage{
-							routing_table.RegistryMessageFor(endpoint1, routing_table.Routes{Hostnames: []string{hostname1}}),
+							routing_table.RegistryMessageFor(endpoint1, routing_table.Route{Hostname: hostname1}),
 						},
 					}
 					Expect(messages).To(MatchMessagesToEmit(expected))
@@ -234,7 +293,9 @@ var _ = Describe("MessagesToEmitBuilder", func() {
 			Context("when hostnames change", func() {
 				BeforeEach(func() {
 					existingEntry = &routing_table.RoutableEndpoints{
-						Hostnames: map[string]struct{}{hostname2: struct{}{}},
+						Routes: []routing_table.Route{
+							routing_table.Route{Hostname: hostname2},
+						},
 						Endpoints: routing_table.EndpointsAsMap([]routing_table.Endpoint{endpoint1}),
 					}
 				})
@@ -242,7 +303,7 @@ var _ = Describe("MessagesToEmitBuilder", func() {
 				It("emits a registration", func() {
 					expected := routing_table.MessagesToEmit{
 						RegistrationMessages: []routing_table.RegistryMessage{
-							routing_table.RegistryMessageFor(endpoint1, routing_table.Routes{Hostnames: []string{hostname1}}),
+							routing_table.RegistryMessageFor(endpoint1, routing_table.Route{Hostname: hostname1}),
 						},
 					}
 					Expect(messages).To(MatchMessagesToEmit(expected))
@@ -253,7 +314,9 @@ var _ = Describe("MessagesToEmitBuilder", func() {
 				Context("when endpoints are added", func() {
 					BeforeEach(func() {
 						existingEntry = &routing_table.RoutableEndpoints{
-							Hostnames: map[string]struct{}{hostname1: struct{}{}},
+							Routes: []routing_table.Route{
+								routing_table.Route{Hostname: hostname1},
+							},
 							Endpoints: routing_table.EndpointsAsMap([]routing_table.Endpoint{endpoint1}),
 						}
 
@@ -263,7 +326,7 @@ var _ = Describe("MessagesToEmitBuilder", func() {
 					It("emits a registration", func() {
 						expected := routing_table.MessagesToEmit{
 							RegistrationMessages: []routing_table.RegistryMessage{
-								routing_table.RegistryMessageFor(endpoint2, routing_table.Routes{Hostnames: []string{hostname1}}),
+								routing_table.RegistryMessageFor(endpoint2, routing_table.Route{Hostname: hostname1}),
 							},
 						}
 						Expect(messages).To(MatchMessagesToEmit(expected))
@@ -273,7 +336,9 @@ var _ = Describe("MessagesToEmitBuilder", func() {
 				Context("when endpoints are removed", func() {
 					BeforeEach(func() {
 						existingEntry = &routing_table.RoutableEndpoints{
-							Hostnames: map[string]struct{}{hostname1: struct{}{}},
+							Routes: []routing_table.Route{
+								routing_table.Route{Hostname: hostname1},
+							},
 							Endpoints: routing_table.EndpointsAsMap([]routing_table.Endpoint{endpoint1, endpoint2}),
 						}
 
@@ -293,12 +358,18 @@ var _ = Describe("MessagesToEmitBuilder", func() {
 		Context("when doing bulk sync loop", func() {
 			BeforeEach(func() {
 				existingEntry = &routing_table.RoutableEndpoints{
-					Hostnames: map[string]struct{}{hostname1: struct{}{}, hostname2: struct{}{}},
+					Routes: []routing_table.Route{
+						routing_table.Route{Hostname: hostname1},
+						routing_table.Route{Hostname: hostname2},
+					},
 					Endpoints: routing_table.EndpointsAsMap([]routing_table.Endpoint{endpoint1}),
 				}
 
 				newEntry = &routing_table.RoutableEndpoints{
-					Hostnames: map[string]struct{}{hostname1: struct{}{}, hostname2: struct{}{}},
+					Routes: []routing_table.Route{
+						routing_table.Route{Hostname: hostname1},
+						routing_table.Route{Hostname: hostname2},
+					},
 					Endpoints: routing_table.EndpointsAsMap([]routing_table.Endpoint{}),
 				}
 			})
@@ -314,7 +385,8 @@ var _ = Describe("MessagesToEmitBuilder", func() {
 					It("emits an unregistration", func() {
 						expected := routing_table.MessagesToEmit{
 							UnregistrationMessages: []routing_table.RegistryMessage{
-								routing_table.RegistryMessageFor(endpoint1, routing_table.Routes{Hostnames: []string{hostname1, hostname2}}),
+								routing_table.RegistryMessageFor(endpoint1, routing_table.Route{Hostname: hostname1}),
+								routing_table.RegistryMessageFor(endpoint1, routing_table.Route{Hostname: hostname2}),
 							},
 						}
 						Expect(messages).To(MatchMessagesToEmit(expected))
@@ -347,12 +419,14 @@ var _ = Describe("MessagesToEmitBuilder", func() {
 			Context("when there are no hostnames in the existing", func() {
 				BeforeEach(func() {
 					existingEntry = &routing_table.RoutableEndpoints{
-						Hostnames: map[string]struct{}{},
+						Routes:    []routing_table.Route{},
 						Endpoints: routing_table.EndpointsAsMap([]routing_table.Endpoint{endpoint1}),
 					}
 
 					newEntry = &routing_table.RoutableEndpoints{
-						Hostnames: map[string]struct{}{hostname1: struct{}{}},
+						Routes: []routing_table.Route{
+							routing_table.Route{Hostname: hostname1},
+						},
 						Endpoints: routing_table.EndpointsAsMap([]routing_table.Endpoint{endpoint1}),
 					}
 				})
@@ -366,12 +440,15 @@ var _ = Describe("MessagesToEmitBuilder", func() {
 				Context("when a hostname removed", func() {
 					BeforeEach(func() {
 						existingEntry = &routing_table.RoutableEndpoints{
-							Hostnames: map[string]struct{}{hostname1: struct{}{}, hostname2: struct{}{}},
+							Routes: []routing_table.Route{
+								routing_table.Route{Hostname: hostname1},
+								routing_table.Route{Hostname: hostname2},
+							},
 							Endpoints: routing_table.EndpointsAsMap([]routing_table.Endpoint{endpoint1}),
 						}
 
 						newEntry = &routing_table.RoutableEndpoints{
-							Hostnames: map[string]struct{}{},
+							Routes:    []routing_table.Route{},
 							Endpoints: routing_table.EndpointsAsMap([]routing_table.Endpoint{endpoint1}),
 						}
 					})
@@ -379,7 +456,8 @@ var _ = Describe("MessagesToEmitBuilder", func() {
 					It("emits an unregistration", func() {
 						expected := routing_table.MessagesToEmit{
 							UnregistrationMessages: []routing_table.RegistryMessage{
-								routing_table.RegistryMessageFor(endpoint1, routing_table.Routes{Hostnames: []string{hostname1, hostname2}}),
+								routing_table.RegistryMessageFor(endpoint1, routing_table.Route{Hostname: hostname1}),
+								routing_table.RegistryMessageFor(endpoint1, routing_table.Route{Hostname: hostname2}),
 							},
 						}
 						Expect(messages).To(MatchMessagesToEmit(expected))
@@ -389,12 +467,17 @@ var _ = Describe("MessagesToEmitBuilder", func() {
 				Context("when a hostname has been added", func() {
 					BeforeEach(func() {
 						existingEntry = &routing_table.RoutableEndpoints{
-							Hostnames: map[string]struct{}{hostname1: struct{}{}},
+							Routes: []routing_table.Route{
+								routing_table.Route{Hostname: hostname1},
+							},
 							Endpoints: routing_table.EndpointsAsMap([]routing_table.Endpoint{endpoint1}),
 						}
 
 						newEntry = &routing_table.RoutableEndpoints{
-							Hostnames: map[string]struct{}{hostname1: struct{}{}, hostname2: struct{}{}},
+							Routes: []routing_table.Route{
+								routing_table.Route{Hostname: hostname1},
+								routing_table.Route{Hostname: hostname2},
+							},
 							Endpoints: routing_table.EndpointsAsMap([]routing_table.Endpoint{endpoint1}),
 						}
 					})
@@ -407,7 +490,9 @@ var _ = Describe("MessagesToEmitBuilder", func() {
 				Context("when a hostname has not changed", func() {
 					BeforeEach(func() {
 						existingEntry = &routing_table.RoutableEndpoints{
-							Hostnames: map[string]struct{}{hostname1: struct{}{}},
+							Routes: []routing_table.Route{
+								routing_table.Route{Hostname: hostname1},
+							},
 							Endpoints: routing_table.EndpointsAsMap([]routing_table.Endpoint{endpoint1}),
 						}
 
@@ -424,12 +509,18 @@ var _ = Describe("MessagesToEmitBuilder", func() {
 				Context("when an endpoint is removed", func() {
 					BeforeEach(func() {
 						existingEntry = &routing_table.RoutableEndpoints{
-							Hostnames: map[string]struct{}{hostname1: struct{}{}, hostname2: struct{}{}},
+							Routes: []routing_table.Route{
+								routing_table.Route{Hostname: hostname1},
+								routing_table.Route{Hostname: hostname2},
+							},
 							Endpoints: routing_table.EndpointsAsMap([]routing_table.Endpoint{endpoint1}),
 						}
 
 						newEntry = &routing_table.RoutableEndpoints{
-							Hostnames: map[string]struct{}{hostname1: struct{}{}, hostname2: struct{}{}},
+							Routes: []routing_table.Route{
+								routing_table.Route{Hostname: hostname1},
+								routing_table.Route{Hostname: hostname2},
+							},
 							Endpoints: routing_table.EndpointsAsMap([]routing_table.Endpoint{}),
 						}
 					})
@@ -437,7 +528,8 @@ var _ = Describe("MessagesToEmitBuilder", func() {
 					It("emits an unregistration", func() {
 						expected := routing_table.MessagesToEmit{
 							UnregistrationMessages: []routing_table.RegistryMessage{
-								routing_table.RegistryMessageFor(endpoint1, routing_table.Routes{Hostnames: []string{hostname1, hostname2}}),
+								routing_table.RegistryMessageFor(endpoint1, routing_table.Route{Hostname: hostname1}),
+								routing_table.RegistryMessageFor(endpoint1, routing_table.Route{Hostname: hostname2}),
 							},
 						}
 						Expect(messages).To(MatchMessagesToEmit(expected))
@@ -447,12 +539,18 @@ var _ = Describe("MessagesToEmitBuilder", func() {
 				Context("when an endpoint has been added", func() {
 					BeforeEach(func() {
 						existingEntry = &routing_table.RoutableEndpoints{
-							Hostnames: map[string]struct{}{hostname1: struct{}{}, hostname2: struct{}{}},
+							Routes: []routing_table.Route{
+								routing_table.Route{Hostname: hostname1},
+								routing_table.Route{Hostname: hostname2},
+							},
 							Endpoints: routing_table.EndpointsAsMap([]routing_table.Endpoint{endpoint1}),
 						}
 
 						newEntry = &routing_table.RoutableEndpoints{
-							Hostnames: map[string]struct{}{hostname1: struct{}{}, hostname2: struct{}{}},
+							Routes: []routing_table.Route{
+								routing_table.Route{Hostname: hostname1},
+								routing_table.Route{Hostname: hostname2},
+							},
 							Endpoints: routing_table.EndpointsAsMap([]routing_table.Endpoint{endpoint1, endpoint2}),
 						}
 					})
@@ -465,7 +563,9 @@ var _ = Describe("MessagesToEmitBuilder", func() {
 				Context("when endpoints have not changed", func() {
 					BeforeEach(func() {
 						existingEntry = &routing_table.RoutableEndpoints{
-							Hostnames: map[string]struct{}{hostname1: struct{}{}},
+							Routes: []routing_table.Route{
+								routing_table.Route{Hostname: hostname1},
+							},
 							Endpoints: routing_table.EndpointsAsMap([]routing_table.Endpoint{endpoint1}),
 						}
 

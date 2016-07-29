@@ -35,8 +35,7 @@ func (MessagesToEmitBuilder) UnfreshRegistrations(existingEntry *RoutableEndpoin
 	messagesToEmit := MessagesToEmit{}
 	for _, endpoint := range existingEntry.Endpoints {
 		if domains != nil && !domains.Contains(endpoint.Domain) {
-			message := RegistryMessageFor(endpoint, existingEntry.routes())
-			messagesToEmit.RegistrationMessages = append(messagesToEmit.RegistrationMessages, message)
+			createAndAddMessages(endpoint, existingEntry.Routes, &messagesToEmit.RegistrationMessages)
 		}
 	}
 
@@ -45,38 +44,36 @@ func (MessagesToEmitBuilder) UnfreshRegistrations(existingEntry *RoutableEndpoin
 
 func (MessagesToEmitBuilder) MergedRegistrations(existingEntry, newEntry *RoutableEndpoints, domains models.DomainSet) MessagesToEmit {
 	messagesToEmit := MessagesToEmit{}
-	if len(newEntry.Hostnames) == 0 {
+	if len(newEntry.Routes) == 0 {
 		//no hostnames, so nothing could possibly be registered
 		return messagesToEmit
 	}
 
-	routeList := newEntry.routes()
+	routeList := newEntry.Routes
 	for _, endpoint := range newEntry.Endpoints {
 		if domains != nil && !domains.Contains(endpoint.Domain) {
 			// Not Fresh
-			for _, hostName := range existingEntry.routes().Hostnames {
-				var addHostName bool = true
-				for _, value := range routeList.Hostnames {
-					if value == hostName {
-						addHostName = false
+			for _, route := range existingEntry.Routes {
+				var addRoute bool = true
+				for _, newRoute := range routeList {
+					if newRoute.Hostname == route.Hostname {
+						addRoute = false
 					}
 				}
-
-				if addHostName {
-					routeList.Hostnames = append(routeList.Hostnames, hostName)
+				if addRoute {
+					routeList = append(routeList, route)
 				}
 			}
 		}
-		newEntry.Hostnames = routesAsMap(routeList.Hostnames)
-		message := RegistryMessageFor(endpoint, routeList)
-		messagesToEmit.RegistrationMessages = append(messagesToEmit.RegistrationMessages, message)
+		newEntry.Routes = routeList
+		createAndAddMessages(endpoint, routeList, &messagesToEmit.RegistrationMessages)
 	}
 	return messagesToEmit
 }
 
 func (MessagesToEmitBuilder) RegistrationsFor(existingEntry, newEntry *RoutableEndpoints) MessagesToEmit {
 	messagesToEmit := MessagesToEmit{}
-	if len(newEntry.Hostnames) == 0 {
+	if len(newEntry.Routes) == 0 {
 		//no hostnames, so nothing could possibly be registered
 		return messagesToEmit
 	}
@@ -84,8 +81,7 @@ func (MessagesToEmitBuilder) RegistrationsFor(existingEntry, newEntry *RoutableE
 	// only new entry OR something changed between existing and new entry
 	if existingEntry == nil || hostnamesHaveChanged(existingEntry, newEntry) || routeServiceUrlHasChanged(existingEntry, newEntry) {
 		for _, endpoint := range newEntry.Endpoints {
-			message := RegistryMessageFor(endpoint, newEntry.routes())
-			messagesToEmit.RegistrationMessages = append(messagesToEmit.RegistrationMessages, message)
+			createAndAddMessages(endpoint, newEntry.Routes, &messagesToEmit.RegistrationMessages)
 		}
 		return messagesToEmit
 	}
@@ -93,8 +89,7 @@ func (MessagesToEmitBuilder) RegistrationsFor(existingEntry, newEntry *RoutableE
 	//otherwise only register *new* endpoints
 	for _, endpoint := range newEntry.Endpoints {
 		if !existingEntry.hasEndpoint(endpoint) {
-			message := RegistryMessageFor(endpoint, newEntry.routes())
-			messagesToEmit.RegistrationMessages = append(messagesToEmit.RegistrationMessages, message)
+			createAndAddMessages(endpoint, newEntry.Routes, &messagesToEmit.RegistrationMessages)
 		}
 	}
 
@@ -104,7 +99,7 @@ func (MessagesToEmitBuilder) RegistrationsFor(existingEntry, newEntry *RoutableE
 func (MessagesToEmitBuilder) UnregistrationsFor(existingEntry, newEntry *RoutableEndpoints, domains models.DomainSet) MessagesToEmit {
 	messagesToEmit := MessagesToEmit{}
 
-	if len(existingEntry.Hostnames) == 0 {
+	if len(existingEntry.Routes) == 0 {
 		// the existing entry has no hostnames and so there is nothing to unregister
 		return messagesToEmit
 	}
@@ -117,29 +112,24 @@ func (MessagesToEmitBuilder) UnregistrationsFor(existingEntry, newEntry *Routabl
 			// only unregister if domain is fresh or preforming event processing
 			if domains == nil || domains.Contains(endpoint.Domain) {
 				//if the endpoint has disappeared unregister all its previous hostnames
-				message := RegistryMessageFor(endpoint, existingEntry.routes())
-				messagesToEmit.UnregistrationMessages = append(messagesToEmit.UnregistrationMessages, message)
+				createAndAddMessages(endpoint, existingEntry.Routes, &messagesToEmit.UnregistrationMessages)
 			}
 		}
 	}
 
-	hostnamesThatDisappeared := []string{}
-	for hostname := range existingEntry.Hostnames {
-		if !newEntry.hasHostname(hostname) {
-			hostnamesThatDisappeared = append(hostnamesThatDisappeared, hostname)
+	routesThatDisappeared := []Route{}
+	for _, route := range existingEntry.Routes {
+		if !newEntry.hasHostname(route.Hostname) {
+			routesThatDisappeared = append(routesThatDisappeared, route)
 		}
 	}
 
-	if len(hostnamesThatDisappeared) > 0 {
+	if len(routesThatDisappeared) > 0 {
 		for _, endpoint := range endpointsThatAreStillPresent {
 			// only unregister if domain is fresh or preforming event processing
 			if domains == nil || domains.Contains(endpoint.Domain) {
 				//if a endpoint is still present, and hostnames have disappeared, unregister those hostnames
-				message := RegistryMessageFor(endpoint, Routes{
-					Hostnames: hostnamesThatDisappeared,
-					LogGuid:   existingEntry.LogGuid,
-				})
-				messagesToEmit.UnregistrationMessages = append(messagesToEmit.UnregistrationMessages, message)
+				createAndAddMessages(endpoint, routesThatDisappeared, &messagesToEmit.UnregistrationMessages)
 			}
 		}
 	}
@@ -148,11 +138,11 @@ func (MessagesToEmitBuilder) UnregistrationsFor(existingEntry, newEntry *Routabl
 }
 
 func hostnamesHaveChanged(existingEntry, newEntry *RoutableEndpoints) bool {
-	if len(newEntry.Hostnames) != len(existingEntry.Hostnames) {
+	if len(newEntry.Routes) != len(existingEntry.Routes) {
 		return true
 	} else {
-		for hostname := range newEntry.Hostnames {
-			if !existingEntry.hasHostname(hostname) {
+		for _, route := range newEntry.Routes {
+			if !existingEntry.hasHostname(route.Hostname) {
 				return true
 			}
 		}
@@ -162,5 +152,21 @@ func hostnamesHaveChanged(existingEntry, newEntry *RoutableEndpoints) bool {
 }
 
 func routeServiceUrlHasChanged(existingEntry, newEntry *RoutableEndpoints) bool {
-	return newEntry.RouteServiceUrl != existingEntry.RouteServiceUrl
+	if len(newEntry.Routes) != len(existingEntry.Routes) {
+		return true
+	} else {
+		for _, route := range newEntry.Routes {
+			if !existingEntry.hasRouteServiceUrl(route.RouteServiceUrl) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func createAndAddMessages(endpoint Endpoint, routes []Route, messages *[]RegistryMessage) {
+	for _, route := range routes {
+		message := RegistryMessageFor(endpoint, route)
+		*messages = append(*messages, message)
+	}
 }

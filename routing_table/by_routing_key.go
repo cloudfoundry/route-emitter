@@ -7,7 +7,7 @@ import (
 	"github.com/cloudfoundry-incubator/routing-info/cfroutes"
 )
 
-type RoutesByRoutingKey map[RoutingKey]Routes
+type RoutesByRoutingKey map[RoutingKey][]Route
 type EndpointsByRoutingKey map[RoutingKey][]Endpoint
 
 func RoutesByRoutingKeyFromSchedulingInfos(schedulingInfos []*models.DesiredLRPSchedulingInfo) RoutesByRoutingKey {
@@ -17,11 +17,15 @@ func RoutesByRoutingKeyFromSchedulingInfos(schedulingInfos []*models.DesiredLRPS
 		if err == nil && len(routes) > 0 {
 			for _, cfRoute := range routes {
 				key := RoutingKey{ProcessGuid: desired.ProcessGuid, ContainerPort: cfRoute.Port}
-				routesByRoutingKey[key] = Routes{
-					Hostnames:       cfRoute.Hostnames,
-					LogGuid:         desired.LogGuid,
-					RouteServiceUrl: cfRoute.RouteServiceUrl,
+				var routeEntries []Route
+				for _, hostname := range cfRoute.Hostnames {
+					routeEntries = append(routeEntries, Route{
+						Hostname:        hostname,
+						LogGuid:         desired.LogGuid,
+						RouteServiceUrl: cfRoute.RouteServiceUrl,
+					})
 				}
+				routesByRoutingKey[key] = append(routesByRoutingKey[key], routeEntries...)
 			}
 		}
 	}
