@@ -214,9 +214,9 @@ func (table *routingTable) AddEndpoint(key RoutingKey, endpoint Endpoint) Messag
 	address := endpoint.address()
 
 	if existingEndpointKey, ok := table.addressEntries[address]; ok {
-		if existingEndpointKey != endpoint.key() {
+		if existingEndpointKey.InstanceGuid != endpoint.InstanceGuid {
 			addressCollisions.Add(1)
-			existingInstanceGuid := currentEntry.Endpoints[existingEndpointKey].InstanceGuid
+			existingInstanceGuid := existingEndpointKey.InstanceGuid
 			table.logger.Info("collision-detected-with-endpoint", lager.Data{
 				"instance_guid_a": existingInstanceGuid,
 				"instance_guid_b": endpoint.InstanceGuid,
