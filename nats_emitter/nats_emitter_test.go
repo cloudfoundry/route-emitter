@@ -6,11 +6,11 @@ import (
 	"code.cloudfoundry.org/lager/lagertest"
 	"code.cloudfoundry.org/route-emitter/nats_emitter"
 	"code.cloudfoundry.org/route-emitter/routing_table"
-	"github.com/apcera/nats"
 	fake_metrics_sender "github.com/cloudfoundry/dropsonde/metric_sender/fake"
 	"github.com/cloudfoundry/dropsonde/metrics"
 	"github.com/cloudfoundry/gunk/diegonats"
 	"github.com/cloudfoundry/gunk/workpool"
+	"github.com/nats-io/nats"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"

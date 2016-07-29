@@ -144,6 +144,7 @@ func main() {
 
 	logger, reconfigurableSink := cflager.New(*sessionName)
 	natsClient := diegonats.NewClient()
+	natsClient.SetPingInterval(30 * time.Second)
 	clock := clock.NewClock()
 	syncer := syncer.NewSyncer(clock, *syncInterval, natsClient, logger)
 
