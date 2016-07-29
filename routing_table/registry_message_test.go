@@ -16,7 +16,7 @@ var _ = Describe("RegistryMessage", func() {
 		expectedMessage = routing_table.RegistryMessage{
 			Host:              "1.1.1.1",
 			Port:              61001,
-			URIs:              []string{"host-1.example.com", "host-2.example.com"},
+			URIs:              []string{"host-1.example.com"},
 			App:               "app-guid",
 			PrivateInstanceId: "instance-guid",
 			RouteServiceUrl:   "https://hello.com",
@@ -31,7 +31,7 @@ var _ = Describe("RegistryMessage", func() {
 			expectedJSON = `{
 				"host": "1.1.1.1",
 				"port": 61001,
-				"uris": ["host-1.example.com", "host-2.example.com"],
+				"uris": ["host-1.example.com"],
 				"app" : "app-guid",
 				"private_instance_id": "instance-guid",
 				"route_service_url": "https://hello.com",
@@ -64,13 +64,13 @@ var _ = Describe("RegistryMessage", func() {
 				Port:          61001,
 				ContainerPort: 11,
 			}
-			routes := routing_table.Routes{
-				Hostnames:       []string{"host-1.example.com", "host-2.example.com"},
+			route := routing_table.Route{
+				Hostname:        "host-1.example.com",
 				LogGuid:         "app-guid",
 				RouteServiceUrl: "https://hello.com",
 			}
 
-			message := routing_table.RegistryMessageFor(endpoint, routes)
+			message := routing_table.RegistryMessageFor(endpoint, route)
 			Expect(message).To(Equal(expectedMessage))
 		})
 	})

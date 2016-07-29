@@ -31,19 +31,16 @@ func (e Endpoint) address() Address {
 	return Address{Host: e.Host, Port: e.Port}
 }
 
-type Routes struct {
-	Hostnames       []string
+type Route struct {
+	Hostname        string
 	LogGuid         string
 	RouteServiceUrl string
-	ModificationTag *models.ModificationTag
 }
 
 type RoutableEndpoints struct {
-	Hostnames       map[string]struct{}
 	Endpoints       map[EndpointKey]Endpoint
-	LogGuid         string
+	Routes          []Route
 	ModificationTag *models.ModificationTag
-	RouteServiceUrl string
 }
 
 type RoutingKey struct {
@@ -53,7 +50,6 @@ type RoutingKey struct {
 
 func NewRoutableEndpoints() RoutableEndpoints {
 	return RoutableEndpoints{
-		Hostnames: map[string]struct{}{},
 		Endpoints: map[EndpointKey]Endpoint{},
 	}
 }
@@ -69,44 +65,37 @@ func (entry RoutableEndpoints) hasEndpoint(endpoint Endpoint) bool {
 }
 
 func (entry RoutableEndpoints) hasHostname(hostname string) bool {
-	_, ok := entry.Hostnames[hostname]
-	return ok
+	for _, route := range entry.Routes {
+		if route.Hostname == hostname {
+			return true
+		}
+	}
+	return false
+}
+
+func (entry RoutableEndpoints) hasRouteServiceUrl(routeServiceUrl string) bool {
+	for _, route := range entry.Routes {
+		if route.RouteServiceUrl == routeServiceUrl {
+			return true
+		}
+	}
+	return false
 }
 
 func (entry RoutableEndpoints) copy() RoutableEndpoints {
 	clone := RoutableEndpoints{
-		Hostnames:       map[string]struct{}{},
 		Endpoints:       map[EndpointKey]Endpoint{},
-		LogGuid:         entry.LogGuid,
+		Routes:          make([]Route, len(entry.Routes)),
 		ModificationTag: entry.ModificationTag,
-		RouteServiceUrl: entry.RouteServiceUrl,
 	}
 
-	for k, v := range entry.Hostnames {
-		clone.Hostnames[k] = v
-	}
+	copy(clone.Routes, entry.Routes)
 
 	for k, v := range entry.Endpoints {
 		clone.Endpoints[k] = v
 	}
 
 	return clone
-}
-
-func (entry RoutableEndpoints) routes() Routes {
-	hostnames := make([]string, len(entry.Hostnames))
-
-	i := 0
-	for hostname := range entry.Hostnames {
-		hostnames[i] = hostname
-		i++
-	}
-
-	return Routes{
-		Hostnames:       hostnames,
-		LogGuid:         entry.LogGuid,
-		RouteServiceUrl: entry.RouteServiceUrl,
-	}
 }
 
 func routesAsMap(routes []string) map[string]struct{} {

@@ -10,16 +10,16 @@ type RegistryMessage struct {
 	Tags              map[string]string `json:"tags,omitempty"`
 }
 
-func RegistryMessageFor(endpoint Endpoint, routes Routes) RegistryMessage {
+func RegistryMessageFor(endpoint Endpoint, route Route) RegistryMessage {
 	return RegistryMessage{
-		URIs: routes.Hostnames,
+		URIs: []string{route.Hostname},
 		Host: endpoint.Host,
 		Port: endpoint.Port,
-		App:  routes.LogGuid,
+		App:  route.LogGuid,
 		Tags: map[string]string{"component": "route-emitter"},
 
 		PrivateInstanceId: endpoint.InstanceGuid,
-		RouteServiceUrl:   routes.RouteServiceUrl,
+		RouteServiceUrl:   route.RouteServiceUrl,
 	}
 }
 

@@ -95,9 +95,10 @@ var _ = Describe("Watcher", func() {
 		logger = lagertest.NewTestLogger("test")
 
 		dummyEndpoint := routing_table.Endpoint{InstanceGuid: expectedInstanceGuid, Index: expectedIndex, Host: expectedHost, Port: expectedContainerPort}
-		dummyMessage := routing_table.RegistryMessageFor(dummyEndpoint, routing_table.Routes{Hostnames: []string{"foo.com", "bar.com"}, LogGuid: logGuid})
+		dummyMessageFoo := routing_table.RegistryMessageFor(dummyEndpoint, routing_table.Route{Hostname: "foo.com", LogGuid: logGuid})
+		dummyMessageBar := routing_table.RegistryMessageFor(dummyEndpoint, routing_table.Route{Hostname: "bar.com", LogGuid: logGuid})
 		dummyMessagesToEmit = routing_table.MessagesToEmit{
-			RegistrationMessages: []routing_table.RegistryMessage{dummyMessage},
+			RegistrationMessages: []routing_table.RegistryMessage{dummyMessageFoo, dummyMessageBar},
 		}
 
 		clock = fakeclock.NewFakeClock(time.Now())
@@ -198,9 +199,20 @@ var _ = Describe("Watcher", func() {
 			It("should set the routes on the table", func() {
 				Eventually(table.SetRoutesCallCount).Should(Equal(1))
 
-				key, routes := table.SetRoutesArgsForCall(0)
+				key, routes, _ := table.SetRoutesArgsForCall(0)
 				Expect(key).To(Equal(expectedRoutingKey))
-				Expect(routes).To(Equal(routing_table.Routes{Hostnames: expectedRoutes, LogGuid: logGuid, RouteServiceUrl: expectedRouteServiceUrl}))
+				Expect(routes).To(ConsistOf(
+					routing_table.Route{
+						Hostname:        expectedRoutes[0],
+						LogGuid:         logGuid,
+						RouteServiceUrl: expectedRouteServiceUrl,
+					},
+					routing_table.Route{
+						Hostname:        expectedRoutes[1],
+						LogGuid:         logGuid,
+						RouteServiceUrl: expectedRouteServiceUrl,
+					},
+				))
 			})
 
 			It("sends a 'routes registered' metric", func() {
@@ -254,6 +266,46 @@ var _ = Describe("Watcher", func() {
 				})
 			})
 
+			Context("when there is a route service binding to only one hostname for a route", func() {
+				BeforeEach(func() {
+					cfRoute1 := cfroutes.CFRoute{
+						Hostnames:       []string{"route-1"},
+						Port:            expectedContainerPort,
+						RouteServiceUrl: expectedRouteServiceUrl,
+					}
+					cfRoute2 := cfroutes.CFRoute{
+						Hostnames: []string{"route-2"},
+						Port:      expectedContainerPort,
+					}
+					routes := cfroutes.CFRoutes{cfRoute1, cfRoute2}.RoutingInfo()
+					desiredLRP.Routes = &routes
+				})
+				It("registers all of the routes on the table", func() {
+					Eventually(table.SetRoutesCallCount).Should(Equal(1))
+
+					key, routes, _ := table.SetRoutesArgsForCall(0)
+					Expect(key).To(Equal(expectedRoutingKey))
+					Expect(routes).To(ConsistOf(
+						routing_table.Route{
+							Hostname:        "route-1",
+							LogGuid:         logGuid,
+							RouteServiceUrl: expectedRouteServiceUrl,
+						},
+						routing_table.Route{
+							Hostname: "route-2",
+							LogGuid:  logGuid,
+						},
+					))
+				})
+
+				It("emits whatever the table tells it to emit", func() {
+					Eventually(emitter.EmitCallCount).Should(Equal(2))
+
+					messagesToEmit := emitter.EmitArgsForCall(1)
+					Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
+				})
+			})
+
 			Context("when there are multiple CF routes", func() {
 				BeforeEach(func() {
 					routes := cfroutes.CFRoutes{expectedCFRoute, expectedAdditionalCFRoute}.RoutingInfo()
@@ -263,13 +315,33 @@ var _ = Describe("Watcher", func() {
 				It("registers all of the routes on the table", func() {
 					Eventually(table.SetRoutesCallCount).Should(Equal(2))
 
-					key, routes := table.SetRoutesArgsForCall(0)
-					Expect(key).To(Equal(expectedRoutingKey))
-					Expect(routes).To(Equal(routing_table.Routes{Hostnames: expectedRoutes, LogGuid: logGuid, RouteServiceUrl: expectedRouteServiceUrl}))
+					key1, routes1, _ := table.SetRoutesArgsForCall(0)
+					key2, routes2, _ := table.SetRoutesArgsForCall(1)
+					var routes = []routing_table.Route{}
+					routes = append(routes, routes1...)
+					routes = append(routes, routes2...)
 
-					key, routes = table.SetRoutesArgsForCall(1)
-					Expect(key).To(Equal(expectedAdditionalRoutingKey))
-					Expect(routes).To(Equal(routing_table.Routes{Hostnames: expectedAdditionalRoutes, LogGuid: logGuid}))
+					Expect([]routing_table.RoutingKey{key1, key2}).To(ConsistOf(expectedRoutingKey, expectedAdditionalRoutingKey))
+					Expect(routes).To(ConsistOf(
+						routing_table.Route{
+							Hostname:        expectedRoutes[0],
+							LogGuid:         logGuid,
+							RouteServiceUrl: expectedRouteServiceUrl,
+						},
+						routing_table.Route{
+							Hostname:        expectedRoutes[1],
+							LogGuid:         logGuid,
+							RouteServiceUrl: expectedRouteServiceUrl,
+						},
+						routing_table.Route{
+							Hostname: expectedAdditionalRoutes[0],
+							LogGuid:  logGuid,
+						},
+						routing_table.Route{
+							Hostname: expectedAdditionalRoutes[1],
+							LogGuid:  logGuid,
+						},
+					))
 				})
 
 				It("emits whatever the table tells it to emit", func() {
@@ -349,9 +421,18 @@ var _ = Describe("Watcher", func() {
 
 			It("should set the routes on the table", func() {
 				Eventually(table.SetRoutesCallCount).Should(Equal(1))
-				key, routes := table.SetRoutesArgsForCall(0)
+				key, routes, _ := table.SetRoutesArgsForCall(0)
 				Expect(key).To(Equal(expectedRoutingKey))
-				Expect(routes).To(Equal(routing_table.Routes{Hostnames: expectedRoutes, LogGuid: logGuid}))
+				Expect(routes).To(ConsistOf(
+					routing_table.Route{
+						Hostname: expectedRoutes[0],
+						LogGuid:  logGuid,
+					},
+					routing_table.Route{
+						Hostname: expectedRoutes[1],
+						LogGuid:  logGuid,
+					},
+				))
 			})
 
 			It("sends a 'routes registered' metric", func() {
@@ -416,9 +497,33 @@ var _ = Describe("Watcher", func() {
 				It("registers all of the routes associated with a port on the table", func() {
 					Eventually(table.SetRoutesCallCount).Should(Equal(2))
 
-					key, routes := table.SetRoutesArgsForCall(0)
-					Expect(key).To(Equal(expectedRoutingKey))
-					Expect(routes).To(Equal(routing_table.Routes{Hostnames: expectedRoutes, LogGuid: logGuid, RouteServiceUrl: expectedRouteServiceUrl}))
+					key1, routes1, _ := table.SetRoutesArgsForCall(0)
+					key2, routes2, _ := table.SetRoutesArgsForCall(1)
+					var routes = []routing_table.Route{}
+					routes = append(routes, routes1...)
+					routes = append(routes, routes2...)
+
+					Expect([]routing_table.RoutingKey{key1, key2}).To(ConsistOf(expectedRoutingKey, expectedAdditionalRoutingKey))
+					Expect(routes).To(ConsistOf(
+						routing_table.Route{
+							Hostname:        expectedRoutes[0],
+							LogGuid:         logGuid,
+							RouteServiceUrl: expectedRouteServiceUrl,
+						},
+						routing_table.Route{
+							Hostname:        expectedRoutes[1],
+							LogGuid:         logGuid,
+							RouteServiceUrl: expectedRouteServiceUrl,
+						},
+						routing_table.Route{
+							Hostname: expectedAdditionalRoutes[0],
+							LogGuid:  logGuid,
+						},
+						routing_table.Route{
+							Hostname: expectedAdditionalRoutes[1],
+							LogGuid:  logGuid,
+						},
+					))
 				})
 
 				It("emits whatever the table tells it to emit", func() {
@@ -438,13 +543,33 @@ var _ = Describe("Watcher", func() {
 				It("registers all of the routes on the table", func() {
 					Eventually(table.SetRoutesCallCount).Should(Equal(2))
 
-					key, routes := table.SetRoutesArgsForCall(0)
-					Expect(key).To(Equal(expectedRoutingKey))
-					Expect(routes).To(Equal(routing_table.Routes{Hostnames: expectedRoutes, LogGuid: logGuid, RouteServiceUrl: expectedRouteServiceUrl}))
+					key1, routes1, _ := table.SetRoutesArgsForCall(0)
+					key2, routes2, _ := table.SetRoutesArgsForCall(1)
+					var routes = []routing_table.Route{}
+					routes = append(routes, routes1...)
+					routes = append(routes, routes2...)
 
-					key, routes = table.SetRoutesArgsForCall(1)
-					Expect(key).To(Equal(expectedAdditionalRoutingKey))
-					Expect(routes).To(Equal(routing_table.Routes{Hostnames: expectedAdditionalRoutes, LogGuid: logGuid}))
+					Expect([]routing_table.RoutingKey{key1, key2}).To(ConsistOf(expectedRoutingKey, expectedAdditionalRoutingKey))
+					Expect(routes).To(ConsistOf(
+						routing_table.Route{
+							Hostname:        expectedRoutes[0],
+							LogGuid:         logGuid,
+							RouteServiceUrl: expectedRouteServiceUrl,
+						},
+						routing_table.Route{
+							Hostname:        expectedRoutes[1],
+							LogGuid:         logGuid,
+							RouteServiceUrl: expectedRouteServiceUrl,
+						},
+						routing_table.Route{
+							Hostname: expectedAdditionalRoutes[0],
+							LogGuid:  logGuid,
+						},
+						routing_table.Route{
+							Hostname: expectedAdditionalRoutes[1],
+							LogGuid:  logGuid,
+						},
+					))
 				})
 
 				It("emits whatever the table tells it to emit", func() {
@@ -1381,10 +1506,10 @@ var _ = Describe("Watcher", func() {
 						Eventually(emitter.EmitCallCount).Should(Equal(1))
 						Expect(emitter.EmitArgsForCall(0)).To(Equal(routing_table.MessagesToEmit{
 							RegistrationMessages: []routing_table.RegistryMessage{
-								routing_table.RegistryMessageFor(endpoint2, routing_table.Routes{Hostnames: []string{hostname2}, LogGuid: "lg2"}),
+								routing_table.RegistryMessageFor(endpoint2, routing_table.Route{Hostname: hostname2, LogGuid: "lg2"}),
 							},
 							UnregistrationMessages: []routing_table.RegistryMessage{
-								routing_table.RegistryMessageFor(endpoint1, routing_table.Routes{Hostnames: []string{hostname1}, LogGuid: "lg1", RouteServiceUrl: "https://rs.example.com"}),
+								routing_table.RegistryMessageFor(endpoint1, routing_table.Route{Hostname: hostname1, LogGuid: "lg1", RouteServiceUrl: "https://rs.example.com"}),
 							},
 						}))
 					})

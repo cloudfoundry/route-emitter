@@ -12,7 +12,7 @@ type FakeRoutingTable struct {
 	RouteCountStub        func() int
 	routeCountMutex       sync.RWMutex
 	routeCountArgsForCall []struct{}
-	routeCountReturns     struct {
+	routeCountReturns struct {
 		result1 int
 	}
 	SwapStub        func(newTable routing_table.RoutingTable, domains models.DomainSet) routing_table.MessagesToEmit
@@ -24,11 +24,12 @@ type FakeRoutingTable struct {
 	swapReturns struct {
 		result1 routing_table.MessagesToEmit
 	}
-	SetRoutesStub        func(key routing_table.RoutingKey, routes routing_table.Routes) routing_table.MessagesToEmit
+	SetRoutesStub        func(key routing_table.RoutingKey, routes []routing_table.Route, modTag *models.ModificationTag) routing_table.MessagesToEmit
 	setRoutesMutex       sync.RWMutex
 	setRoutesArgsForCall []struct {
 		key    routing_table.RoutingKey
-		routes routing_table.Routes
+		routes []routing_table.Route
+		modTag *models.ModificationTag
 	}
 	setRoutesReturns struct {
 		result1 routing_table.MessagesToEmit
@@ -72,7 +73,7 @@ type FakeRoutingTable struct {
 	MessagesToEmitStub        func() routing_table.MessagesToEmit
 	messagesToEmitMutex       sync.RWMutex
 	messagesToEmitArgsForCall []struct{}
-	messagesToEmitReturns     struct {
+	messagesToEmitReturns struct {
 		result1 routing_table.MessagesToEmit
 	}
 }
@@ -134,15 +135,16 @@ func (fake *FakeRoutingTable) SwapReturns(result1 routing_table.MessagesToEmit) 
 	}{result1}
 }
 
-func (fake *FakeRoutingTable) SetRoutes(key routing_table.RoutingKey, routes routing_table.Routes) routing_table.MessagesToEmit {
+func (fake *FakeRoutingTable) SetRoutes(key routing_table.RoutingKey, routes []routing_table.Route, modTag *models.ModificationTag) routing_table.MessagesToEmit {
 	fake.setRoutesMutex.Lock()
 	fake.setRoutesArgsForCall = append(fake.setRoutesArgsForCall, struct {
 		key    routing_table.RoutingKey
-		routes routing_table.Routes
-	}{key, routes})
+		routes []routing_table.Route
+		modTag *models.ModificationTag
+	}{key, routes, modTag})
 	fake.setRoutesMutex.Unlock()
 	if fake.SetRoutesStub != nil {
-		return fake.SetRoutesStub(key, routes)
+		return fake.SetRoutesStub(key, routes, modTag)
 	} else {
 		return fake.setRoutesReturns.result1
 	}
@@ -154,10 +156,10 @@ func (fake *FakeRoutingTable) SetRoutesCallCount() int {
 	return len(fake.setRoutesArgsForCall)
 }
 
-func (fake *FakeRoutingTable) SetRoutesArgsForCall(i int) (routing_table.RoutingKey, routing_table.Routes) {
+func (fake *FakeRoutingTable) SetRoutesArgsForCall(i int) (routing_table.RoutingKey, []routing_table.Route, *models.ModificationTag) {
 	fake.setRoutesMutex.RLock()
 	defer fake.setRoutesMutex.RUnlock()
-	return fake.setRoutesArgsForCall[i].key, fake.setRoutesArgsForCall[i].routes
+	return fake.setRoutesArgsForCall[i].key, fake.setRoutesArgsForCall[i].routes, fake.setRoutesArgsForCall[i].modTag
 }
 
 func (fake *FakeRoutingTable) SetRoutesReturns(result1 routing_table.MessagesToEmit) {

@@ -17,7 +17,7 @@ type RoutingTable interface {
 
 	Swap(newTable RoutingTable, domains models.DomainSet) MessagesToEmit
 
-	SetRoutes(key RoutingKey, routes Routes) MessagesToEmit
+	SetRoutes(key RoutingKey, routes []Route, modTag *models.ModificationTag) MessagesToEmit
 	RemoveRoutes(key RoutingKey, modTag *models.ModificationTag) MessagesToEmit
 	AddEndpoint(key RoutingKey, endpoint Endpoint) MessagesToEmit
 	RemoveEndpoint(key RoutingKey, endpoint Endpoint) MessagesToEmit
@@ -39,15 +39,13 @@ type routingTable struct {
 	logger         lager.Logger
 }
 
-func NewTempTable(routes RoutesByRoutingKey, endpointsByKey EndpointsByRoutingKey) RoutingTable {
+func NewTempTable(routesMap RoutesByRoutingKey, endpointsByKey EndpointsByRoutingKey) RoutingTable {
 	entries := make(map[RoutingKey]RoutableEndpoints)
 	addressEntries := make(map[Address]EndpointKey)
 
-	for key, entry := range routes {
+	for key, routes := range routesMap {
 		entries[key] = RoutableEndpoints{
-			Hostnames:       routesAsMap(entry.Hostnames),
-			LogGuid:         entry.LogGuid,
-			RouteServiceUrl: entry.RouteServiceUrl,
+			Routes: routes,
 		}
 	}
 
@@ -103,7 +101,7 @@ func (table *routingTable) RouteCount() int {
 
 	count := 0
 	for _, entry := range table.entries {
-		count += len(entry.Hostnames)
+		count += len(entry.Routes)
 	}
 
 	table.Unlock()
@@ -170,21 +168,18 @@ func (table *routingTable) MessagesToEmit() MessagesToEmit {
 	return messagesToEmit
 }
 
-func (table *routingTable) SetRoutes(key RoutingKey, routes Routes) MessagesToEmit {
+func (table *routingTable) SetRoutes(key RoutingKey, routes []Route, modTag *models.ModificationTag) MessagesToEmit {
 	table.Lock()
 	defer table.Unlock()
 
 	currentEntry := table.entries[key]
-	if !currentEntry.ModificationTag.SucceededBy(routes.ModificationTag) {
+	if !currentEntry.ModificationTag.SucceededBy(modTag) {
 		return MessagesToEmit{}
 	}
 
 	newEntry := currentEntry.copy()
-	newEntry.Hostnames = routesAsMap(routes.Hostnames)
-	newEntry.LogGuid = routes.LogGuid
-	newEntry.ModificationTag = routes.ModificationTag
-	newEntry.RouteServiceUrl = routes.RouteServiceUrl
-
+	newEntry.Routes = routes
+	newEntry.ModificationTag = modTag
 	table.entries[key] = newEntry
 
 	return table.emit(key, currentEntry, newEntry)
@@ -255,7 +250,7 @@ func (table *routingTable) RemoveEndpoint(key RoutingKey, endpoint Endpoint) Mes
 	return table.emit(key, currentEntry, newEntry)
 }
 
-func (table *routingTable) emit(key RoutingKey, oldEntry RoutableEndpoints, newEntry RoutableEndpoints) MessagesToEmit {
+func (table *routingTable) emit(key RoutingKey, oldEntry, newEntry RoutableEndpoints) MessagesToEmit {
 	messagesToEmit := table.messageBuilder.RegistrationsFor(&oldEntry, &newEntry)
 	messagesToEmit = messagesToEmit.merge(table.messageBuilder.UnregistrationsFor(&oldEntry, &newEntry, nil))
 

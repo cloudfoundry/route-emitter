@@ -127,15 +127,30 @@ var _ = Describe("Route Emitter", func() {
 				})
 
 				It("emits its routes immediately", func() {
-					Eventually(registeredRoutes).Should(Receive(MatchRegistryMessage(routing_table.RegistryMessage{
-						URIs:              hostnames,
-						Host:              netInfo.Address,
-						Port:              netInfo.Ports[0].HostPort,
-						App:               desiredLRP.LogGuid,
-						PrivateInstanceId: instanceKey.InstanceGuid,
-						RouteServiceUrl:   "https://awesome.com",
-						Tags:              map[string]string{"component": "route-emitter"},
-					})))
+					var msg1, msg2 routing_table.RegistryMessage
+					Eventually(registeredRoutes).Should(Receive(&msg1))
+					Eventually(registeredRoutes).Should(Receive(&msg2))
+
+					Expect([]routing_table.RegistryMessage{msg1, msg2}).To(ConsistOf(
+						MatchRegistryMessage(routing_table.RegistryMessage{
+							URIs:              []string{hostnames[1]},
+							Host:              netInfo.Address,
+							Port:              netInfo.Ports[0].HostPort,
+							App:               desiredLRP.LogGuid,
+							PrivateInstanceId: instanceKey.InstanceGuid,
+							RouteServiceUrl:   "https://awesome.com",
+							Tags:              map[string]string{"component": "route-emitter"},
+						}),
+						MatchRegistryMessage(routing_table.RegistryMessage{
+							URIs:              []string{hostnames[0]},
+							Host:              netInfo.Address,
+							Port:              netInfo.Ports[0].HostPort,
+							App:               desiredLRP.LogGuid,
+							PrivateInstanceId: instanceKey.InstanceGuid,
+							RouteServiceUrl:   "https://awesome.com",
+							Tags:              map[string]string{"component": "route-emitter"},
+						}),
+					))
 				})
 			})
 
@@ -171,44 +186,73 @@ var _ = Describe("Route Emitter", func() {
 				})
 
 				It("emits its routes immediately", func() {
-					Eventually(registeredRoutes).Should(Receive(MatchRegistryMessage(routing_table.RegistryMessage{
-						URIs:              hostnames,
-						Host:              netInfo.Address,
-						Port:              netInfo.Ports[0].HostPort,
-						App:               desiredLRP.LogGuid,
-						PrivateInstanceId: instanceKey.InstanceGuid,
-						RouteServiceUrl:   "https://awesome.com",
-						Tags:              map[string]string{"component": "route-emitter"},
-					})))
+					var msg1, msg2 routing_table.RegistryMessage
+					Eventually(registeredRoutes).Should(Receive(&msg1))
+					Eventually(registeredRoutes).Should(Receive(&msg2))
+
+					Expect([]routing_table.RegistryMessage{msg1, msg2}).To(ConsistOf(
+						MatchRegistryMessage(routing_table.RegistryMessage{
+							URIs:              []string{hostnames[1]},
+							Host:              netInfo.Address,
+							Port:              netInfo.Ports[0].HostPort,
+							App:               desiredLRP.LogGuid,
+							PrivateInstanceId: instanceKey.InstanceGuid,
+							RouteServiceUrl:   "https://awesome.com",
+							Tags:              map[string]string{"component": "route-emitter"},
+						}),
+						MatchRegistryMessage(routing_table.RegistryMessage{
+							URIs:              []string{hostnames[0]},
+							Host:              netInfo.Address,
+							Port:              netInfo.Ports[0].HostPort,
+							App:               desiredLRP.LogGuid,
+							PrivateInstanceId: instanceKey.InstanceGuid,
+							RouteServiceUrl:   "https://awesome.com",
+							Tags:              map[string]string{"component": "route-emitter"},
+						}),
+					))
 				})
 
 				It("repeats the route message at the interval given by the router", func() {
 					var msg1 routing_table.RegistryMessage
+					var msg2 routing_table.RegistryMessage
 					Eventually(registeredRoutes).Should(Receive(&msg1))
+					Eventually(registeredRoutes).Should(Receive(&msg2))
 					t1 := time.Now()
 
-					var msg2 routing_table.RegistryMessage
-					Eventually(registeredRoutes, 5).Should(Receive(&msg2))
+					var msg3 routing_table.RegistryMessage
+					var msg4 routing_table.RegistryMessage
+					Eventually(registeredRoutes, 5).Should(Receive(&msg3))
+					Eventually(registeredRoutes, 5).Should(Receive(&msg4))
 					t2 := time.Now()
 
-					Expect(msg2).To(MatchRegistryMessage(msg1))
+					Expect([]routing_table.RegistryMessage{msg3, msg4}).To(ConsistOf(
+						MatchRegistryMessage(msg1),
+						MatchRegistryMessage(msg2),
+					))
 					Expect(t2.Sub(t1)).To(BeNumerically("~", 2*syncInterval, 500*time.Millisecond))
 				})
 
 				Context("when etcd goes away", func() {
 					var msg1 routing_table.RegistryMessage
 					var msg2 routing_table.RegistryMessage
+					var msg3 routing_table.RegistryMessage
+					var msg4 routing_table.RegistryMessage
 
 					BeforeEach(func() {
 						// ensure it's seen the route at least once
 						Eventually(registeredRoutes).Should(Receive(&msg1))
+						Eventually(registeredRoutes).Should(Receive(&msg2))
 
 						etcdRunner.Stop()
 					})
 
 					It("continues to broadcast routes", func() {
-						Eventually(registeredRoutes, 5).Should(Receive(&msg2))
-						Expect(msg2).To(MatchRegistryMessage(msg1))
+						Eventually(registeredRoutes, 5).Should(Receive(&msg3))
+						Eventually(registeredRoutes, 5).Should(Receive(&msg4))
+						Expect([]routing_table.RegistryMessage{msg3, msg4}).To(ConsistOf(
+							MatchRegistryMessage(msg1),
+							MatchRegistryMessage(msg2),
+						))
 					})
 				})
 			})
@@ -283,19 +327,35 @@ var _ = Describe("Route Emitter", func() {
 			})
 
 			It("immediately emits all routes", func() {
-				Eventually(registeredRoutes).Should(Receive(MatchRegistryMessage(routing_table.RegistryMessage{
-					URIs:              []string{"route-1", "route-2"},
-					Host:              "1.2.3.4",
-					Port:              65100,
-					App:               "some-log-guid",
-					PrivateInstanceId: "iguid1",
-					RouteServiceUrl:   "https://awesome.com",
-					Tags:              map[string]string{"component": "route-emitter"},
-				})))
+				var msg1, msg2 routing_table.RegistryMessage
+				Eventually(registeredRoutes).Should(Receive(&msg1))
+				Eventually(registeredRoutes).Should(Receive(&msg2))
+
+				Expect([]routing_table.RegistryMessage{msg1, msg2}).To(ConsistOf(
+					MatchRegistryMessage(routing_table.RegistryMessage{
+						URIs:              []string{"route-1"},
+						Host:              "1.2.3.4",
+						Port:              65100,
+						App:               "some-log-guid",
+						PrivateInstanceId: "iguid1",
+						RouteServiceUrl:   "https://awesome.com",
+						Tags:              map[string]string{"component": "route-emitter"},
+					}),
+					MatchRegistryMessage(routing_table.RegistryMessage{
+						URIs:              []string{"route-2"},
+						Host:              "1.2.3.4",
+						Port:              65100,
+						App:               "some-log-guid",
+						PrivateInstanceId: "iguid1",
+						RouteServiceUrl:   "https://awesome.com",
+						Tags:              map[string]string{"component": "route-emitter"},
+					}),
+				))
 			})
 
 			Context("and a route is added", func() {
 				BeforeEach(func() {
+					Eventually(registeredRoutes).Should(Receive())
 					Eventually(registeredRoutes).Should(Receive())
 
 					hostnames = []string{"route-1", "route-2", "route-3"}
@@ -310,21 +370,32 @@ var _ = Describe("Route Emitter", func() {
 				})
 
 				It("immediately emits router.register", func() {
-					Eventually(registeredRoutes).Should(Receive(MatchRegistryMessage(routing_table.RegistryMessage{
-						URIs:              hostnames,
-						Host:              "1.2.3.4",
-						Port:              65100,
-						App:               "some-log-guid",
-						PrivateInstanceId: "iguid1",
-						Tags:              map[string]string{"component": "route-emitter"},
-					})))
+					var msg1, msg2, msg3 routing_table.RegistryMessage
+					Eventually(registeredRoutes).Should(Receive(&msg1))
+					Eventually(registeredRoutes).Should(Receive(&msg2))
+					Eventually(registeredRoutes).Should(Receive(&msg3))
+
+					registryMessages := []routing_table.RegistryMessage{}
+					for _, hostname := range hostnames {
+						registryMessages = append(registryMessages, routing_table.RegistryMessage{
+							URIs:              []string{hostname},
+							Host:              "1.2.3.4",
+							Port:              65100,
+							App:               "some-log-guid",
+							PrivateInstanceId: "iguid1",
+							Tags:              map[string]string{"component": "route-emitter"},
+						})
+					}
+					Expect([]routing_table.RegistryMessage{msg1, msg2, msg3}).To(ConsistOf(
+						MatchRegistryMessage(registryMessages[0]),
+						MatchRegistryMessage(registryMessages[1]),
+						MatchRegistryMessage(registryMessages[2]),
+					))
 				})
 			})
 
 			Context("and a route is removed", func() {
 				BeforeEach(func() {
-					Eventually(registeredRoutes).Should(Receive())
-
 					updateRequest := &models.DesiredLRPUpdate{
 						Routes:     newRoutes([]string{"route-2"}, containerPort, ""),
 						Instances:  &desiredLRP.Instances,
@@ -336,14 +407,27 @@ var _ = Describe("Route Emitter", func() {
 
 				It("immediately emits router.unregister when domain is fresh", func() {
 					bbsClient.UpsertDomain(logger, domain, 2*time.Second)
-					Eventually(unregisteredRoutes).Should(Receive(MatchRegistryMessage(routing_table.RegistryMessage{
-						URIs:              []string{"route-1"},
-						Host:              "1.2.3.4",
-						Port:              65100,
-						App:               "some-log-guid",
-						PrivateInstanceId: "iguid1",
-						Tags:              map[string]string{"component": "route-emitter"},
-					})))
+					Eventually(unregisteredRoutes).Should(Receive(
+						MatchRegistryMessage(routing_table.RegistryMessage{
+							URIs:              []string{"route-1"},
+							Host:              "1.2.3.4",
+							Port:              65100,
+							App:               "some-log-guid",
+							PrivateInstanceId: "iguid1",
+							RouteServiceUrl:   "https://awesome.com",
+							Tags:              map[string]string{"component": "route-emitter"},
+						}),
+					))
+					Eventually(registeredRoutes).Should(Receive(
+						MatchRegistryMessage(routing_table.RegistryMessage{
+							URIs:              []string{"route-2"},
+							Host:              "1.2.3.4",
+							Port:              65100,
+							App:               "some-log-guid",
+							PrivateInstanceId: "iguid1",
+							Tags:              map[string]string{"component": "route-emitter"},
+						}),
+					))
 				})
 			})
 		})
