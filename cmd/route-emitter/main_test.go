@@ -17,6 +17,7 @@ import (
 )
 
 const emitterInterruptTimeout = 5 * time.Second
+const msgReceiveTimeout = 5 * time.Second
 
 var _ = Describe("Route Emitter", func() {
 	listenForRoutes := func(subject string) <-chan routing_table.RegistryMessage {
@@ -407,7 +408,7 @@ var _ = Describe("Route Emitter", func() {
 
 				It("immediately emits router.unregister when domain is fresh", func() {
 					bbsClient.UpsertDomain(logger, domain, 2*time.Second)
-					Eventually(unregisteredRoutes).Should(Receive(
+					Eventually(unregisteredRoutes, msgReceiveTimeout).Should(Receive(
 						MatchRegistryMessage(routing_table.RegistryMessage{
 							URIs:              []string{"route-1"},
 							Host:              "1.2.3.4",
@@ -418,7 +419,7 @@ var _ = Describe("Route Emitter", func() {
 							Tags:              map[string]string{"component": "route-emitter"},
 						}),
 					))
-					Eventually(registeredRoutes).Should(Receive(
+					Eventually(registeredRoutes, msgReceiveTimeout).Should(Receive(
 						MatchRegistryMessage(routing_table.RegistryMessage{
 							URIs:              []string{"route-2"},
 							Host:              "1.2.3.4",
