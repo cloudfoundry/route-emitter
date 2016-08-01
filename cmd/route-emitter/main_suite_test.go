@@ -72,7 +72,7 @@ func createEmitterRunner(sessionName string) *ginkgomon.Runner {
 			"-consulCluster", consulRunner.ConsulCluster(),
 		),
 
-		StartCheck: "route-emitter.started",
+		StartCheck: "route-emitter.watcher.sync.complete",
 
 		AnsiColorCode: "97m",
 	})
