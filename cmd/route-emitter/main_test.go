@@ -134,22 +134,24 @@ var _ = Describe("Route Emitter", func() {
 
 					Expect([]routing_table.RegistryMessage{msg1, msg2}).To(ConsistOf(
 						MatchRegistryMessage(routing_table.RegistryMessage{
-							URIs:              []string{hostnames[1]},
-							Host:              netInfo.Address,
-							Port:              netInfo.Ports[0].HostPort,
-							App:               desiredLRP.LogGuid,
-							PrivateInstanceId: instanceKey.InstanceGuid,
-							RouteServiceUrl:   "https://awesome.com",
-							Tags:              map[string]string{"component": "route-emitter"},
+							URIs:                 []string{hostnames[1]},
+							Host:                 netInfo.Address,
+							Port:                 netInfo.Ports[0].HostPort,
+							App:                  desiredLRP.LogGuid,
+							PrivateInstanceId:    instanceKey.InstanceGuid,
+							PrivateInstanceIndex: "0",
+							RouteServiceUrl:      "https://awesome.com",
+							Tags:                 map[string]string{"component": "route-emitter"},
 						}),
 						MatchRegistryMessage(routing_table.RegistryMessage{
-							URIs:              []string{hostnames[0]},
-							Host:              netInfo.Address,
-							Port:              netInfo.Ports[0].HostPort,
-							App:               desiredLRP.LogGuid,
-							PrivateInstanceId: instanceKey.InstanceGuid,
-							RouteServiceUrl:   "https://awesome.com",
-							Tags:              map[string]string{"component": "route-emitter"},
+							URIs:                 []string{hostnames[0]},
+							Host:                 netInfo.Address,
+							Port:                 netInfo.Ports[0].HostPort,
+							App:                  desiredLRP.LogGuid,
+							PrivateInstanceId:    instanceKey.InstanceGuid,
+							PrivateInstanceIndex: "0",
+							RouteServiceUrl:      "https://awesome.com",
+							Tags:                 map[string]string{"component": "route-emitter"},
 						}),
 					))
 				})
@@ -193,22 +195,24 @@ var _ = Describe("Route Emitter", func() {
 
 					Expect([]routing_table.RegistryMessage{msg1, msg2}).To(ConsistOf(
 						MatchRegistryMessage(routing_table.RegistryMessage{
-							URIs:              []string{hostnames[1]},
-							Host:              netInfo.Address,
-							Port:              netInfo.Ports[0].HostPort,
-							App:               desiredLRP.LogGuid,
-							PrivateInstanceId: instanceKey.InstanceGuid,
-							RouteServiceUrl:   "https://awesome.com",
-							Tags:              map[string]string{"component": "route-emitter"},
+							URIs:                 []string{hostnames[1]},
+							Host:                 netInfo.Address,
+							Port:                 netInfo.Ports[0].HostPort,
+							App:                  desiredLRP.LogGuid,
+							PrivateInstanceId:    instanceKey.InstanceGuid,
+							PrivateInstanceIndex: "0",
+							RouteServiceUrl:      "https://awesome.com",
+							Tags:                 map[string]string{"component": "route-emitter"},
 						}),
 						MatchRegistryMessage(routing_table.RegistryMessage{
-							URIs:              []string{hostnames[0]},
-							Host:              netInfo.Address,
-							Port:              netInfo.Ports[0].HostPort,
-							App:               desiredLRP.LogGuid,
-							PrivateInstanceId: instanceKey.InstanceGuid,
-							RouteServiceUrl:   "https://awesome.com",
-							Tags:              map[string]string{"component": "route-emitter"},
+							URIs:                 []string{hostnames[0]},
+							Host:                 netInfo.Address,
+							Port:                 netInfo.Ports[0].HostPort,
+							App:                  desiredLRP.LogGuid,
+							PrivateInstanceId:    instanceKey.InstanceGuid,
+							PrivateInstanceIndex: "0",
+							RouteServiceUrl:      "https://awesome.com",
+							Tags:                 map[string]string{"component": "route-emitter"},
 						}),
 					))
 				})
@@ -334,22 +338,24 @@ var _ = Describe("Route Emitter", func() {
 
 				Expect([]routing_table.RegistryMessage{msg1, msg2}).To(ConsistOf(
 					MatchRegistryMessage(routing_table.RegistryMessage{
-						URIs:              []string{"route-1"},
-						Host:              "1.2.3.4",
-						Port:              65100,
-						App:               "some-log-guid",
-						PrivateInstanceId: "iguid1",
-						RouteServiceUrl:   "https://awesome.com",
-						Tags:              map[string]string{"component": "route-emitter"},
+						URIs:                 []string{"route-1"},
+						Host:                 "1.2.3.4",
+						Port:                 65100,
+						App:                  "some-log-guid",
+						PrivateInstanceId:    "iguid1",
+						PrivateInstanceIndex: "0",
+						RouteServiceUrl:      "https://awesome.com",
+						Tags:                 map[string]string{"component": "route-emitter"},
 					}),
 					MatchRegistryMessage(routing_table.RegistryMessage{
-						URIs:              []string{"route-2"},
-						Host:              "1.2.3.4",
-						Port:              65100,
-						App:               "some-log-guid",
-						PrivateInstanceId: "iguid1",
-						RouteServiceUrl:   "https://awesome.com",
-						Tags:              map[string]string{"component": "route-emitter"},
+						URIs:                 []string{"route-2"},
+						Host:                 "1.2.3.4",
+						Port:                 65100,
+						App:                  "some-log-guid",
+						PrivateInstanceId:    "iguid1",
+						PrivateInstanceIndex: "0",
+						RouteServiceUrl:      "https://awesome.com",
+						Tags:                 map[string]string{"component": "route-emitter"},
 					}),
 				))
 			})
@@ -379,12 +385,13 @@ var _ = Describe("Route Emitter", func() {
 					registryMessages := []routing_table.RegistryMessage{}
 					for _, hostname := range hostnames {
 						registryMessages = append(registryMessages, routing_table.RegistryMessage{
-							URIs:              []string{hostname},
-							Host:              "1.2.3.4",
-							Port:              65100,
-							App:               "some-log-guid",
-							PrivateInstanceId: "iguid1",
-							Tags:              map[string]string{"component": "route-emitter"},
+							URIs:                 []string{hostname},
+							Host:                 "1.2.3.4",
+							Port:                 65100,
+							App:                  "some-log-guid",
+							PrivateInstanceId:    "iguid1",
+							PrivateInstanceIndex: "0",
+							Tags:                 map[string]string{"component": "route-emitter"},
 						})
 					}
 					Expect([]routing_table.RegistryMessage{msg1, msg2, msg3}).To(ConsistOf(
@@ -410,23 +417,25 @@ var _ = Describe("Route Emitter", func() {
 					bbsClient.UpsertDomain(logger, domain, 2*time.Second)
 					Eventually(unregisteredRoutes, msgReceiveTimeout).Should(Receive(
 						MatchRegistryMessage(routing_table.RegistryMessage{
-							URIs:              []string{"route-1"},
-							Host:              "1.2.3.4",
-							Port:              65100,
-							App:               "some-log-guid",
-							PrivateInstanceId: "iguid1",
-							RouteServiceUrl:   "https://awesome.com",
-							Tags:              map[string]string{"component": "route-emitter"},
+							URIs:                 []string{"route-1"},
+							Host:                 "1.2.3.4",
+							Port:                 65100,
+							App:                  "some-log-guid",
+							PrivateInstanceId:    "iguid1",
+							PrivateInstanceIndex: "0",
+							RouteServiceUrl:      "https://awesome.com",
+							Tags:                 map[string]string{"component": "route-emitter"},
 						}),
 					))
 					Eventually(registeredRoutes, msgReceiveTimeout).Should(Receive(
 						MatchRegistryMessage(routing_table.RegistryMessage{
-							URIs:              []string{"route-2"},
-							Host:              "1.2.3.4",
-							Port:              65100,
-							App:               "some-log-guid",
-							PrivateInstanceId: "iguid1",
-							Tags:              map[string]string{"component": "route-emitter"},
+							URIs:                 []string{"route-2"},
+							Host:                 "1.2.3.4",
+							Port:                 65100,
+							App:                  "some-log-guid",
+							PrivateInstanceId:    "iguid1",
+							PrivateInstanceIndex: "0",
+							Tags:                 map[string]string{"component": "route-emitter"},
 						}),
 					))
 				})
