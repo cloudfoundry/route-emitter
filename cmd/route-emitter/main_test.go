@@ -102,6 +102,26 @@ var _ = Describe("Route Emitter", func() {
 		})
 	})
 
+	Context("Ping interval for nats client", func() {
+		var runner *ginkgomon.Runner
+		var emitter ifrit.Process
+
+		BeforeEach(func() {
+			runner = createEmitterRunner("emitter1")
+			runner.StartCheck = "emitter1.started"
+			emitter = ginkgomon.Invoke(runner)
+		})
+
+		AfterEach(func() {
+			ginkgomon.Interrupt(emitter, emitterInterruptTimeout)
+		})
+
+		It("returns 20 second", func() {
+			Expect(runner.Buffer()).To(gbytes.Say("setting-nats-ping-interval"))
+			Expect(runner.Buffer()).To(gbytes.Say(`"duration-in-seconds":20`))
+		})
+	})
+
 	Context("when the emitter is running", func() {
 		var emitter ifrit.Process
 
