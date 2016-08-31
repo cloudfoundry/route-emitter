@@ -14,8 +14,8 @@ import (
 	"code.cloudfoundry.org/route-emitter/nats_emitter"
 	"code.cloudfoundry.org/route-emitter/routing_table"
 	"code.cloudfoundry.org/route-emitter/syncer"
+	"code.cloudfoundry.org/routing-info/cfroutes"
 	"code.cloudfoundry.org/runtimeschema/metric"
-	"github.com/cloudfoundry-incubator/routing-info/cfroutes"
 )
 
 var (

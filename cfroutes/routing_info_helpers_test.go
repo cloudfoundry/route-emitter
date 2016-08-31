@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 
 	"code.cloudfoundry.org/bbs/models"
-	"github.com/cloudfoundry-incubator/routing-info/cfroutes"
+	"code.cloudfoundry.org/routing-info/cfroutes"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"

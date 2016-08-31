@@ -4,7 +4,7 @@ import (
 	"errors"
 
 	"code.cloudfoundry.org/bbs/models"
-	"github.com/cloudfoundry-incubator/routing-info/cfroutes"
+	"code.cloudfoundry.org/routing-info/cfroutes"
 )
 
 type RoutesByRoutingKey map[RoutingKey][]Route
