@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"net/url"
@@ -131,6 +132,12 @@ var routeEmittingWorkers = flag.Int(
 	"Max concurrency for sending route messages",
 )
 
+var cellID = flag.String(
+	"cellID",
+	"",
+	"the ID used by the rep to identify itself to external systems - must be specified",
+)
+
 const (
 	dropsondeOrigin = "route_emitter"
 )
@@ -143,6 +150,12 @@ func main() {
 	cfhttp.Initialize(*communicationTimeout)
 
 	logger, reconfigurableSink := cflager.New(*sessionName)
+
+	if *cellID == "" {
+		logger.Error("invalid-cell-id", errors.New("-cellID must be specified"))
+		os.Exit(1)
+	}
+
 	natsClient := diegonats.NewClient()
 
 	natsPingduration := 20 * time.Second
@@ -159,17 +172,17 @@ func main() {
 	table := initializeRoutingTable(logger)
 	emitter := initializeNatsEmitter(natsClient, logger)
 	watcher := ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
-		return watcher.NewWatcher(initializeBBSClient(logger), clock, table, emitter, syncer.Events(), logger).Run(signals, ready)
+		return watcher.NewWatcher(initializeBBSClient(logger), clock, table, emitter, syncer.Events(), logger, *cellID).Run(signals, ready)
 	})
 
 	syncRunner := ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
 		return syncer.Run(signals, ready)
 	})
 
-	lockMaintainer := initializeLockMaintainer(logger, *consulCluster, *sessionName, *lockTTL, *lockRetryInterval, clock)
+	// lockMaintainer := initializeLockMaintainer(logger, *consulCluster, *sessionName, *lockTTL, *lockRetryInterval, clock)
 
 	members := grouper.Members{
-		{"lock-maintainer", lockMaintainer},
+		// {"lock-maintainer", lockMaintainer},
 		{"nats-client", natsClientRunner},
 		{"watcher", watcher},
 		{"syncer", syncRunner},
@@ -214,7 +227,7 @@ func initializeNatsEmitter(natsClient diegonats.NATSClient, logger lager.Logger)
 }
 
 func initializeRoutingTable(logger lager.Logger) routing_table.RoutingTable {
-	return routing_table.NewTable(logger)
+	return routing_table.NewTable(logger, *cellID)
 }
 
 func initializeLockMaintainer(

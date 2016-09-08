@@ -200,8 +200,8 @@ var _ = Describe("ByRoutingKey", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(endpoints).To(ConsistOf([]routing_table.Endpoint{
-				routing_table.Endpoint{Host: "1.1.1.1", Domain: "domain", Port: 11, InstanceGuid: "instance-guid", ContainerPort: 44, Evacuating: true, Index: 0},
-				routing_table.Endpoint{Host: "1.1.1.1", Domain: "domain", Port: 66, InstanceGuid: "instance-guid", ContainerPort: 99, Evacuating: true, Index: 0},
+				routing_table.Endpoint{Host: "1.1.1.1", Domain: "domain", Port: 11, InstanceGuid: "instance-guid", ContainerPort: 44, Evacuating: true, Index: 0, CellID: "cell-id"},
+				routing_table.Endpoint{Host: "1.1.1.1", Domain: "domain", Port: 66, InstanceGuid: "instance-guid", ContainerPort: 99, Evacuating: true, Index: 0, CellID: "cell-id"},
 			}))
 		})
 	})

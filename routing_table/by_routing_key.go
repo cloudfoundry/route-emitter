@@ -75,6 +75,7 @@ func EndpointsFromActual(actualLRPInfo *ActualLRPRoutingInfo) (map[uint32]Endpoi
 				Port:          portMapping.HostPort,
 				ContainerPort: portMapping.ContainerPort,
 				Evacuating:    actualLRPInfo.Evacuating,
+				CellID:        actualLRPInfo.ActualLRP.ActualLRPInstanceKey.CellId,
 			}
 			endpoints[portMapping.ContainerPort] = endpoint
 		}

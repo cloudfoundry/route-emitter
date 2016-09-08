@@ -21,6 +21,7 @@ type Endpoint struct {
 	ContainerPort   uint32
 	Evacuating      bool
 	ModificationTag *models.ModificationTag
+	CellID          string
 }
 
 func (e Endpoint) key() EndpointKey {

@@ -69,12 +69,12 @@ func NewTempTable(routesMap RoutesByRoutingKey, endpointsByKey EndpointsByRoutin
 	}
 }
 
-func NewTable(logger lager.Logger) RoutingTable {
+func NewTable(logger lager.Logger, cellID string) RoutingTable {
 	return &routingTable{
 		entries:        make(map[RoutingKey]RoutableEndpoints),
 		addressEntries: make(map[Address]EndpointKey),
 		Locker:         &sync.Mutex{},
-		messageBuilder: MessagesToEmitBuilder{},
+		messageBuilder: MessagesToEmitBuilder{CellID: cellID},
 		logger:         logger,
 	}
 }

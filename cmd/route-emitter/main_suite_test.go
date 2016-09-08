@@ -70,6 +70,7 @@ func createEmitterRunner(sessionName string) *ginkgomon.Runner {
 			"-syncInterval", syncInterval.String(),
 			"-lockRetryInterval", "1s",
 			"-consulCluster", consulRunner.ConsulCluster(),
+			"-cellID", "cell-id",
 		),
 
 		StartCheck: "route-emitter.watcher.sync.complete",

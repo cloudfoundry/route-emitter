@@ -32,9 +32,9 @@ var _ = Describe("RoutingTable", func() {
 	currentTag := &models.ModificationTag{Epoch: "abc", Index: 1}
 	newerTag := &models.ModificationTag{Epoch: "def", Index: 0}
 
-	endpoint1 := routing_table.Endpoint{InstanceGuid: "ig-1", Host: "1.1.1.1", Index: 0, Domain: domain, Port: 11, ContainerPort: 8080, Evacuating: false, ModificationTag: currentTag}
-	endpoint2 := routing_table.Endpoint{InstanceGuid: "ig-2", Host: "2.2.2.2", Index: 1, Domain: domain, Port: 22, ContainerPort: 8080, Evacuating: false, ModificationTag: currentTag}
-	endpoint3 := routing_table.Endpoint{InstanceGuid: "ig-3", Host: "3.3.3.3", Index: 2, Domain: domain, Port: 33, ContainerPort: 8080, Evacuating: false, ModificationTag: currentTag}
+	endpoint1 := routing_table.Endpoint{InstanceGuid: "ig-1", Host: "1.1.1.1", Index: 0, Domain: domain, Port: 11, ContainerPort: 8080, Evacuating: false, ModificationTag: currentTag, CellID: "cell-id"}
+	endpoint2 := routing_table.Endpoint{InstanceGuid: "ig-2", Host: "2.2.2.2", Index: 1, Domain: domain, Port: 22, ContainerPort: 8080, Evacuating: false, ModificationTag: currentTag, CellID: "cell-id"}
+	endpoint3 := routing_table.Endpoint{InstanceGuid: "ig-3", Host: "3.3.3.3", Index: 2, Domain: domain, Port: 33, ContainerPort: 8080, Evacuating: false, ModificationTag: currentTag, CellID: "cell-id"}
 	collisionEndpoint := routing_table.Endpoint{
 		InstanceGuid:    "ig-4",
 		Host:            "1.1.1.1",
@@ -45,9 +45,9 @@ var _ = Describe("RoutingTable", func() {
 		Evacuating:      false,
 		ModificationTag: currentTag,
 	}
-	newInstanceEndpointAfterEvacuation := routing_table.Endpoint{InstanceGuid: "ig-5", Host: "5.5.5.5", Index: 0, Domain: domain, Port: 55, ContainerPort: 8080, Evacuating: false, ModificationTag: currentTag}
+	newInstanceEndpointAfterEvacuation := routing_table.Endpoint{InstanceGuid: "ig-5", Host: "5.5.5.5", Index: 0, Domain: domain, Port: 55, ContainerPort: 8080, Evacuating: false, ModificationTag: currentTag, CellID: "cell-id"}
 
-	evacuating1 := routing_table.Endpoint{InstanceGuid: "ig-1", Host: "1.1.1.1", Index: 0, Domain: domain, Port: 11, ContainerPort: 8080, Evacuating: true, ModificationTag: currentTag}
+	evacuating1 := routing_table.Endpoint{InstanceGuid: "ig-1", Host: "1.1.1.1", Index: 0, Domain: domain, Port: 11, ContainerPort: 8080, Evacuating: true, ModificationTag: currentTag, CellID: "cell-id"}
 
 	logGuid := "some-log-guid"
 
@@ -56,7 +56,7 @@ var _ = Describe("RoutingTable", func() {
 
 	BeforeEach(func() {
 		logger = lagertest.NewTestLogger("test-route-emitter")
-		table = routing_table.NewTable(logger)
+		table = routing_table.NewTable(logger, "cell-id")
 	})
 
 	Describe("Evacuating endpoints", func() {

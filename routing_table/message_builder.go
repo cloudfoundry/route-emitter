@@ -29,20 +29,21 @@ func (NoopMessageBuilder) UnregistrationsFor(existingEntry, newEntry *RoutableEn
 }
 
 type MessagesToEmitBuilder struct {
+	CellID string
 }
 
-func (MessagesToEmitBuilder) UnfreshRegistrations(existingEntry *RoutableEndpoints, domains models.DomainSet) MessagesToEmit {
+func (b MessagesToEmitBuilder) UnfreshRegistrations(existingEntry *RoutableEndpoints, domains models.DomainSet) MessagesToEmit {
 	messagesToEmit := MessagesToEmit{}
 	for _, endpoint := range existingEntry.Endpoints {
 		if domains != nil && !domains.Contains(endpoint.Domain) {
-			createAndAddMessages(endpoint, existingEntry.Routes, &messagesToEmit.RegistrationMessages)
+			createAndAddMessages(endpoint, existingEntry.Routes, &messagesToEmit.RegistrationMessages, b.CellID)
 		}
 	}
 
 	return messagesToEmit
 }
 
-func (MessagesToEmitBuilder) MergedRegistrations(existingEntry, newEntry *RoutableEndpoints, domains models.DomainSet) MessagesToEmit {
+func (b MessagesToEmitBuilder) MergedRegistrations(existingEntry, newEntry *RoutableEndpoints, domains models.DomainSet) MessagesToEmit {
 	messagesToEmit := MessagesToEmit{}
 	if len(newEntry.Routes) == 0 {
 		//no hostnames, so nothing could possibly be registered
@@ -66,12 +67,12 @@ func (MessagesToEmitBuilder) MergedRegistrations(existingEntry, newEntry *Routab
 			}
 		}
 		newEntry.Routes = routeList
-		createAndAddMessages(endpoint, routeList, &messagesToEmit.RegistrationMessages)
+		createAndAddMessages(endpoint, routeList, &messagesToEmit.RegistrationMessages, b.CellID)
 	}
 	return messagesToEmit
 }
 
-func (MessagesToEmitBuilder) RegistrationsFor(existingEntry, newEntry *RoutableEndpoints) MessagesToEmit {
+func (b MessagesToEmitBuilder) RegistrationsFor(existingEntry, newEntry *RoutableEndpoints) MessagesToEmit {
 	messagesToEmit := MessagesToEmit{}
 	if len(newEntry.Routes) == 0 {
 		//no hostnames, so nothing could possibly be registered
@@ -81,7 +82,7 @@ func (MessagesToEmitBuilder) RegistrationsFor(existingEntry, newEntry *RoutableE
 	// only new entry OR something changed between existing and new entry
 	if existingEntry == nil || hostnamesHaveChanged(existingEntry, newEntry) || routeServiceUrlHasChanged(existingEntry, newEntry) {
 		for _, endpoint := range newEntry.Endpoints {
-			createAndAddMessages(endpoint, newEntry.Routes, &messagesToEmit.RegistrationMessages)
+			createAndAddMessages(endpoint, newEntry.Routes, &messagesToEmit.RegistrationMessages, b.CellID)
 		}
 		return messagesToEmit
 	}
@@ -89,14 +90,14 @@ func (MessagesToEmitBuilder) RegistrationsFor(existingEntry, newEntry *RoutableE
 	//otherwise only register *new* endpoints
 	for _, endpoint := range newEntry.Endpoints {
 		if !existingEntry.hasEndpoint(endpoint) {
-			createAndAddMessages(endpoint, newEntry.Routes, &messagesToEmit.RegistrationMessages)
+			createAndAddMessages(endpoint, newEntry.Routes, &messagesToEmit.RegistrationMessages, b.CellID)
 		}
 	}
 
 	return messagesToEmit
 }
 
-func (MessagesToEmitBuilder) UnregistrationsFor(existingEntry, newEntry *RoutableEndpoints, domains models.DomainSet) MessagesToEmit {
+func (b MessagesToEmitBuilder) UnregistrationsFor(existingEntry, newEntry *RoutableEndpoints, domains models.DomainSet) MessagesToEmit {
 	messagesToEmit := MessagesToEmit{}
 
 	if len(existingEntry.Routes) == 0 {
@@ -112,7 +113,7 @@ func (MessagesToEmitBuilder) UnregistrationsFor(existingEntry, newEntry *Routabl
 			// only unregister if domain is fresh or preforming event processing
 			if domains == nil || domains.Contains(endpoint.Domain) {
 				//if the endpoint has disappeared unregister all its previous hostnames
-				createAndAddMessages(endpoint, existingEntry.Routes, &messagesToEmit.UnregistrationMessages)
+				createAndAddMessages(endpoint, existingEntry.Routes, &messagesToEmit.UnregistrationMessages, b.CellID)
 			}
 		}
 	}
@@ -129,7 +130,7 @@ func (MessagesToEmitBuilder) UnregistrationsFor(existingEntry, newEntry *Routabl
 			// only unregister if domain is fresh or preforming event processing
 			if domains == nil || domains.Contains(endpoint.Domain) {
 				//if a endpoint is still present, and hostnames have disappeared, unregister those hostnames
-				createAndAddMessages(endpoint, routesThatDisappeared, &messagesToEmit.UnregistrationMessages)
+				createAndAddMessages(endpoint, routesThatDisappeared, &messagesToEmit.UnregistrationMessages, b.CellID)
 			}
 		}
 	}
@@ -164,7 +165,11 @@ func routeServiceUrlHasChanged(existingEntry, newEntry *RoutableEndpoints) bool 
 	return false
 }
 
-func createAndAddMessages(endpoint Endpoint, routes []Route, messages *[]RegistryMessage) {
+func createAndAddMessages(endpoint Endpoint, routes []Route, messages *[]RegistryMessage, cellID string) {
+	if cellID != endpoint.CellID {
+		return
+	}
+
 	for _, route := range routes {
 		message := RegistryMessageFor(endpoint, route)
 		*messages = append(*messages, message)

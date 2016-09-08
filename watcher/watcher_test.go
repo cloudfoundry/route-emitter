@@ -103,7 +103,7 @@ var _ = Describe("Watcher", func() {
 
 		clock = fakeclock.NewFakeClock(time.Now())
 
-		watcherProcess = watcher.NewWatcher(bbsClient, clock, table, emitter, syncEvents, logger)
+		watcherProcess = watcher.NewWatcher(bbsClient, clock, table, emitter, syncEvents, logger, "cell-id")
 
 		expectedRoutes = []string{"route-1", "route-2"}
 		expectedCFRoute = cfroutes.CFRoute{Hostnames: expectedRoutes, Port: expectedContainerPort, RouteServiceUrl: expectedRouteServiceUrl}
@@ -911,6 +911,7 @@ var _ = Describe("Watcher", func() {
 							Domain:        expectedDomain,
 							Port:          expectedExternalPort,
 							ContainerPort: expectedContainerPort,
+							CellID:        "cell-id",
 						}},
 						endpointArgs{expectedAdditionalRoutingKey, routing_table.Endpoint{
 							InstanceGuid:  expectedInstanceGuid,
@@ -919,6 +920,7 @@ var _ = Describe("Watcher", func() {
 							Domain:        expectedDomain,
 							Port:          expectedAdditionalExternalPort,
 							ContainerPort: expectedAdditionalContainerPort,
+							CellID:        "cell-id",
 						}},
 					}))
 				})
@@ -993,6 +995,7 @@ var _ = Describe("Watcher", func() {
 						Domain:        expectedDomain,
 						Port:          expectedExternalPort,
 						ContainerPort: expectedContainerPort,
+						CellID:        "cell-id",
 					}))
 
 					key, endpoint = table.RemoveEndpointArgsForCall(1)
@@ -1004,6 +1007,7 @@ var _ = Describe("Watcher", func() {
 						Domain:        expectedDomain,
 						Port:          expectedAdditionalExternalPort,
 						ContainerPort: expectedAdditionalContainerPort,
+						CellID:        "cell-id",
 					}))
 
 				})
@@ -1109,6 +1113,7 @@ var _ = Describe("Watcher", func() {
 						Domain:        expectedDomain,
 						Port:          expectedExternalPort,
 						ContainerPort: expectedContainerPort,
+						CellID:        "cell-id",
 					}))
 
 					key, endpoint = table.RemoveEndpointArgsForCall(1)
@@ -1120,6 +1125,7 @@ var _ = Describe("Watcher", func() {
 						Domain:        expectedDomain,
 						Port:          expectedAdditionalExternalPort,
 						ContainerPort: expectedAdditionalContainerPort,
+						CellID:        "cell-id",
 					}))
 
 				})
@@ -1482,10 +1488,10 @@ var _ = Describe("Watcher", func() {
 						)
 
 						domains := models.NewDomainSet([]string{"domain"})
-						table := routing_table.NewTable(logger)
+						table := routing_table.NewTable(logger, "cell-id")
 						table.Swap(tempTable, domains)
 
-						watcherProcess = watcher.NewWatcher(bbsClient, clock, table, emitter, syncEvents, logger)
+						watcherProcess = watcher.NewWatcher(bbsClient, clock, table, emitter, syncEvents, logger, "cell-id")
 
 						bbsClient.DesiredLRPSchedulingInfosStub = func(logger lager.Logger, f models.DesiredLRPFilter) ([]*models.DesiredLRPSchedulingInfo, error) {
 							defer GinkgoRecover()

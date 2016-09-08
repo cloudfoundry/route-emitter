@@ -35,6 +35,7 @@ type Watcher struct {
 	emitter    nats_emitter.NATSEmitter
 	syncEvents syncer.Events
 	logger     lager.Logger
+	cellID     string
 }
 
 type syncEndEvent struct {
@@ -63,6 +64,7 @@ func NewWatcher(
 	emitter nats_emitter.NATSEmitter,
 	syncEvents syncer.Events,
 	logger lager.Logger,
+	cellID string,
 ) *Watcher {
 	return &Watcher{
 		bbsClient:  bbsClient,
@@ -71,6 +73,7 @@ func NewWatcher(
 		emitter:    emitter,
 		syncEvents: syncEvents,
 		logger:     logger.Session("watcher"),
+		cellID:     cellID,
 	}
 }
 
@@ -221,7 +224,7 @@ func (watcher *Watcher) sync(logger lager.Logger, syncEndChan chan syncEndEvent)
 		defer wg.Done()
 
 		logger.Debug("getting-actual-lrps")
-		actualLRPGroups, err := watcher.bbsClient.ActualLRPGroups(logger, models.ActualLRPFilter{})
+		actualLRPGroups, err := watcher.bbsClient.ActualLRPGroups(logger, models.ActualLRPFilter{CellID: watcher.cellID})
 		if err != nil {
 			logger.Error("failed-getting-actual-lrps", err)
 			getActualLRPsErr = err
@@ -463,6 +466,13 @@ func (watcher *Watcher) handleActualCreate(logger lager.Logger, actualLRPInfo *r
 	logger.Info("starting")
 	defer logger.Info("complete")
 
+	if actualLRPInfo.ActualLRP.ActualLRPInstanceKey.CellId != watcher.cellID {
+		logger.Info("NOT IT!!!!")
+		return
+	}
+
+	logger.Info("I'M IT!!!")
+
 	if actualLRPInfo.ActualLRP.State == models.ActualLRPStateRunning {
 		watcher.addAndEmit(logger, actualLRPInfo)
 	}
@@ -475,6 +485,19 @@ func (watcher *Watcher) handleActualUpdate(logger lager.Logger, before, after *r
 	})
 	logger.Info("starting")
 	defer logger.Info("complete")
+
+	cellID := after.ActualLRP.CellId
+
+	if cellID == "" {
+		cellID = before.ActualLRP.CellId
+	}
+
+	if cellID != watcher.cellID {
+		logger.Info("NOT IT!!!!", lager.Data{"before": before, "after": after})
+		return
+	}
+
+	logger.Info("I'M IT!!!", lager.Data{"before": before, "after": after})
 
 	switch {
 	case after.ActualLRP.State == models.ActualLRPStateRunning:
@@ -489,6 +512,12 @@ func (watcher *Watcher) handleActualDelete(logger lager.Logger, actualLRPInfo *r
 	logger.Info("starting")
 	defer logger.Info("complete")
 
+	if actualLRPInfo.ActualLRP.ActualLRPInstanceKey.CellId != watcher.cellID {
+		logger.Info("NOT IT!!!!")
+		return
+	}
+
+	logger.Info("I'M IT!!!")
 	if actualLRPInfo.ActualLRP.State == models.ActualLRPStateRunning {
 		watcher.removeAndEmit(logger, actualLRPInfo)
 	}
