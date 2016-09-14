@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"code.cloudfoundry.org/lager/lagertest"
-	"github.com/cloudfoundry/gunk/diegonats"
-	"github.com/cloudfoundry/gunk/diegonats/gnatsdrunner"
+	"code.cloudfoundry.org/route-emitter/diegonats"
+	"code.cloudfoundry.org/route-emitter/diegonats/gnatsdrunner"
 	"github.com/cloudfoundry/storeadapter/storerunner/etcdstorerunner"
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/config"

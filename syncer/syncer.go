@@ -7,8 +7,8 @@ import (
 
 	"code.cloudfoundry.org/clock"
 	"code.cloudfoundry.org/lager"
+	"code.cloudfoundry.org/route-emitter/diegonats"
 	"code.cloudfoundry.org/route-emitter/routing_table"
-	"github.com/cloudfoundry/gunk/diegonats"
 	"github.com/nats-io/nats"
 	uuid "github.com/nu7hatch/gouuid"
 )
