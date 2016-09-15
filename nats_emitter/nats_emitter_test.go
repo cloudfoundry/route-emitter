@@ -7,9 +7,9 @@ import (
 	"code.cloudfoundry.org/route-emitter/diegonats"
 	"code.cloudfoundry.org/route-emitter/nats_emitter"
 	"code.cloudfoundry.org/route-emitter/routing_table"
+	"code.cloudfoundry.org/workpool"
 	fake_metrics_sender "github.com/cloudfoundry/dropsonde/metric_sender/fake"
 	"github.com/cloudfoundry/dropsonde/metrics"
-	"github.com/cloudfoundry/gunk/workpool"
 	"github.com/nats-io/nats"
 
 	. "github.com/onsi/ginkgo"

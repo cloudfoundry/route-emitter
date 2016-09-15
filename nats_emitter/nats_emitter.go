@@ -8,7 +8,7 @@ import (
 	"code.cloudfoundry.org/route-emitter/diegonats"
 	"code.cloudfoundry.org/route-emitter/routing_table"
 	"code.cloudfoundry.org/runtimeschema/metric"
-	"github.com/cloudfoundry/gunk/workpool"
+	"code.cloudfoundry.org/workpool"
 )
 
 var messagesEmitted = metric.Counter("MessagesEmitted")
