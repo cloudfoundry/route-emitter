@@ -16,6 +16,7 @@ var messagesEmitted = metric.Counter("MessagesEmitted")
 //go:generate counterfeiter -o fake_nats_emitter/fake_nats_emitter.go . NATSEmitter
 type NATSEmitter interface {
 	Emit(messagesToEmit routing_table.MessagesToEmit) error
+	StopHeartBeat()
 }
 
 type natsEmitter struct {
@@ -45,6 +46,8 @@ func (n *natsEmitter) Emit(messagesToEmit routing_table.MessagesToEmit) error {
 		n.emit("router.unregister", message, &wg, errors)
 	}
 
+	n.sendHeartbeat()
+
 	wg.Wait()
 
 	select {
@@ -57,6 +60,54 @@ func (n *natsEmitter) Emit(messagesToEmit routing_table.MessagesToEmit) error {
 	messagesEmitted.Add(numberOfMessages)
 
 	return nil
+}
+
+func (n *natsEmitter) sendHeartbeat() {
+	client := struct {
+		Name string
+		TTL  int
+	}{
+		"route-emitter",
+		60,
+	}
+	payload, err := json.Marshal(client)
+	if err != nil {
+		n.logger.Error("failed-to-marshal", err, lager.Data{
+			"message": client,
+			"subject": "router.client.heartbeat",
+		})
+	}
+
+	err = n.natsClient.Publish("router.client.heartbeat", payload)
+	if err != nil {
+		n.logger.Error("failed-to-publish", err, lager.Data{
+			"message": client,
+			"subject": "router.client.heartbeat",
+		})
+	}
+}
+
+func (n *natsEmitter) StopHeartBeat() {
+	client := struct {
+		Name string
+	}{
+		"route-emitter",
+	}
+	payload, err := json.Marshal(client)
+	if err != nil {
+		n.logger.Error("failed-to-marshal", err, lager.Data{
+			"message": client,
+			"subject": "router.client.shutdown",
+		})
+	}
+
+	err = n.natsClient.Publish("router.client.shutdown", payload)
+	if err != nil {
+		n.logger.Error("failed-to-publish", err, lager.Data{
+			"message": client,
+			"subject": "router.client.shutdown",
+		})
+	}
 }
 
 func (n *natsEmitter) emit(subject string, message routing_table.RegistryMessage, wg *sync.WaitGroup, errors chan error) {

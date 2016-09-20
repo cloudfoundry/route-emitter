@@ -171,6 +171,8 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 
 		case <-signals:
 			watcher.logger.Info("stopping")
+			// emit shutdown
+			watcher.emitter.StopHeartBeat()
 			atomic.StoreInt32(&stopEventSource, 1)
 			if es := eventSource.Load(); es != nil {
 				err := es.(events.EventSource).Close()

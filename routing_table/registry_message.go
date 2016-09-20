@@ -23,7 +23,7 @@ func RegistryMessageFor(endpoint Endpoint, route Route) RegistryMessage {
 		Host: endpoint.Host,
 		Port: endpoint.Port,
 		App:  route.LogGuid,
-		Tags: map[string]string{"component": "route-emitter"},
+		Tags: map[string]string{"component": "route-emitter", "client": "route-emitter"},
 
 		PrivateInstanceId:    endpoint.InstanceGuid,
 		PrivateInstanceIndex: index,

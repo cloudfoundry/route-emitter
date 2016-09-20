@@ -17,6 +17,9 @@ type FakeNATSEmitter struct {
 	emitReturns struct {
 		result1 error
 	}
+	StopHeartBeatStub        func()
+	stopHeartBeatMutex       sync.RWMutex
+	stopHeartBeatArgsForCall []struct{}
 }
 
 func (fake *FakeNATSEmitter) Emit(messagesToEmit routing_table.MessagesToEmit) error {
@@ -49,6 +52,21 @@ func (fake *FakeNATSEmitter) EmitReturns(result1 error) {
 	fake.emitReturns = struct {
 		result1 error
 	}{result1}
+}
+
+func (fake *FakeNATSEmitter) StopHeartBeat() {
+	fake.stopHeartBeatMutex.Lock()
+	fake.stopHeartBeatArgsForCall = append(fake.stopHeartBeatArgsForCall, struct{}{})
+	fake.stopHeartBeatMutex.Unlock()
+	if fake.StopHeartBeatStub != nil {
+		fake.StopHeartBeatStub()
+	}
+}
+
+func (fake *FakeNATSEmitter) StopHeartBeatCallCount() int {
+	fake.stopHeartBeatMutex.RLock()
+	defer fake.stopHeartBeatMutex.RUnlock()
+	return len(fake.stopHeartBeatArgsForCall)
 }
 
 var _ nats_emitter.NATSEmitter = new(FakeNATSEmitter)
