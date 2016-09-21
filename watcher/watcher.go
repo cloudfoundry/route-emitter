@@ -233,6 +233,7 @@ func (watcher *Watcher) sync(logger lager.Logger, syncEndChan chan syncEndEvent)
 		logger.Debug("succeeded-getting-actual-lrps", lager.Data{"num-actual-responses": len(actualLRPGroups)})
 
 		runningActualLRPs = make([]*routing_table.ActualLRPRoutingInfo, 0, len(actualLRPGroups))
+		processGuids := []string{}
 		for _, actualLRPGroup := range actualLRPGroups {
 			actualLRP, evacuating := actualLRPGroup.Resolve()
 			if actualLRP.State == models.ActualLRPStateRunning {
@@ -240,17 +241,13 @@ func (watcher *Watcher) sync(logger lager.Logger, syncEndChan chan syncEndEvent)
 					ActualLRP:  actualLRP,
 					Evacuating: evacuating,
 				})
+
+				processGuids = append(processGuids, actualLRP.ProcessGuid)
 			}
 		}
-	}()
-
-	wg.Add(1)
-	go func() {
-		var err error
-		defer wg.Done()
 
 		logger.Debug("getting-scheduling-infos")
-		schedulingInfos, err = watcher.bbsClient.DesiredLRPSchedulingInfos(logger, models.DesiredLRPFilter{})
+		schedulingInfos, err = watcher.bbsClient.DesiredLRPSchedulingInfos(logger, models.DesiredLRPFilter{ProcessGuids: processGuids})
 		if err != nil {
 			logger.Error("failed-getting-desired-lrps", err)
 			getSchedulingInfosErr = err
@@ -258,6 +255,21 @@ func (watcher *Watcher) sync(logger lager.Logger, syncEndChan chan syncEndEvent)
 		}
 		logger.Debug("succeeded-getting-scheduling-infos", lager.Data{"num-desired-responses": len(schedulingInfos)})
 	}()
+
+	// wg.Add(1)
+	// go func() {
+	// 	var err error
+	// 	defer wg.Done()
+
+	// 	logger.Debug("getting-scheduling-infos")
+	// 	schedulingInfos, err = watcher.bbsClient.DesiredLRPSchedulingInfos(logger, models.DesiredLRPFilter{})
+	// 	if err != nil {
+	// 		logger.Error("failed-getting-desired-lrps", err)
+	// 		getSchedulingInfosErr = err
+	// 		return
+	// 	}
+	// 	logger.Debug("succeeded-getting-scheduling-infos", lager.Data{"num-desired-responses": len(schedulingInfos)})
+	// }()
 
 	wg.Add(1)
 	go func() {
