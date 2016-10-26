@@ -24,6 +24,7 @@ var _ = Describe("ConsulDownChecker", func() {
 		retryInterval time.Duration
 		signals       chan os.Signal
 		ready         chan struct{}
+		runErrCh      chan error
 
 		consulDownChecker *consuldownchecker.ConsulDownChecker
 	)
@@ -37,35 +38,55 @@ var _ = Describe("ConsulDownChecker", func() {
 		consulClient.StatusReturns(statusClient)
 		signals = make(chan os.Signal)
 		ready = make(chan struct{})
+		runErrCh = make(chan error)
 
 		consulDownChecker = consuldownchecker.NewConsulDownChecker(logger, clock, consulClient, retryInterval)
 	})
 
-	It("exits quickly if consul has a leader", func() {
-		statusClient.LeaderReturns("Pompeius", nil)
-		err := consulDownChecker.Run(signals, ready)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(ready).NotTo(BeClosed())
+	JustBeforeEach(func() {
+		go func() {
+			defer GinkgoRecover()
+			runErrCh <- consulDownChecker.Run(signals, ready)
+		}()
 	})
 
-	It("exits quickly with error if consul agent is unreachable", func() {
-		statusClient.LeaderReturns("", errors.New("not a five hundred"))
-		err := consulDownChecker.Run(signals, ready)
-		Expect(err).To(HaveOccurred())
-		Expect(ready).NotTo(BeClosed())
+	Context("when consul has a leader", func() {
+		BeforeEach(func() {
+			statusClient.LeaderReturns("Pompeius", nil)
+		})
+
+		It("exits after checking 3 times", func() {
+			clock.WaitForWatcherAndIncrement(retryInterval)
+			clock.WaitForWatcherAndIncrement(retryInterval)
+			var err error
+			Eventually(runErrCh, 5).Should(Receive(&err))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(ready).NotTo(BeClosed())
+			Eventually(statusClient.LeaderCallCount).Should(Equal(3))
+		})
+	})
+
+	Context("when consul agent is unreachable", func() {
+		BeforeEach(func() {
+			statusClient.LeaderReturns("", errors.New("not a five hundred"))
+		})
+
+		It("exits quickly with error", func() {
+			var err error
+			Eventually(runErrCh, 5).Should(Receive(&err))
+			Expect(err).To(HaveOccurred())
+			Expect(ready).NotTo(BeClosed())
+		})
 	})
 
 	Context("when consul does not have leader", func() {
-		var runErrCh chan error
-
 		BeforeEach(func() {
 			statusClient.LeaderReturns("", errors.New("Unexpected response code: 500 (rpc error: No cluster leader)"))
-			runErrCh = make(chan error)
+		})
 
-			go func() {
-				defer GinkgoRecover()
-				runErrCh <- consulDownChecker.Run(signals, ready)
-			}()
+		JustBeforeEach(func() {
+			clock.WaitForWatcherAndIncrement(retryInterval)
+			clock.WaitForWatcherAndIncrement(retryInterval)
 			Eventually(ready).Should(BeClosed())
 		})
 
@@ -85,6 +106,33 @@ var _ = Describe("ConsulDownChecker", func() {
 
 		It("exits when there is a leader", func() {
 			statusClient.LeaderReturns("Ceasar", nil)
+			clock.WaitForWatcherAndIncrement(retryInterval)
+			Eventually(logger).Should(gbytes.Say("consul-has-leader"))
+			clock.WaitForWatcherAndIncrement(retryInterval)
+			Eventually(logger).Should(gbytes.Say("consul-has-leader"))
+			clock.WaitForWatcherAndIncrement(retryInterval)
+			Eventually(logger).Should(gbytes.Say("consul-has-leader"))
+			var err error
+			Eventually(runErrCh).Should(Receive(&err))
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("keeps check if consul is flapping", func() {
+			Eventually(logger).Should(gbytes.Say("still-down"))
+			statusClient.LeaderReturns("Ceasar", nil)
+
+			clock.WaitForWatcherAndIncrement(retryInterval)
+			Eventually(logger).Should(gbytes.Say("consul-has-leader"))
+
+			statusClient.LeaderReturns("", nil)
+			clock.WaitForWatcherAndIncrement(retryInterval)
+			Eventually(logger).Should(gbytes.Say("still-down"))
+
+			statusClient.LeaderReturns("Ceasar", nil)
+			clock.WaitForWatcherAndIncrement(retryInterval)
+			Eventually(logger).Should(gbytes.Say("consul-has-leader"))
+			clock.WaitForWatcherAndIncrement(retryInterval)
+			Eventually(logger).Should(gbytes.Say("consul-has-leader"))
 			clock.WaitForWatcherAndIncrement(retryInterval)
 			Eventually(logger).Should(gbytes.Say("consul-has-leader"))
 			var err error

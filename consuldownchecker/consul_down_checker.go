@@ -34,11 +34,8 @@ func (c *ConsulDownChecker) Run(signals <-chan os.Signal, ready chan<- struct{})
 	defer logger.Info("finished")
 	retryTimer := c.clock.NewTimer(0)
 
-	hasLeader, err := c.checkForLeader(logger)
-	if hasLeader || err != nil {
-		return err
-	}
-	close(ready)
+	hasLeaderCounter := 0
+	leaderCheckCounter := 0
 
 	for {
 		select {
@@ -46,11 +43,25 @@ func (c *ConsulDownChecker) Run(signals <-chan os.Signal, ready chan<- struct{})
 			logger.Info("received-signal")
 			return nil
 		case <-retryTimer.C():
+			leaderCheckCounter++
 			hasLeader, err := c.checkForLeader(logger)
-			if hasLeader || err != nil {
+			if err != nil {
 				return err
 			}
-			logger.Info("still-down")
+			if hasLeader {
+				hasLeaderCounter++
+				logger.Info("consul-has-leader", lager.Data{"attempts": hasLeaderCounter})
+			} else {
+				logger.Info("still-down", lager.Data{"attempts": leaderCheckCounter})
+				hasLeaderCounter = 0
+			}
+			if hasLeaderCounter > 2 {
+				return nil
+			}
+			if leaderCheckCounter == 3 {
+				close(ready)
+			}
+
 			retryTimer.Reset(c.retryInterval)
 		}
 	}
@@ -64,7 +75,6 @@ func (c *ConsulDownChecker) checkForLeader(logger lager.Logger) (bool, error) {
 	}
 
 	if leader != "" {
-		logger.Info("consul-has-leader")
 		return true, nil
 	}
 

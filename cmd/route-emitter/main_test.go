@@ -121,8 +121,8 @@ var _ = Describe("Route Emitter", func() {
 		})
 
 		It("returns 20 second", func() {
-			Expect(runner.Buffer()).To(gbytes.Say("setting-nats-ping-interval"))
-			Expect(runner.Buffer()).To(gbytes.Say(`"duration-in-seconds":20`))
+			Expect(runner).To(gbytes.Say("setting-nats-ping-interval"))
+			Expect(runner).To(gbytes.Say(`"duration-in-seconds":20`))
 		})
 	})
 
@@ -398,10 +398,12 @@ var _ = Describe("Route Emitter", func() {
 			})
 
 			It("enters paranoid mode and exits when consul comes back up", func() {
-				Eventually(runner.Buffer(), 6).Should(gbytes.Say("paranoid-mode.started"))
+				lockTTL := 5
+				retryInterval := 1
+				Eventually(runner, lockTTL+3*retryInterval+1).Should(gbytes.Say("paranoid-mode.started"))
 				consulRunner.Start()
 				fakeConsulHandler = nil
-				Eventually(runner.Buffer()).Should(gbytes.Say("paranoid-mode.exited"))
+				Eventually(runner, 3*retryInterval+1).Should(gbytes.Say("paranoid-mode.exited"))
 				var err error
 				Eventually(emitter.Wait()).Should(Receive(&err))
 				Expect(err).NotTo(HaveOccurred())
