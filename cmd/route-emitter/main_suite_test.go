@@ -41,13 +41,14 @@ var (
 	bbsRunner  *ginkgomon.Runner
 	bbsProcess ifrit.Process
 
-	etcdRunner   *etcdstorerunner.ETCDClusterRunner
-	consulRunner *consulrunner.ClusterRunner
-	gnatsdRunner ifrit.Process
-	natsClient   diegonats.NATSClient
-	bbsClient    bbs.InternalClient
-	logger       *lagertest.TestLogger
-	syncInterval time.Duration
+	etcdRunner           *etcdstorerunner.ETCDClusterRunner
+	consulRunner         *consulrunner.ClusterRunner
+	gnatsdRunner         ifrit.Process
+	natsClient           diegonats.NATSClient
+	bbsClient            bbs.InternalClient
+	logger               *lagertest.TestLogger
+	syncInterval         time.Duration
+	consulClusterAddress string
 
 	sqlProcess ifrit.Process
 	sqlRunner  sqlrunner.SQLRunner
@@ -69,7 +70,8 @@ func createEmitterRunner(sessionName string) *ginkgomon.Runner {
 			"-communicationTimeout", "100ms",
 			"-syncInterval", syncInterval.String(),
 			"-lockRetryInterval", "1s",
-			"-consulCluster", consulRunner.ConsulCluster(),
+			"-lockTTL", "5s",
+			"-consulCluster", consulClusterAddress,
 		),
 
 		StartCheck: "route-emitter.watcher.sync.complete",
@@ -157,6 +159,7 @@ var _ = BeforeEach(func() {
 	etcdRunner.Start()
 	consulRunner.Start()
 	consulRunner.WaitUntilReady()
+	consulClusterAddress = consulRunner.ConsulCluster()
 
 	bbsRunner = bbstestrunner.New(bbsPath, bbsArgs)
 	bbsProcess = ginkgomon.Invoke(bbsRunner)

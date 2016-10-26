@@ -2,6 +2,10 @@ package main_test
 
 import (
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"net/http/httputil"
+	"net/url"
 	"time"
 
 	"code.cloudfoundry.org/bbs/models"
@@ -123,10 +127,13 @@ var _ = Describe("Route Emitter", func() {
 	})
 
 	Context("when the emitter is running", func() {
-		var emitter ifrit.Process
+		var (
+			emitter ifrit.Process
+			runner  *ginkgomon.Runner
+		)
 
 		BeforeEach(func() {
-			runner := createEmitterRunner("emitter1")
+			runner = createEmitterRunner("emitter1")
 			runner.StartCheck = "emitter1.started"
 			emitter = ginkgomon.Invoke(runner)
 		})
@@ -327,6 +334,89 @@ var _ = Describe("Route Emitter", func() {
 
 			It("does not explode", func() {
 				Consistently(emitter.Wait(), 5).ShouldNot(Receive())
+			})
+		})
+	})
+
+	Describe("paranoid mode", func() {
+		var (
+			emitter           ifrit.Process
+			runner            *ginkgomon.Runner
+			fakeConsul        *httptest.Server
+			fakeConsulHandler http.HandlerFunc
+		)
+
+		BeforeEach(func() {
+			consulClusterURL, err := url.Parse(consulRunner.ConsulCluster())
+			Expect(err).NotTo(HaveOccurred())
+			fakeConsulHandler = nil
+
+			proxy := httputil.NewSingleHostReverseProxy(consulClusterURL)
+			fakeConsul = httptest.NewUnstartedServer(
+				http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					if fakeConsulHandler != nil {
+						fakeConsulHandler(w, r)
+					} else {
+						proxy.ServeHTTP(w, r)
+					}
+				}),
+			)
+			fakeConsul.Start()
+
+			consulClusterAddress = fakeConsul.URL
+			runner = createEmitterRunner("emitter1")
+			runner.StartCheck = "emitter1.started"
+			emitter = ginkgomon.Invoke(runner)
+		})
+
+		AfterEach(func() {
+			fakeConsul.Close()
+			ginkgomon.Interrupt(emitter, emitterInterruptTimeout)
+		})
+
+		Context("when consul goes down", func() {
+			var (
+				msg1 routing_table.RegistryMessage
+				msg2 routing_table.RegistryMessage
+			)
+
+			BeforeEach(func() {
+				err := bbsClient.DesireLRP(logger, desiredLRP)
+				Expect(err).NotTo(HaveOccurred())
+
+				err = bbsClient.StartActualLRP(logger, &lrpKey, &instanceKey, &netInfo)
+				Expect(err).NotTo(HaveOccurred())
+
+				Eventually(registeredRoutes).Should(Receive(&msg1))
+				Eventually(registeredRoutes).Should(Receive(&msg2))
+
+				fakeConsulHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					w.WriteHeader(500)
+					w.Write([]byte(`"No known Consul servers"`))
+				})
+				consulRunner.Stop()
+			})
+
+			It("enters paranoid mode and exits when consul comes back up", func() {
+				Eventually(runner.Buffer(), 6).Should(gbytes.Say("paranoid-mode.started"))
+				consulRunner.Start()
+				fakeConsulHandler = nil
+				Eventually(runner.Buffer()).Should(gbytes.Say("paranoid-mode.exited"))
+				var err error
+				Eventually(emitter.Wait()).Should(Receive(&err))
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("repeats the route message at the interval given by the router", func() {
+				var msg3 routing_table.RegistryMessage
+				var msg4 routing_table.RegistryMessage
+				Eventually(registeredRoutes, 5).Should(Receive(&msg3))
+				Eventually(registeredRoutes, 5).Should(Receive(&msg4))
+
+				Expect([]routing_table.RegistryMessage{msg3, msg4}).To(ConsistOf(
+					MatchRegistryMessage(msg1),
+					MatchRegistryMessage(msg2),
+				))
 			})
 		})
 	})
