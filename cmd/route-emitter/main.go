@@ -1,10 +1,12 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"net/url"
 	"os"
+	"strings"
 	"time"
 
 	"code.cloudfoundry.org/bbs"
@@ -23,6 +25,7 @@ import (
 	"code.cloudfoundry.org/route-emitter/watcher"
 	"code.cloudfoundry.org/workpool"
 	"github.com/cloudfoundry/dropsonde"
+	"github.com/hashicorp/consul/api"
 	"github.com/nu7hatch/gouuid"
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/ifrit/grouper"
@@ -189,6 +192,32 @@ func main() {
 
 	err := <-monitor.Wait()
 	if err != nil {
+		logger.Error("finished-with-failure", err)
+	} else {
+		logger.Info("finished")
+	}
+
+	// Paranoid mode
+
+	logger = logger.Session("paranoid-mode")
+
+	consulDownChecker := initializeConsulDownChecker(logger, *consulCluster, clock)
+
+	members = grouper.Members{
+		{"consul-down-checker", consulDownChecker},
+		{"nats-client", natsClientRunner},
+		{"watcher", watcher},
+		{"syncer", syncRunner},
+	}
+
+	group = grouper.NewOrdered(os.Interrupt, members)
+
+	monitor = ifrit.Invoke(sigmon.New(group))
+
+	logger.Info("started")
+
+	err = <-monitor.Wait()
+	if err != nil {
 		logger.Error("exited-with-failure", err)
 		os.Exit(1)
 	}
@@ -215,6 +244,99 @@ func initializeNatsEmitter(natsClient diegonats.NATSClient, logger lager.Logger)
 
 func initializeRoutingTable(logger lager.Logger) routing_table.RoutingTable {
 	return routing_table.NewTable(logger)
+}
+
+func initializeConsulDownChecker(
+	logger lager.Logger,
+	consulCluster string,
+	clock clock.Clock,
+) ifrit.Runner {
+	consulClient, err := newConsulAPI(consulCluster)
+	if err != nil {
+		logger.Fatal("new-client-failed", err)
+	}
+
+	runner := ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
+		logger := logger.Session("consul-down-checker")
+		logger.Info("starting")
+		defer logger.Info("finished")
+
+		retryTimer := clock.NewTimer(0)
+
+		leader, err := consulClient.Status().Leader()
+		if err != nil && !strings.Contains(err.Error(), "No known Consul servers") {
+			logger.Error("failed-getting-leader", err)
+			return err
+		}
+
+		if leader != "" {
+			logger.Info("consul-has-leader")
+			return nil
+		} else {
+			close(ready)
+		}
+
+		for {
+			select {
+			case <-signals:
+				logger.Info("received-signal")
+				return nil
+			case <-retryTimer.C():
+				leader, err := consulClient.Status().Leader()
+				if err != nil && !strings.Contains(err.Error(), "No known Consul servers") {
+					logger.Error("failed-getting-leader", err)
+					return err
+				}
+
+				if leader != "" {
+					logger.Info("consul-has-leader")
+					return nil
+				} else {
+					logger.Info("still-down")
+				}
+				retryTimer.Reset(5 * time.Second)
+			}
+		}
+	})
+
+	return runner
+}
+
+func parse(urlArg string) (string, string, error) {
+	u, err := url.Parse(urlArg)
+	if err != nil {
+		return "", "", err
+	}
+
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return "", "", errors.New("scheme must be http or https")
+	}
+
+	if u.Host == "" {
+		return "", "", errors.New("missing address")
+	}
+
+	return u.Scheme, u.Host, nil
+}
+
+func newConsulAPI(urlString string) (*api.Client, error) {
+	scheme, address, err := parse(urlString)
+	if err != nil {
+		return nil, err
+	}
+
+	config := &api.Config{
+		Address:    address,
+		Scheme:     scheme,
+		HttpClient: cfhttp.NewStreamingClient(),
+	}
+
+	c, err := api.NewClient(config)
+	if err != nil {
+		return nil, err
+	}
+
+	return c, nil
 }
 
 func initializeLockMaintainer(
