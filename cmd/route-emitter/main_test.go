@@ -12,6 +12,7 @@ import (
 	"code.cloudfoundry.org/route-emitter/routing_table"
 	. "code.cloudfoundry.org/route-emitter/routing_table/matchers"
 	"code.cloudfoundry.org/routing-info/cfroutes"
+	"github.com/cloudfoundry/sonde-go/events"
 	"github.com/nats-io/nats"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -336,6 +337,22 @@ var _ = Describe("Route Emitter", func() {
 				Consistently(emitter.Wait(), 5).ShouldNot(Receive())
 			})
 		})
+
+		It("emits a metric to say that it is not in paranoid mode", func() {
+			type metricAndValue struct {
+				Name  string
+				Value int32
+			}
+
+			Eventually(func() metricAndValue {
+				envelope := <-testMetricsChan
+				if *envelope.EventType == events.Envelope_ValueMetric {
+					return metricAndValue{Name: *envelope.ValueMetric.Name, Value: int32(*envelope.ValueMetric.Value)}
+				}
+				return metricAndValue{}
+			}).Should(Equal(metricAndValue{Name: "ParanoidMode", Value: 0}))
+
+		})
 	})
 
 	Describe("paranoid mode", func() {
@@ -407,6 +424,26 @@ var _ = Describe("Route Emitter", func() {
 				var err error
 				Eventually(emitter.Wait()).Should(Receive(&err))
 				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("emits a metric to say that it has entered paranoid mode", func() {
+				lockTTL := 5
+				retryInterval := 1
+				Eventually(runner, lockTTL+3*retryInterval+1).Should(gbytes.Say("paranoid-mode.started"))
+
+				type metricAndValue struct {
+					Name  string
+					Value int32
+				}
+
+				Eventually(func() metricAndValue {
+					envelope := <-testMetricsChan
+					if *envelope.EventType == events.Envelope_ValueMetric {
+						return metricAndValue{Name: *envelope.ValueMetric.Name, Value: int32(*envelope.ValueMetric.Value)}
+					}
+					return metricAndValue{}
+				}).Should(Equal(metricAndValue{Name: "ParanoidMode", Value: 1}))
+
 			})
 
 			It("repeats the route message at the interval given by the router", func() {

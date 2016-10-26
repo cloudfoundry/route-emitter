@@ -19,6 +19,7 @@ import (
 	"code.cloudfoundry.org/route-emitter/consuldownchecker"
 	"code.cloudfoundry.org/route-emitter/diegonats"
 	"code.cloudfoundry.org/route-emitter/nats_emitter"
+	"code.cloudfoundry.org/route-emitter/paranoidmodenotifier"
 	"code.cloudfoundry.org/route-emitter/routing_table"
 	"code.cloudfoundry.org/route-emitter/syncer"
 	"code.cloudfoundry.org/route-emitter/watcher"
@@ -82,6 +83,12 @@ var syncInterval = flag.Duration(
 	"syncInterval",
 	time.Minute,
 	"the interval between syncs of the routing table from etcd",
+)
+
+var paranoidModeNotificationInterval = flag.Duration(
+	"paranoidModeNotificationInterval",
+	time.Minute,
+	"the interval between emission of the ParanoidMode metric",
 )
 
 var dropsondePort = flag.Int(
@@ -170,9 +177,11 @@ func main() {
 	consulClient := initializeConsulClient(logger, *consulCluster)
 
 	lockMaintainer := initializeLockMaintainer(logger, consulClient, *sessionName, *lockTTL, *lockRetryInterval, clock)
+	paranoidModeNotifier := paranoidmodenotifier.NewParanoidModeNotifier(logger, 0, clock, *paranoidModeNotificationInterval)
 
 	members := grouper.Members{
 		{"lock-maintainer", lockMaintainer},
+		{"paranoid-mode-notifier", paranoidModeNotifier},
 		{"nats-client", natsClientRunner},
 		{"watcher", watcher},
 		{"syncer", syncRunner},
@@ -203,8 +212,11 @@ func main() {
 
 	consulDownChecker := consuldownchecker.NewConsulDownChecker(logger, clock, consulClient, *lockRetryInterval)
 
+	paranoidModeNotifier = paranoidmodenotifier.NewParanoidModeNotifier(logger, 1, clock, *paranoidModeNotificationInterval)
+
 	members = grouper.Members{
 		{"consul-down-checker", consulDownChecker},
+		{"paranoid-mode-notifier", paranoidModeNotifier},
 		{"nats-client", natsClientRunner},
 		{"watcher", watcher},
 		{"syncer", syncRunner},

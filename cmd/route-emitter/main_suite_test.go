@@ -3,9 +3,11 @@ package main_test
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/url"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -13,7 +15,9 @@ import (
 	"code.cloudfoundry.org/lager/lagertest"
 	"code.cloudfoundry.org/route-emitter/diegonats"
 	"code.cloudfoundry.org/route-emitter/diegonats/gnatsdrunner"
+	"github.com/cloudfoundry/sonde-go/events"
 	"github.com/cloudfoundry/storeadapter/storerunner/etcdstorerunner"
+	"github.com/gogo/protobuf/proto"
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/config"
 	. "github.com/onsi/gomega"
@@ -31,9 +35,10 @@ import (
 const heartbeatInterval = 1 * time.Second
 
 var (
-	emitterPath string
-	etcdPort    int
-	natsPort    int
+	emitterPath   string
+	etcdPort      int
+	natsPort      int
+	dropsondePort int
 
 	bbsPath    string
 	bbsURL     *url.URL
@@ -49,6 +54,8 @@ var (
 	logger               *lagertest.TestLogger
 	syncInterval         time.Duration
 	consulClusterAddress string
+	testMetricsListener  net.PacketConn
+	testMetricsChan      chan *events.Envelope
 
 	sqlProcess ifrit.Process
 	sqlRunner  sqlrunner.SQLRunner
@@ -65,6 +72,7 @@ func createEmitterRunner(sessionName string) *ginkgomon.Runner {
 		Command: exec.Command(
 			string(emitterPath),
 			"-sessionName", sessionName,
+			"-dropsondePort", strconv.Itoa(dropsondePort),
 			"-natsAddresses", fmt.Sprintf("127.0.0.1:%d", natsPort),
 			"-bbsAddress", bbsURL.String(),
 			"-communicationTimeout", "100ms",
@@ -165,6 +173,29 @@ var _ = BeforeEach(func() {
 	bbsProcess = ginkgomon.Invoke(bbsRunner)
 
 	gnatsdRunner, natsClient = gnatsdrunner.StartGnatsd(natsPort)
+
+	testMetricsListener, _ = net.ListenPacket("udp", "127.0.0.1:0")
+	testMetricsChan = make(chan *events.Envelope, 1)
+	go func() {
+		defer GinkgoRecover()
+		for {
+			buffer := make([]byte, 1024)
+			n, _, err := testMetricsListener.ReadFrom(buffer)
+			if err != nil {
+				close(testMetricsChan)
+				return
+			}
+
+			var envelope events.Envelope
+			err = proto.Unmarshal(buffer[:n], &envelope)
+			Expect(err).NotTo(HaveOccurred())
+			testMetricsChan <- &envelope
+		}
+	}()
+
+	var err error
+	dropsondePort, err = strconv.Atoi(strings.TrimPrefix(testMetricsListener.LocalAddr().String(), "127.0.0.1:"))
+	Expect(err).NotTo(HaveOccurred())
 })
 
 var _ = AfterEach(func() {
@@ -173,6 +204,9 @@ var _ = AfterEach(func() {
 	consulRunner.Stop()
 	gnatsdRunner.Signal(os.Interrupt)
 	Eventually(gnatsdRunner.Wait(), 5).Should(Receive())
+
+	testMetricsListener.Close()
+	Eventually(testMetricsChan).Should(BeClosed())
 
 	if test_helpers.UseSQL() {
 		sqlRunner.Reset()
