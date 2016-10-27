@@ -1,4 +1,4 @@
-package paranoidmodenotifier
+package consuldownmodenotifier
 
 import (
 	"os"
@@ -9,30 +9,30 @@ import (
 	"code.cloudfoundry.org/runtimeschema/metric"
 )
 
-type ParanoidModeNofitier struct {
+type ConsulDownModeNofitier struct {
 	logger   lager.Logger
 	value    int
 	clock    clock.Clock
 	interval time.Duration
 }
 
-func NewParanoidModeNotifier(
+func NewConsulDownModeNotifier(
 	logger lager.Logger,
 	value int,
 	clock clock.Clock,
 	interval time.Duration,
-) *ParanoidModeNofitier {
-	return &ParanoidModeNofitier{
+) *ConsulDownModeNofitier {
+	return &ConsulDownModeNofitier{
 		logger: logger, value: value, clock: clock, interval: interval,
 	}
 }
 
-func (p *ParanoidModeNofitier) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
-	logger := p.logger.Session("paranoid-mode-notifier")
+func (p *ConsulDownModeNofitier) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
+	logger := p.logger.Session("consul-down-mode-notifier")
 	logger.Info("starting")
 	defer logger.Info("finished")
 	retryTimer := p.clock.NewTimer(0)
-	var paranoidMetric = metric.Metric("ParanoidMode")
+	var consulDownMetric = metric.Metric("ConsulDownMode")
 
 	close(ready)
 
@@ -42,7 +42,7 @@ func (p *ParanoidModeNofitier) Run(signals <-chan os.Signal, ready chan<- struct
 			logger.Info("received-signal")
 			return nil
 		case <-retryTimer.C():
-			paranoidMetric.Send(p.value)
+			consulDownMetric.Send(p.value)
 			retryTimer.Reset(p.interval)
 		}
 	}

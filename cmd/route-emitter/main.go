@@ -17,9 +17,9 @@ import (
 	"code.cloudfoundry.org/locket"
 	route_emitter "code.cloudfoundry.org/route-emitter"
 	"code.cloudfoundry.org/route-emitter/consuldownchecker"
+	"code.cloudfoundry.org/route-emitter/consuldownmodenotifier"
 	"code.cloudfoundry.org/route-emitter/diegonats"
 	"code.cloudfoundry.org/route-emitter/nats_emitter"
-	"code.cloudfoundry.org/route-emitter/paranoidmodenotifier"
 	"code.cloudfoundry.org/route-emitter/routing_table"
 	"code.cloudfoundry.org/route-emitter/syncer"
 	"code.cloudfoundry.org/route-emitter/watcher"
@@ -85,10 +85,10 @@ var syncInterval = flag.Duration(
 	"the interval between syncs of the routing table from etcd",
 )
 
-var paranoidModeNotificationInterval = flag.Duration(
-	"paranoidModeNotificationInterval",
+var consulDownModeNotificationInterval = flag.Duration(
+	"consulDownModeNotificationInterval",
 	time.Minute,
-	"the interval between emission of the ParanoidMode metric",
+	"the interval between emission of the ConsulDownMode metric",
 )
 
 var dropsondePort = flag.Int(
@@ -177,11 +177,11 @@ func main() {
 	consulClient := initializeConsulClient(logger, *consulCluster)
 
 	lockMaintainer := initializeLockMaintainer(logger, consulClient, *sessionName, *lockTTL, *lockRetryInterval, clock)
-	paranoidModeNotifier := paranoidmodenotifier.NewParanoidModeNotifier(logger, 0, clock, *paranoidModeNotificationInterval)
+	consulDownModeNotifier := consuldownmodenotifier.NewConsulDownModeNotifier(logger, 0, clock, *consulDownModeNotificationInterval)
 
 	members := grouper.Members{
 		{"lock-maintainer", lockMaintainer},
-		{"paranoid-mode-notifier", paranoidModeNotifier},
+		{"consul-down-mode-notifier", consulDownModeNotifier},
 		{"nats-client", natsClientRunner},
 		{"watcher", watcher},
 		{"syncer", syncRunner},
@@ -206,17 +206,17 @@ func main() {
 		logger.Info("finished")
 	}
 
-	// Paranoid mode
+	// ConsulDown mode
 
-	logger = logger.Session("paranoid-mode")
+	logger = logger.Session("consul-down-mode")
 
 	consulDownChecker := consuldownchecker.NewConsulDownChecker(logger, clock, consulClient, *lockRetryInterval)
 
-	paranoidModeNotifier = paranoidmodenotifier.NewParanoidModeNotifier(logger, 1, clock, *paranoidModeNotificationInterval)
+	consulDownModeNotifier = consuldownmodenotifier.NewConsulDownModeNotifier(logger, 1, clock, *consulDownModeNotificationInterval)
 
 	members = grouper.Members{
 		{"consul-down-checker", consulDownChecker},
-		{"paranoid-mode-notifier", paranoidModeNotifier},
+		{"consul-down-mode-notifier", consulDownModeNotifier},
 		{"nats-client", natsClientRunner},
 		{"watcher", watcher},
 		{"syncer", syncRunner},

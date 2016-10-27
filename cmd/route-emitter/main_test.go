@@ -338,7 +338,7 @@ var _ = Describe("Route Emitter", func() {
 			})
 		})
 
-		It("emits a metric to say that it is not in paranoid mode", func() {
+		It("emits a metric to say that it is not in consul down mode", func() {
 			type metricAndValue struct {
 				Name  string
 				Value int32
@@ -350,12 +350,12 @@ var _ = Describe("Route Emitter", func() {
 					return metricAndValue{Name: *envelope.ValueMetric.Name, Value: int32(*envelope.ValueMetric.Value)}
 				}
 				return metricAndValue{}
-			}).Should(Equal(metricAndValue{Name: "ParanoidMode", Value: 0}))
+			}).Should(Equal(metricAndValue{Name: "ConsulDownMode", Value: 0}))
 
 		})
 	})
 
-	Describe("paranoid mode", func() {
+	Describe("consul down mode", func() {
 		var (
 			emitter           ifrit.Process
 			runner            *ginkgomon.Runner
@@ -414,22 +414,22 @@ var _ = Describe("Route Emitter", func() {
 				consulRunner.Stop()
 			})
 
-			It("enters paranoid mode and exits when consul comes back up", func() {
+			It("enters consul down mode and exits when consul comes back up", func() {
 				lockTTL := 5
 				retryInterval := 1
-				Eventually(runner, lockTTL+3*retryInterval+1).Should(gbytes.Say("paranoid-mode.started"))
+				Eventually(runner, lockTTL+3*retryInterval+1).Should(gbytes.Say("consul-down-mode.started"))
 				consulRunner.Start()
 				fakeConsulHandler = nil
-				Eventually(runner, 3*retryInterval+1).Should(gbytes.Say("paranoid-mode.exited"))
+				Eventually(runner, 3*retryInterval+1).Should(gbytes.Say("consul-down-mode.exited"))
 				var err error
 				Eventually(emitter.Wait()).Should(Receive(&err))
 				Expect(err).NotTo(HaveOccurred())
 			})
 
-			It("emits a metric to say that it has entered paranoid mode", func() {
+			It("emits a metric to say that it has entered consul down mode", func() {
 				lockTTL := 5
 				retryInterval := 1
-				Eventually(runner, lockTTL+3*retryInterval+1).Should(gbytes.Say("paranoid-mode.started"))
+				Eventually(runner, lockTTL+3*retryInterval+1).Should(gbytes.Say("consul-down-mode.started"))
 
 				type metricAndValue struct {
 					Name  string
@@ -442,7 +442,7 @@ var _ = Describe("Route Emitter", func() {
 						return metricAndValue{Name: *envelope.ValueMetric.Name, Value: int32(*envelope.ValueMetric.Value)}
 					}
 					return metricAndValue{}
-				}).Should(Equal(metricAndValue{Name: "ParanoidMode", Value: 1}))
+				}).Should(Equal(metricAndValue{Name: "ConsulDownMode", Value: 1}))
 
 			})
 
