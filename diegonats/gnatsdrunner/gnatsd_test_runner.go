@@ -16,7 +16,8 @@ import (
 
 func StartGnatsd(natsPort int) (ifrit.Process, diegonats.NATSClient) {
 	ginkgomonRunner := NewGnatsdTestRunner(natsPort)
-	gnatsdProcess := ifrit.Envoke(ginkgomonRunner)
+	gnatsdProcess := ifrit.Invoke(ginkgomonRunner)
+	Eventually(gnatsdProcess.Ready(), "5s").Should(BeClosed())
 
 	natsClient := diegonats.NewClient()
 	_, err := natsClient.Connect([]string{fmt.Sprintf("nats://127.0.0.1:%d", natsPort)})

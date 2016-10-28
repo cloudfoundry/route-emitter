@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"net/http/httputil"
 	"net/url"
+	"sync"
 	"time"
 
 	"code.cloudfoundry.org/bbs/models"
@@ -17,6 +18,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gbytes"
+	"github.com/onsi/gomega/types"
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/ifrit/ginkgomon"
 )
@@ -339,19 +341,7 @@ var _ = Describe("Route Emitter", func() {
 		})
 
 		It("emits a metric to say that it is not in consul down mode", func() {
-			type metricAndValue struct {
-				Name  string
-				Value int32
-			}
-
-			Eventually(func() metricAndValue {
-				envelope := <-testMetricsChan
-				if *envelope.EventType == events.Envelope_ValueMetric {
-					return metricAndValue{Name: *envelope.ValueMetric.Name, Value: int32(*envelope.ValueMetric.Value)}
-				}
-				return metricAndValue{}
-			}).Should(Equal(metricAndValue{Name: "ConsulDownMode", Value: 0}))
-
+			Eventually(testMetricsChan).Should(Receive(matchMetricAndValue(metricAndValue{Name: "ConsulDownMode", Value: 0})))
 		})
 	})
 
@@ -361,6 +351,7 @@ var _ = Describe("Route Emitter", func() {
 			runner            *ginkgomon.Runner
 			fakeConsul        *httptest.Server
 			fakeConsulHandler http.HandlerFunc
+			handlerWriteLock  *sync.Mutex
 		)
 
 		BeforeEach(func() {
@@ -368,9 +359,12 @@ var _ = Describe("Route Emitter", func() {
 			Expect(err).NotTo(HaveOccurred())
 			fakeConsulHandler = nil
 
+			handlerWriteLock = &sync.Mutex{}
 			proxy := httputil.NewSingleHostReverseProxy(consulClusterURL)
 			fakeConsul = httptest.NewUnstartedServer(
 				http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					handlerWriteLock.Lock()
+					defer handlerWriteLock.Unlock()
 					if fakeConsulHandler != nil {
 						fakeConsulHandler(w, r)
 					} else {
@@ -407,10 +401,12 @@ var _ = Describe("Route Emitter", func() {
 				Eventually(registeredRoutes).Should(Receive(&msg1))
 				Eventually(registeredRoutes).Should(Receive(&msg2))
 
+				handlerWriteLock.Lock()
 				fakeConsulHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					w.WriteHeader(500)
 					w.Write([]byte(`"No known Consul servers"`))
 				})
+				handlerWriteLock.Unlock()
 				consulRunner.Stop()
 			})
 
@@ -419,7 +415,9 @@ var _ = Describe("Route Emitter", func() {
 				retryInterval := 1
 				Eventually(runner, lockTTL+3*retryInterval+1).Should(gbytes.Say("consul-down-mode.started"))
 				consulRunner.Start()
+				handlerWriteLock.Lock()
 				fakeConsulHandler = nil
+				handlerWriteLock.Unlock()
 				Eventually(runner, 3*retryInterval+1).Should(gbytes.Say("consul-down-mode.exited"))
 				var err error
 				Eventually(emitter.Wait()).Should(Receive(&err))
@@ -431,19 +429,7 @@ var _ = Describe("Route Emitter", func() {
 				retryInterval := 1
 				Eventually(runner, lockTTL+3*retryInterval+1).Should(gbytes.Say("consul-down-mode.started"))
 
-				type metricAndValue struct {
-					Name  string
-					Value int32
-				}
-
-				Eventually(func() metricAndValue {
-					envelope := <-testMetricsChan
-					if *envelope.EventType == events.Envelope_ValueMetric {
-						return metricAndValue{Name: *envelope.ValueMetric.Name, Value: int32(*envelope.ValueMetric.Value)}
-					}
-					return metricAndValue{}
-				}).Should(Equal(metricAndValue{Name: "ConsulDownMode", Value: 1}))
-
+				Eventually(testMetricsChan, 3*retryInterval+1).Should(Receive(matchMetricAndValue(metricAndValue{Name: "ConsulDownMode", Value: 1})))
 			})
 
 			It("repeats the route message at the interval given by the router", func() {
@@ -605,4 +591,23 @@ func newRoutes(hosts []string, port uint32, routeServiceUrl string) *models.Rout
 	}
 
 	return &routes
+}
+
+type metricAndValue struct {
+	Name  string
+	Value int32
+}
+
+func matchMetricAndValue(target metricAndValue) types.GomegaMatcher {
+	return SatisfyAll(
+		WithTransform(func(source *events.Envelope) events.Envelope_EventType {
+			return *source.EventType
+		}, Equal(events.Envelope_ValueMetric)),
+		WithTransform(func(source *events.Envelope) string {
+			return *source.ValueMetric.Name
+		}, Equal(target.Name)),
+		WithTransform(func(source *events.Envelope) int32 {
+			return int32(*source.ValueMetric.Value)
+		}, Equal(target.Value)),
+	)
 }
