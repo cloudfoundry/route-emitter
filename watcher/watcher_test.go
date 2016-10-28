@@ -1215,6 +1215,10 @@ var _ = Describe("Watcher", func() {
 		It("does not exit", func() {
 			Consistently(process.Wait()).ShouldNot(Receive())
 		})
+
+		It("closes any unused connections", func() {
+			Eventually(eventSource.CloseCallCount, 2*time.Second).Should(Equal(1))
+		})
 	})
 
 	Describe("interrupting the process", func() {

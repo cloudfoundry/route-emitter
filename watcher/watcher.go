@@ -116,6 +116,11 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 					event, err = es.Next()
 					if err != nil {
 						watcher.logger.Error("failed-getting-next-event", err)
+						watcher.logger.Debug("closing-event-source-on-error")
+						closeErr := es.Close()
+						if closeErr != nil {
+							watcher.logger.Error("failed-closing-event-source", closeErr)
+						}
 						// wait a bit before retrying
 						time.Sleep(time.Second)
 						break
