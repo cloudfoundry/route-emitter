@@ -44,13 +44,9 @@ func (MessagesToEmitBuilder) UnfreshRegistrations(existingEntry *RoutableEndpoin
 
 func (MessagesToEmitBuilder) MergedRegistrations(existingEntry, newEntry *RoutableEndpoints, domains models.DomainSet) MessagesToEmit {
 	messagesToEmit := MessagesToEmit{}
-	if len(newEntry.Routes) == 0 {
-		//no hostnames, so nothing could possibly be registered
-		return messagesToEmit
-	}
 
-	routeList := newEntry.Routes
 	for _, endpoint := range newEntry.Endpoints {
+		routeList := newEntry.Routes
 		if domains != nil && !domains.Contains(endpoint.Domain) {
 			// Not Fresh
 			for _, route := range existingEntry.Routes {
@@ -66,6 +62,12 @@ func (MessagesToEmitBuilder) MergedRegistrations(existingEntry, newEntry *Routab
 			}
 		}
 		newEntry.Routes = routeList
+
+		if len(newEntry.Routes) == 0 {
+			//no hostnames, so nothing could possibly be registered
+			continue
+		}
+
 		createAndAddMessages(endpoint, routeList, &messagesToEmit.RegistrationMessages)
 	}
 	return messagesToEmit

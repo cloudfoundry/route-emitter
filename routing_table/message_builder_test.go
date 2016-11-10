@@ -184,6 +184,24 @@ var _ = Describe("MessagesToEmitBuilder", func() {
 						routing_table.Route{Hostname: hostname2},
 					))
 				})
+
+				Context("when the emitter only has the actual LRP state", func() {
+					BeforeEach(func() {
+						newEntry = &routing_table.RoutableEndpoints{
+							Endpoints: routing_table.EndpointsAsMap([]routing_table.Endpoint{endpoint1}),
+						}
+					})
+
+					It("emits the registration", func() {
+						expected := routing_table.MessagesToEmit{
+							RegistrationMessages: []routing_table.RegistryMessage{
+								routing_table.RegistryMessageFor(endpoint1, routing_table.Route{Hostname: hostname1}),
+								routing_table.RegistryMessageFor(endpoint1, routing_table.Route{Hostname: hostname2}),
+							},
+						}
+						Expect(messages).To(MatchMessagesToEmit(expected))
+					})
+				})
 			})
 
 			Context("when reemitting change to previous endpoints", func() {

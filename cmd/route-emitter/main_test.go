@@ -157,6 +157,34 @@ var _ = Describe("Route Emitter", func() {
 					Expect(err).NotTo(HaveOccurred())
 				})
 
+				Context("when etcd loses its data", func() {
+					var msg1 routing_table.RegistryMessage
+					var msg2 routing_table.RegistryMessage
+					var msg3 routing_table.RegistryMessage
+					var msg4 routing_table.RegistryMessage
+
+					BeforeEach(func() {
+						// ensure it's seen the route at least once
+						Eventually(registeredRoutes).Should(Receive(&msg1))
+						Eventually(registeredRoutes).Should(Receive(&msg2))
+
+						etcdRunner.Reset()
+
+						// Only start actual LRP, do not repopulate Desired
+						err := bbsClient.StartActualLRP(logger, &lrpKey, &instanceKey, &netInfo)
+						Expect(err).NotTo(HaveOccurred())
+					})
+
+					It("continues to broadcast routes", func() {
+						Eventually(registeredRoutes, 5).Should(Receive(&msg3))
+						Eventually(registeredRoutes, 5).Should(Receive(&msg4))
+						Expect([]routing_table.RegistryMessage{msg3, msg4}).To(ConsistOf(
+							MatchRegistryMessage(msg1),
+							MatchRegistryMessage(msg2),
+						))
+					})
+				})
+
 				It("emits its routes immediately", func() {
 					var msg1, msg2 routing_table.RegistryMessage
 					Eventually(registeredRoutes).Should(Receive(&msg1))
