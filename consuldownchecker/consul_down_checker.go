@@ -43,7 +43,6 @@ func (c *ConsulDownChecker) Run(signals <-chan os.Signal, ready chan<- struct{})
 			logger.Info("received-signal")
 			return nil
 		case <-retryTimer.C():
-			retryTimer.Stop()
 			leaderCheckCounter++
 			hasLeader, err := c.checkForLeader(logger)
 			if err != nil {
