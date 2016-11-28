@@ -446,7 +446,7 @@ var _ = Describe("Route Emitter", func() {
 				handlerWriteLock.Lock()
 				fakeConsulHandler = nil
 				handlerWriteLock.Unlock()
-				Eventually(runner, 3*retryInterval+1).Should(gbytes.Say("consul-down-mode.exited"))
+				Eventually(runner, 6*retryInterval+1).Should(gbytes.Say("consul-down-mode.exited"))
 				var err error
 				Eventually(emitter.Wait()).Should(Receive(&err))
 				Expect(err).NotTo(HaveOccurred())
