@@ -217,6 +217,7 @@ func startBBS() {
 	bbsRunning = true
 }
 
-var _ = AfterSuite(func() {
+var _ = SynchronizedAfterSuite(func() {
+}, func() {
 	gexec.CleanupBuildArtifacts()
 })
