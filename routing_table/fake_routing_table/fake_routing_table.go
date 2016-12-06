@@ -12,7 +12,7 @@ type FakeRoutingTable struct {
 	RouteCountStub        func() int
 	routeCountMutex       sync.RWMutex
 	routeCountArgsForCall []struct{}
-	routeCountReturns struct {
+	routeCountReturns     struct {
 		result1 int
 	}
 	SwapStub        func(newTable routing_table.RoutingTable, domains models.DomainSet) routing_table.MessagesToEmit
@@ -73,7 +73,7 @@ type FakeRoutingTable struct {
 	MessagesToEmitStub        func() routing_table.MessagesToEmit
 	messagesToEmitMutex       sync.RWMutex
 	messagesToEmitArgsForCall []struct{}
-	messagesToEmitReturns struct {
+	messagesToEmitReturns     struct {
 		result1 routing_table.MessagesToEmit
 	}
 }

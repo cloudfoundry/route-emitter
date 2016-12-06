@@ -86,8 +86,7 @@ func (table *routingTable) EndpointsForIndex(key RoutingKey, index int32) []Endp
 	endpointsForIndex := make([]Endpoint, 0, 2)
 	endpointsForKey := table.entries[key].Endpoints
 
-	for i := range endpointsForKey {
-		endpoint := endpointsForKey[i]
+	for _, endpoint := range endpointsForKey {
 		if endpoint.Index == index {
 			endpointsForIndex = append(endpointsForIndex, endpoint)
 		}

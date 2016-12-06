@@ -943,6 +943,218 @@ var _ = Describe("Watcher", func() {
 				})
 			})
 
+			Context("when the LRP is evacuating", func() {
+				var (
+					lrpKey              models.ActualLRPKey
+					lrpNetInfo          models.ActualLRPNetInfo
+					oldActualLRPGroup   *models.ActualLRPGroup
+					evacuatingEndpoint1 routing_table.Endpoint
+					evacuatingEndpoint2 routing_table.Endpoint
+				)
+
+				BeforeEach(func() {
+					lrpKey = models.NewActualLRPKey(expectedProcessGuid, expectedIndex, "domain")
+
+					lrpNetInfo = models.NewActualLRPNetInfo(
+						expectedHost,
+						models.NewPortMapping(expectedExternalPort, expectedContainerPort),
+						models.NewPortMapping(expectedAdditionalExternalPort, expectedAdditionalContainerPort),
+					)
+
+					oldLRP := &models.ActualLRP{
+						ActualLRPKey:         lrpKey,
+						ActualLRPInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGuid, "cell-id"),
+						ActualLRPNetInfo:     lrpNetInfo,
+						State:                models.ActualLRPStateClaimed,
+					}
+
+					oldActualLRPGroup = &models.ActualLRPGroup{
+						Instance: oldLRP,
+					}
+
+					evacuatingEndpoint1 = routing_table.Endpoint{
+						InstanceGuid:  expectedInstanceGuid,
+						Index:         expectedIndex,
+						Host:          expectedHost,
+						Domain:        expectedDomain,
+						Port:          expectedExternalPort,
+						ContainerPort: expectedContainerPort,
+						Evacuating:    true,
+					}
+					evacuatingEndpoint2 = routing_table.Endpoint{
+						InstanceGuid:  expectedInstanceGuid,
+						Index:         expectedIndex,
+						Host:          expectedHost,
+						Domain:        expectedDomain,
+						Port:          expectedAdditionalExternalPort,
+						ContainerPort: expectedAdditionalContainerPort,
+						Evacuating:    true,
+					}
+
+					evacuatingLRP := &models.ActualLRP{
+						ActualLRPKey:         lrpKey,
+						ActualLRPInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGuid, "cell-id"),
+						ActualLRPNetInfo:     lrpNetInfo,
+						State:                models.ActualLRPStateRunning,
+					}
+					evacuatingLRPGroup := &models.ActualLRPGroup{
+						Evacuating: evacuatingLRP,
+					}
+
+					table.EndpointsForIndexStub = func(key routing_table.RoutingKey, index int32) []routing_table.Endpoint {
+						if key == expectedRoutingKey {
+							return []routing_table.Endpoint{evacuatingEndpoint1}
+						} else if key == expectedAdditionalRoutingKey {
+							return []routing_table.Endpoint{evacuatingEndpoint2}
+						} else {
+							return []routing_table.Endpoint{}
+						}
+						return nil
+					}
+					nextEvent.Store(EventHolder{models.NewActualLRPCreatedEvent(evacuatingLRPGroup)})
+				})
+
+				It("adds the evacuating endpoints", func() {
+					Eventually(table.AddEndpointCallCount).Should(Equal(2))
+
+					// Verify the arguments that were passed to AddEndpoint independent of which call was made first.
+					type endpointArgs struct {
+						key      routing_table.RoutingKey
+						endpoint routing_table.Endpoint
+					}
+					args := make([]endpointArgs, 2)
+					key, endpoint := table.AddEndpointArgsForCall(0)
+					args[0] = endpointArgs{key, endpoint}
+					key, endpoint = table.AddEndpointArgsForCall(1)
+					args[1] = endpointArgs{key, endpoint}
+
+					Expect(args).To(ConsistOf([]endpointArgs{
+						endpointArgs{expectedRoutingKey, evacuatingEndpoint1},
+						endpointArgs{expectedAdditionalRoutingKey, evacuatingEndpoint2},
+					}))
+
+					Expect(table.RemoveEndpointCallCount()).To(BeZero())
+				})
+
+				Context("when a new claimed LRP is introduced", func() {
+					BeforeEach(func() {
+						olderLRP := &models.ActualLRP{
+							ActualLRPKey:         lrpKey,
+							ActualLRPInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGuid, "cell-id"),
+							ActualLRPNetInfo:     lrpNetInfo,
+							State:                models.ActualLRPStateUnclaimed,
+						}
+
+						olderActualLRPGroup := &models.ActualLRPGroup{
+							Instance: olderLRP,
+						}
+
+						nextEvent.Store(EventHolder{models.NewActualLRPChangedEvent(olderActualLRPGroup, oldActualLRPGroup)})
+					})
+
+					It("does not remove any evacuating endpoints", func() {
+						// If this fails, DO NOT treat it as a flake; RemoveEndpoint should
+						// not be called in this context.
+						Consistently(table.RemoveEndpointCallCount).Should(BeZero())
+					})
+				})
+
+				Context("when a new running LRP is introduced", func() {
+					BeforeEach(func() {
+						newLRP := &models.ActualLRP{
+							ActualLRPKey:         lrpKey,
+							ActualLRPInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGuid, "cell-id"),
+							ActualLRPNetInfo:     lrpNetInfo,
+							State:                models.ActualLRPStateRunning,
+						}
+
+						newActualLRPGroup := &models.ActualLRPGroup{
+							Instance: newLRP,
+						}
+
+						nextEvent.Store(EventHolder{models.NewActualLRPChangedEvent(oldActualLRPGroup, newActualLRPGroup)})
+					})
+
+					It("should register the new instance's route and unregister the old instance's route", func() {
+						Eventually(table.AddEndpointCallCount).Should(Equal(2))
+						Eventually(table.RemoveEndpointCallCount).Should(Equal(2))
+
+						// Verify the arguments that were passed to AddEndpoint independent of which call was made first.
+						type endpointArgs struct {
+							key      routing_table.RoutingKey
+							endpoint routing_table.Endpoint
+						}
+						args := make([]endpointArgs, 2)
+						key, endpoint := table.AddEndpointArgsForCall(0)
+						args[0] = endpointArgs{key, endpoint}
+						key, endpoint = table.AddEndpointArgsForCall(1)
+						args[1] = endpointArgs{key, endpoint}
+
+						Expect(args).To(ConsistOf([]endpointArgs{
+							endpointArgs{expectedRoutingKey, routing_table.Endpoint{
+								InstanceGuid:  expectedInstanceGuid,
+								Index:         expectedIndex,
+								Host:          expectedHost,
+								Domain:        expectedDomain,
+								Port:          expectedExternalPort,
+								ContainerPort: expectedContainerPort,
+							}},
+							endpointArgs{expectedAdditionalRoutingKey, routing_table.Endpoint{
+								InstanceGuid:  expectedInstanceGuid,
+								Index:         expectedIndex,
+								Host:          expectedHost,
+								Domain:        expectedDomain,
+								Port:          expectedAdditionalExternalPort,
+								ContainerPort: expectedAdditionalContainerPort,
+							}},
+						}))
+
+						args = make([]endpointArgs, 2)
+						key, endpoint = table.RemoveEndpointArgsForCall(0)
+						args[0] = endpointArgs{key, endpoint}
+						key, endpoint = table.RemoveEndpointArgsForCall(1)
+						args[1] = endpointArgs{key, endpoint}
+
+						Expect(args).To(ConsistOf([]endpointArgs{
+							endpointArgs{expectedRoutingKey, evacuatingEndpoint1},
+							endpointArgs{expectedAdditionalRoutingKey, evacuatingEndpoint2},
+						}))
+
+						Expect(table.EndpointsForIndexCallCount()).To(Equal(2))
+						key1, index1 := table.EndpointsForIndexArgsForCall(0)
+						key2, index2 := table.EndpointsForIndexArgsForCall(1)
+						keys := []routing_table.RoutingKey{key1, key2}
+						indices := []int{int(index1), int(index2)}
+
+						Expect(keys).To(ConsistOf([]routing_table.RoutingKey{
+							expectedRoutingKey,
+							expectedAdditionalRoutingKey,
+						}))
+						Expect(indices).To(Equal([]int{expectedIndex, expectedIndex}))
+					})
+
+					Context("when there is no evacuating endpoint", func() {
+						BeforeEach(func() {
+							newEndpoint := routing_table.Endpoint{
+								InstanceGuid:  expectedInstanceGuid,
+								Index:         expectedIndex,
+								Host:          expectedHost,
+								Domain:        expectedDomain,
+								Port:          expectedExternalPort,
+								ContainerPort: expectedContainerPort,
+							}
+							table.EndpointsForIndexReturns([]routing_table.Endpoint{newEndpoint})
+						})
+
+						It("does not delete any endpoint", func() {
+							// If this fails, DO NOT treat it as a flake; RemoveEndpoint should
+							// not be called in this context.
+							Consistently(table.RemoveEndpointCallCount).Should(BeZero())
+						})
+					})
+				})
+			})
+
 			Context("when the resulting LRP transitions away from the RUNNING state", func() {
 				JustBeforeEach(func() {
 					table.RemoveEndpointReturns(dummyMessagesToEmit)

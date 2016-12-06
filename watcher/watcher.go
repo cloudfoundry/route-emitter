@@ -484,6 +484,7 @@ func (watcher *Watcher) handleActualUpdate(logger lager.Logger, before, after *r
 	switch {
 	case after.ActualLRP.State == models.ActualLRPStateRunning:
 		watcher.addAndEmit(logger, after)
+		watcher.removeAnyEvacuatingAndEmit(logger, after)
 	case after.ActualLRP.State != models.ActualLRPStateRunning && before.ActualLRP.State == models.ActualLRPStateRunning:
 		watcher.removeAndEmit(logger, before)
 	}
@@ -499,6 +500,26 @@ func (watcher *Watcher) handleActualDelete(logger lager.Logger, actualLRPInfo *r
 	}
 }
 
+func (watcher *Watcher) removeAnyEvacuatingAndEmit(logger lager.Logger, actualLRPInfo *routing_table.ActualLRPRoutingInfo) {
+	logger.Info("watcher-remove-any-evacuating-and-emit", lager.Data{"net_info": actualLRPInfo.ActualLRP.ActualLRPNetInfo})
+	endpoints, err := routing_table.EndpointsFromActual(actualLRPInfo)
+	if err != nil {
+		logger.Error("failed-to-extract-endpoint-from-actual", err)
+		return
+	}
+
+	for _, endpoint := range endpoints {
+		key := routing_table.RoutingKey{ProcessGuid: actualLRPInfo.ActualLRP.ProcessGuid, ContainerPort: uint32(endpoint.ContainerPort)}
+		currentEndpoints := watcher.table.EndpointsForIndex(key, actualLRPInfo.ActualLRP.Index)
+		for _, e := range currentEndpoints {
+			if e.Evacuating && e != endpoint {
+				messagesToEmit := watcher.table.RemoveEndpoint(key, e)
+				watcher.emitMessages(logger, messagesToEmit)
+			}
+		}
+	}
+}
+
 func (watcher *Watcher) addAndEmit(logger lager.Logger, actualLRPInfo *routing_table.ActualLRPRoutingInfo) {
 	logger.Info("watcher-add-and-emit", lager.Data{"net_info": actualLRPInfo.ActualLRP.ActualLRPNetInfo})
 	endpoints, err := routing_table.EndpointsFromActual(actualLRPInfo)
@@ -509,7 +530,6 @@ func (watcher *Watcher) addAndEmit(logger lager.Logger, actualLRPInfo *routing_t
 
 	for _, endpoint := range endpoints {
 		key := routing_table.RoutingKey{ProcessGuid: actualLRPInfo.ActualLRP.ProcessGuid, ContainerPort: uint32(endpoint.ContainerPort)}
-
 		messagesToEmit := watcher.table.AddEndpoint(key, endpoint)
 		watcher.emitMessages(logger, messagesToEmit)
 	}
