@@ -16,7 +16,6 @@ import (
 	"code.cloudfoundry.org/route-emitter/diegonats"
 	"code.cloudfoundry.org/route-emitter/diegonats/gnatsdrunner"
 	"github.com/cloudfoundry/sonde-go/events"
-	"github.com/cloudfoundry/storeadapter/storerunner/etcdstorerunner"
 	"github.com/gogo/protobuf/proto"
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/config"
@@ -36,7 +35,6 @@ const heartbeatInterval = 1 * time.Second
 
 var (
 	emitterPath   string
-	etcdPort      int
 	natsPort      int
 	dropsondePort int
 
@@ -46,7 +44,6 @@ var (
 	bbsRunner  *ginkgomon.Runner
 	bbsProcess ifrit.Process
 
-	etcdRunner           *etcdstorerunner.ETCDClusterRunner
 	consulRunner         *consulrunner.ClusterRunner
 	gnatsdRunner         ifrit.Process
 	natsClient           diegonats.NATSClient
@@ -59,6 +56,7 @@ var (
 
 	sqlProcess ifrit.Process
 	sqlRunner  sqlrunner.SQLRunner
+	bbsRunning = false
 )
 
 func TestRouteEmitter(t *testing.T) {
@@ -109,18 +107,12 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 	err := json.Unmarshal(payload, &binaries)
 	Expect(err).NotTo(HaveOccurred())
 
-	etcdPort = 5001 + GinkgoParallelNode()
 	natsPort = 4001 + GinkgoParallelNode()
-
-	etcdRunner = etcdstorerunner.NewETCDClusterRunner(etcdPort, 1, nil)
 
 	emitterPath = string(binaries["emitter"])
 
-	if test_helpers.UseSQL() {
-		dbName := fmt.Sprintf("diego_%d", GinkgoParallelNode())
-		sqlRunner = test_helpers.NewSQLRunner(dbName)
-		sqlProcess = ginkgomon.Invoke(sqlRunner)
-	}
+	dbName := fmt.Sprintf("diego_%d", GinkgoParallelNode())
+	sqlRunner = test_helpers.NewSQLRunner(dbName)
 
 	consulRunner = consulrunner.NewClusterRunner(
 		9001+config.GinkgoConfig.ParallelNode*consulrunner.PortOffsetLength,
@@ -146,31 +138,27 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 	bbsClient = bbs.NewClient(bbsURL.String())
 
 	bbsArgs = bbstestrunner.Args{
-		Address:           bbsAddress,
-		AdvertiseURL:      bbsURL.String(),
-		AuctioneerAddress: "some-address",
-		EtcdCluster:       strings.Join(etcdRunner.NodeURLS(), ","),
-		ConsulCluster:     consulRunner.ConsulCluster(),
-		HealthAddress:     healthAddress,
+		Address:                  bbsAddress,
+		AdvertiseURL:             bbsURL.String(),
+		AuctioneerAddress:        "some-address",
+		DatabaseDriver:           sqlRunner.DriverName(),
+		DatabaseConnectionString: sqlRunner.ConnectionString(),
+		ConsulCluster:            consulRunner.ConsulCluster(),
+		HealthAddress:            healthAddress,
 
 		EncryptionKeys: []string{"label:key"},
 		ActiveKeyLabel: "label",
 	}
-
-	if test_helpers.UseSQL() {
-		bbsArgs.DatabaseDriver = sqlRunner.DriverName()
-		bbsArgs.DatabaseConnectionString = sqlRunner.ConnectionString()
-	}
 })
 
 var _ = BeforeEach(func() {
-	etcdRunner.Start()
 	consulRunner.Start()
 	consulRunner.WaitUntilReady()
 	consulClusterAddress = consulRunner.ConsulCluster()
 
-	bbsRunner = bbstestrunner.New(bbsPath, bbsArgs)
-	bbsProcess = ginkgomon.Invoke(bbsRunner)
+	sqlProcess = ginkgomon.Invoke(sqlRunner)
+
+	startBBS()
 
 	gnatsdRunner, natsClient = gnatsdrunner.StartGnatsd(natsPort)
 
@@ -199,8 +187,7 @@ var _ = BeforeEach(func() {
 })
 
 var _ = AfterEach(func() {
-	ginkgomon.Kill(bbsProcess)
-	etcdRunner.Stop()
+	stopBBS()
 	consulRunner.Stop()
 	gnatsdRunner.Signal(os.Interrupt)
 	Eventually(gnatsdRunner.Wait(), 5).Should(Receive())
@@ -208,17 +195,28 @@ var _ = AfterEach(func() {
 	testMetricsListener.Close()
 	Eventually(testMetricsChan).Should(BeClosed())
 
-	if test_helpers.UseSQL() {
-		sqlRunner.Reset()
-	}
+	ginkgomon.Kill(sqlProcess)
 })
 
-var _ = SynchronizedAfterSuite(func() {
-	ginkgomon.Kill(sqlProcess)
-
-	if etcdRunner != nil {
-		etcdRunner.Stop()
+func stopBBS() {
+	if !bbsRunning {
+		return
 	}
-}, func() {
+
+	bbsRunning = false
+	ginkgomon.Interrupt(bbsProcess)
+}
+
+func startBBS() {
+	if bbsRunning {
+		return
+	}
+
+	bbsRunner = bbstestrunner.New(bbsPath, bbsArgs)
+	bbsProcess = ginkgomon.Invoke(bbsRunner)
+	bbsRunning = true
+}
+
+var _ = AfterSuite(func() {
 	gexec.CleanupBuildArtifacts()
 })

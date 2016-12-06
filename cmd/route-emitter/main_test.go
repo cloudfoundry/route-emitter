@@ -157,7 +157,7 @@ var _ = Describe("Route Emitter", func() {
 					Expect(err).NotTo(HaveOccurred())
 				})
 
-				Context("when etcd loses its data", func() {
+				Context("when backing store loses its data", func() {
 					var msg1 routing_table.RegistryMessage
 					var msg2 routing_table.RegistryMessage
 					var msg3 routing_table.RegistryMessage
@@ -168,7 +168,7 @@ var _ = Describe("Route Emitter", func() {
 						Eventually(registeredRoutes).Should(Receive(&msg1))
 						Eventually(registeredRoutes).Should(Receive(&msg2))
 
-						etcdRunner.Reset()
+						sqlRunner.Reset()
 
 						// Only start actual LRP, do not repopulate Desired
 						err := bbsClient.StartActualLRP(logger, &lrpKey, &instanceKey, &netInfo)
@@ -295,7 +295,7 @@ var _ = Describe("Route Emitter", func() {
 					Expect(t2.Sub(t1)).To(BeNumerically("~", 2*syncInterval, 500*time.Millisecond))
 				})
 
-				Context("when etcd goes away", func() {
+				Context("when backing store goes away", func() {
 					var msg1 routing_table.RegistryMessage
 					var msg2 routing_table.RegistryMessage
 					var msg3 routing_table.RegistryMessage
@@ -306,7 +306,7 @@ var _ = Describe("Route Emitter", func() {
 						Eventually(registeredRoutes).Should(Receive(&msg1))
 						Eventually(registeredRoutes).Should(Receive(&msg2))
 
-						etcdRunner.Stop()
+						stopBBS()
 					})
 
 					It("continues to broadcast routes", func() {
@@ -358,9 +358,9 @@ var _ = Describe("Route Emitter", func() {
 			})
 		})
 
-		Context("and etcd goes away", func() {
+		Context("and backing store goes away", func() {
 			BeforeEach(func() {
-				etcdRunner.Stop()
+				stopBBS()
 			})
 
 			It("does not explode", func() {

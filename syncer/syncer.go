@@ -87,7 +87,7 @@ GREET_LOOP:
 
 	s.sync()
 
-	//now keep emitting at the desired interval, syncing with etcd every syncInterval
+	// now keep emitting at the desired interval, syncing every syncInterval
 	syncTicker := s.clock.NewTicker(s.syncInterval)
 	routerTicker := s.clock.NewTicker(routerPruneInterval)
 

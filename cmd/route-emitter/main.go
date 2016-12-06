@@ -82,7 +82,7 @@ var natsPassword = flag.String(
 var syncInterval = flag.Duration(
 	"syncInterval",
 	time.Minute,
-	"the interval between syncs of the routing table from etcd",
+	"the interval between syncs of the routing table",
 )
 
 var consulDownModeNotificationInterval = flag.Duration(
