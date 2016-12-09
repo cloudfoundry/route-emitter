@@ -37,6 +37,12 @@ var bbsAddress = flag.String(
 	"Address of the BBS API Server",
 )
 
+var cellID = flag.String(
+	"cellID",
+	"",
+	"If set filter the event stream for events related to the given cell id",
+)
+
 var sessionName = flag.String(
 	"sessionName",
 	"route-emitter",
@@ -167,7 +173,7 @@ func main() {
 	table := initializeRoutingTable(logger)
 	emitter := initializeNatsEmitter(natsClient, logger)
 	watcher := ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
-		return watcher.NewWatcher(initializeBBSClient(logger), clock, table, emitter, syncer.Events(), logger).Run(signals, ready)
+		return watcher.NewWatcher(*cellID, initializeBBSClient(logger), clock, table, emitter, syncer.Events(), logger).Run(signals, ready)
 	})
 
 	syncRunner := ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
@@ -179,13 +185,19 @@ func main() {
 	lockMaintainer := initializeLockMaintainer(logger, consulClient, *sessionName, *lockTTL, *lockRetryInterval, clock)
 	consulDownModeNotifier := consuldownmodenotifier.NewConsulDownModeNotifier(logger, 0, clock, *consulDownModeNotificationInterval)
 
-	members := grouper.Members{
-		{"lock-maintainer", lockMaintainer},
-		{"consul-down-mode-notifier", consulDownModeNotifier},
-		{"nats-client", natsClientRunner},
-		{"watcher", watcher},
-		{"syncer", syncRunner},
+	members := grouper.Members{}
+
+	if *cellID == "" {
+		// we are running in local mode
+		members = append(members, grouper.Member{"lock-maintainer", lockMaintainer})
 	}
+
+	members = append(members,
+		grouper.Member{"consul-down-mode-notifier", consulDownModeNotifier},
+		grouper.Member{"nats-client", natsClientRunner},
+		grouper.Member{"watcher", watcher},
+		grouper.Member{"syncer", syncRunner},
+	)
 
 	if dbgAddr := debugserver.DebugAddress(flag.CommandLine); dbgAddr != "" {
 		members = append(grouper.Members{

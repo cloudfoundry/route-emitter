@@ -65,19 +65,23 @@ func TestRouteEmitter(t *testing.T) {
 	RunSpecs(t, "Route Emitter Suite")
 }
 
-func createEmitterRunner(sessionName string) *ginkgomon.Runner {
+func createEmitterRunner(sessionName string, extraArgs ...string) *ginkgomon.Runner {
+	args := []string{"-sessionName", sessionName,
+		"-dropsondePort", strconv.Itoa(dropsondePort),
+		"-natsAddresses", fmt.Sprintf("127.0.0.1:%d", natsPort),
+		"-bbsAddress", bbsURL.String(),
+		"-communicationTimeout", "100ms",
+		"-syncInterval", syncInterval.String(),
+		"-lockRetryInterval", "1s",
+		"-lockTTL", "5s",
+		"-consulCluster", consulClusterAddress,
+	}
+	args = append(args, extraArgs...)
+
 	return ginkgomon.New(ginkgomon.Config{
 		Command: exec.Command(
 			string(emitterPath),
-			"-sessionName", sessionName,
-			"-dropsondePort", strconv.Itoa(dropsondePort),
-			"-natsAddresses", fmt.Sprintf("127.0.0.1:%d", natsPort),
-			"-bbsAddress", bbsURL.String(),
-			"-communicationTimeout", "100ms",
-			"-syncInterval", syncInterval.String(),
-			"-lockRetryInterval", "1s",
-			"-lockTTL", "5s",
-			"-consulCluster", consulClusterAddress,
+			args...,
 		),
 
 		StartCheck: "route-emitter.watcher.sync.complete",

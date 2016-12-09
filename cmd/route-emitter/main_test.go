@@ -330,7 +330,9 @@ var _ = Describe("Route Emitter", func() {
 			BeforeEach(func() {
 				secondRunner = createEmitterRunner("emitter2")
 				secondRunner.StartCheck = "lock.acquiring-lock"
+			})
 
+			JustBeforeEach(func() {
 				secondEmitter = ginkgomon.Invoke(secondRunner)
 			})
 
@@ -342,6 +344,17 @@ var _ = Describe("Route Emitter", func() {
 			Describe("the second emitter", func() {
 				It("does not become active", func() {
 					Consistently(secondRunner.Buffer, 5*time.Second).ShouldNot(gbytes.Say("emitter2.started"))
+				})
+
+				Context("runs in local mode", func() {
+					BeforeEach(func() {
+						secondRunner = createEmitterRunner("emitter2", "-cellID", "some-cell-id")
+						secondRunner.StartCheck = "emitter2.watcher.sync.complete"
+					})
+
+					It("becomes active and does not acquire the lock", func() {
+						Eventually(secondRunner.Buffer).Should(gbytes.Say("emitter2.started"))
+					})
 				})
 			})
 

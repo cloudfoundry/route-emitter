@@ -55,9 +55,11 @@ var _ = Describe("Watcher", func() {
 	var (
 		eventSource *eventfakes.FakeEventSource
 		bbsClient   *fake_bbs.FakeClient
-		table       *fake_routing_table.FakeRoutingTable
+		fakeTable   *fake_routing_table.FakeRoutingTable
+		table       routing_table.RoutingTable
 		emitter     *fake_nats_emitter.FakeNATSEmitter
 		syncEvents  syncer.Events
+		cellID      string
 
 		clock          *fakeclock.FakeClock
 		watcherProcess *watcher.Watcher
@@ -85,8 +87,10 @@ var _ = Describe("Watcher", func() {
 		bbsClient = new(fake_bbs.FakeClient)
 		bbsClient.SubscribeToEventsReturns(eventSource, nil)
 		bbsClient.DomainsReturns([]string{expectedDomain}, nil)
+		cellID = ""
 
-		table = &fake_routing_table.FakeRoutingTable{}
+		fakeTable = &fake_routing_table.FakeRoutingTable{}
+		table = fakeTable
 		emitter = &fake_nats_emitter.FakeNATSEmitter{}
 		syncEvents = syncer.Events{
 			Sync: make(chan struct{}),
@@ -102,8 +106,6 @@ var _ = Describe("Watcher", func() {
 		}
 
 		clock = fakeclock.NewFakeClock(time.Now())
-
-		watcherProcess = watcher.NewWatcher(bbsClient, clock, table, emitter, syncEvents, logger)
 
 		expectedRoutes = []string{"route-1", "route-2"}
 		expectedCFRoute = cfroutes.CFRoute{Hostnames: expectedRoutes, Port: expectedContainerPort, RouteServiceUrl: expectedRouteServiceUrl}
@@ -150,6 +152,16 @@ var _ = Describe("Watcher", func() {
 	})
 
 	JustBeforeEach(func() {
+		watcherProcess = watcher.NewWatcher(
+			cellID,
+			bbsClient,
+			clock,
+			table,
+			emitter,
+			syncEvents,
+			logger,
+		)
+
 		process = ifrit.Invoke(watcherProcess)
 	})
 
@@ -167,161 +179,41 @@ var _ = Describe("Watcher", func() {
 	})
 
 	Describe("Desired LRP changes", func() {
-		JustBeforeEach(func() {
-			syncEvents.Sync <- struct{}{}
-			Eventually(emitter.EmitCallCount).ShouldNot(Equal(0))
-		})
-
-		Context("when a create event occurs", func() {
-			var desiredLRP *models.DesiredLRP
-
-			BeforeEach(func() {
-				routes := cfroutes.CFRoutes{expectedCFRoute}.RoutingInfo()
-				desiredLRP = &models.DesiredLRP{
-					Action: models.WrapAction(&models.RunAction{
-						User: "me",
-						Path: "ls",
-					}),
-					Domain:      "tests",
-					ProcessGuid: expectedProcessGuid,
-					Ports:       []uint32{expectedContainerPort},
-					Routes:      &routes,
-					LogGuid:     logGuid,
-				}
-			})
-
+		behaveAsDesired := func() {
 			JustBeforeEach(func() {
-				table.SetRoutesReturns(dummyMessagesToEmit)
-
-				nextEvent.Store(EventHolder{models.NewDesiredLRPCreatedEvent(desiredLRP)})
+				syncEvents.Sync <- struct{}{}
+				Eventually(emitter.EmitCallCount).ShouldNot(Equal(0))
 			})
 
-			It("should set the routes on the table", func() {
-				Eventually(table.SetRoutesCallCount).Should(Equal(1))
-
-				key, routes, _ := table.SetRoutesArgsForCall(0)
-				Expect(key).To(Equal(expectedRoutingKey))
-				Expect(routes).To(ConsistOf(
-					routing_table.Route{
-						Hostname:        expectedRoutes[0],
-						LogGuid:         logGuid,
-						RouteServiceUrl: expectedRouteServiceUrl,
-					},
-					routing_table.Route{
-						Hostname:        expectedRoutes[1],
-						LogGuid:         logGuid,
-						RouteServiceUrl: expectedRouteServiceUrl,
-					},
-				))
-			})
-
-			It("sends a 'routes registered' metric", func() {
-				Eventually(func() uint64 {
-					return fakeMetricSender.GetCounter("RoutesRegistered")
-				}).Should(BeEquivalentTo(2))
-			})
-
-			It("sends a 'routes unregistered' metric", func() {
-				Eventually(func() uint64 {
-					return fakeMetricSender.GetCounter("RoutesUnregistered")
-				}).Should(BeEquivalentTo(0))
-			})
-
-			It("should emit whatever the table tells it to emit", func() {
-				Eventually(emitter.EmitCallCount).Should(Equal(2))
-				messagesToEmit := emitter.EmitArgsForCall(1)
-				Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
-			})
-
-			Context("when there are diego ssh-keys on the route", func() {
-				var (
-					foundRoutes bool
-				)
+			Context("when a create event occurs", func() {
+				var desiredLRP *models.DesiredLRP
 
 				BeforeEach(func() {
-					diegoSSHInfo := json.RawMessage([]byte(`{"ssh-key": "ssh-value"}`))
-
 					routes := cfroutes.CFRoutes{expectedCFRoute}.RoutingInfo()
-					routes["diego-ssh"] = &diegoSSHInfo
-
-					desiredLRP.Routes = &routes
+					desiredLRP = &models.DesiredLRP{
+						Action: models.WrapAction(&models.RunAction{
+							User: "me",
+							Path: "ls",
+						}),
+						Domain:      "tests",
+						ProcessGuid: expectedProcessGuid,
+						Ports:       []uint32{expectedContainerPort},
+						Routes:      &routes,
+						LogGuid:     logGuid,
+					}
 				})
 
-				It("does not log them", func() {
-					Eventually(table.SetRoutesCallCount).Should(Equal(1))
-					logs := logger.Logs()
+				JustBeforeEach(func() {
+					fakeTable.SetRoutesReturns(dummyMessagesToEmit)
 
-					for _, log := range logs {
-						if log.Data["routes"] != nil {
-							Expect(log.Data["routes"]).ToNot(HaveKey("diego-ssh"))
-							Expect(log.Data["routes"]).To(HaveKey("cf-router"))
-							foundRoutes = true
-						}
-					}
-					if !foundRoutes {
-						Fail("Expected to find diego-ssh routes on desiredLRP")
-					}
-
-					Expect(len(*desiredLRP.Routes)).To(Equal(2))
+					nextEvent.Store(EventHolder{models.NewDesiredLRPCreatedEvent(desiredLRP)})
 				})
-			})
 
-			Context("when there is a route service binding to only one hostname for a route", func() {
-				BeforeEach(func() {
-					cfRoute1 := cfroutes.CFRoute{
-						Hostnames:       []string{"route-1"},
-						Port:            expectedContainerPort,
-						RouteServiceUrl: expectedRouteServiceUrl,
-					}
-					cfRoute2 := cfroutes.CFRoute{
-						Hostnames: []string{"route-2"},
-						Port:      expectedContainerPort,
-					}
-					routes := cfroutes.CFRoutes{cfRoute1, cfRoute2}.RoutingInfo()
-					desiredLRP.Routes = &routes
-				})
-				It("registers all of the routes on the table", func() {
-					Eventually(table.SetRoutesCallCount).Should(Equal(1))
+				It("should set the routes on the table", func() {
+					Eventually(fakeTable.SetRoutesCallCount).Should(Equal(1))
 
-					key, routes, _ := table.SetRoutesArgsForCall(0)
+					key, routes, _ := fakeTable.SetRoutesArgsForCall(0)
 					Expect(key).To(Equal(expectedRoutingKey))
-					Expect(routes).To(ConsistOf(
-						routing_table.Route{
-							Hostname:        "route-1",
-							LogGuid:         logGuid,
-							RouteServiceUrl: expectedRouteServiceUrl,
-						},
-						routing_table.Route{
-							Hostname: "route-2",
-							LogGuid:  logGuid,
-						},
-					))
-				})
-
-				It("emits whatever the table tells it to emit", func() {
-					Eventually(emitter.EmitCallCount).Should(Equal(2))
-
-					messagesToEmit := emitter.EmitArgsForCall(1)
-					Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
-				})
-			})
-
-			Context("when there are multiple CF routes", func() {
-				BeforeEach(func() {
-					routes := cfroutes.CFRoutes{expectedCFRoute, expectedAdditionalCFRoute}.RoutingInfo()
-					desiredLRP.Routes = &routes
-				})
-
-				It("registers all of the routes on the table", func() {
-					Eventually(table.SetRoutesCallCount).Should(Equal(2))
-
-					key1, routes1, _ := table.SetRoutesArgsForCall(0)
-					key2, routes2, _ := table.SetRoutesArgsForCall(1)
-					var routes = []routing_table.Route{}
-					routes = append(routes, routes1...)
-					routes = append(routes, routes2...)
-
-					Expect([]routing_table.RoutingKey{key1, key2}).To(ConsistOf(expectedRoutingKey, expectedAdditionalRoutingKey))
 					Expect(routes).To(ConsistOf(
 						routing_table.Route{
 							Hostname:        expectedRoutes[0],
@@ -333,384 +225,522 @@ var _ = Describe("Watcher", func() {
 							LogGuid:         logGuid,
 							RouteServiceUrl: expectedRouteServiceUrl,
 						},
-						routing_table.Route{
-							Hostname: expectedAdditionalRoutes[0],
-							LogGuid:  logGuid,
-						},
-						routing_table.Route{
-							Hostname: expectedAdditionalRoutes[1],
-							LogGuid:  logGuid,
-						},
 					))
 				})
 
-				It("emits whatever the table tells it to emit", func() {
-					Eventually(emitter.EmitCallCount).Should(Equal(3))
+				It("sends a 'routes registered' metric", func() {
+					Eventually(func() uint64 {
+						return fakeMetricSender.GetCounter("RoutesRegistered")
+					}).Should(BeEquivalentTo(2))
+				})
 
+				It("sends a 'routes unregistered' metric", func() {
+					Eventually(func() uint64 {
+						return fakeMetricSender.GetCounter("RoutesUnregistered")
+					}).Should(BeEquivalentTo(0))
+				})
+
+				It("should emit whatever the table tells it to emit", func() {
+					Eventually(emitter.EmitCallCount).Should(Equal(2))
 					messagesToEmit := emitter.EmitArgsForCall(1)
 					Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
-
-					messagesToEmit = emitter.EmitArgsForCall(2)
-					Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
-				})
-			})
-		})
-
-		Context("when a change event occurs", func() {
-			var originalDesiredLRP, changedDesiredLRP *models.DesiredLRP
-
-			BeforeEach(func() {
-				table.SetRoutesReturns(dummyMessagesToEmit)
-				routes := cfroutes.CFRoutes{{Hostnames: expectedRoutes, Port: expectedContainerPort}}.RoutingInfo()
-
-				originalDesiredLRP = &models.DesiredLRP{
-					Action: models.WrapAction(&models.RunAction{
-						User: "me",
-						Path: "ls",
-					}),
-					Domain:      "tests",
-					ProcessGuid: expectedProcessGuid,
-					LogGuid:     logGuid,
-					Routes:      &routes,
-					Instances:   3,
-				}
-				changedDesiredLRP = &models.DesiredLRP{
-					Action: models.WrapAction(&models.RunAction{
-						User: "me",
-						Path: "ls",
-					}),
-					Domain:          "tests",
-					ProcessGuid:     expectedProcessGuid,
-					LogGuid:         logGuid,
-					Routes:          &routes,
-					ModificationTag: &models.ModificationTag{Epoch: "abcd", Index: 1},
-					Instances:       3,
-				}
-			})
-
-			JustBeforeEach(func() {
-				nextEvent.Store(EventHolder{models.NewDesiredLRPChangedEvent(
-					originalDesiredLRP,
-					changedDesiredLRP,
-				)})
-			})
-
-			Context("when scaling down the number of LRP instances", func() {
-				BeforeEach(func() {
-					changedDesiredLRP.Instances = 1
-
-					table.EndpointsForIndexStub = func(key routing_table.RoutingKey, index int32) []routing_table.Endpoint {
-						endpoint := routing_table.Endpoint{
-							InstanceGuid:  fmt.Sprintf("instance-guid-%d", index),
-							Index:         index,
-							Host:          fmt.Sprintf("1.1.1.%d", index),
-							Domain:        "domain",
-							Port:          expectedExternalPort,
-							ContainerPort: expectedContainerPort,
-							Evacuating:    false,
-						}
-
-						return []routing_table.Endpoint{endpoint}
-					}
 				})
 
-				It("removes route endpoints for instances that are no longer desired", func() {
-					Eventually(table.RemoveEndpointCallCount).Should(Equal(2))
-				})
-			})
+				Context("when there are diego ssh-keys on the route", func() {
+					var (
+						foundRoutes bool
+					)
 
-			It("should set the routes on the table", func() {
-				Eventually(table.SetRoutesCallCount).Should(Equal(1))
-				key, routes, _ := table.SetRoutesArgsForCall(0)
-				Expect(key).To(Equal(expectedRoutingKey))
-				Expect(routes).To(ConsistOf(
-					routing_table.Route{
-						Hostname: expectedRoutes[0],
-						LogGuid:  logGuid,
-					},
-					routing_table.Route{
-						Hostname: expectedRoutes[1],
-						LogGuid:  logGuid,
-					},
-				))
-			})
+					BeforeEach(func() {
+						diegoSSHInfo := json.RawMessage([]byte(`{"ssh-key": "ssh-value"}`))
 
-			It("sends a 'routes registered' metric", func() {
-				Eventually(func() uint64 {
-					return fakeMetricSender.GetCounter("RoutesRegistered")
-				}).Should(BeEquivalentTo(2))
-			})
+						routes := cfroutes.CFRoutes{expectedCFRoute}.RoutingInfo()
+						routes["diego-ssh"] = &diegoSSHInfo
 
-			It("sends a 'routes unregistered' metric", func() {
-				Eventually(func() uint64 {
-					return fakeMetricSender.GetCounter("RoutesUnregistered")
-				}).Should(BeEquivalentTo(0))
-			})
+						desiredLRP.Routes = &routes
+					})
 
-			It("should emit whatever the table tells it to emit", func() {
-				Eventually(emitter.EmitCallCount).Should(Equal(2))
-				messagesToEmit := emitter.EmitArgsForCall(1)
-				Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
-			})
+					It("does not log them", func() {
+						Eventually(fakeTable.SetRoutesCallCount).Should(Equal(1))
+						logs := logger.Logs()
 
-			Context("when there are diego ssh-keys on the route", func() {
-				var foundRoutes bool
-
-				BeforeEach(func() {
-					diegoSSHInfo := json.RawMessage([]byte(`{"ssh-key": "ssh-value"}`))
-
-					routes := cfroutes.CFRoutes{expectedCFRoute}.RoutingInfo()
-					routes["diego-ssh"] = &diegoSSHInfo
-
-					changedDesiredLRP.Routes = &routes
-				})
-
-				It("does not log them", func() {
-					Eventually(table.SetRoutesCallCount).Should(Equal(1))
-					logs := logger.Logs()
-
-					for _, log := range logs {
-						if after, ok := log.Data["after"]; ok {
-							afterData := after.(map[string]interface{})
-
-							if afterData["routes"] != nil {
-								Expect(afterData["routes"]).ToNot(HaveKey("diego-ssh"))
-								Expect(afterData["routes"]).To(HaveKey("cf-router"))
+						for _, log := range logs {
+							if log.Data["routes"] != nil {
+								Expect(log.Data["routes"]).ToNot(HaveKey("diego-ssh"))
+								Expect(log.Data["routes"]).To(HaveKey("cf-router"))
 								foundRoutes = true
 							}
 						}
-					}
-					if !foundRoutes {
-						Fail("Expected to find diego-ssh routes on desiredLRP")
-					}
+						if !foundRoutes {
+							Fail("Expected to find diego-ssh routes on desiredLRP")
+						}
 
-					Expect(len(*changedDesiredLRP.Routes)).To(Equal(2))
+						Expect(len(*desiredLRP.Routes)).To(Equal(2))
+					})
+				})
+
+				Context("when there is a route service binding to only one hostname for a route", func() {
+					BeforeEach(func() {
+						cfRoute1 := cfroutes.CFRoute{
+							Hostnames:       []string{"route-1"},
+							Port:            expectedContainerPort,
+							RouteServiceUrl: expectedRouteServiceUrl,
+						}
+						cfRoute2 := cfroutes.CFRoute{
+							Hostnames: []string{"route-2"},
+							Port:      expectedContainerPort,
+						}
+						routes := cfroutes.CFRoutes{cfRoute1, cfRoute2}.RoutingInfo()
+						desiredLRP.Routes = &routes
+					})
+					It("registers all of the routes on the table", func() {
+						Eventually(fakeTable.SetRoutesCallCount).Should(Equal(1))
+
+						key, routes, _ := fakeTable.SetRoutesArgsForCall(0)
+						Expect(key).To(Equal(expectedRoutingKey))
+						Expect(routes).To(ConsistOf(
+							routing_table.Route{
+								Hostname:        "route-1",
+								LogGuid:         logGuid,
+								RouteServiceUrl: expectedRouteServiceUrl,
+							},
+							routing_table.Route{
+								Hostname: "route-2",
+								LogGuid:  logGuid,
+							},
+						))
+					})
+
+					It("emits whatever the table tells it to emit", func() {
+						Eventually(emitter.EmitCallCount).Should(Equal(2))
+
+						messagesToEmit := emitter.EmitArgsForCall(1)
+						Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
+					})
+				})
+
+				Context("when there are multiple CF routes", func() {
+					BeforeEach(func() {
+						routes := cfroutes.CFRoutes{expectedCFRoute, expectedAdditionalCFRoute}.RoutingInfo()
+						desiredLRP.Routes = &routes
+					})
+
+					It("registers all of the routes on the table", func() {
+						Eventually(fakeTable.SetRoutesCallCount).Should(Equal(2))
+
+						key1, routes1, _ := fakeTable.SetRoutesArgsForCall(0)
+						key2, routes2, _ := fakeTable.SetRoutesArgsForCall(1)
+						var routes = []routing_table.Route{}
+						routes = append(routes, routes1...)
+						routes = append(routes, routes2...)
+
+						Expect([]routing_table.RoutingKey{key1, key2}).To(ConsistOf(expectedRoutingKey, expectedAdditionalRoutingKey))
+						Expect(routes).To(ConsistOf(
+							routing_table.Route{
+								Hostname:        expectedRoutes[0],
+								LogGuid:         logGuid,
+								RouteServiceUrl: expectedRouteServiceUrl,
+							},
+							routing_table.Route{
+								Hostname:        expectedRoutes[1],
+								LogGuid:         logGuid,
+								RouteServiceUrl: expectedRouteServiceUrl,
+							},
+							routing_table.Route{
+								Hostname: expectedAdditionalRoutes[0],
+								LogGuid:  logGuid,
+							},
+							routing_table.Route{
+								Hostname: expectedAdditionalRoutes[1],
+								LogGuid:  logGuid,
+							},
+						))
+					})
+
+					It("emits whatever the table tells it to emit", func() {
+						Eventually(emitter.EmitCallCount).Should(Equal(3))
+
+						messagesToEmit := emitter.EmitArgsForCall(1)
+						Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
+
+						messagesToEmit = emitter.EmitArgsForCall(2)
+						Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
+					})
 				})
 			})
 
-			Context("when CF routes are added without an associated container port", func() {
+			Context("when a change event occurs", func() {
+				var originalDesiredLRP, changedDesiredLRP *models.DesiredLRP
+
 				BeforeEach(func() {
-					routes := cfroutes.CFRoutes{expectedCFRoute, expectedAdditionalCFRoute}.RoutingInfo()
-					changedDesiredLRP.Routes = &routes
+					fakeTable.SetRoutesReturns(dummyMessagesToEmit)
+					routes := cfroutes.CFRoutes{{Hostnames: expectedRoutes, Port: expectedContainerPort}}.RoutingInfo()
+
+					originalDesiredLRP = &models.DesiredLRP{
+						Action: models.WrapAction(&models.RunAction{
+							User: "me",
+							Path: "ls",
+						}),
+						Domain:      "tests",
+						ProcessGuid: expectedProcessGuid,
+						LogGuid:     logGuid,
+						Routes:      &routes,
+						Instances:   3,
+					}
+					changedDesiredLRP = &models.DesiredLRP{
+						Action: models.WrapAction(&models.RunAction{
+							User: "me",
+							Path: "ls",
+						}),
+						Domain:          "tests",
+						ProcessGuid:     expectedProcessGuid,
+						LogGuid:         logGuid,
+						Routes:          &routes,
+						ModificationTag: &models.ModificationTag{Epoch: "abcd", Index: 1},
+						Instances:       3,
+					}
 				})
 
-				It("registers all of the routes associated with a port on the table", func() {
-					Eventually(table.SetRoutesCallCount).Should(Equal(2))
+				JustBeforeEach(func() {
+					nextEvent.Store(EventHolder{models.NewDesiredLRPChangedEvent(
+						originalDesiredLRP,
+						changedDesiredLRP,
+					)})
+				})
 
-					key1, routes1, _ := table.SetRoutesArgsForCall(0)
-					key2, routes2, _ := table.SetRoutesArgsForCall(1)
-					var routes = []routing_table.Route{}
-					routes = append(routes, routes1...)
-					routes = append(routes, routes2...)
+				Context("when scaling down the number of LRP instances", func() {
+					BeforeEach(func() {
+						changedDesiredLRP.Instances = 1
 
-					Expect([]routing_table.RoutingKey{key1, key2}).To(ConsistOf(expectedRoutingKey, expectedAdditionalRoutingKey))
+						fakeTable.EndpointsForIndexStub = func(key routing_table.RoutingKey, index int32) []routing_table.Endpoint {
+							endpoint := routing_table.Endpoint{
+								InstanceGuid:  fmt.Sprintf("instance-guid-%d", index),
+								Index:         index,
+								Host:          fmt.Sprintf("1.1.1.%d", index),
+								Domain:        "domain",
+								Port:          expectedExternalPort,
+								ContainerPort: expectedContainerPort,
+								Evacuating:    false,
+							}
+
+							return []routing_table.Endpoint{endpoint}
+						}
+					})
+
+					It("removes route endpoints for instances that are no longer desired", func() {
+						Eventually(fakeTable.RemoveEndpointCallCount).Should(Equal(2))
+					})
+				})
+
+				It("should set the routes on the table", func() {
+					Eventually(fakeTable.SetRoutesCallCount).Should(Equal(1))
+					key, routes, _ := fakeTable.SetRoutesArgsForCall(0)
+					Expect(key).To(Equal(expectedRoutingKey))
 					Expect(routes).To(ConsistOf(
 						routing_table.Route{
-							Hostname:        expectedRoutes[0],
-							LogGuid:         logGuid,
-							RouteServiceUrl: expectedRouteServiceUrl,
-						},
-						routing_table.Route{
-							Hostname:        expectedRoutes[1],
-							LogGuid:         logGuid,
-							RouteServiceUrl: expectedRouteServiceUrl,
-						},
-						routing_table.Route{
-							Hostname: expectedAdditionalRoutes[0],
+							Hostname: expectedRoutes[0],
 							LogGuid:  logGuid,
 						},
 						routing_table.Route{
-							Hostname: expectedAdditionalRoutes[1],
+							Hostname: expectedRoutes[1],
 							LogGuid:  logGuid,
 						},
 					))
 				})
 
-				It("emits whatever the table tells it to emit", func() {
-					Eventually(emitter.EmitCallCount).Should(Equal(3))
-
-					messagesToEmit := emitter.EmitArgsForCall(2)
-					Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
-				})
-			})
-
-			Context("when CF routes and container ports are added", func() {
-				BeforeEach(func() {
-					routes := cfroutes.CFRoutes{expectedCFRoute, expectedAdditionalCFRoute}.RoutingInfo()
-					changedDesiredLRP.Routes = &routes
+				It("sends a 'routes registered' metric", func() {
+					Eventually(func() uint64 {
+						return fakeMetricSender.GetCounter("RoutesRegistered")
+					}).Should(BeEquivalentTo(2))
 				})
 
-				It("registers all of the routes on the table", func() {
-					Eventually(table.SetRoutesCallCount).Should(Equal(2))
-
-					key1, routes1, _ := table.SetRoutesArgsForCall(0)
-					key2, routes2, _ := table.SetRoutesArgsForCall(1)
-					var routes = []routing_table.Route{}
-					routes = append(routes, routes1...)
-					routes = append(routes, routes2...)
-
-					Expect([]routing_table.RoutingKey{key1, key2}).To(ConsistOf(expectedRoutingKey, expectedAdditionalRoutingKey))
-					Expect(routes).To(ConsistOf(
-						routing_table.Route{
-							Hostname:        expectedRoutes[0],
-							LogGuid:         logGuid,
-							RouteServiceUrl: expectedRouteServiceUrl,
-						},
-						routing_table.Route{
-							Hostname:        expectedRoutes[1],
-							LogGuid:         logGuid,
-							RouteServiceUrl: expectedRouteServiceUrl,
-						},
-						routing_table.Route{
-							Hostname: expectedAdditionalRoutes[0],
-							LogGuid:  logGuid,
-						},
-						routing_table.Route{
-							Hostname: expectedAdditionalRoutes[1],
-							LogGuid:  logGuid,
-						},
-					))
+				It("sends a 'routes unregistered' metric", func() {
+					Eventually(func() uint64 {
+						return fakeMetricSender.GetCounter("RoutesUnregistered")
+					}).Should(BeEquivalentTo(0))
 				})
 
-				It("emits whatever the table tells it to emit", func() {
-					Eventually(emitter.EmitCallCount).Should(Equal(3))
-
+				It("should emit whatever the table tells it to emit", func() {
+					Eventually(emitter.EmitCallCount).Should(Equal(2))
 					messagesToEmit := emitter.EmitArgsForCall(1)
 					Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
+				})
 
-					messagesToEmit = emitter.EmitArgsForCall(2)
-					Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
+				Context("when there are diego ssh-keys on the route", func() {
+					var foundRoutes bool
+
+					BeforeEach(func() {
+						diegoSSHInfo := json.RawMessage([]byte(`{"ssh-key": "ssh-value"}`))
+
+						routes := cfroutes.CFRoutes{expectedCFRoute}.RoutingInfo()
+						routes["diego-ssh"] = &diegoSSHInfo
+
+						changedDesiredLRP.Routes = &routes
+					})
+
+					It("does not log them", func() {
+						Eventually(fakeTable.SetRoutesCallCount).Should(Equal(1))
+						logs := logger.Logs()
+
+						for _, log := range logs {
+							if after, ok := log.Data["after"]; ok {
+								afterData := after.(map[string]interface{})
+
+								if afterData["routes"] != nil {
+									Expect(afterData["routes"]).ToNot(HaveKey("diego-ssh"))
+									Expect(afterData["routes"]).To(HaveKey("cf-router"))
+									foundRoutes = true
+								}
+							}
+						}
+						if !foundRoutes {
+							Fail("Expected to find diego-ssh routes on desiredLRP")
+						}
+
+						Expect(len(*changedDesiredLRP.Routes)).To(Equal(2))
+					})
+				})
+
+				Context("when CF routes are added without an associated container port", func() {
+					BeforeEach(func() {
+						routes := cfroutes.CFRoutes{expectedCFRoute, expectedAdditionalCFRoute}.RoutingInfo()
+						changedDesiredLRP.Routes = &routes
+					})
+
+					It("registers all of the routes associated with a port on the table", func() {
+						Eventually(fakeTable.SetRoutesCallCount).Should(Equal(2))
+
+						key1, routes1, _ := fakeTable.SetRoutesArgsForCall(0)
+						key2, routes2, _ := fakeTable.SetRoutesArgsForCall(1)
+						var routes = []routing_table.Route{}
+						routes = append(routes, routes1...)
+						routes = append(routes, routes2...)
+
+						Expect([]routing_table.RoutingKey{key1, key2}).To(ConsistOf(expectedRoutingKey, expectedAdditionalRoutingKey))
+						Expect(routes).To(ConsistOf(
+							routing_table.Route{
+								Hostname:        expectedRoutes[0],
+								LogGuid:         logGuid,
+								RouteServiceUrl: expectedRouteServiceUrl,
+							},
+							routing_table.Route{
+								Hostname:        expectedRoutes[1],
+								LogGuid:         logGuid,
+								RouteServiceUrl: expectedRouteServiceUrl,
+							},
+							routing_table.Route{
+								Hostname: expectedAdditionalRoutes[0],
+								LogGuid:  logGuid,
+							},
+							routing_table.Route{
+								Hostname: expectedAdditionalRoutes[1],
+								LogGuid:  logGuid,
+							},
+						))
+					})
+
+					It("emits whatever the table tells it to emit", func() {
+						Eventually(emitter.EmitCallCount).Should(Equal(3))
+
+						messagesToEmit := emitter.EmitArgsForCall(2)
+						Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
+					})
+				})
+
+				Context("when CF routes and container ports are added", func() {
+					BeforeEach(func() {
+						routes := cfroutes.CFRoutes{expectedCFRoute, expectedAdditionalCFRoute}.RoutingInfo()
+						changedDesiredLRP.Routes = &routes
+					})
+
+					It("registers all of the routes on the table", func() {
+						Eventually(fakeTable.SetRoutesCallCount).Should(Equal(2))
+
+						key1, routes1, _ := fakeTable.SetRoutesArgsForCall(0)
+						key2, routes2, _ := fakeTable.SetRoutesArgsForCall(1)
+						var routes = []routing_table.Route{}
+						routes = append(routes, routes1...)
+						routes = append(routes, routes2...)
+
+						Expect([]routing_table.RoutingKey{key1, key2}).To(ConsistOf(expectedRoutingKey, expectedAdditionalRoutingKey))
+						Expect(routes).To(ConsistOf(
+							routing_table.Route{
+								Hostname:        expectedRoutes[0],
+								LogGuid:         logGuid,
+								RouteServiceUrl: expectedRouteServiceUrl,
+							},
+							routing_table.Route{
+								Hostname:        expectedRoutes[1],
+								LogGuid:         logGuid,
+								RouteServiceUrl: expectedRouteServiceUrl,
+							},
+							routing_table.Route{
+								Hostname: expectedAdditionalRoutes[0],
+								LogGuid:  logGuid,
+							},
+							routing_table.Route{
+								Hostname: expectedAdditionalRoutes[1],
+								LogGuid:  logGuid,
+							},
+						))
+					})
+
+					It("emits whatever the table tells it to emit", func() {
+						Eventually(emitter.EmitCallCount).Should(Equal(3))
+
+						messagesToEmit := emitter.EmitArgsForCall(1)
+						Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
+
+						messagesToEmit = emitter.EmitArgsForCall(2)
+						Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
+					})
+				})
+
+				Context("when CF routes are removed", func() {
+					BeforeEach(func() {
+						routes := cfroutes.CFRoutes{}.RoutingInfo()
+						changedDesiredLRP.Routes = &routes
+
+						fakeTable.SetRoutesReturns(routing_table.MessagesToEmit{})
+						fakeTable.RemoveRoutesReturns(dummyMessagesToEmit)
+					})
+
+					It("deletes the routes for the missng key", func() {
+						Eventually(fakeTable.RemoveRoutesCallCount).Should(Equal(1))
+
+						key, modTag := fakeTable.RemoveRoutesArgsForCall(0)
+						Expect(key).To(Equal(expectedRoutingKey))
+						Expect(modTag).To(Equal(changedDesiredLRP.ModificationTag))
+					})
+
+					It("emits whatever the table tells it to emit", func() {
+						Eventually(emitter.EmitCallCount).Should(Equal(2))
+
+						messagesToEmit := emitter.EmitArgsForCall(1)
+						Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
+					})
 				})
 			})
 
-			Context("when CF routes are removed", func() {
+			Context("when a delete event occurs", func() {
+				var desiredLRP *models.DesiredLRP
+
 				BeforeEach(func() {
-					routes := cfroutes.CFRoutes{}.RoutingInfo()
-					changedDesiredLRP.Routes = &routes
-
-					table.SetRoutesReturns(routing_table.MessagesToEmit{})
-					table.RemoveRoutesReturns(dummyMessagesToEmit)
+					fakeTable.RemoveRoutesReturns(dummyMessagesToEmit)
+					routes := cfroutes.CFRoutes{expectedCFRoute}.RoutingInfo()
+					desiredLRP = &models.DesiredLRP{
+						Action: models.WrapAction(&models.RunAction{
+							User: "me",
+							Path: "ls",
+						}),
+						Domain:          "tests",
+						ProcessGuid:     expectedProcessGuid,
+						Ports:           []uint32{expectedContainerPort},
+						Routes:          &routes,
+						LogGuid:         logGuid,
+						ModificationTag: &models.ModificationTag{Epoch: "defg", Index: 2},
+					}
 				})
 
-				It("deletes the routes for the missng key", func() {
-					Eventually(table.RemoveRoutesCallCount).Should(Equal(1))
+				JustBeforeEach(func() {
+					nextEvent.Store(EventHolder{models.NewDesiredLRPRemovedEvent(desiredLRP)})
+				})
 
-					key, modTag := table.RemoveRoutesArgsForCall(0)
+				It("should remove the routes from the table", func() {
+					Eventually(fakeTable.RemoveRoutesCallCount).Should(Equal(1))
+					key, modTag := fakeTable.RemoveRoutesArgsForCall(0)
 					Expect(key).To(Equal(expectedRoutingKey))
-					Expect(modTag).To(Equal(changedDesiredLRP.ModificationTag))
+					Expect(modTag).To(Equal(desiredLRP.ModificationTag))
 				})
 
-				It("emits whatever the table tells it to emit", func() {
+				It("should emit whatever the table tells it to emit", func() {
 					Eventually(emitter.EmitCallCount).Should(Equal(2))
 
 					messagesToEmit := emitter.EmitArgsForCall(1)
 					Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
 				})
+
+				Context("when there are diego ssh-keys on the route", func() {
+					var (
+						foundRoutes bool
+					)
+
+					BeforeEach(func() {
+						diegoSSHInfo := json.RawMessage([]byte(`{"ssh-key": "ssh-value"}`))
+
+						routes := cfroutes.CFRoutes{expectedCFRoute}.RoutingInfo()
+						routes["diego-ssh"] = &diegoSSHInfo
+
+						desiredLRP.Routes = &routes
+					})
+
+					It("does not log them", func() {
+						Eventually(fakeTable.RemoveRoutesCallCount).Should(Equal(1))
+						logs := logger.Logs()
+
+						for _, log := range logs {
+							if log.Data["routes"] != nil {
+								Expect(log.Data["routes"]).ToNot(HaveKey("diego-ssh"))
+								Expect(log.Data["routes"]).To(HaveKey("cf-router"))
+								foundRoutes = true
+							}
+						}
+						if !foundRoutes {
+							Fail("Expected to find diego-ssh routes on desiredLRP")
+						}
+
+						Expect(len(*desiredLRP.Routes)).To(Equal(2))
+					})
+				})
+
+				Context("when there are multiple CF routes", func() {
+					BeforeEach(func() {
+						routes := cfroutes.CFRoutes{expectedCFRoute, expectedAdditionalCFRoute}.RoutingInfo()
+						desiredLRP.Routes = &routes
+					})
+
+					It("should remove the routes from the table", func() {
+						Eventually(fakeTable.RemoveRoutesCallCount).Should(Equal(2))
+
+						key, modTag := fakeTable.RemoveRoutesArgsForCall(0)
+						Expect(key).To(Equal(expectedRoutingKey))
+						Expect(modTag).To(Equal(desiredLRP.ModificationTag))
+
+						key, modTag = fakeTable.RemoveRoutesArgsForCall(1)
+						Expect(key).To(Equal(expectedAdditionalRoutingKey))
+
+						key, modTag = fakeTable.RemoveRoutesArgsForCall(0)
+						Expect(key).To(Equal(expectedRoutingKey))
+						Expect(modTag).To(Equal(desiredLRP.ModificationTag))
+					})
+
+					It("emits whatever the table tells it to emit", func() {
+						Eventually(emitter.EmitCallCount).Should(Equal(3))
+
+						messagesToEmit := emitter.EmitArgsForCall(1)
+						Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
+
+						messagesToEmit = emitter.EmitArgsForCall(2)
+						Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
+					})
+				})
 			})
+		}
+
+		Context("when the cell id is set", func() {
+			BeforeEach(func() {
+				cellID = "cell-a"
+			})
+
+			behaveAsDesired()
 		})
 
-		Context("when a delete event occurs", func() {
-			var desiredLRP *models.DesiredLRP
-
+		Context("when the cell id is not set", func() {
 			BeforeEach(func() {
-				table.RemoveRoutesReturns(dummyMessagesToEmit)
-				routes := cfroutes.CFRoutes{expectedCFRoute}.RoutingInfo()
-				desiredLRP = &models.DesiredLRP{
-					Action: models.WrapAction(&models.RunAction{
-						User: "me",
-						Path: "ls",
-					}),
-					Domain:          "tests",
-					ProcessGuid:     expectedProcessGuid,
-					Ports:           []uint32{expectedContainerPort},
-					Routes:          &routes,
-					LogGuid:         logGuid,
-					ModificationTag: &models.ModificationTag{Epoch: "defg", Index: 2},
-				}
+				cellID = ""
 			})
 
-			JustBeforeEach(func() {
-				nextEvent.Store(EventHolder{models.NewDesiredLRPRemovedEvent(desiredLRP)})
-			})
-
-			It("should remove the routes from the table", func() {
-				Eventually(table.RemoveRoutesCallCount).Should(Equal(1))
-				key, modTag := table.RemoveRoutesArgsForCall(0)
-				Expect(key).To(Equal(expectedRoutingKey))
-				Expect(modTag).To(Equal(desiredLRP.ModificationTag))
-			})
-
-			It("should emit whatever the table tells it to emit", func() {
-				Eventually(emitter.EmitCallCount).Should(Equal(2))
-
-				messagesToEmit := emitter.EmitArgsForCall(1)
-				Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
-			})
-
-			Context("when there are diego ssh-keys on the route", func() {
-				var (
-					foundRoutes bool
-				)
-
-				BeforeEach(func() {
-					diegoSSHInfo := json.RawMessage([]byte(`{"ssh-key": "ssh-value"}`))
-
-					routes := cfroutes.CFRoutes{expectedCFRoute}.RoutingInfo()
-					routes["diego-ssh"] = &diegoSSHInfo
-
-					desiredLRP.Routes = &routes
-				})
-
-				It("does not log them", func() {
-					Eventually(table.RemoveRoutesCallCount).Should(Equal(1))
-					logs := logger.Logs()
-
-					for _, log := range logs {
-						if log.Data["routes"] != nil {
-							Expect(log.Data["routes"]).ToNot(HaveKey("diego-ssh"))
-							Expect(log.Data["routes"]).To(HaveKey("cf-router"))
-							foundRoutes = true
-						}
-					}
-					if !foundRoutes {
-						Fail("Expected to find diego-ssh routes on desiredLRP")
-					}
-
-					Expect(len(*desiredLRP.Routes)).To(Equal(2))
-				})
-			})
-
-			Context("when there are multiple CF routes", func() {
-				BeforeEach(func() {
-					routes := cfroutes.CFRoutes{expectedCFRoute, expectedAdditionalCFRoute}.RoutingInfo()
-					desiredLRP.Routes = &routes
-				})
-
-				It("should remove the routes from the table", func() {
-					Eventually(table.RemoveRoutesCallCount).Should(Equal(2))
-
-					key, modTag := table.RemoveRoutesArgsForCall(0)
-					Expect(key).To(Equal(expectedRoutingKey))
-					Expect(modTag).To(Equal(desiredLRP.ModificationTag))
-
-					key, modTag = table.RemoveRoutesArgsForCall(1)
-					Expect(key).To(Equal(expectedAdditionalRoutingKey))
-
-					key, modTag = table.RemoveRoutesArgsForCall(0)
-					Expect(key).To(Equal(expectedRoutingKey))
-					Expect(modTag).To(Equal(desiredLRP.ModificationTag))
-				})
-
-				It("emits whatever the table tells it to emit", func() {
-					Eventually(emitter.EmitCallCount).Should(Equal(3))
-
-					messagesToEmit := emitter.EmitArgsForCall(1)
-					Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
-
-					messagesToEmit = emitter.EmitArgsForCall(2)
-					Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
-				})
-			})
+			behaveAsDesired()
 		})
 	})
 
@@ -751,7 +781,7 @@ var _ = Describe("Watcher", func() {
 				})
 
 				JustBeforeEach(func() {
-					table.AddEndpointReturns(dummyMessagesToEmit)
+					fakeTable.AddEndpointReturns(dummyMessagesToEmit)
 					nextEvent.Store(EventHolder{models.NewActualLRPCreatedEvent(actualLRPGroup)})
 				})
 
@@ -769,17 +799,17 @@ var _ = Describe("Watcher", func() {
 				})
 
 				It("should add/update the endpoints on the table", func() {
-					Eventually(table.AddEndpointCallCount).Should(Equal(2))
+					Eventually(fakeTable.AddEndpointCallCount).Should(Equal(2))
 
 					keys := routing_table.RoutingKeysFromActual(actualLRP)
 					endpoints, err := routing_table.EndpointsFromActual(actualLRPRoutingInfo)
 					Expect(err).NotTo(HaveOccurred())
 
-					key, endpoint := table.AddEndpointArgsForCall(0)
+					key, endpoint := fakeTable.AddEndpointArgsForCall(0)
 					Expect(keys).To(ContainElement(key))
 					Expect(endpoint).To(Equal(endpoints[key.ContainerPort]))
 
-					key, endpoint = table.AddEndpointArgsForCall(1)
+					key, endpoint = fakeTable.AddEndpointArgsForCall(1)
 					Expect(keys).To(ContainElement(key))
 					Expect(endpoint).To(Equal(endpoints[key.ContainerPort]))
 				})
@@ -801,6 +831,32 @@ var _ = Describe("Watcher", func() {
 					Eventually(func() uint64 {
 						return fakeMetricSender.GetCounter("RoutesUnregistered")
 					}).Should(BeEquivalentTo(0))
+				})
+
+				Context("when a cell id is set", func() {
+					BeforeEach(func() {
+						cellID = "cell-a"
+					})
+
+					Context("and the event cell-id matches", func() {
+						BeforeEach(func() {
+							actualLRP.ActualLRPInstanceKey.CellId = "cell-a"
+						})
+
+						It("should add/update the endpoints on the table", func() {
+							Eventually(fakeTable.AddEndpointCallCount).Should(Equal(2))
+						})
+					})
+
+					Context("and the event cell-id does not match", func() {
+						BeforeEach(func() {
+							actualLRP.ActualLRPInstanceKey.CellId = "cell-b"
+						})
+
+						It("should add/update the endpoints on the table", func() {
+							Consistently(fakeTable.AddEndpointCallCount).Should(Equal(0))
+						})
+					})
 				})
 			})
 
@@ -837,7 +893,7 @@ var _ = Describe("Watcher", func() {
 				})
 
 				It("doesn't add/update the endpoint on the table", func() {
-					Consistently(table.AddEndpointCallCount).Should(Equal(0))
+					Consistently(fakeTable.AddEndpointCallCount).Should(Equal(0))
 				})
 
 				It("doesn't emit", func() {
@@ -848,19 +904,21 @@ var _ = Describe("Watcher", func() {
 
 		Context("when a change event occurs", func() {
 			Context("when the resulting LRP is in the RUNNING state", func() {
-				BeforeEach(func() {
-					table.AddEndpointReturns(dummyMessagesToEmit)
-				})
+				var (
+					afterActualLRP, beforeActualLRP *models.ActualLRPGroup
+				)
 
-				JustBeforeEach(func() {
-					beforeActualLRP := &models.ActualLRPGroup{
+				BeforeEach(func() {
+					fakeTable.AddEndpointReturns(dummyMessagesToEmit)
+
+					beforeActualLRP = &models.ActualLRPGroup{
 						Instance: &models.ActualLRP{
 							ActualLRPKey:         models.NewActualLRPKey(expectedProcessGuid, expectedIndex, "domain"),
 							ActualLRPInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGuid, "cell-id"),
 							State:                models.ActualLRPStateClaimed,
 						},
 					}
-					afterActualLRP := &models.ActualLRPGroup{
+					afterActualLRP = &models.ActualLRPGroup{
 						Instance: &models.ActualLRP{
 							ActualLRPKey:         models.NewActualLRPKey(expectedProcessGuid, expectedIndex, "domain"),
 							ActualLRPInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGuid, "cell-id"),
@@ -872,7 +930,9 @@ var _ = Describe("Watcher", func() {
 							State: models.ActualLRPStateRunning,
 						},
 					}
+				})
 
+				JustBeforeEach(func() {
 					nextEvent.Store(EventHolder{models.NewActualLRPChangedEvent(beforeActualLRP, afterActualLRP)})
 				})
 
@@ -890,7 +950,7 @@ var _ = Describe("Watcher", func() {
 				})
 
 				It("should add/update the endpoint on the table", func() {
-					Eventually(table.AddEndpointCallCount).Should(Equal(2))
+					Eventually(fakeTable.AddEndpointCallCount).Should(Equal(2))
 
 					// Verify the arguments that were passed to AddEndpoint independent of which call was made first.
 					type endpointArgs struct {
@@ -898,9 +958,9 @@ var _ = Describe("Watcher", func() {
 						endpoint routing_table.Endpoint
 					}
 					args := make([]endpointArgs, 2)
-					key, endpoint := table.AddEndpointArgsForCall(0)
+					key, endpoint := fakeTable.AddEndpointArgsForCall(0)
 					args[0] = endpointArgs{key, endpoint}
-					key, endpoint = table.AddEndpointArgsForCall(1)
+					key, endpoint = fakeTable.AddEndpointArgsForCall(1)
 					args[1] = endpointArgs{key, endpoint}
 
 					Expect(args).To(ConsistOf([]endpointArgs{
@@ -940,6 +1000,32 @@ var _ = Describe("Watcher", func() {
 					Eventually(func() uint64 {
 						return fakeMetricSender.GetCounter("RoutesUnregistered")
 					}).Should(BeEquivalentTo(0))
+				})
+
+				Context("when a cell id is set", func() {
+					BeforeEach(func() {
+						cellID = "cell-a"
+					})
+
+					Context("and the event cell-id matches", func() {
+						BeforeEach(func() {
+							afterActualLRP.Instance.ActualLRPInstanceKey.CellId = "cell-a"
+						})
+
+						It("should add/update the endpoints on the table", func() {
+							Eventually(fakeTable.AddEndpointCallCount).Should(Equal(2))
+						})
+					})
+
+					Context("and the event cell-id does not match", func() {
+						BeforeEach(func() {
+							afterActualLRP.Instance.ActualLRPInstanceKey.CellId = "cell-b"
+						})
+
+						It("should add/update the endpoints on the table", func() {
+							Consistently(fakeTable.AddEndpointCallCount).Should(Equal(0))
+						})
+					})
 				})
 			})
 
@@ -991,7 +1077,7 @@ var _ = Describe("Watcher", func() {
 						Evacuating:    true,
 					}
 
-					table.EndpointsForIndexStub = func(key routing_table.RoutingKey, index int32) []routing_table.Endpoint {
+					fakeTable.EndpointsForIndexStub = func(key routing_table.RoutingKey, index int32) []routing_table.Endpoint {
 						if key == expectedRoutingKey {
 							return []routing_table.Endpoint{evacuatingEndpoint1}
 						} else if key == expectedAdditionalRoutingKey {
@@ -1018,7 +1104,7 @@ var _ = Describe("Watcher", func() {
 					})
 
 					It("adds the evacuating endpoints", func() {
-						Eventually(table.AddEndpointCallCount).Should(Equal(2))
+						Eventually(fakeTable.AddEndpointCallCount).Should(Equal(2))
 
 						// Verify the arguments that were passed to AddEndpoint independent of which call was made first.
 						type endpointArgs struct {
@@ -1026,9 +1112,9 @@ var _ = Describe("Watcher", func() {
 							endpoint routing_table.Endpoint
 						}
 						args := make([]endpointArgs, 2)
-						key, endpoint := table.AddEndpointArgsForCall(0)
+						key, endpoint := fakeTable.AddEndpointArgsForCall(0)
 						args[0] = endpointArgs{key, endpoint}
-						key, endpoint = table.AddEndpointArgsForCall(1)
+						key, endpoint = fakeTable.AddEndpointArgsForCall(1)
 						args[1] = endpointArgs{key, endpoint}
 
 						Expect(args).To(ConsistOf([]endpointArgs{
@@ -1036,7 +1122,7 @@ var _ = Describe("Watcher", func() {
 							endpointArgs{expectedAdditionalRoutingKey, evacuatingEndpoint2},
 						}))
 
-						Expect(table.RemoveEndpointCallCount()).To(BeZero())
+						Expect(fakeTable.RemoveEndpointCallCount()).To(BeZero())
 					})
 				})
 
@@ -1059,7 +1145,7 @@ var _ = Describe("Watcher", func() {
 					It("does not remove any evacuating endpoints", func() {
 						// If this fails, DO NOT treat it as a flake; RemoveEndpoint should
 						// not be called in this context.
-						Consistently(table.RemoveEndpointCallCount).Should(BeZero())
+						Consistently(fakeTable.RemoveEndpointCallCount).Should(BeZero())
 					})
 				})
 
@@ -1080,8 +1166,8 @@ var _ = Describe("Watcher", func() {
 					})
 
 					It("should register the new instance's route and unregister the old instance's route", func() {
-						Eventually(table.AddEndpointCallCount).Should(Equal(2))
-						Eventually(table.RemoveEndpointCallCount).Should(Equal(2))
+						Eventually(fakeTable.AddEndpointCallCount).Should(Equal(2))
+						Eventually(fakeTable.RemoveEndpointCallCount).Should(Equal(2))
 
 						// Verify the arguments that were passed to AddEndpoint independent of which call was made first.
 						type endpointArgs struct {
@@ -1089,9 +1175,9 @@ var _ = Describe("Watcher", func() {
 							endpoint routing_table.Endpoint
 						}
 						args := make([]endpointArgs, 2)
-						key, endpoint := table.AddEndpointArgsForCall(0)
+						key, endpoint := fakeTable.AddEndpointArgsForCall(0)
 						args[0] = endpointArgs{key, endpoint}
-						key, endpoint = table.AddEndpointArgsForCall(1)
+						key, endpoint = fakeTable.AddEndpointArgsForCall(1)
 						args[1] = endpointArgs{key, endpoint}
 
 						Expect(args).To(ConsistOf([]endpointArgs{
@@ -1114,9 +1200,9 @@ var _ = Describe("Watcher", func() {
 						}))
 
 						args = make([]endpointArgs, 2)
-						key, endpoint = table.RemoveEndpointArgsForCall(0)
+						key, endpoint = fakeTable.RemoveEndpointArgsForCall(0)
 						args[0] = endpointArgs{key, endpoint}
-						key, endpoint = table.RemoveEndpointArgsForCall(1)
+						key, endpoint = fakeTable.RemoveEndpointArgsForCall(1)
 						args[1] = endpointArgs{key, endpoint}
 
 						Expect(args).To(ConsistOf([]endpointArgs{
@@ -1124,9 +1210,9 @@ var _ = Describe("Watcher", func() {
 							endpointArgs{expectedAdditionalRoutingKey, evacuatingEndpoint2},
 						}))
 
-						Expect(table.EndpointsForIndexCallCount()).To(Equal(2))
-						key1, index1 := table.EndpointsForIndexArgsForCall(0)
-						key2, index2 := table.EndpointsForIndexArgsForCall(1)
+						Expect(fakeTable.EndpointsForIndexCallCount()).To(Equal(2))
+						key1, index1 := fakeTable.EndpointsForIndexArgsForCall(0)
+						key2, index2 := fakeTable.EndpointsForIndexArgsForCall(1)
 						keys := []routing_table.RoutingKey{key1, key2}
 						indices := []int{int(index1), int(index2)}
 
@@ -1147,22 +1233,25 @@ var _ = Describe("Watcher", func() {
 								Port:          expectedExternalPort,
 								ContainerPort: expectedContainerPort,
 							}
-							table.EndpointsForIndexReturns([]routing_table.Endpoint{newEndpoint})
+							fakeTable.EndpointsForIndexReturns([]routing_table.Endpoint{newEndpoint})
 						})
 
 						It("does not delete any endpoint", func() {
 							// If this fails, DO NOT treat it as a flake; RemoveEndpoint should
 							// not be called in this context.
-							Consistently(table.RemoveEndpointCallCount).Should(BeZero())
+							Consistently(fakeTable.RemoveEndpointCallCount).Should(BeZero())
 						})
 					})
 				})
 			})
 
 			Context("when the resulting LRP transitions away from the RUNNING state", func() {
-				JustBeforeEach(func() {
-					table.RemoveEndpointReturns(dummyMessagesToEmit)
-					beforeActualLRP := &models.ActualLRPGroup{
+				var (
+					beforeActualLRP, afterActualLRP *models.ActualLRPGroup
+				)
+
+				BeforeEach(func() {
+					beforeActualLRP = &models.ActualLRPGroup{
 						Instance: &models.ActualLRP{
 							ActualLRPKey:         models.NewActualLRPKey(expectedProcessGuid, expectedIndex, "domain"),
 							ActualLRPInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGuid, "cell-id"),
@@ -1174,13 +1263,17 @@ var _ = Describe("Watcher", func() {
 							State: models.ActualLRPStateRunning,
 						},
 					}
-					afterActualLRP := &models.ActualLRPGroup{
+					afterActualLRP = &models.ActualLRPGroup{
 						Instance: &models.ActualLRP{
 							ActualLRPKey: models.NewActualLRPKey(expectedProcessGuid, expectedIndex, "domain"),
 							State:        models.ActualLRPStateUnclaimed,
 						},
 					}
 
+				})
+
+				JustBeforeEach(func() {
+					fakeTable.RemoveEndpointReturns(dummyMessagesToEmit)
 					nextEvent.Store(EventHolder{models.NewActualLRPChangedEvent(beforeActualLRP, afterActualLRP)})
 				})
 
@@ -1198,9 +1291,9 @@ var _ = Describe("Watcher", func() {
 				})
 
 				It("should remove the endpoint from the table", func() {
-					Eventually(table.RemoveEndpointCallCount).Should(Equal(2))
+					Eventually(fakeTable.RemoveEndpointCallCount).Should(Equal(2))
 
-					key, endpoint := table.RemoveEndpointArgsForCall(0)
+					key, endpoint := fakeTable.RemoveEndpointArgsForCall(0)
 					Expect(key).To(Equal(expectedRoutingKey))
 					Expect(endpoint).To(Equal(routing_table.Endpoint{
 						InstanceGuid:  expectedInstanceGuid,
@@ -1211,7 +1304,7 @@ var _ = Describe("Watcher", func() {
 						ContainerPort: expectedContainerPort,
 					}))
 
-					key, endpoint = table.RemoveEndpointArgsForCall(1)
+					key, endpoint = fakeTable.RemoveEndpointArgsForCall(1)
 					Expect(key).To(Equal(expectedAdditionalRoutingKey))
 					Expect(endpoint).To(Equal(routing_table.Endpoint{
 						InstanceGuid:  expectedInstanceGuid,
@@ -1229,6 +1322,32 @@ var _ = Describe("Watcher", func() {
 
 					messagesToEmit := emitter.EmitArgsForCall(1)
 					Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
+				})
+
+				Context("when a cell id is set", func() {
+					BeforeEach(func() {
+						cellID = "cell-a"
+					})
+
+					Context("and the event cell-id matches", func() {
+						BeforeEach(func() {
+							beforeActualLRP.Instance.CellId = "cell-a"
+						})
+
+						It("should remove the endpoint from the table", func() {
+							Eventually(fakeTable.RemoveEndpointCallCount).Should(Equal(2))
+						})
+					})
+
+					Context("and the event cell-id does not match", func() {
+						BeforeEach(func() {
+							beforeActualLRP.Instance.CellId = "cell-b"
+						})
+
+						It("should not remove the endpoint from the table", func() {
+							Consistently(fakeTable.RemoveEndpointCallCount).Should(Equal(0))
+						})
+					})
 				})
 			})
 
@@ -1264,27 +1383,30 @@ var _ = Describe("Watcher", func() {
 				})
 
 				It("should not remove the endpoint", func() {
-					Consistently(table.RemoveEndpointCallCount).Should(BeZero())
+					Consistently(fakeTable.RemoveEndpointCallCount).Should(BeZero())
 				})
 
 				It("should not add or update the endpoint", func() {
-					Consistently(table.AddEndpointCallCount).Should(BeZero())
+					Consistently(fakeTable.AddEndpointCallCount).Should(BeZero())
 				})
 
 				It("should not emit anything", func() {
 					Consistently(emitter.EmitCallCount).Should(Equal(1))
 				})
 			})
+
 		})
 
 		Context("when a delete event occurs", func() {
 			Context("when the actual is in the RUNNING state", func() {
-				BeforeEach(func() {
-					table.RemoveEndpointReturns(dummyMessagesToEmit)
-				})
+				var (
+					actualLRP *models.ActualLRPGroup
+				)
 
-				JustBeforeEach(func() {
-					actualLRP := &models.ActualLRPGroup{
+				BeforeEach(func() {
+					fakeTable.RemoveEndpointReturns(dummyMessagesToEmit)
+
+					actualLRP = &models.ActualLRPGroup{
 						Instance: &models.ActualLRP{
 							ActualLRPKey:         models.NewActualLRPKey(expectedProcessGuid, expectedIndex, "domain"),
 							ActualLRPInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGuid, "cell-id"),
@@ -1296,7 +1418,9 @@ var _ = Describe("Watcher", func() {
 							State: models.ActualLRPStateRunning,
 						},
 					}
+				})
 
+				JustBeforeEach(func() {
 					nextEvent.Store(EventHolder{models.NewActualLRPRemovedEvent(actualLRP)})
 				})
 
@@ -1314,9 +1438,9 @@ var _ = Describe("Watcher", func() {
 				})
 
 				It("should remove the endpoint from the table", func() {
-					Eventually(table.RemoveEndpointCallCount).Should(Equal(2))
+					Eventually(fakeTable.RemoveEndpointCallCount).Should(Equal(2))
 
-					key, endpoint := table.RemoveEndpointArgsForCall(0)
+					key, endpoint := fakeTable.RemoveEndpointArgsForCall(0)
 					Expect(key).To(Equal(expectedRoutingKey))
 					Expect(endpoint).To(Equal(routing_table.Endpoint{
 						InstanceGuid:  expectedInstanceGuid,
@@ -1327,7 +1451,7 @@ var _ = Describe("Watcher", func() {
 						ContainerPort: expectedContainerPort,
 					}))
 
-					key, endpoint = table.RemoveEndpointArgsForCall(1)
+					key, endpoint = fakeTable.RemoveEndpointArgsForCall(1)
 					Expect(key).To(Equal(expectedAdditionalRoutingKey))
 					Expect(endpoint).To(Equal(routing_table.Endpoint{
 						InstanceGuid:  expectedInstanceGuid,
@@ -1348,6 +1472,32 @@ var _ = Describe("Watcher", func() {
 
 					messagesToEmit = emitter.EmitArgsForCall(2)
 					Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
+				})
+
+				Context("when a cell id is set", func() {
+					BeforeEach(func() {
+						cellID = "cell-a"
+					})
+
+					Context("and the event cell-id matches", func() {
+						BeforeEach(func() {
+							actualLRP.Instance.CellId = "cell-a"
+						})
+
+						It("should remove the endpoint from the table", func() {
+							Eventually(fakeTable.RemoveEndpointCallCount).Should(Equal(2))
+						})
+					})
+
+					Context("and the event cell-id does not match", func() {
+						BeforeEach(func() {
+							actualLRP.Instance.CellId = "cell-b"
+						})
+
+						It("should not remove the endpoint from the table", func() {
+							Consistently(fakeTable.RemoveEndpointCallCount).Should(Equal(0))
+						})
+					})
 				})
 			})
 
@@ -1377,7 +1527,7 @@ var _ = Describe("Watcher", func() {
 				})
 
 				It("doesn't remove the endpoint from the table", func() {
-					Consistently(table.RemoveEndpointCallCount).Should(Equal(0))
+					Consistently(fakeTable.RemoveEndpointCallCount).Should(Equal(0))
 				})
 
 				It("doesn't emit", func() {
@@ -1466,8 +1616,8 @@ var _ = Describe("Watcher", func() {
 
 		Context("Emit", func() {
 			JustBeforeEach(func() {
-				table.MessagesToEmitReturns(dummyMessagesToEmit)
-				table.RouteCountReturns(123)
+				fakeTable.MessagesToEmitReturns(dummyMessagesToEmit)
+				fakeTable.RouteCountReturns(123)
 				syncEvents.Emit <- struct{}{}
 			})
 
@@ -1580,7 +1730,7 @@ var _ = Describe("Watcher", func() {
 
 					It("caches events", func() {
 						sendEvent()
-						Consistently(table.RemoveEndpointCallCount).Should(Equal(0))
+						Consistently(fakeTable.RemoveEndpointCallCount).Should(Equal(0))
 						ready <- struct{}{}
 					})
 
@@ -1613,12 +1763,12 @@ var _ = Describe("Watcher", func() {
 
 					It("should not call sync until the error resolves", func() {
 						Eventually(bbsClient.ActualLRPGroupsCallCount).Should(Equal(1))
-						Consistently(table.SwapCallCount).Should(Equal(0))
+						Consistently(fakeTable.SwapCallCount).Should(Equal(0))
 
 						atomic.StoreInt32(&returnError, 0)
 						syncEvents.Sync <- struct{}{}
 
-						Eventually(table.SwapCallCount).Should(Equal(1))
+						Eventually(fakeTable.SwapCallCount).Should(Equal(1))
 						Expect(bbsClient.ActualLRPGroupsCallCount()).To(Equal(2))
 					})
 				})
@@ -1640,18 +1790,20 @@ var _ = Describe("Watcher", func() {
 
 					It("should not call sync until the error resolves", func() {
 						Eventually(bbsClient.DesiredLRPSchedulingInfosCallCount).Should(Equal(1))
-						Consistently(table.SwapCallCount).Should(Equal(0))
+						Consistently(fakeTable.SwapCallCount).Should(Equal(0))
 
 						atomic.StoreInt32(&returnError, 0)
 						syncEvents.Sync <- struct{}{}
 
-						Eventually(table.SwapCallCount).Should(Equal(1))
+						Eventually(fakeTable.SwapCallCount).Should(Equal(1))
 						Expect(bbsClient.DesiredLRPSchedulingInfosCallCount()).To(Equal(2))
 					})
 				})
 			})
 
 			Context("when syncing ends", func() {
+				var ready chan struct{}
+
 				BeforeEach(func() {
 					bbsClient.ActualLRPGroupsStub = func(logger lager.Logger, f models.ActualLRPFilter) ([]*models.ActualLRPGroup, error) {
 						clock.IncrementBySeconds(1)
@@ -1669,40 +1821,13 @@ var _ = Describe("Watcher", func() {
 				})
 
 				It("swaps the tables", func() {
-					Eventually(table.SwapCallCount).Should(Equal(1))
+					Eventually(fakeTable.SwapCallCount).Should(Equal(1))
 				})
 
-				Context("a table with a single routable endpoint", func() {
-					var ready chan struct{}
-
+				Context("when desired lrps are retrieved", func() {
 					BeforeEach(func() {
+
 						ready = make(chan struct{})
-
-						actualLRPRoutingInfo1 := &routing_table.ActualLRPRoutingInfo{
-							ActualLRP:  actualLRPGroup1.Instance,
-							Evacuating: false,
-						}
-
-						actualLRPRoutingInfo2 := &routing_table.ActualLRPRoutingInfo{
-							ActualLRP:  actualLRPGroup2.Instance,
-							Evacuating: false,
-						}
-						tempTable := routing_table.NewTempTable(
-							routing_table.RoutesByRoutingKeyFromSchedulingInfos([]*models.DesiredLRPSchedulingInfo{schedulingInfo1, schedulingInfo2}),
-							routing_table.EndpointsByRoutingKeyFromActuals([]*routing_table.ActualLRPRoutingInfo{
-								actualLRPRoutingInfo1,
-								actualLRPRoutingInfo2,
-							},
-								map[string]*models.DesiredLRPSchedulingInfo{
-									schedulingInfo1.ProcessGuid: schedulingInfo1,
-									schedulingInfo2.ProcessGuid: schedulingInfo2}),
-						)
-
-						domains := models.NewDomainSet([]string{"domain"})
-						table := routing_table.NewTable(logger)
-						table.Swap(tempTable, domains)
-
-						watcherProcess = watcher.NewWatcher(bbsClient, clock, table, emitter, syncEvents, logger)
 
 						bbsClient.DesiredLRPSchedulingInfosStub = func(logger lager.Logger, f models.DesiredLRPFilter) ([]*models.DesiredLRPSchedulingInfo, error) {
 							defer GinkgoRecover()
@@ -1714,21 +1839,82 @@ var _ = Describe("Watcher", func() {
 						}
 					})
 
-					It("applies the cached events and emits", func() {
-						Eventually(ready).Should(Receive())
-						sendEvent()
+					Context("a table with a single routable endpoint", func() {
+						BeforeEach(func() {
+							actualLRPRoutingInfo1 := &routing_table.ActualLRPRoutingInfo{
+								ActualLRP:  actualLRPGroup1.Instance,
+								Evacuating: false,
+							}
 
-						ready <- struct{}{}
+							actualLRPRoutingInfo2 := &routing_table.ActualLRPRoutingInfo{
+								ActualLRP:  actualLRPGroup2.Instance,
+								Evacuating: false,
+							}
+							tempTable := routing_table.NewTempTable(
+								routing_table.RoutesByRoutingKeyFromSchedulingInfos([]*models.DesiredLRPSchedulingInfo{schedulingInfo1, schedulingInfo2}),
+								routing_table.EndpointsByRoutingKeyFromActuals([]*routing_table.ActualLRPRoutingInfo{
+									actualLRPRoutingInfo1,
+									actualLRPRoutingInfo2,
+								},
+									map[string]*models.DesiredLRPSchedulingInfo{
+										schedulingInfo1.ProcessGuid: schedulingInfo1,
+										schedulingInfo2.ProcessGuid: schedulingInfo2}),
+							)
 
-						Eventually(emitter.EmitCallCount).Should(Equal(1))
-						Expect(emitter.EmitArgsForCall(0)).To(Equal(routing_table.MessagesToEmit{
-							RegistrationMessages: []routing_table.RegistryMessage{
-								routing_table.RegistryMessageFor(endpoint2, routing_table.Route{Hostname: hostname2, LogGuid: "lg2"}),
-							},
-							UnregistrationMessages: []routing_table.RegistryMessage{
-								routing_table.RegistryMessageFor(endpoint1, routing_table.Route{Hostname: hostname1, LogGuid: "lg1", RouteServiceUrl: "https://rs.example.com"}),
-							},
-						}))
+							domains := models.NewDomainSet([]string{"domain"})
+							table = routing_table.NewTable(logger)
+							table.Swap(tempTable, domains)
+						})
+
+						It("applies the cached events and emits", func() {
+							Eventually(ready).Should(Receive())
+							sendEvent()
+
+							ready <- struct{}{}
+
+							Eventually(emitter.EmitCallCount).Should(Equal(1))
+							Expect(emitter.EmitArgsForCall(0)).To(Equal(routing_table.MessagesToEmit{
+								RegistrationMessages: []routing_table.RegistryMessage{
+									routing_table.RegistryMessageFor(endpoint2, routing_table.Route{Hostname: hostname2, LogGuid: "lg2"}),
+								},
+								UnregistrationMessages: []routing_table.RegistryMessage{
+									routing_table.RegistryMessageFor(endpoint1, routing_table.Route{Hostname: hostname1, LogGuid: "lg1", RouteServiceUrl: "https://rs.example.com"}),
+								},
+							}))
+						})
+					})
+
+					Context("when the cell id is set", func() {
+						var (
+							routingTable routing_table.RoutingTable
+						)
+
+						BeforeEach(func() {
+							cellID = "another-cell-id"
+							actualLRPGroup2.Instance.ActualLRPInstanceKey.CellId = cellID
+						})
+
+						JustBeforeEach(func() {
+							Eventually(ready).Should(Receive())
+							ready <- struct{}{}
+
+							Eventually(fakeTable.SwapCallCount).Should(Equal(1))
+							routingTable, _ = fakeTable.SwapArgsForCall(0)
+						})
+
+						It("does not register endpoints for lrps on other cells", func() {
+							keys := routing_table.RoutingKeysFromActual(actualLRPGroup1.Instance)
+							Expect(keys).To(HaveLen(1))
+							endpoints := routingTable.EndpointsForIndex(keys[0], 0)
+							Expect(endpoints).To(HaveLen(0))
+						})
+
+						It("registers endpoints for lrps on this cell", func() {
+							keys := routing_table.RoutingKeysFromActual(actualLRPGroup2.Instance)
+							Expect(keys).To(HaveLen(1))
+							endpoints := routingTable.EndpointsForIndex(keys[0], 0)
+							Expect(endpoints).To(HaveLen(1))
+						})
 					})
 				})
 
@@ -1740,7 +1926,7 @@ var _ = Describe("Watcher", func() {
 					By("completing, events are no longer cached")
 					sendEvent()
 
-					Eventually(table.RemoveEndpointCallCount).Should(Equal(1))
+					Eventually(fakeTable.RemoveEndpointCallCount).Should(Equal(1))
 				})
 			})
 		})
