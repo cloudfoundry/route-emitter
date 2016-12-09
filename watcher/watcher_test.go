@@ -991,16 +991,6 @@ var _ = Describe("Watcher", func() {
 						Evacuating:    true,
 					}
 
-					evacuatingLRP := &models.ActualLRP{
-						ActualLRPKey:         lrpKey,
-						ActualLRPInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGuid, "cell-id"),
-						ActualLRPNetInfo:     lrpNetInfo,
-						State:                models.ActualLRPStateRunning,
-					}
-					evacuatingLRPGroup := &models.ActualLRPGroup{
-						Evacuating: evacuatingLRP,
-					}
-
 					table.EndpointsForIndexStub = func(key routing_table.RoutingKey, index int32) []routing_table.Endpoint {
 						if key == expectedRoutingKey {
 							return []routing_table.Endpoint{evacuatingEndpoint1}
@@ -1011,33 +1001,47 @@ var _ = Describe("Watcher", func() {
 						}
 						return nil
 					}
-					nextEvent.Store(EventHolder{models.NewActualLRPCreatedEvent(evacuatingLRPGroup)})
 				})
 
-				It("adds the evacuating endpoints", func() {
-					Eventually(table.AddEndpointCallCount).Should(Equal(2))
+				Context("when evacuating LRP is created", func() {
+					JustBeforeEach(func() {
+						evacuatingLRP := &models.ActualLRP{
+							ActualLRPKey:         lrpKey,
+							ActualLRPInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGuid, "cell-id"),
+							ActualLRPNetInfo:     lrpNetInfo,
+							State:                models.ActualLRPStateRunning,
+						}
+						evacuatingLRPGroup := &models.ActualLRPGroup{
+							Evacuating: evacuatingLRP,
+						}
+						nextEvent.Store(EventHolder{models.NewActualLRPCreatedEvent(evacuatingLRPGroup)})
+					})
 
-					// Verify the arguments that were passed to AddEndpoint independent of which call was made first.
-					type endpointArgs struct {
-						key      routing_table.RoutingKey
-						endpoint routing_table.Endpoint
-					}
-					args := make([]endpointArgs, 2)
-					key, endpoint := table.AddEndpointArgsForCall(0)
-					args[0] = endpointArgs{key, endpoint}
-					key, endpoint = table.AddEndpointArgsForCall(1)
-					args[1] = endpointArgs{key, endpoint}
+					It("adds the evacuating endpoints", func() {
+						Eventually(table.AddEndpointCallCount).Should(Equal(2))
 
-					Expect(args).To(ConsistOf([]endpointArgs{
-						endpointArgs{expectedRoutingKey, evacuatingEndpoint1},
-						endpointArgs{expectedAdditionalRoutingKey, evacuatingEndpoint2},
-					}))
+						// Verify the arguments that were passed to AddEndpoint independent of which call was made first.
+						type endpointArgs struct {
+							key      routing_table.RoutingKey
+							endpoint routing_table.Endpoint
+						}
+						args := make([]endpointArgs, 2)
+						key, endpoint := table.AddEndpointArgsForCall(0)
+						args[0] = endpointArgs{key, endpoint}
+						key, endpoint = table.AddEndpointArgsForCall(1)
+						args[1] = endpointArgs{key, endpoint}
 
-					Expect(table.RemoveEndpointCallCount()).To(BeZero())
+						Expect(args).To(ConsistOf([]endpointArgs{
+							endpointArgs{expectedRoutingKey, evacuatingEndpoint1},
+							endpointArgs{expectedAdditionalRoutingKey, evacuatingEndpoint2},
+						}))
+
+						Expect(table.RemoveEndpointCallCount()).To(BeZero())
+					})
 				})
 
 				Context("when a new claimed LRP is introduced", func() {
-					BeforeEach(func() {
+					JustBeforeEach(func() {
 						olderLRP := &models.ActualLRP{
 							ActualLRPKey:         lrpKey,
 							ActualLRPInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGuid, "cell-id"),
@@ -1060,7 +1064,7 @@ var _ = Describe("Watcher", func() {
 				})
 
 				Context("when a new running LRP is introduced", func() {
-					BeforeEach(func() {
+					JustBeforeEach(func() {
 						newLRP := &models.ActualLRP{
 							ActualLRPKey:         lrpKey,
 							ActualLRPInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGuid, "cell-id"),
@@ -1384,13 +1388,10 @@ var _ = Describe("Watcher", func() {
 	})
 
 	Describe("Unrecognized events", func() {
-		BeforeEach(func() {
-			nextEvent.Store(EventHolder{&unrecognizedEvent{}})
-		})
-
 		JustBeforeEach(func() {
 			syncEvents.Sync <- struct{}{}
 			Eventually(emitter.EmitCallCount).Should(Equal(1))
+			nextEvent.Store(EventHolder{&unrecognizedEvent{}})
 		})
 
 		It("does not emit any more messages", func() {
