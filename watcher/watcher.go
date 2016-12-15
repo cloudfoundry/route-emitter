@@ -361,8 +361,6 @@ func (watcher *Watcher) eventCellIDMatches(logger lager.Logger, event models.Eve
 		return true
 	}
 
-	logger.Info("checking-if-lrp-cell-id-matches", lager.Data{"event": event})
-
 	switch event := event.(type) {
 	case *models.DesiredLRPCreatedEvent:
 		return true
@@ -372,7 +370,6 @@ func (watcher *Watcher) eventCellIDMatches(logger lager.Logger, event models.Eve
 		return true
 	case *models.ActualLRPCreatedEvent:
 		lrp, _ := event.ActualLrpGroup.Resolve()
-		logger.Info("checking-if-lrp-cell-id-matches", lager.Data{"lrp": lrp, "watcher-cell-id": watcher.cellID})
 		return lrp.ActualLRPInstanceKey.CellId == watcher.cellID
 	case *models.ActualLRPChangedEvent:
 		beforeLRP, _ := event.Before.Resolve()
@@ -395,7 +392,7 @@ func (watcher *Watcher) eventCellIDMatches(logger lager.Logger, event models.Eve
 
 func (watcher *Watcher) handleEvent(logger lager.Logger, event models.Event) {
 	if !watcher.eventCellIDMatches(logger, event) {
-		logger.Info("skipping-event", lager.Data{"event": event})
+		logSkippedEvent(logger, event)
 		return
 	}
 
@@ -621,6 +618,20 @@ func desiredLRPData(schedulingInfo *models.DesiredLRPSchedulingInfo) lager.Data 
 		"routes":       logRoutes,
 		"instances":    schedulingInfo.GetInstances(),
 	}
+}
+
+func logSkippedEvent(logger lager.Logger, event models.Event) {
+	data := lager.Data{"event-type": event.EventType()}
+	switch e := event.(type) {
+	case *models.ActualLRPCreatedEvent:
+		data["lrp"] = actualLRPData(routing_table.NewActualLRPRoutingInfo(e.ActualLrpGroup))
+	case *models.ActualLRPRemovedEvent:
+		data["lrp"] = actualLRPData(routing_table.NewActualLRPRoutingInfo(e.ActualLrpGroup))
+	case *models.ActualLRPChangedEvent:
+		data["before"] = actualLRPData(routing_table.NewActualLRPRoutingInfo(e.Before))
+		data["after"] = actualLRPData(routing_table.NewActualLRPRoutingInfo(e.After))
+	}
+	logger.Info("skipping-event", data)
 }
 
 func actualLRPData(lrpRoutingInfo *routing_table.ActualLRPRoutingInfo) lager.Data {
