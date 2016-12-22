@@ -25,7 +25,9 @@ import (
 	"github.com/tedsuo/ifrit/ginkgomon"
 
 	"code.cloudfoundry.org/bbs"
+	bbsconfig "code.cloudfoundry.org/bbs/cmd/bbs/config"
 	bbstestrunner "code.cloudfoundry.org/bbs/cmd/bbs/testrunner"
+	"code.cloudfoundry.org/bbs/encryption"
 	"code.cloudfoundry.org/bbs/test_helpers"
 	"code.cloudfoundry.org/bbs/test_helpers/sqlrunner"
 	"code.cloudfoundry.org/consuladapter/consulrunner"
@@ -40,7 +42,7 @@ var (
 
 	bbsPath    string
 	bbsURL     *url.URL
-	bbsArgs    bbstestrunner.Args
+	bbsConfig  bbsconfig.BBSConfig
 	bbsRunner  *ginkgomon.Runner
 	bbsProcess ifrit.Process
 
@@ -141,8 +143,8 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 
 	bbsClient = bbs.NewClient(bbsURL.String())
 
-	bbsArgs = bbstestrunner.Args{
-		Address:                  bbsAddress,
+	bbsConfig = bbsconfig.BBSConfig{
+		ListenAddress:            bbsAddress,
 		AdvertiseURL:             bbsURL.String(),
 		AuctioneerAddress:        "some-address",
 		DatabaseDriver:           sqlRunner.DriverName(),
@@ -150,8 +152,10 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 		ConsulCluster:            consulRunner.ConsulCluster(),
 		HealthAddress:            healthAddress,
 
-		EncryptionKeys: []string{"label:key"},
-		ActiveKeyLabel: "label",
+		EncryptionConfig: encryption.EncryptionConfig{
+			EncryptionKeys: map[string]string{"label": "key"},
+			ActiveKeyLabel: "label",
+		},
 	}
 })
 
@@ -216,7 +220,7 @@ func startBBS() {
 		return
 	}
 
-	bbsRunner = bbstestrunner.New(bbsPath, bbsArgs)
+	bbsRunner = bbstestrunner.New(bbsPath, bbsConfig)
 	bbsProcess = ginkgomon.Invoke(bbsRunner)
 	bbsRunning = true
 }
