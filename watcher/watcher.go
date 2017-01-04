@@ -229,7 +229,7 @@ func (watcher *Watcher) sync(logger lager.Logger, syncEndChan chan syncEndEvent)
 		defer wg.Done()
 
 		logger.Debug("getting-actual-lrps")
-		actualLRPGroups, err := watcher.bbsClient.ActualLRPGroups(logger, models.ActualLRPFilter{})
+		actualLRPGroups, err := watcher.bbsClient.ActualLRPGroups(logger, models.ActualLRPFilter{CellID: watcher.cellID})
 		if err != nil {
 			logger.Error("failed-getting-actual-lrps", err)
 			getActualLRPsErr = err
@@ -241,9 +241,6 @@ func (watcher *Watcher) sync(logger lager.Logger, syncEndChan chan syncEndEvent)
 		for _, actualLRPGroup := range actualLRPGroups {
 			actualLRP, evacuating := actualLRPGroup.Resolve()
 			if actualLRP.State == models.ActualLRPStateRunning {
-				if watcher.cellID != "" && actualLRP.ActualLRPInstanceKey.CellId != watcher.cellID {
-					continue
-				}
 				runningActualLRPs = append(runningActualLRPs, &routing_table.ActualLRPRoutingInfo{
 					ActualLRP:  actualLRP,
 					Evacuating: evacuating,

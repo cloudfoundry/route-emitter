@@ -1892,6 +1892,14 @@ var _ = Describe("Watcher", func() {
 						BeforeEach(func() {
 							cellID = "another-cell-id"
 							actualLRPGroup2.Instance.ActualLRPInstanceKey.CellId = cellID
+
+							bbsClient.ActualLRPGroupsStub = func(logger lager.Logger, f models.ActualLRPFilter) ([]*models.ActualLRPGroup, error) {
+								clock.IncrementBySeconds(1)
+
+								return []*models.ActualLRPGroup{
+									actualLRPGroup2,
+								}, nil
+							}
 						})
 
 						JustBeforeEach(func() {
@@ -1914,6 +1922,12 @@ var _ = Describe("Watcher", func() {
 							Expect(keys).To(HaveLen(1))
 							endpoints := routingTable.EndpointsForIndex(keys[0], 0)
 							Expect(endpoints).To(HaveLen(1))
+						})
+
+						It("fetches actual lrps that match the cell id", func() {
+							Eventually(bbsClient.ActualLRPGroupsCallCount).Should(Equal(1))
+							_, filter := bbsClient.ActualLRPGroupsArgsForCall(0)
+							Expect(filter.CellID).To(Equal(cellID))
 						})
 					})
 				})
