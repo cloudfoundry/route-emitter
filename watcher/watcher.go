@@ -224,6 +224,20 @@ func (watcher *Watcher) sync(logger lager.Logger, syncEndChan chan syncEndEvent)
 
 	wg := sync.WaitGroup{}
 
+	getSchedulingInfos := func(guids []string) {
+		logger.Debug("getting-scheduling-infos")
+		var err error
+		schedulingInfos, err = watcher.bbsClient.DesiredLRPSchedulingInfos(logger, models.DesiredLRPFilter{
+			ProcessGuids: guids,
+		})
+		if err != nil {
+			logger.Error("failed-getting-desired-lrps", err)
+			getSchedulingInfosErr = err
+			return
+		}
+		logger.Debug("succeeded-getting-scheduling-infos", lager.Data{"num-desired-responses": len(schedulingInfos)})
+	}
+
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -247,22 +261,25 @@ func (watcher *Watcher) sync(logger lager.Logger, syncEndChan chan syncEndEvent)
 				})
 			}
 		}
-	}()
 
-	wg.Add(1)
-	go func() {
-		var err error
-		defer wg.Done()
-
-		logger.Debug("getting-scheduling-infos")
-		schedulingInfos, err = watcher.bbsClient.DesiredLRPSchedulingInfos(logger, models.DesiredLRPFilter{})
-		if err != nil {
-			logger.Error("failed-getting-desired-lrps", err)
-			getSchedulingInfosErr = err
-			return
+		if watcher.cellID != "" {
+			guids := make([]string, 0, len(runningActualLRPs))
+			// filter the desired lrp scheduling info by process guids
+			for _, actualLRP := range actualLRPGroups {
+				lrp, _ := actualLRP.Resolve()
+				guids = append(guids, lrp.ProcessGuid)
+			}
+			getSchedulingInfos(guids)
 		}
-		logger.Debug("succeeded-getting-scheduling-infos", lager.Data{"num-desired-responses": len(schedulingInfos)})
 	}()
+
+	if watcher.cellID == "" {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			getSchedulingInfos(nil)
+		}()
+	}
 
 	wg.Add(1)
 	go func() {

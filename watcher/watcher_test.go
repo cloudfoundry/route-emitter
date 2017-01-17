@@ -1866,6 +1866,14 @@ var _ = Describe("Watcher", func() {
 							table.Swap(tempTable, domains)
 						})
 
+						It("gets all the desired lrps", func() {
+							Eventually(ready).Should(Receive())
+							ready <- struct{}{}
+							Eventually(bbsClient.DesiredLRPSchedulingInfosCallCount()).Should(Equal(1))
+							_, filter := bbsClient.DesiredLRPSchedulingInfosArgsForCall(0)
+							Expect(filter.ProcessGuids).To(BeEmpty())
+						})
+
 						It("applies the cached events and emits", func() {
 							Eventually(ready).Should(Receive())
 							sendEvent()
@@ -1928,6 +1936,13 @@ var _ = Describe("Watcher", func() {
 							Eventually(bbsClient.ActualLRPGroupsCallCount).Should(Equal(1))
 							_, filter := bbsClient.ActualLRPGroupsArgsForCall(0)
 							Expect(filter.CellID).To(Equal(cellID))
+						})
+
+						It("fetches desired lrp scheduling info that match the cell id", func() {
+							Eventually(bbsClient.DesiredLRPSchedulingInfosCallCount()).Should(Equal(1))
+							_, filter := bbsClient.DesiredLRPSchedulingInfosArgsForCall(0)
+							lrp, _ := actualLRPGroup2.Resolve()
+							Expect(filter.ProcessGuids).To(ConsistOf(lrp.ProcessGuid))
 						})
 					})
 				})
