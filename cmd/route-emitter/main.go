@@ -9,13 +9,13 @@ import (
 
 	"code.cloudfoundry.org/bbs"
 	"code.cloudfoundry.org/cfhttp"
-	"code.cloudfoundry.org/cflager"
 	"code.cloudfoundry.org/clock"
 	"code.cloudfoundry.org/consuladapter"
 	"code.cloudfoundry.org/debugserver"
 	"code.cloudfoundry.org/lager"
-	"code.cloudfoundry.org/locket"
+	"code.cloudfoundry.org/lager/lagerflags"
 	route_emitter "code.cloudfoundry.org/route-emitter"
+	"code.cloudfoundry.org/route-emitter/cmd/route-emitter/config"
 	"code.cloudfoundry.org/route-emitter/consuldownchecker"
 	"code.cloudfoundry.org/route-emitter/consuldownmodenotifier"
 	"code.cloudfoundry.org/route-emitter/diegonats"
@@ -31,118 +31,10 @@ import (
 	"github.com/tedsuo/ifrit/sigmon"
 )
 
-var bbsAddress = flag.String(
-	"bbsAddress",
+var configFilePath = flag.String(
+	"config",
 	"",
-	"Address of the BBS API Server",
-)
-
-var cellID = flag.String(
-	"cellID",
-	"",
-	"If set filter the event stream for events related to the given cell id",
-)
-
-var sessionName = flag.String(
-	"sessionName",
-	"route-emitter",
-	"consul session name",
-)
-
-var consulCluster = flag.String(
-	"consulCluster",
-	"",
-	"comma-separated list of consul server URLs (scheme://ip:port)",
-)
-
-var lockTTL = flag.Duration(
-	"lockTTL",
-	locket.DefaultSessionTTL,
-	"TTL for service lock",
-)
-
-var lockRetryInterval = flag.Duration(
-	"lockRetryInterval",
-	locket.RetryInterval,
-	"interval to wait before retrying a failed lock acquisition",
-)
-
-var natsAddresses = flag.String(
-	"natsAddresses",
-	"127.0.0.1:4222",
-	"comma-separated list of NATS addresses (ip:port)",
-)
-
-var natsUsername = flag.String(
-	"natsUsername",
-	"nats",
-	"Username to connect to nats",
-)
-
-var natsPassword = flag.String(
-	"natsPassword",
-	"nats",
-	"Password for nats user",
-)
-
-var syncInterval = flag.Duration(
-	"syncInterval",
-	time.Minute,
-	"the interval between syncs of the routing table",
-)
-
-var consulDownModeNotificationInterval = flag.Duration(
-	"consulDownModeNotificationInterval",
-	time.Minute,
-	"the interval between emission of the ConsulDownMode metric",
-)
-
-var dropsondePort = flag.Int(
-	"dropsondePort",
-	3457,
-	"port the local metron agent is listening on",
-)
-
-var communicationTimeout = flag.Duration(
-	"communicationTimeout",
-	30*time.Second,
-	"Timeout applied to all HTTP requests.",
-)
-
-var bbsCACert = flag.String(
-	"bbsCACert",
-	"",
-	"path to certificate authority cert used for mutually authenticated TLS BBS communication",
-)
-
-var bbsClientCert = flag.String(
-	"bbsClientCert",
-	"",
-	"path to client cert used for mutually authenticated TLS BBS communication",
-)
-
-var bbsClientKey = flag.String(
-	"bbsClientKey",
-	"",
-	"path to client key used for mutually authenticated TLS BBS communication",
-)
-
-var bbsClientSessionCacheSize = flag.Int(
-	"bbsClientSessionCacheSize",
-	0,
-	"Capacity of the ClientSessionCache option on the TLS configuration. If zero, golang's default will be used",
-)
-
-var bbsMaxIdleConnsPerHost = flag.Int(
-	"bbsMaxIdleConnsPerHost",
-	0,
-	"Controls the maximum number of idle (keep-alive) connctions per host. If zero, golang's default will be used",
-)
-
-var routeEmittingWorkers = flag.Int(
-	"routeEmittingWorkers",
-	20,
-	"Max concurrency for sending route messages",
+	"Path to JSON configuration file",
 )
 
 const (
@@ -150,44 +42,63 @@ const (
 )
 
 func main() {
-	debugserver.AddFlags(flag.CommandLine)
-	cflager.AddFlags(flag.CommandLine)
 	flag.Parse()
 
-	cfhttp.Initialize(*communicationTimeout)
+	cfg, err := config.NewRouteEmitterConfig(*configFilePath)
+	if err != nil {
+		logger, _ := lagerflags.NewFromConfig("route-emitter", lagerflags.DefaultLagerConfig())
+		logger.Fatal("failed-to-parse-config", err)
+	}
 
-	logger, reconfigurableSink := cflager.New(*sessionName)
+	cfhttp.Initialize(time.Duration(cfg.CommunicationTimeout))
+
+	logger, reconfigurableSink := lagerflags.NewFromConfig(cfg.ConsulSessionName, cfg.LagerConfig)
 	natsClient := diegonats.NewClient()
 
-	natsPingduration := 20 * time.Second
-	logger.Info("setting-nats-ping-interval", lager.Data{"duration-in-seconds": natsPingduration.Seconds()})
-	natsClient.SetPingInterval(natsPingduration)
+	natsPingDuration := 20 * time.Second
+	logger.Info("setting-nats-ping-interval", lager.Data{"duration-in-seconds": natsPingDuration.Seconds()})
+	natsClient.SetPingInterval(natsPingDuration)
 
 	clock := clock.NewClock()
-	syncer := syncer.NewSyncer(clock, *syncInterval, natsClient, logger)
+	syncer := syncer.NewSyncer(clock, time.Duration(cfg.SyncInterval), natsClient, logger)
 
-	initializeDropsonde(logger)
+	initializeDropsonde(logger, cfg.DropsondePort)
 
-	natsClientRunner := diegonats.NewClientRunner(*natsAddresses, *natsUsername, *natsPassword, logger, natsClient)
+	natsClientRunner := diegonats.NewClientRunner(cfg.NATSAddresses, cfg.NATSUsername, cfg.NATSPassword, logger, natsClient)
 
 	table := initializeRoutingTable(logger)
-	emitter := initializeNatsEmitter(natsClient, logger)
-	watcher := ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
-		return watcher.NewWatcher(*cellID, initializeBBSClient(logger), clock, table, emitter, syncer.Events(), logger).Run(signals, ready)
-	})
+	emitter := initializeNatsEmitter(logger, natsClient, cfg.RouteEmittingWorkers)
+	watcher := watcher.NewWatcher(
+		cfg.CellID,
+		initializeBBSClient(logger, cfg),
+		clock,
+		table,
+		emitter,
+		syncer.Events(),
+		logger,
+	)
 
-	syncRunner := ifrit.RunFunc(func(signals <-chan os.Signal, ready chan<- struct{}) error {
-		return syncer.Run(signals, ready)
-	})
+	consulClient := initializeConsulClient(logger, cfg.ConsulCluster)
 
-	consulClient := initializeConsulClient(logger, *consulCluster)
+	lockMaintainer := initializeLockMaintainer(
+		logger,
+		consulClient,
+		cfg.ConsulSessionName,
+		time.Duration(cfg.LockTTL),
+		time.Duration(cfg.LockRetryInterval),
+		clock,
+	)
 
-	lockMaintainer := initializeLockMaintainer(logger, consulClient, *sessionName, *lockTTL, *lockRetryInterval, clock)
-	consulDownModeNotifier := consuldownmodenotifier.NewConsulDownModeNotifier(logger, 0, clock, *consulDownModeNotificationInterval)
+	consulDownModeNotifier := consuldownmodenotifier.NewConsulDownModeNotifier(
+		logger,
+		0,
+		clock,
+		time.Duration(cfg.ConsulDownModeNotificationInterval),
+	)
 
 	members := grouper.Members{}
 
-	if *cellID == "" {
+	if cfg.CellID == "" {
 		// we are running in local mode
 		members = append(members, grouper.Member{"lock-maintainer", lockMaintainer})
 	}
@@ -196,7 +107,7 @@ func main() {
 		grouper.Member{"consul-down-mode-notifier", consulDownModeNotifier},
 		grouper.Member{"nats-client", natsClientRunner},
 		grouper.Member{"watcher", watcher},
-		grouper.Member{"syncer", syncRunner},
+		grouper.Member{"syncer", syncer},
 	)
 
 	if dbgAddr := debugserver.DebugAddress(flag.CommandLine); dbgAddr != "" {
@@ -211,7 +122,7 @@ func main() {
 
 	logger.Info("started")
 
-	err := <-monitor.Wait()
+	err = <-monitor.Wait()
 	if err != nil {
 		logger.Error("finished-with-failure", err)
 	} else {
@@ -222,16 +133,26 @@ func main() {
 
 	logger = logger.Session("consul-down-mode")
 
-	consulDownChecker := consuldownchecker.NewConsulDownChecker(logger, clock, consulClient, *lockRetryInterval)
+	consulDownChecker := consuldownchecker.NewConsulDownChecker(
+		logger,
+		clock,
+		consulClient,
+		time.Duration(cfg.LockRetryInterval),
+	)
 
-	consulDownModeNotifier = consuldownmodenotifier.NewConsulDownModeNotifier(logger, 1, clock, *consulDownModeNotificationInterval)
+	consulDownModeNotifier = consuldownmodenotifier.NewConsulDownModeNotifier(
+		logger,
+		1,
+		clock,
+		time.Duration(cfg.ConsulDownModeNotificationInterval),
+	)
 
 	members = grouper.Members{
 		{"consul-down-checker", consulDownChecker},
 		{"consul-down-mode-notifier", consulDownModeNotifier},
 		{"nats-client", natsClientRunner},
 		{"watcher", watcher},
-		{"syncer", syncRunner},
+		{"syncer", syncer},
 	}
 
 	group = grouper.NewOrdered(os.Interrupt, members)
@@ -251,18 +172,22 @@ func main() {
 	logger.Info("exited")
 }
 
-func initializeDropsonde(logger lager.Logger) {
-	dropsondeDestination := fmt.Sprint("localhost:", *dropsondePort)
+func initializeDropsonde(logger lager.Logger, dropsondePort int) {
+	dropsondeDestination := fmt.Sprint("localhost:", dropsondePort)
 	err := dropsonde.Initialize(dropsondeDestination, dropsondeOrigin)
 	if err != nil {
 		logger.Error("failed to initialize dropsonde: %v", err)
 	}
 }
 
-func initializeNatsEmitter(natsClient diegonats.NATSClient, logger lager.Logger) nats_emitter.NATSEmitter {
-	workPool, err := workpool.NewWorkPool(*routeEmittingWorkers)
+func initializeNatsEmitter(
+	logger lager.Logger,
+	natsClient diegonats.NATSClient,
+	routeEmittingWorkers int,
+) nats_emitter.NATSEmitter {
+	workPool, err := workpool.NewWorkPool(routeEmittingWorkers)
 	if err != nil {
-		logger.Fatal("failed-to-construct-nats-emitter-workpool", err, lager.Data{"num-workers": *routeEmittingWorkers}) // should never happen
+		logger.Fatal("failed-to-construct-nats-emitter-workpool", err, lager.Data{"num-workers": routeEmittingWorkers}) // should never happen
 	}
 
 	return nats_emitter.New(natsClient, workPool, logger)
@@ -297,17 +222,27 @@ func initializeLockMaintainer(
 	return serviceClient.NewRouteEmitterLockRunner(logger, uuid.String(), lockRetryInterval, lockTTL)
 }
 
-func initializeBBSClient(logger lager.Logger) bbs.Client {
-	bbsURL, err := url.Parse(*bbsAddress)
+func initializeBBSClient(
+	logger lager.Logger,
+	cfg config.RouteEmitterConfig,
+) bbs.Client {
+	bbsURL, err := url.Parse(cfg.BBSAddress)
 	if err != nil {
 		logger.Fatal("Invalid BBS URL", err)
 	}
 
 	if bbsURL.Scheme != "https" {
-		return bbs.NewClient(*bbsAddress)
+		return bbs.NewClient(cfg.BBSAddress)
 	}
 
-	bbsClient, err := bbs.NewSecureClient(*bbsAddress, *bbsCACert, *bbsClientCert, *bbsClientKey, *bbsClientSessionCacheSize, *bbsMaxIdleConnsPerHost)
+	bbsClient, err := bbs.NewSecureClient(
+		cfg.BBSAddress,
+		cfg.BBSCACertFile,
+		cfg.BBSClientCertFile,
+		cfg.BBSClientKeyFile,
+		cfg.BBSClientSessionCacheSize,
+		cfg.BBSMaxIdleConnsPerHost,
+	)
 	if err != nil {
 		logger.Fatal("Failed to configure secure BBS client", err)
 	}

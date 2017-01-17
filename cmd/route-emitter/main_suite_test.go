@@ -6,7 +6,6 @@ import (
 	"net"
 	"net/url"
 	"os"
-	"os/exec"
 	"strconv"
 	"strings"
 	"testing"
@@ -18,7 +17,6 @@ import (
 	"github.com/cloudfoundry/sonde-go/events"
 	"github.com/gogo/protobuf/proto"
 	. "github.com/onsi/ginkgo"
-	"github.com/onsi/ginkgo/config"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gexec"
 	"github.com/tedsuo/ifrit"
@@ -67,31 +65,6 @@ func TestRouteEmitter(t *testing.T) {
 	RunSpecs(t, "Route Emitter Suite")
 }
 
-func createEmitterRunner(sessionName string, extraArgs ...string) *ginkgomon.Runner {
-	args := []string{"-sessionName", sessionName,
-		"-dropsondePort", strconv.Itoa(dropsondePort),
-		"-natsAddresses", fmt.Sprintf("127.0.0.1:%d", natsPort),
-		"-bbsAddress", bbsURL.String(),
-		"-communicationTimeout", "100ms",
-		"-syncInterval", syncInterval.String(),
-		"-lockRetryInterval", "1s",
-		"-lockTTL", "5s",
-		"-consulCluster", consulClusterAddress,
-	}
-	args = append(args, extraArgs...)
-
-	return ginkgomon.New(ginkgomon.Config{
-		Command: exec.Command(
-			string(emitterPath),
-			args...,
-		),
-
-		StartCheck: "route-emitter.watcher.sync.complete",
-
-		AnsiColorCode: "97m",
-	})
-}
-
 var _ = SynchronizedBeforeSuite(func() []byte {
 	emitter, err := gexec.Build("code.cloudfoundry.org/route-emitter/cmd/route-emitter", "-race")
 	Expect(err).NotTo(HaveOccurred())
@@ -122,7 +95,7 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 
 	consulRunner = consulrunner.NewClusterRunner(
 		consulrunner.ClusterRunnerConfig{
-			StartingPort: 9001 + config.GinkgoConfig.ParallelNode*consulrunner.PortOffsetLength,
+			StartingPort: 9001 + GinkgoParallelNode()*consulrunner.PortOffsetLength,
 			NumNodes:     1,
 			Scheme:       "http",
 		},

@@ -2,14 +2,19 @@ package main_test
 
 import (
 	"encoding/json"
+	"fmt"
+	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"net/http/httputil"
 	"net/url"
+	"os/exec"
 	"sync"
 	"time"
 
 	"code.cloudfoundry.org/bbs/models"
+	"code.cloudfoundry.org/durationjson"
+	"code.cloudfoundry.org/route-emitter/cmd/route-emitter/config"
 	"code.cloudfoundry.org/route-emitter/routing_table"
 	. "code.cloudfoundry.org/route-emitter/routing_table/matchers"
 	"code.cloudfoundry.org/routing-info/cfroutes"
@@ -27,22 +32,6 @@ const emitterInterruptTimeout = 5 * time.Second
 const msgReceiveTimeout = 5 * time.Second
 
 var _ = Describe("Route Emitter", func() {
-	listenForRoutes := func(subject string) <-chan routing_table.RegistryMessage {
-		routes := make(chan routing_table.RegistryMessage)
-
-		natsClient.Subscribe(subject, func(msg *nats.Msg) {
-			defer GinkgoRecover()
-
-			var message routing_table.RegistryMessage
-			err := json.Unmarshal(msg.Data, &message)
-			Expect(err).NotTo(HaveOccurred())
-
-			routes <- message
-		})
-
-		return routes
-	}
-
 	var (
 		registeredRoutes   <-chan routing_table.RegistryMessage
 		unregisteredRoutes <-chan routing_table.RegistryMessage
@@ -60,6 +49,56 @@ var _ = Describe("Route Emitter", func() {
 		containerPort uint32
 		routes        *models.Routes
 	)
+
+	createEmitterRunner := func(sessionName string, cellID string) *ginkgomon.Runner {
+		cfg := config.RouteEmitterConfig{
+			CellID:               cellID,
+			ConsulSessionName:    sessionName,
+			DropsondePort:        dropsondePort,
+			NATSAddresses:        fmt.Sprintf("127.0.0.1:%d", natsPort),
+			BBSAddress:           bbsURL.String(),
+			CommunicationTimeout: durationjson.Duration(100 * time.Millisecond),
+			SyncInterval:         durationjson.Duration(syncInterval),
+			LockRetryInterval:    durationjson.Duration(time.Second),
+			LockTTL:              durationjson.Duration(5 * time.Second),
+			ConsulCluster:        consulClusterAddress,
+		}
+
+		configFile, err := ioutil.TempFile("", "route-emitter-test")
+		Expect(err).NotTo(HaveOccurred())
+
+		configPath := configFile.Name()
+		encoder := json.NewEncoder(configFile)
+		err = encoder.Encode(&cfg)
+		Expect(err).NotTo(HaveOccurred())
+
+		return ginkgomon.New(ginkgomon.Config{
+			Command: exec.Command(
+				string(emitterPath),
+				"-config", configPath,
+			),
+
+			StartCheck: "route-emitter.watcher.sync.complete",
+
+			AnsiColorCode: "97m",
+		})
+	}
+
+	listenForRoutes := func(subject string) <-chan routing_table.RegistryMessage {
+		routes := make(chan routing_table.RegistryMessage)
+
+		natsClient.Subscribe(subject, func(msg *nats.Msg) {
+			defer GinkgoRecover()
+
+			var message routing_table.RegistryMessage
+			err := json.Unmarshal(msg.Data, &message)
+			Expect(err).NotTo(HaveOccurred())
+
+			routes <- message
+		})
+
+		return routes
+	}
 
 	BeforeEach(func() {
 		processGuid = "guid1"
@@ -109,12 +148,16 @@ var _ = Describe("Route Emitter", func() {
 		})
 	})
 
+	AfterEach(func() {
+		// os.RemoveAll(configPath)
+	})
+
 	Context("Ping interval for nats client", func() {
 		var runner *ginkgomon.Runner
 		var emitter ifrit.Process
 
 		BeforeEach(func() {
-			runner = createEmitterRunner("emitter1")
+			runner = createEmitterRunner("emitter1", "")
 			runner.StartCheck = "emitter1.started"
 			emitter = ginkgomon.Invoke(runner)
 		})
@@ -136,7 +179,7 @@ var _ = Describe("Route Emitter", func() {
 		)
 
 		BeforeEach(func() {
-			runner = createEmitterRunner("emitter1")
+			runner = createEmitterRunner("emitter1", "")
 			runner.StartCheck = "emitter1.started"
 			emitter = ginkgomon.Invoke(runner)
 		})
@@ -328,7 +371,7 @@ var _ = Describe("Route Emitter", func() {
 			)
 
 			BeforeEach(func() {
-				secondRunner = createEmitterRunner("emitter2")
+				secondRunner = createEmitterRunner("emitter2", "")
 				secondRunner.StartCheck = "lock.acquiring-lock"
 			})
 
@@ -348,7 +391,7 @@ var _ = Describe("Route Emitter", func() {
 
 				Context("runs in local mode", func() {
 					BeforeEach(func() {
-						secondRunner = createEmitterRunner("emitter2", "-cellID", "some-cell-id")
+						secondRunner = createEmitterRunner("emitter2", "some-cell-id")
 						secondRunner.StartCheck = "emitter2.watcher.sync.complete"
 					})
 
@@ -416,7 +459,7 @@ var _ = Describe("Route Emitter", func() {
 			fakeConsul.Start()
 
 			consulClusterAddress = fakeConsul.URL
-			runner = createEmitterRunner("emitter1")
+			runner = createEmitterRunner("emitter1", "")
 			runner.StartCheck = "emitter1.started"
 			emitter = ginkgomon.Invoke(runner)
 		})
@@ -500,7 +543,7 @@ var _ = Describe("Route Emitter", func() {
 
 		Context("and the emitter is started", func() {
 			BeforeEach(func() {
-				emitter = ginkgomon.Invoke(createEmitterRunner("route-emitter"))
+				emitter = ginkgomon.Invoke(createEmitterRunner("route-emitter", ""))
 			})
 
 			AfterEach(func() {
