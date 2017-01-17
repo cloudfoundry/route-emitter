@@ -27,7 +27,7 @@ var _ = Describe("Config", func() {
 			"communication_timeout":"2s",
 			"consul_down_mode_notification_interval": "2m",
 			"sync_interval": "4s",
-			"bbs_api_url": "1.1.1.1:9091",
+			"bbs_address": "1.1.1.1:9091",
 			"bbs_ca_cert_file": "/tmp/bbs_ca_cert",
 			"bbs_client_cert_file": "/tmp/bbs_client_cert",
 			"bbs_client_key_file": "/tmp/bbs_client_key",
