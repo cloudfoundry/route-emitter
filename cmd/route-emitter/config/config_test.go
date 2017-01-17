@@ -129,7 +129,7 @@ var _ = Describe("Config", func() {
 				DropsondePort:                      3457,
 				LockRetryInterval:                  durationjson.Duration(locket.RetryInterval),
 				LockTTL:                            durationjson.Duration(locket.DefaultSessionTTL),
-				NATSAddresses:                      "http://127.0.0.1:4222",
+				NATSAddresses:                      "nats://127.0.0.1:4222",
 				NATSUsername:                       "nats",
 				NATSPassword:                       "nats",
 				RouteEmittingWorkers:               20,
