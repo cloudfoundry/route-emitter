@@ -1588,18 +1588,6 @@ var _ = Describe("Watcher", func() {
 			Context("when syncing ends", func() {
 				var ready chan struct{}
 
-				BeforeEach(func() {
-					bbsClient.ActualLRPGroupsStub = func(logger lager.Logger, f models.ActualLRPFilter) ([]*models.ActualLRPGroup, error) {
-						clock.IncrementBySeconds(1)
-
-						return []*models.ActualLRPGroup{
-							actualLRPGroup1,
-							actualLRPGroup2,
-							actualLRPGroup3,
-						}, nil
-					}
-				})
-
 				JustBeforeEach(func() {
 					syncEvents.Sync <- struct{}{}
 				})
@@ -1610,6 +1598,15 @@ var _ = Describe("Watcher", func() {
 
 				Context("when desired lrps are retrieved", func() {
 					BeforeEach(func() {
+						bbsClient.ActualLRPGroupsStub = func(logger lager.Logger, f models.ActualLRPFilter) ([]*models.ActualLRPGroup, error) {
+							clock.IncrementBySeconds(1)
+
+							return []*models.ActualLRPGroup{
+								actualLRPGroup1,
+								actualLRPGroup2,
+								actualLRPGroup3,
+							}, nil
+						}
 
 						ready = make(chan struct{})
 
@@ -1621,6 +1618,19 @@ var _ = Describe("Watcher", func() {
 
 							return []*models.DesiredLRPSchedulingInfo{schedulingInfo1, schedulingInfo2}, nil
 						}
+					})
+
+					It("should emit the sync duration, and allow event processing", func() {
+						Eventually(ready).Should(Receive())
+						ready <- struct{}{}
+						Eventually(func() float64 {
+							return fakeMetricSender.GetValue("RouteEmitterSyncDuration").Value
+						}).Should(BeNumerically(">=", 100*time.Millisecond))
+
+						By("completing, events are no longer cached")
+						sendEvent()
+
+						Eventually(fakeTable.RemoveEndpointCallCount).Should(Equal(1))
 					})
 
 					Context("a table with a single routable endpoint", func() {
@@ -1684,62 +1694,80 @@ var _ = Describe("Watcher", func() {
 						BeforeEach(func() {
 							cellID = "another-cell-id"
 							actualLRPGroup2.Instance.ActualLRPInstanceKey.CellId = cellID
-
-							bbsClient.ActualLRPGroupsStub = func(logger lager.Logger, f models.ActualLRPFilter) ([]*models.ActualLRPGroup, error) {
-								clock.IncrementBySeconds(1)
-
-								return []*models.ActualLRPGroup{
-									actualLRPGroup2,
-								}, nil
-							}
 						})
 
-						JustBeforeEach(func() {
-							Eventually(ready).Should(Receive())
-							ready <- struct{}{}
+						Context("when the cell has actual lrps running", func() {
+							BeforeEach(func() {
+								bbsClient.ActualLRPGroupsStub = func(logger lager.Logger, f models.ActualLRPFilter) ([]*models.ActualLRPGroup, error) {
+									clock.IncrementBySeconds(1)
 
-							Eventually(fakeTable.SwapCallCount).Should(Equal(1))
-							routingTable, _ = fakeTable.SwapArgsForCall(0)
+									return []*models.ActualLRPGroup{
+										actualLRPGroup2,
+									}, nil
+								}
+							})
+
+							JustBeforeEach(func() {
+								Eventually(ready).Should(Receive())
+								ready <- struct{}{}
+
+								Eventually(fakeTable.SwapCallCount).Should(Equal(1))
+								routingTable, _ = fakeTable.SwapArgsForCall(0)
+							})
+
+							It("does not register endpoints for lrps on other cells", func() {
+								keys := routing_table.RoutingKeysFromActual(actualLRPGroup1.Instance)
+								Expect(keys).To(HaveLen(1))
+								endpoints := routingTable.EndpointsForIndex(keys[0], 0)
+								Expect(endpoints).To(HaveLen(0))
+							})
+
+							It("registers endpoints for lrps on this cell", func() {
+								keys := routing_table.RoutingKeysFromActual(actualLRPGroup2.Instance)
+								Expect(keys).To(HaveLen(1))
+								endpoints := routingTable.EndpointsForIndex(keys[0], 0)
+								Expect(endpoints).To(HaveLen(1))
+							})
+
+							It("fetches actual lrps that match the cell id", func() {
+								Eventually(bbsClient.ActualLRPGroupsCallCount).Should(Equal(1))
+								_, filter := bbsClient.ActualLRPGroupsArgsForCall(0)
+								Expect(filter.CellID).To(Equal(cellID))
+							})
+
+							It("fetches desired lrp scheduling info that match the cell id", func() {
+								Eventually(bbsClient.DesiredLRPSchedulingInfosCallCount()).Should(Equal(1))
+								_, filter := bbsClient.DesiredLRPSchedulingInfosArgsForCall(0)
+								lrp, _ := actualLRPGroup2.Resolve()
+								Expect(filter.ProcessGuids).To(ConsistOf(lrp.ProcessGuid))
+							})
 						})
 
-						It("does not register endpoints for lrps on other cells", func() {
-							keys := routing_table.RoutingKeysFromActual(actualLRPGroup1.Instance)
-							Expect(keys).To(HaveLen(1))
-							endpoints := routingTable.EndpointsForIndex(keys[0], 0)
-							Expect(endpoints).To(HaveLen(0))
-						})
+						Context("when there are no running actual lrps on the cell", func() {
+							BeforeEach(func() {
+								bbsClient.ActualLRPGroupsStub = func(logger lager.Logger, f models.ActualLRPFilter) ([]*models.ActualLRPGroup, error) {
+									clock.IncrementBySeconds(1)
 
-						It("registers endpoints for lrps on this cell", func() {
-							keys := routing_table.RoutingKeysFromActual(actualLRPGroup2.Instance)
-							Expect(keys).To(HaveLen(1))
-							endpoints := routingTable.EndpointsForIndex(keys[0], 0)
-							Expect(endpoints).To(HaveLen(1))
-						})
+									ready <- struct{}{}
+									Eventually(ready).Should(Receive())
 
-						It("fetches actual lrps that match the cell id", func() {
-							Eventually(bbsClient.ActualLRPGroupsCallCount).Should(Equal(1))
-							_, filter := bbsClient.ActualLRPGroupsArgsForCall(0)
-							Expect(filter.CellID).To(Equal(cellID))
-						})
+									return []*models.ActualLRPGroup{}, nil
+								}
+							})
 
-						It("fetches desired lrp scheduling info that match the cell id", func() {
-							Eventually(bbsClient.DesiredLRPSchedulingInfosCallCount()).Should(Equal(1))
-							_, filter := bbsClient.DesiredLRPSchedulingInfosArgsForCall(0)
-							lrp, _ := actualLRPGroup2.Resolve()
-							Expect(filter.ProcessGuids).To(ConsistOf(lrp.ProcessGuid))
+							JustBeforeEach(func() {
+								Eventually(ready).Should(Receive())
+								ready <- struct{}{}
+
+								Eventually(fakeTable.SwapCallCount).Should(Equal(1))
+								routingTable, _ = fakeTable.SwapArgsForCall(0)
+							})
+
+							It("does not fetch any desired lrp scheduling info", func() {
+								Consistently(bbsClient.DesiredLRPSchedulingInfosCallCount()).Should(Equal(0))
+							})
 						})
 					})
-				})
-
-				It("should emit the sync duration, and allow event processing", func() {
-					Eventually(func() float64 {
-						return fakeMetricSender.GetValue("RouteEmitterSyncDuration").Value
-					}).Should(BeNumerically(">=", 100*time.Millisecond))
-
-					By("completing, events are no longer cached")
-					sendEvent()
-
-					Eventually(fakeTable.RemoveEndpointCallCount).Should(Equal(1))
 				})
 			})
 		})

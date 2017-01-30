@@ -110,9 +110,9 @@ func main() {
 		grouper.Member{"syncer", syncer},
 	)
 
-	if dbgAddr := debugserver.DebugAddress(flag.CommandLine); dbgAddr != "" {
+	if cfg.DebugAddress != "" {
 		members = append(grouper.Members{
-			{"debug-server", debugserver.Runner(dbgAddr, reconfigurableSink)},
+			{"debug-server", debugserver.Runner(cfg.DebugAddress, reconfigurableSink)},
 		}, members...)
 	}
 

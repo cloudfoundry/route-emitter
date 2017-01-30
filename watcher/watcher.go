@@ -225,7 +225,7 @@ func (watcher *Watcher) sync(logger lager.Logger, syncEndChan chan syncEndEvent)
 	wg := sync.WaitGroup{}
 
 	getSchedulingInfos := func(guids []string) {
-		logger.Debug("getting-scheduling-infos")
+		logger.Debug("getting-scheduling-infos", lager.Data{"guids-length": len(guids)})
 		var err error
 		schedulingInfos, err = watcher.bbsClient.DesiredLRPSchedulingInfos(logger, models.DesiredLRPFilter{
 			ProcessGuids: guids,
@@ -269,7 +269,9 @@ func (watcher *Watcher) sync(logger lager.Logger, syncEndChan chan syncEndEvent)
 				lrp, _ := actualLRP.Resolve()
 				guids = append(guids, lrp.ProcessGuid)
 			}
-			getSchedulingInfos(guids)
+			if len(guids) > 0 {
+				getSchedulingInfos(guids)
+			}
 		}
 	}()
 
@@ -395,7 +397,7 @@ func (watcher *Watcher) eventCellIDMatches(logger lager.Logger, event models.Eve
 		}
 		// this shouldn't matter if we pass it through or not, since the event is
 		// a no-op from the route-emitter point of view
-		return true
+		return false
 	case *models.ActualLRPRemovedEvent:
 		lrp, _ := event.ActualLrpGroup.Resolve()
 		return lrp.ActualLRPInstanceKey.CellId == watcher.cellID
