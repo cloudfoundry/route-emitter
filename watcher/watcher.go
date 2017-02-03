@@ -572,6 +572,22 @@ func (watcher *Watcher) addAndEmit(logger lager.Logger, actualLRPInfo *routing_t
 
 	for _, endpoint := range endpoints {
 		key := routing_table.RoutingKey{ProcessGuid: actualLRPInfo.ActualLRP.ProcessGuid, ContainerPort: uint32(endpoint.ContainerPort)}
+		routes := watcher.table.GetRoutes(key)
+
+		if len(routes) == 0 {
+			logger.Info("desired-lrp-missing-for-actual-lrp", lager.Data{"guid": key.ProcessGuid})
+			lrps, err := watcher.bbsClient.DesiredLRPSchedulingInfos(logger, models.DesiredLRPFilter{
+				ProcessGuids: []string{key.ProcessGuid},
+			})
+
+			if err != nil {
+				logger.Error("failed-getting-desired-lrps-for-missing-actual-lrp", err)
+			}
+
+			if len(lrps) > 0 {
+				watcher.setRoutesForDesired(logger, lrps[0])
+			}
+		}
 
 		messagesToEmit := watcher.table.AddEndpoint(key, endpoint)
 		watcher.emitMessages(logger, messagesToEmit)

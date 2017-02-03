@@ -1367,6 +1367,20 @@ var _ = Describe("RoutingTable", func() {
 		})
 	})
 
+	Describe("GetRoutes", func() {
+		It("returns routes for routing key ", func() {
+			expectedRoute := routing_table.Route{Hostname: "fake-route-url", LogGuid: logGuid}
+			table.SetRoutes(routing_table.RoutingKey{ProcessGuid: "fake-process-guid"}, []routing_table.Route{
+				routing_table.Route{Hostname: "fake-route-url", LogGuid: logGuid},
+			}, nil)
+			actualRoutes := table.GetRoutes(routing_table.RoutingKey{ProcessGuid: "fake-process-guid"})
+			Expect(actualRoutes).To(HaveLen(1))
+			Expect(actualRoutes[0].Hostname).To(Equal(expectedRoute.Hostname))
+			Expect(actualRoutes[0].LogGuid).To(Equal(expectedRoute.LogGuid))
+			Expect(actualRoutes[0].RouteServiceUrl).To(Equal(expectedRoute.RouteServiceUrl))
+		})
+	})
+
 	Describe("RouteCount", func() {
 		It("returns 0 on a new routing table", func() {
 			Expect(table.RouteCount()).To(Equal(0))

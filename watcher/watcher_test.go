@@ -78,8 +78,8 @@ var _ = Describe("Watcher", func() {
 
 		logger *lagertest.TestLogger
 
-		nextErr   atomic.Value
-		nextEvent atomic.Value
+		nextErr        atomic.Value
+		nextEventValue atomic.Value
 	)
 
 	BeforeEach(func() {
@@ -125,7 +125,7 @@ var _ = Describe("Watcher", func() {
 
 		nextErr = atomic.Value{}
 		nextErr := nextErr
-		nextEvent.Store(nilEventHolder)
+		nextEventValue.Store(nilEventHolder)
 
 		eventSource.CloseStub = func() error {
 			nextErr.Store(errors.New("closed"))
@@ -134,8 +134,8 @@ var _ = Describe("Watcher", func() {
 
 		eventSource.NextStub = func() (models.Event, error) {
 			time.Sleep(10 * time.Millisecond)
-			if eventHolder := nextEvent.Load(); eventHolder != nil && eventHolder != nilEventHolder {
-				nextEvent.Store(nilEventHolder)
+			if eventHolder := nextEventValue.Load(); eventHolder != nil && eventHolder != nilEventHolder {
+				nextEventValue.Store(nilEventHolder)
 
 				eh := eventHolder.(EventHolder)
 				if eh.event != nil {
@@ -206,7 +206,7 @@ var _ = Describe("Watcher", func() {
 				JustBeforeEach(func() {
 					fakeTable.SetRoutesReturns(dummyMessagesToEmit)
 
-					nextEvent.Store(EventHolder{models.NewDesiredLRPCreatedEvent(desiredLRP)})
+					nextEventValue.Store(EventHolder{models.NewDesiredLRPCreatedEvent(desiredLRP)})
 				})
 
 				It("should set the routes on the table", func() {
@@ -402,7 +402,7 @@ var _ = Describe("Watcher", func() {
 				})
 
 				JustBeforeEach(func() {
-					nextEvent.Store(EventHolder{models.NewDesiredLRPChangedEvent(
+					nextEventValue.Store(EventHolder{models.NewDesiredLRPChangedEvent(
 						originalDesiredLRP,
 						changedDesiredLRP,
 					)})
@@ -643,7 +643,7 @@ var _ = Describe("Watcher", func() {
 				})
 
 				JustBeforeEach(func() {
-					nextEvent.Store(EventHolder{models.NewDesiredLRPRemovedEvent(desiredLRP)})
+					nextEventValue.Store(EventHolder{models.NewDesiredLRPRemovedEvent(desiredLRP)})
 				})
 
 				It("should remove the routes from the table", func() {
@@ -782,7 +782,7 @@ var _ = Describe("Watcher", func() {
 
 				JustBeforeEach(func() {
 					fakeTable.AddEndpointReturns(dummyMessagesToEmit)
-					nextEvent.Store(EventHolder{models.NewActualLRPCreatedEvent(actualLRPGroup)})
+					nextEventValue.Store(EventHolder{models.NewActualLRPCreatedEvent(actualLRPGroup)})
 				})
 
 				It("should log the net info", func() {
@@ -876,7 +876,7 @@ var _ = Describe("Watcher", func() {
 					actualLRPGroup = &models.ActualLRPGroup{
 						Instance: actualLRP,
 					}
-					nextEvent.Store(EventHolder{models.NewActualLRPCreatedEvent(actualLRPGroup)})
+					nextEventValue.Store(EventHolder{models.NewActualLRPCreatedEvent(actualLRPGroup)})
 				})
 
 				It("should NOT log the net info", func() {
@@ -933,7 +933,7 @@ var _ = Describe("Watcher", func() {
 				})
 
 				JustBeforeEach(func() {
-					nextEvent.Store(EventHolder{models.NewActualLRPChangedEvent(beforeActualLRP, afterActualLRP)})
+					nextEventValue.Store(EventHolder{models.NewActualLRPChangedEvent(beforeActualLRP, afterActualLRP)})
 				})
 
 				It("should log the new net info", func() {
@@ -1058,7 +1058,7 @@ var _ = Describe("Watcher", func() {
 
 				JustBeforeEach(func() {
 					fakeTable.RemoveEndpointReturns(dummyMessagesToEmit)
-					nextEvent.Store(EventHolder{models.NewActualLRPChangedEvent(beforeActualLRP, afterActualLRP)})
+					nextEventValue.Store(EventHolder{models.NewActualLRPChangedEvent(beforeActualLRP, afterActualLRP)})
 				})
 
 				It("should log the previous net info", func() {
@@ -1150,7 +1150,7 @@ var _ = Describe("Watcher", func() {
 							State:                models.ActualLRPStateClaimed,
 						},
 					}
-					nextEvent.Store(EventHolder{models.NewActualLRPChangedEvent(beforeActualLRP, afterActualLRP)})
+					nextEventValue.Store(EventHolder{models.NewActualLRPChangedEvent(beforeActualLRP, afterActualLRP)})
 				})
 
 				It("should NOT log the net info", func() {
@@ -1205,7 +1205,7 @@ var _ = Describe("Watcher", func() {
 				})
 
 				JustBeforeEach(func() {
-					nextEvent.Store(EventHolder{models.NewActualLRPRemovedEvent(actualLRP)})
+					nextEventValue.Store(EventHolder{models.NewActualLRPRemovedEvent(actualLRP)})
 				})
 
 				It("should log the previous net info", func() {
@@ -1294,7 +1294,7 @@ var _ = Describe("Watcher", func() {
 						},
 					}
 
-					nextEvent.Store(EventHolder{models.NewActualLRPRemovedEvent(actualLRP)})
+					nextEventValue.Store(EventHolder{models.NewActualLRPRemovedEvent(actualLRP)})
 				})
 
 				It("should NOT log the net info", func() {
@@ -1325,7 +1325,7 @@ var _ = Describe("Watcher", func() {
 		JustBeforeEach(func() {
 			syncEvents.Sync <- struct{}{}
 			Eventually(emitter.EmitCallCount).Should(Equal(1))
-			nextEvent.Store(EventHolder{&unrecognizedEvent{}})
+			nextEventValue.Store(EventHolder{&unrecognizedEvent{}})
 		})
 
 		It("does not emit any more messages", func() {
@@ -1427,6 +1427,7 @@ var _ = Describe("Watcher", func() {
 			currentTag := &models.ModificationTag{Epoch: "abc", Index: 1}
 			hostname1 := "foo.example.com"
 			hostname2 := "bar.example.com"
+			hostname3 := "baz.example.com"
 			endpoint1 := routing_table.Endpoint{InstanceGuid: "ig-1", Host: "1.1.1.1", Index: 0, Port: 11, ContainerPort: 8080, Evacuating: false, ModificationTag: currentTag}
 			endpoint2 := routing_table.Endpoint{InstanceGuid: "ig-2", Host: "2.2.2.2", Index: 0, Port: 22, ContainerPort: 8080, Evacuating: false, ModificationTag: currentTag}
 			endpoint3 := routing_table.Endpoint{InstanceGuid: "ig-3", Host: "2.2.2.2", Index: 1, Port: 23, ContainerPort: 8080, Evacuating: false, ModificationTag: currentTag}
@@ -1454,6 +1455,17 @@ var _ = Describe("Watcher", func() {
 				Instances: 1,
 			}
 
+			schedulingInfo3 := &models.DesiredLRPSchedulingInfo{
+				DesiredLRPKey: models.NewDesiredLRPKey("pg-3", "tests", "lg3"),
+				Routes: cfroutes.CFRoutes{
+					cfroutes.CFRoute{
+						Hostnames: []string{hostname3},
+						Port:      8080,
+					},
+				}.RoutingInfo(),
+				Instances: 1,
+			}
+
 			actualLRPGroup1 := &models.ActualLRPGroup{
 				Instance: &models.ActualLRP{
 					ActualLRPKey:         models.NewActualLRPKey("pg-1", 0, "domain"),
@@ -1474,7 +1486,7 @@ var _ = Describe("Watcher", func() {
 
 			actualLRPGroup3 := &models.ActualLRPGroup{
 				Instance: &models.ActualLRP{
-					ActualLRPKey:         models.NewActualLRPKey("pg-2", 1, "domain"),
+					ActualLRPKey:         models.NewActualLRPKey("pg-3", 1, "domain"),
 					ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint3.InstanceGuid, "cell-id"),
 					ActualLRPNetInfo:     models.NewActualLRPNetInfo(endpoint3.Host, models.NewPortMapping(endpoint3.Port, endpoint3.ContainerPort)),
 					State:                models.ActualLRPStateRunning,
@@ -1743,6 +1755,64 @@ var _ = Describe("Watcher", func() {
 							})
 						})
 
+						Context("when desired lrp for the actual lrp is missing", func() {
+							BeforeEach(func() {
+								cellID = "cell-id"
+
+								bbsClient.DesiredLRPSchedulingInfosStub = func(logger lager.Logger, f models.DesiredLRPFilter) ([]*models.DesiredLRPSchedulingInfo, error) {
+									defer GinkgoRecover()
+									ready <- struct{}{}
+									Eventually(ready).Should(Receive())
+									if len(f.ProcessGuids) == 1 && f.ProcessGuids[0] == "pg-3" {
+										return []*models.DesiredLRPSchedulingInfo{schedulingInfo3}, nil
+									}
+									return []*models.DesiredLRPSchedulingInfo{schedulingInfo1}, nil
+								}
+
+								bbsClient.ActualLRPGroupsStub = func(logger lager.Logger, f models.ActualLRPFilter) ([]*models.ActualLRPGroup, error) {
+									clock.IncrementBySeconds(1)
+									return []*models.ActualLRPGroup{actualLRPGroup1}, nil
+								}
+
+								fakeTable.SetRoutesReturns(dummyMessagesToEmit)
+							})
+
+							JustBeforeEach(func() {
+								Eventually(ready).Should(Receive())
+								ready <- struct{}{}
+
+								beforeActualLRPGroup3 := &models.ActualLRPGroup{
+									Instance: &models.ActualLRP{
+										ActualLRPKey:         models.NewActualLRPKey("pg-3", 1, "domain"),
+										ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint3.InstanceGuid, "cell-id"),
+										State:                models.ActualLRPStateClaimed,
+									},
+								}
+
+								nextEvent <- models.NewActualLRPChangedEvent(
+									beforeActualLRPGroup3,
+									actualLRPGroup3,
+								)
+							})
+
+							It("fetches the desired lrp and updates the routing table", func() {
+								Eventually(ready).Should(Receive())
+								ready <- struct{}{}
+
+								Eventually(fakeTable.SwapCallCount).Should(Equal(1))
+								routingTable, _ = fakeTable.SwapArgsForCall(0)
+
+								Eventually(bbsClient.DesiredLRPSchedulingInfosCallCount()).Should(Equal(2))
+
+								_, filter := bbsClient.DesiredLRPSchedulingInfosArgsForCall(1)
+								lrp, _ := actualLRPGroup3.Resolve()
+
+								Eventually(fakeTable.SwapCallCount).Should(Equal(1))
+								routingTable, _ = fakeTable.SwapArgsForCall(0)
+								Expect(filter.ProcessGuids).To(HaveLen(1))
+								Expect(filter.ProcessGuids).To(ConsistOf(lrp.ProcessGuid))
+							})
+						})
 						Context("when there are no running actual lrps on the cell", func() {
 							BeforeEach(func() {
 								bbsClient.ActualLRPGroupsStub = func(logger lager.Logger, f models.ActualLRPFilter) ([]*models.ActualLRPGroup, error) {

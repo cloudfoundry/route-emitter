@@ -18,6 +18,7 @@ type RoutingTable interface {
 	Swap(newTable RoutingTable, domains models.DomainSet) MessagesToEmit
 
 	SetRoutes(key RoutingKey, routes []Route, modTag *models.ModificationTag) MessagesToEmit
+	GetRoutes(key RoutingKey) []Route
 	RemoveRoutes(key RoutingKey, modTag *models.ModificationTag) MessagesToEmit
 	AddEndpoint(key RoutingKey, endpoint Endpoint) MessagesToEmit
 	RemoveEndpoint(key RoutingKey, endpoint Endpoint) MessagesToEmit
@@ -182,6 +183,15 @@ func (table *routingTable) SetRoutes(key RoutingKey, routes []Route, modTag *mod
 	table.entries[key] = newEntry
 
 	return table.emit(key, currentEntry, newEntry)
+}
+
+func (table *routingTable) GetRoutes(key RoutingKey) []Route {
+	table.Lock()
+	defer table.Unlock()
+
+	currentEntry := table.entries[key]
+
+	return currentEntry.Routes
 }
 
 func (table *routingTable) RemoveRoutes(key RoutingKey, modTag *models.ModificationTag) MessagesToEmit {

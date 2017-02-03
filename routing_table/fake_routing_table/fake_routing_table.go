@@ -34,6 +34,14 @@ type FakeRoutingTable struct {
 	setRoutesReturns struct {
 		result1 routing_table.MessagesToEmit
 	}
+	GetRoutesStub        func(key routing_table.RoutingKey) []routing_table.Route
+	getRoutesMutex       sync.RWMutex
+	getRoutesArgsForCall []struct {
+		key routing_table.RoutingKey
+	}
+	getRoutesReturns struct {
+		result1 []routing_table.Route
+	}
 	RemoveRoutesStub        func(key routing_table.RoutingKey, modTag *models.ModificationTag) routing_table.MessagesToEmit
 	removeRoutesMutex       sync.RWMutex
 	removeRoutesArgsForCall []struct {
@@ -76,11 +84,14 @@ type FakeRoutingTable struct {
 	messagesToEmitReturns     struct {
 		result1 routing_table.MessagesToEmit
 	}
+	invocations      map[string][][]interface{}
+	invocationsMutex sync.RWMutex
 }
 
 func (fake *FakeRoutingTable) RouteCount() int {
 	fake.routeCountMutex.Lock()
 	fake.routeCountArgsForCall = append(fake.routeCountArgsForCall, struct{}{})
+	fake.recordInvocation("RouteCount", []interface{}{})
 	fake.routeCountMutex.Unlock()
 	if fake.RouteCountStub != nil {
 		return fake.RouteCountStub()
@@ -108,6 +119,7 @@ func (fake *FakeRoutingTable) Swap(newTable routing_table.RoutingTable, domains 
 		newTable routing_table.RoutingTable
 		domains  models.DomainSet
 	}{newTable, domains})
+	fake.recordInvocation("Swap", []interface{}{newTable, domains})
 	fake.swapMutex.Unlock()
 	if fake.SwapStub != nil {
 		return fake.SwapStub(newTable, domains)
@@ -136,12 +148,18 @@ func (fake *FakeRoutingTable) SwapReturns(result1 routing_table.MessagesToEmit) 
 }
 
 func (fake *FakeRoutingTable) SetRoutes(key routing_table.RoutingKey, routes []routing_table.Route, modTag *models.ModificationTag) routing_table.MessagesToEmit {
+	var routesCopy []routing_table.Route
+	if routes != nil {
+		routesCopy = make([]routing_table.Route, len(routes))
+		copy(routesCopy, routes)
+	}
 	fake.setRoutesMutex.Lock()
 	fake.setRoutesArgsForCall = append(fake.setRoutesArgsForCall, struct {
 		key    routing_table.RoutingKey
 		routes []routing_table.Route
 		modTag *models.ModificationTag
-	}{key, routes, modTag})
+	}{key, routesCopy, modTag})
+	fake.recordInvocation("SetRoutes", []interface{}{key, routesCopy, modTag})
 	fake.setRoutesMutex.Unlock()
 	if fake.SetRoutesStub != nil {
 		return fake.SetRoutesStub(key, routes, modTag)
@@ -169,12 +187,46 @@ func (fake *FakeRoutingTable) SetRoutesReturns(result1 routing_table.MessagesToE
 	}{result1}
 }
 
+func (fake *FakeRoutingTable) GetRoutes(key routing_table.RoutingKey) []routing_table.Route {
+	fake.getRoutesMutex.Lock()
+	fake.getRoutesArgsForCall = append(fake.getRoutesArgsForCall, struct {
+		key routing_table.RoutingKey
+	}{key})
+	fake.recordInvocation("GetRoutes", []interface{}{key})
+	fake.getRoutesMutex.Unlock()
+	if fake.GetRoutesStub != nil {
+		return fake.GetRoutesStub(key)
+	} else {
+		return fake.getRoutesReturns.result1
+	}
+}
+
+func (fake *FakeRoutingTable) GetRoutesCallCount() int {
+	fake.getRoutesMutex.RLock()
+	defer fake.getRoutesMutex.RUnlock()
+	return len(fake.getRoutesArgsForCall)
+}
+
+func (fake *FakeRoutingTable) GetRoutesArgsForCall(i int) routing_table.RoutingKey {
+	fake.getRoutesMutex.RLock()
+	defer fake.getRoutesMutex.RUnlock()
+	return fake.getRoutesArgsForCall[i].key
+}
+
+func (fake *FakeRoutingTable) GetRoutesReturns(result1 []routing_table.Route) {
+	fake.GetRoutesStub = nil
+	fake.getRoutesReturns = struct {
+		result1 []routing_table.Route
+	}{result1}
+}
+
 func (fake *FakeRoutingTable) RemoveRoutes(key routing_table.RoutingKey, modTag *models.ModificationTag) routing_table.MessagesToEmit {
 	fake.removeRoutesMutex.Lock()
 	fake.removeRoutesArgsForCall = append(fake.removeRoutesArgsForCall, struct {
 		key    routing_table.RoutingKey
 		modTag *models.ModificationTag
 	}{key, modTag})
+	fake.recordInvocation("RemoveRoutes", []interface{}{key, modTag})
 	fake.removeRoutesMutex.Unlock()
 	if fake.RemoveRoutesStub != nil {
 		return fake.RemoveRoutesStub(key, modTag)
@@ -208,6 +260,7 @@ func (fake *FakeRoutingTable) AddEndpoint(key routing_table.RoutingKey, endpoint
 		key      routing_table.RoutingKey
 		endpoint routing_table.Endpoint
 	}{key, endpoint})
+	fake.recordInvocation("AddEndpoint", []interface{}{key, endpoint})
 	fake.addEndpointMutex.Unlock()
 	if fake.AddEndpointStub != nil {
 		return fake.AddEndpointStub(key, endpoint)
@@ -241,6 +294,7 @@ func (fake *FakeRoutingTable) RemoveEndpoint(key routing_table.RoutingKey, endpo
 		key      routing_table.RoutingKey
 		endpoint routing_table.Endpoint
 	}{key, endpoint})
+	fake.recordInvocation("RemoveEndpoint", []interface{}{key, endpoint})
 	fake.removeEndpointMutex.Unlock()
 	if fake.RemoveEndpointStub != nil {
 		return fake.RemoveEndpointStub(key, endpoint)
@@ -274,6 +328,7 @@ func (fake *FakeRoutingTable) EndpointsForIndex(key routing_table.RoutingKey, in
 		key   routing_table.RoutingKey
 		index int32
 	}{key, index})
+	fake.recordInvocation("EndpointsForIndex", []interface{}{key, index})
 	fake.endpointsForIndexMutex.Unlock()
 	if fake.EndpointsForIndexStub != nil {
 		return fake.EndpointsForIndexStub(key, index)
@@ -304,6 +359,7 @@ func (fake *FakeRoutingTable) EndpointsForIndexReturns(result1 []routing_table.E
 func (fake *FakeRoutingTable) MessagesToEmit() routing_table.MessagesToEmit {
 	fake.messagesToEmitMutex.Lock()
 	fake.messagesToEmitArgsForCall = append(fake.messagesToEmitArgsForCall, struct{}{})
+	fake.recordInvocation("MessagesToEmit", []interface{}{})
 	fake.messagesToEmitMutex.Unlock()
 	if fake.MessagesToEmitStub != nil {
 		return fake.MessagesToEmitStub()
@@ -323,6 +379,42 @@ func (fake *FakeRoutingTable) MessagesToEmitReturns(result1 routing_table.Messag
 	fake.messagesToEmitReturns = struct {
 		result1 routing_table.MessagesToEmit
 	}{result1}
+}
+
+func (fake *FakeRoutingTable) Invocations() map[string][][]interface{} {
+	fake.invocationsMutex.RLock()
+	defer fake.invocationsMutex.RUnlock()
+	fake.routeCountMutex.RLock()
+	defer fake.routeCountMutex.RUnlock()
+	fake.swapMutex.RLock()
+	defer fake.swapMutex.RUnlock()
+	fake.setRoutesMutex.RLock()
+	defer fake.setRoutesMutex.RUnlock()
+	fake.getRoutesMutex.RLock()
+	defer fake.getRoutesMutex.RUnlock()
+	fake.removeRoutesMutex.RLock()
+	defer fake.removeRoutesMutex.RUnlock()
+	fake.addEndpointMutex.RLock()
+	defer fake.addEndpointMutex.RUnlock()
+	fake.removeEndpointMutex.RLock()
+	defer fake.removeEndpointMutex.RUnlock()
+	fake.endpointsForIndexMutex.RLock()
+	defer fake.endpointsForIndexMutex.RUnlock()
+	fake.messagesToEmitMutex.RLock()
+	defer fake.messagesToEmitMutex.RUnlock()
+	return fake.invocations
+}
+
+func (fake *FakeRoutingTable) recordInvocation(key string, args []interface{}) {
+	fake.invocationsMutex.Lock()
+	defer fake.invocationsMutex.Unlock()
+	if fake.invocations == nil {
+		fake.invocations = map[string][][]interface{}{}
+	}
+	if fake.invocations[key] == nil {
+		fake.invocations[key] = [][]interface{}{}
+	}
+	fake.invocations[key] = append(fake.invocations[key], args)
 }
 
 var _ routing_table.RoutingTable = new(FakeRoutingTable)
