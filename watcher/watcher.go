@@ -643,7 +643,7 @@ func logSkippedEvent(logger lager.Logger, event models.Event) {
 		data["before"] = actualLRPData(routing_table.NewActualLRPRoutingInfo(e.Before))
 		data["after"] = actualLRPData(routing_table.NewActualLRPRoutingInfo(e.After))
 	}
-	logger.Info("skipping-event", data)
+	logger.Debug("skipping-event", data)
 }
 
 func actualLRPData(lrpRoutingInfo *routing_table.ActualLRPRoutingInfo) lager.Data {
