@@ -61,7 +61,7 @@ var (
 
 func TestRouteEmitter(t *testing.T) {
 	RegisterFailHandler(Fail)
-	SetDefaultEventuallyTimeout(2 * time.Second)
+	SetDefaultEventuallyTimeout(5 * time.Second)
 	RunSpecs(t, "Route Emitter Suite")
 }
 
@@ -132,14 +132,17 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 			ActiveKeyLabel: "label",
 		},
 	}
-})
 
-var _ = BeforeEach(func() {
+	sqlProcess = ginkgomon.Invoke(sqlRunner)
+
 	consulRunner.Start()
 	consulRunner.WaitUntilReady()
 	consulClusterAddress = consulRunner.ConsulCluster()
+})
 
-	sqlProcess = ginkgomon.Invoke(sqlRunner)
+var _ = BeforeEach(func() {
+	sqlRunner.Reset()
+	consulRunner.Reset()
 
 	startBBS()
 
@@ -171,22 +174,14 @@ var _ = BeforeEach(func() {
 
 var _ = AfterEach(func() {
 	stopBBS()
-	consulRunner.Stop()
 	gnatsdRunner.Signal(os.Interrupt)
 	Eventually(gnatsdRunner.Wait(), 5).Should(Receive())
 
 	testMetricsListener.Close()
 	Eventually(testMetricsChan).Should(BeClosed())
-
-	ginkgomon.Kill(sqlProcess)
 })
 
 func stopBBS() {
-	if !bbsRunning {
-		return
-	}
-
-	bbsRunning = false
 	ginkgomon.Interrupt(bbsProcess)
 }
 
@@ -201,6 +196,8 @@ func startBBS() {
 }
 
 var _ = SynchronizedAfterSuite(func() {
+	consulRunner.Stop()
+	ginkgomon.Interrupt(sqlProcess)
 }, func() {
 	gexec.CleanupBuildArtifacts()
 })
