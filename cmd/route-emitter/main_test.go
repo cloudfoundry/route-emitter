@@ -530,7 +530,7 @@ var _ = Describe("Route Emitter", func() {
 		})
 	})
 
-	Context("when the BBS has routes to emit in /desired and /actual", func() {
+	Context("when the legacyBBS has routes to emit in /desired and /actual", func() {
 		var emitter ifrit.Process
 
 		BeforeEach(func() {
