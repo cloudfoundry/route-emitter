@@ -1659,6 +1659,8 @@ var _ = Describe("Watcher", func() {
 							Eventually(ready).Should(Receive())
 							sendEvent()
 
+							Eventually(logger).Should(Say("caching-event"))
+
 							ready <- struct{}{}
 
 							Eventually(emitter.EmitCallCount).Should(Equal(1))
