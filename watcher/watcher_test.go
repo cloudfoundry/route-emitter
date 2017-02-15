@@ -78,8 +78,8 @@ var _ = Describe("Watcher", func() {
 
 		logger *lagertest.TestLogger
 
-		nextErr        atomic.Value
-		nextEventValue atomic.Value
+		errCh   chan error
+		eventCh chan EventHolder
 	)
 
 	BeforeEach(func() {
@@ -123,31 +123,28 @@ var _ = Describe("Watcher", func() {
 		fakeMetricSender = fake_metrics_sender.NewFakeMetricSender()
 		metrics.Initialize(fakeMetricSender, nil)
 
-		nextErr = atomic.Value{}
-		nextErr := nextErr
-		nextEventValue.Store(nilEventHolder)
+		errCh = make(chan error, 10)
+		eventCh = make(chan EventHolder, 1)
+
+		// make the variables local to avoid race detection
+		nextErr := errCh
+		nextEventValue := eventCh
 
 		eventSource.CloseStub = func() error {
-			nextErr.Store(errors.New("closed"))
+			nextErr <- errors.New("closed")
 			return nil
 		}
 
 		eventSource.NextStub = func() (models.Event, error) {
-			time.Sleep(10 * time.Millisecond)
-			if eventHolder := nextEventValue.Load(); eventHolder != nil && eventHolder != nilEventHolder {
-				nextEventValue.Store(nilEventHolder)
-
-				eh := eventHolder.(EventHolder)
-				if eh.event != nil {
-					return eh.event, nil
-				}
+			t := time.After(10 * time.Millisecond)
+			select {
+			case err := <-nextErr:
+				return nil, err
+			case x := <-nextEventValue:
+				return x.event, nil
+			case <-t:
+				return nil, nil
 			}
-
-			if err := nextErr.Load(); err != nil {
-				return nil, err.(error)
-			}
-
-			return nil, nil
 		}
 	})
 
@@ -206,7 +203,7 @@ var _ = Describe("Watcher", func() {
 				JustBeforeEach(func() {
 					fakeTable.SetRoutesReturns(dummyMessagesToEmit)
 
-					nextEventValue.Store(EventHolder{models.NewDesiredLRPCreatedEvent(desiredLRP)})
+					Eventually(eventCh).Should(BeSent(EventHolder{models.NewDesiredLRPCreatedEvent(desiredLRP)}))
 				})
 
 				It("should set the routes on the table", func() {
@@ -402,10 +399,10 @@ var _ = Describe("Watcher", func() {
 				})
 
 				JustBeforeEach(func() {
-					nextEventValue.Store(EventHolder{models.NewDesiredLRPChangedEvent(
+					Eventually(eventCh).Should(BeSent(EventHolder{models.NewDesiredLRPChangedEvent(
 						originalDesiredLRP,
 						changedDesiredLRP,
-					)})
+					)}))
 				})
 
 				Context("when scaling down the number of LRP instances", func() {
@@ -643,7 +640,7 @@ var _ = Describe("Watcher", func() {
 				})
 
 				JustBeforeEach(func() {
-					nextEventValue.Store(EventHolder{models.NewDesiredLRPRemovedEvent(desiredLRP)})
+					Eventually(eventCh).Should(BeSent(EventHolder{models.NewDesiredLRPRemovedEvent(desiredLRP)}))
 				})
 
 				It("should remove the routes from the table", func() {
@@ -782,7 +779,7 @@ var _ = Describe("Watcher", func() {
 
 				JustBeforeEach(func() {
 					fakeTable.AddEndpointReturns(dummyMessagesToEmit)
-					nextEventValue.Store(EventHolder{models.NewActualLRPCreatedEvent(actualLRPGroup)})
+					Eventually(eventCh).Should(BeSent(EventHolder{models.NewActualLRPCreatedEvent(actualLRPGroup)}))
 				})
 
 				It("should log the net info", func() {
@@ -876,7 +873,7 @@ var _ = Describe("Watcher", func() {
 					actualLRPGroup = &models.ActualLRPGroup{
 						Instance: actualLRP,
 					}
-					nextEventValue.Store(EventHolder{models.NewActualLRPCreatedEvent(actualLRPGroup)})
+					Eventually(eventCh).Should(BeSent(EventHolder{models.NewActualLRPCreatedEvent(actualLRPGroup)}))
 				})
 
 				It("should NOT log the net info", func() {
@@ -933,7 +930,7 @@ var _ = Describe("Watcher", func() {
 				})
 
 				JustBeforeEach(func() {
-					nextEventValue.Store(EventHolder{models.NewActualLRPChangedEvent(beforeActualLRP, afterActualLRP)})
+					Eventually(eventCh).Should(BeSent(EventHolder{models.NewActualLRPChangedEvent(beforeActualLRP, afterActualLRP)}))
 				})
 
 				It("should log the new net info", func() {
@@ -1058,7 +1055,7 @@ var _ = Describe("Watcher", func() {
 
 				JustBeforeEach(func() {
 					fakeTable.RemoveEndpointReturns(dummyMessagesToEmit)
-					nextEventValue.Store(EventHolder{models.NewActualLRPChangedEvent(beforeActualLRP, afterActualLRP)})
+					Eventually(eventCh).Should(BeSent(EventHolder{models.NewActualLRPChangedEvent(beforeActualLRP, afterActualLRP)}))
 				})
 
 				It("should log the previous net info", func() {
@@ -1150,7 +1147,7 @@ var _ = Describe("Watcher", func() {
 							State:                models.ActualLRPStateClaimed,
 						},
 					}
-					nextEventValue.Store(EventHolder{models.NewActualLRPChangedEvent(beforeActualLRP, afterActualLRP)})
+					Eventually(eventCh).Should(BeSent(EventHolder{models.NewActualLRPChangedEvent(beforeActualLRP, afterActualLRP)}))
 				})
 
 				It("should NOT log the net info", func() {
@@ -1205,7 +1202,7 @@ var _ = Describe("Watcher", func() {
 				})
 
 				JustBeforeEach(func() {
-					nextEventValue.Store(EventHolder{models.NewActualLRPRemovedEvent(actualLRP)})
+					Eventually(eventCh).Should(BeSent(EventHolder{models.NewActualLRPRemovedEvent(actualLRP)}))
 				})
 
 				It("should log the previous net info", func() {
@@ -1294,7 +1291,7 @@ var _ = Describe("Watcher", func() {
 						},
 					}
 
-					nextEventValue.Store(EventHolder{models.NewActualLRPRemovedEvent(actualLRP)})
+					Eventually(eventCh).Should(BeSent(EventHolder{models.NewActualLRPRemovedEvent(actualLRP)}))
 				})
 
 				It("should NOT log the net info", func() {
@@ -1325,7 +1322,7 @@ var _ = Describe("Watcher", func() {
 		JustBeforeEach(func() {
 			syncEvents.Sync <- struct{}{}
 			Eventually(emitter.EmitCallCount).Should(Equal(1))
-			nextEventValue.Store(EventHolder{&unrecognizedEvent{}})
+			Eventually(eventCh).Should(BeSent(EventHolder{&unrecognizedEvent{}}))
 		})
 
 		It("does not emit any more messages", func() {
@@ -1376,28 +1373,6 @@ var _ = Describe("Watcher", func() {
 	})
 
 	Describe("Sync Events", func() {
-		var nextEvent chan models.Event
-
-		BeforeEach(func() {
-			nextEvent = make(chan models.Event)
-
-			nextEvent := nextEvent
-			nextErr := nextErr
-			eventSource.NextStub = func() (models.Event, error) {
-				select {
-				case e := <-nextEvent:
-					return e, nil
-				default:
-				}
-
-				if err := nextErr.Load(); err != nil {
-					return nil, err.(error)
-				}
-
-				return nil, nil
-			}
-		})
-
 		Context("Emit", func() {
 			JustBeforeEach(func() {
 				fakeTable.MessagesToEmitReturns(dummyMessagesToEmit)
@@ -1494,7 +1469,7 @@ var _ = Describe("Watcher", func() {
 			}
 
 			sendEvent := func() {
-				nextEvent <- models.NewActualLRPRemovedEvent(actualLRPGroup1)
+				Eventually(eventCh).Should(BeSent(EventHolder{models.NewActualLRPRemovedEvent(actualLRPGroup1)}))
 			}
 
 			Context("when sync begins", func() {
@@ -1789,10 +1764,10 @@ var _ = Describe("Watcher", func() {
 									},
 								}
 
-								nextEvent <- models.NewActualLRPChangedEvent(
+								Eventually(eventCh).Should(BeSent(EventHolder{models.NewActualLRPChangedEvent(
 									beforeActualLRPGroup3,
 									actualLRPGroup3,
-								)
+								)}))
 							})
 
 							It("fetches the desired lrp and updates the routing table", func() {
