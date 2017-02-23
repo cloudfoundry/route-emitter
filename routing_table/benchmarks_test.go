@@ -1,6 +1,7 @@
 package routing_table_test
 
 import (
+	"fmt"
 	"strconv"
 	"time"
 
@@ -12,6 +13,10 @@ import (
 
 type fakeBenchmarker struct{}
 
+const (
+	MaxRoutes = 250000
+)
+
 func (fb *fakeBenchmarker) Time(desc string, f func(), whatever ...interface{}) time.Duration {
 	start := time.Now()
 	f()
@@ -22,24 +27,25 @@ func (fb *fakeBenchmarker) RecordValue(desc string, f float64, whatever ...inter
 
 var _ = FDescribe("Benchmarks", func() {
 	var (
-		rt                      routing_table.RoutingTable
-		logger                  *lagertest.TestLogger
-		registerationMessages   int
-		unregisterationMessages int
+		rt                     routing_table.RoutingTable
+		logger                 *lagertest.TestLogger
+		registrationMessages   int
+		unregistrationMessages int
 	)
 
 	BeforeEach(func() {
-		logger = lagertest.NewTestLogger("whatever")
+		logger = lagertest.NewTestLogger("route-emitter-benchmarks")
 		rt = routing_table.NewTable(logger)
+		registrationMessages, unregistrationMessages = 0, 0
 	})
 
 	AfterEach(func() {
-		Expect(registerationMessages).To(BeNumerically(">=", 250000))
+		Expect(registrationMessages).To(BeNumerically(">=", MaxRoutes))
 	})
 
-	benchmark := func(startIndex int) func(Benchmarker) {
+	benchmarkAdd := func(startIndex, endIndex, appIndex int) func(Benchmarker) {
 		return func(b Benchmarker) {
-			for i := startIndex; i < startIndex+250000; i++ {
+			for i := startIndex; i < endIndex; i++ {
 				guid := "app-" + strconv.Itoa(i)
 				key := routing_table.RoutingKey{
 					ProcessGuid:   guid,
@@ -52,11 +58,11 @@ var _ = FDescribe("Benchmarks", func() {
 					},
 				}
 				endpoint := routing_table.Endpoint{
-					InstanceGuid:  guid,
-					Index:         0,
+					InstanceGuid:  fmt.Sprintf("%s-%d", guid, appIndex),
+					Index:         int32(appIndex),
 					Host:          routes[0].Hostname,
 					Domain:        "test.domain",
-					Port:          1024 + uint32(i),
+					Port:          1024 + uint32(i*(appIndex+1)),
 					ContainerPort: key.ContainerPort,
 					Evacuating:    false,
 				}
@@ -65,21 +71,148 @@ var _ = FDescribe("Benchmarks", func() {
 				})
 				b.Time("adding endpoint", func() {
 					msgs := rt.AddEndpoint(key, endpoint)
-					registerationMessages += len(msgs.RegistrationMessages)
-					unregisterationMessages += len(msgs.UnregistrationMessages)
+					registrationMessages += len(msgs.RegistrationMessages)
+					unregistrationMessages += len(msgs.UnregistrationMessages)
 				})
 			}
 		}
 	}
 
-	Measure("route addition", benchmark(0), 1)
+	benchmarkRemove := func(startIndex, endIndex, appIndex int) func(Benchmarker) {
+		return func(b Benchmarker) {
+			for i := startIndex; i < endIndex; i++ {
+				guid := "app-" + strconv.Itoa(i)
+				key := routing_table.RoutingKey{
+					ProcessGuid:   guid,
+					ContainerPort: 8080,
+				}
+				routes := []routing_table.Route{
+					{
+						Hostname: guid,
+						LogGuid:  guid,
+					},
+				}
+				endpoint := routing_table.Endpoint{
+					InstanceGuid:  fmt.Sprintf("%s-%d", guid, appIndex),
+					Index:         int32(appIndex),
+					Host:          routes[0].Hostname,
+					Domain:        "test.domain",
+					Port:          1024 + uint32(i*(appIndex+1)),
+					ContainerPort: key.ContainerPort,
+					Evacuating:    false,
+				}
+				b.Time("removing route", func() {
+					rt.RemoveRoutes(key, nil)
+				})
+				b.Time("removing endpoint", func() {
+					msgs := rt.RemoveEndpoint(key, endpoint)
+					registrationMessages += len(msgs.RegistrationMessages)
+					unregistrationMessages += len(msgs.UnregistrationMessages)
+				})
+			}
+		}
+	}
+
+	newRoutTable := func(startIndex int) routing_table.RoutingTable {
+		tmpRt := routing_table.NewTable(logger)
+		for i := startIndex; i < startIndex+MaxRoutes; i++ {
+			guid := "app-" + strconv.Itoa(i)
+			key := routing_table.RoutingKey{
+				ProcessGuid:   guid,
+				ContainerPort: 8080,
+			}
+			routes := []routing_table.Route{
+				{
+					Hostname: guid,
+					LogGuid:  guid,
+				},
+			}
+			endpoint := routing_table.Endpoint{
+				InstanceGuid:  guid,
+				Index:         0,
+				Host:          routes[0].Hostname,
+				Domain:        "test.domain",
+				Port:          1024 + uint32(i),
+				ContainerPort: key.ContainerPort,
+				Evacuating:    false,
+			}
+			tmpRt.SetRoutes(key, routes, nil)
+			tmpRt.AddEndpoint(key, endpoint)
+		}
+		return tmpRt
+	}
+
+	benchmarkEndpointsForIndex := func(startIndex, endIndex int) func(Benchmarker) {
+		return func(b Benchmarker) {
+			for i := startIndex; i < endIndex; i++ {
+				guid := "app-" + strconv.Itoa(i)
+				key := routing_table.RoutingKey{
+					ProcessGuid:   guid,
+					ContainerPort: 8080,
+				}
+				b.Time("adding route", func() {
+					rt.EndpointsForIndex(key, int32(0))
+				})
+			}
+		}
+	}
+
+	Measure("route addition", benchmarkAdd(0, MaxRoutes, 0), 1)
 
 	Context("when the table is already populated", func() {
 		BeforeEach(func() {
-			benchmark(0)(&fakeBenchmarker{})
+			benchmarkAdd(0, MaxRoutes, 0)(&fakeBenchmarker{})
 		})
 
-		Measure("route heartbeats", benchmark(0), 1)
-		Measure("more route additions", benchmark(250000), 1)
+		Measure("route heartbeats", benchmarkAdd(0, MaxRoutes, 0), 1)
+		Measure("more route additions", benchmarkAdd(MaxRoutes, 2*MaxRoutes, 0), 1)
+	})
+
+	FContext("when the table is already populated", func() {
+		BeforeEach(func() {
+			benchmarkAdd(0, MaxRoutes, 0)(&fakeBenchmarker{})
+		})
+
+		Context("when removing routes", func() {
+			AfterEach(func() {
+				Expect(unregistrationMessages).To(BeNumerically(">=", MaxRoutes))
+			})
+
+			Measure("remove routes", benchmarkRemove(0, MaxRoutes, 0), 1)
+		})
+
+		Measure("getting route info", func(b Benchmarker) {
+			for i := 0; i < MaxRoutes; i++ {
+				guid := "app-" + strconv.Itoa(i)
+				key := routing_table.RoutingKey{
+					ProcessGuid:   guid,
+					ContainerPort: 8080,
+				}
+				b.Time("get route", func() {
+					rt.GetRoutes(key)
+				})
+			}
+		}, 1)
+
+	})
+
+	Context("swap routing tables", func() {
+		tempRoutingTable := newRoutTable(MaxRoutes)
+		Measure("swap routes", func(b Benchmarker) {
+			benchmarkAdd(0, MaxRoutes, 0)(&fakeBenchmarker{})
+			b.Time("swapping table", func() {
+				rt.Swap(tempRoutingTable, nil)
+			})
+		}, 10)
+	})
+
+	Context("get endpoint from index", func() {
+		BeforeEach(func() {
+			for i := 0; i < 5; i++ {
+				benchmarkAdd(0, MaxRoutes/5, i)(&fakeBenchmarker{})
+			}
+		})
+
+		Measure("fetch endpoints", benchmarkEndpointsForIndex(0, MaxRoutes/5), 1)
 	})
 })
