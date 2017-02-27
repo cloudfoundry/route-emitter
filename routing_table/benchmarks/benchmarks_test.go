@@ -159,7 +159,7 @@ var _ = Describe("Benchmarks", func() {
 		}
 	}
 
-	Measure("route addition", benchmarkAdd(0, MaxRoutes, 0), 1)
+	Measure("route addition", benchmarkAdd(0, MaxRoutes, 0), numSamples())
 
 	Context("when the table is already populated", func() {
 		BeforeEach(func() {
@@ -167,8 +167,8 @@ var _ = Describe("Benchmarks", func() {
 		})
 
 		Context("when adding routes", func() {
-			Measure("route heartbeats", benchmarkAdd(0, MaxRoutes, 0), 1)
-			Measure("more route additions", benchmarkAdd(MaxRoutes, 2*MaxRoutes, 0), 1)
+			Measure("route heartbeats", benchmarkAdd(0, MaxRoutes, 0), numSamples())
+			Measure("more route additions", benchmarkAdd(MaxRoutes, 2*MaxRoutes, 0), numSamples())
 		})
 
 		Context("when removing routes", func() {
@@ -176,7 +176,7 @@ var _ = Describe("Benchmarks", func() {
 				Expect(unregistrationMessages).To(BeNumerically(">=", MaxRoutes))
 			})
 
-			Measure("remove routes", benchmarkRemove(0, MaxRoutes, 0), 1)
+			Measure("remove routes", benchmarkRemove(0, MaxRoutes, 0), numSamples())
 		})
 
 		Measure("getting route info", func(b Benchmarker) {
@@ -190,8 +190,7 @@ var _ = Describe("Benchmarks", func() {
 					rt.GetRoutes(key)
 				})
 			}
-		}, 1)
-
+		}, numSamples())
 	})
 
 	Context("swap routing tables", func() {
@@ -201,7 +200,7 @@ var _ = Describe("Benchmarks", func() {
 			b.Time("swapping table", func() {
 				rt.Swap(tempRoutingTable, nil)
 			})
-		}, 10)
+		}, numSamples())
 	})
 
 	Context("get endpoint from index", func() {
@@ -211,6 +210,6 @@ var _ = Describe("Benchmarks", func() {
 			}
 		})
 
-		Measure("fetch endpoints", benchmarkEndpointsForIndex(0, MaxRoutes/5), 1)
+		Measure("fetch endpoints", benchmarkEndpointsForIndex(0, MaxRoutes/5), numSamples())
 	})
 })
