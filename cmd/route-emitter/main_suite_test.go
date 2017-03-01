@@ -34,9 +34,11 @@ import (
 const heartbeatInterval = 1 * time.Second
 
 var (
-	emitterPath   string
-	natsPort      int
-	dropsondePort int
+	emitterPath        string
+	natsPort           int
+	dropsondePort      int
+	healthCheckPort    int
+	healthCheckAddress string
 
 	bbsPath    string
 	bbsURL     *url.URL
@@ -107,9 +109,9 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 
 	bbsPath = string(binaries["bbs"])
 	bbsPort := 13000 + GinkgoParallelNode()*2
-	healthPort := bbsPort + 1
+	bbsHealthPort := bbsPort + 1
 	bbsAddress := fmt.Sprintf("127.0.0.1:%d", bbsPort)
-	healthAddress := fmt.Sprintf("127.0.0.1:%d", healthPort)
+	bbsHealthAddress := fmt.Sprintf("127.0.0.1:%d", bbsHealthPort)
 
 	bbsURL = &url.URL{
 		Scheme: "http",
@@ -125,7 +127,7 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 		DatabaseDriver:           sqlRunner.DriverName(),
 		DatabaseConnectionString: sqlRunner.ConnectionString(),
 		ConsulCluster:            consulRunner.ConsulCluster(),
-		HealthAddress:            healthAddress,
+		HealthAddress:            bbsHealthAddress,
 
 		EncryptionConfig: encryption.EncryptionConfig{
 			EncryptionKeys: map[string]string{"label": "key"},
@@ -163,6 +165,8 @@ var _ = BeforeEach(func() {
 			testMetricsChan <- &envelope
 		}
 	}()
+	healthCheckPort = 4500 + GinkgoParallelNode()
+	healthCheckAddress = fmt.Sprintf("127.0.0.1:%d", healthCheckPort)
 
 	var err error
 	dropsondePort, err = strconv.Atoi(strings.TrimPrefix(testMetricsListener.LocalAddr().String(), "127.0.0.1:"))
@@ -178,7 +182,7 @@ var _ = AfterEach(func() {
 	testMetricsListener.Close()
 	Eventually(testMetricsChan).Should(BeClosed())
 
-	ginkgomon.Kill(sqlProcess)
+	ginkgomon.Kill(sqlProcess, 5*time.Second)
 })
 
 func stopBBS() {
@@ -188,6 +192,7 @@ func stopBBS() {
 
 	bbsRunning = false
 	ginkgomon.Interrupt(bbsProcess)
+	Eventually(bbsProcess.Wait()).Should(Receive())
 }
 
 func startBBS() {

@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"time"
 
 	"code.cloudfoundry.org/lager/lagertest"
 	. "code.cloudfoundry.org/route-emitter/diegonats"
@@ -54,33 +53,25 @@ var _ = Describe("Starting the NatsClientRunner process", func() {
 
 			Eventually(errorChan).Should(Receive(Equal(errors.New("nats closed unexpectedly"))))
 		})
+
+		It("reconnects when nats server goes down and comes back up", func() {
+			stopNATS()
+			Eventually(natsClient.Ping).Should(BeFalse())
+
+			startNATS()
+			Expect(natsClient.Ping()).To(BeTrue())
+		})
 	})
 
 	Describe("when NATS is not up", func() {
-		var natsClientProcessChan chan ifrit.Process
-
 		BeforeEach(func() {
-			natsClientProcessChan = make(chan ifrit.Process, 1)
-			go func() {
-				natsClientProcessChan <- ifrit.Invoke(natsClientRunner)
-			}()
+			natsClientProcess = ifrit.Invoke(natsClientRunner)
 		})
 
-		It("waits for NATS to come up and connects to NATS", func() {
-			Consistently(natsClientProcessChan).ShouldNot(Receive())
-			startNATS()
-			Eventually(natsClientProcessChan, 5*time.Second).Should(Receive(&natsClientProcess))
-
-			Expect(natsClient.Ping()).To(BeTrue())
-		})
-
-		It("disconnects when it receives a signal", func() {
-			Consistently(natsClientProcessChan).ShouldNot(Receive())
-			startNATS()
-			Eventually(natsClientProcessChan, 5*time.Second).Should(Receive(&natsClientProcess))
-
-			natsClientProcess.Signal(os.Interrupt)
-			Eventually(natsClientProcess.Wait(), 5).Should(Receive())
+		It("errors with a connection failure", func() {
+			var err error
+			Eventually(natsClientProcess.Wait(), 5).Should(Receive(&err))
+			Expect(err).To(MatchError(errors.New("nats: no servers available for connection")))
 		})
 	})
 })

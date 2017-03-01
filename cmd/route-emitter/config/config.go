@@ -24,6 +24,7 @@ type RouteEmitterConfig struct {
 	ConsulDownModeNotificationInterval durationjson.Duration `json:"consul_down_mode_notification_interval,omitempty"`
 	ConsulSessionName                  string                `json:"consul_session_name,omitempty"`
 	DropsondePort                      int                   `json:"dropsonde_port,omitempty"`
+	HealthCheckAddress                 string                `json:"healthcheck_address,omitempty"`
 	LockRetryInterval                  durationjson.Duration `json:"lock_retry_interval,omitempty"`
 	LockTTL                            durationjson.Duration `json:"lock_ttl,omitempty"`
 	NATSAddresses                      string                `json:"nats_addresses,omitempty"`

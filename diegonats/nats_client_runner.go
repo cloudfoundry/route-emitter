@@ -5,7 +5,6 @@ import (
 	"net/url"
 	"os"
 	"strings"
-	"time"
 
 	"code.cloudfoundry.org/lager"
 )
@@ -40,14 +39,9 @@ func (runner NATSClientRunner) Run(signals <-chan os.Signal, ready chan<- struct
 	}
 
 	unexpectedConnClosed, err := runner.client.Connect(natsMembers)
-	for err != nil {
+	if err != nil {
 		runner.logger.Error("connecting-to-nats-failed", err)
-		select {
-		case <-signals:
-			return nil
-		case <-time.After(time.Second):
-			unexpectedConnClosed, err = runner.client.Connect(natsMembers)
-		}
+		return err
 	}
 
 	runner.logger.Info("connecting-to-nats-succeeeded")
