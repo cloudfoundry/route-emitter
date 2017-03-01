@@ -20,7 +20,7 @@ import (
 	. "github.com/onsi/gomega/gbytes"
 	"github.com/tedsuo/ifrit"
 
-	"code.cloudfoundry.org/route-emitter/nats_emitter/fake_nats_emitter"
+	"code.cloudfoundry.org/route-emitter/emitter/fakes"
 	"code.cloudfoundry.org/route-emitter/routing_table"
 	"code.cloudfoundry.org/route-emitter/routing_table/fake_routing_table"
 	"code.cloudfoundry.org/route-emitter/syncer"
@@ -57,7 +57,7 @@ var _ = Describe("Watcher", func() {
 		bbsClient   *fake_bbs.FakeClient
 		fakeTable   *fake_routing_table.FakeRoutingTable
 		table       routing_table.RoutingTable
-		emitter     *fake_nats_emitter.FakeNATSEmitter
+		natsEmitter *fakes.FakeNATSEmitter
 		syncEvents  syncer.Events
 		cellID      string
 
@@ -91,7 +91,7 @@ var _ = Describe("Watcher", func() {
 
 		fakeTable = &fake_routing_table.FakeRoutingTable{}
 		table = fakeTable
-		emitter = &fake_nats_emitter.FakeNATSEmitter{}
+		natsEmitter = &fakes.FakeNATSEmitter{}
 		syncEvents = syncer.Events{
 			Sync: make(chan struct{}),
 			Emit: make(chan struct{}),
@@ -154,7 +154,7 @@ var _ = Describe("Watcher", func() {
 			bbsClient,
 			clock,
 			table,
-			emitter,
+			natsEmitter,
 			syncEvents,
 			logger,
 		)
@@ -179,7 +179,7 @@ var _ = Describe("Watcher", func() {
 		behaveAsDesired := func() {
 			JustBeforeEach(func() {
 				syncEvents.Sync <- struct{}{}
-				Eventually(emitter.EmitCallCount).ShouldNot(Equal(0))
+				Eventually(natsEmitter.EmitCallCount).ShouldNot(Equal(0))
 			})
 
 			Context("when a create event occurs", func() {
@@ -238,8 +238,8 @@ var _ = Describe("Watcher", func() {
 				})
 
 				It("should emit whatever the table tells it to emit", func() {
-					Eventually(emitter.EmitCallCount).Should(Equal(2))
-					messagesToEmit := emitter.EmitArgsForCall(1)
+					Eventually(natsEmitter.EmitCallCount).Should(Equal(2))
+					messagesToEmit := natsEmitter.EmitArgsForCall(1)
 					Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
 				})
 
@@ -309,9 +309,9 @@ var _ = Describe("Watcher", func() {
 					})
 
 					It("emits whatever the table tells it to emit", func() {
-						Eventually(emitter.EmitCallCount).Should(Equal(2))
+						Eventually(natsEmitter.EmitCallCount).Should(Equal(2))
 
-						messagesToEmit := emitter.EmitArgsForCall(1)
+						messagesToEmit := natsEmitter.EmitArgsForCall(1)
 						Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
 					})
 				})
@@ -355,12 +355,12 @@ var _ = Describe("Watcher", func() {
 					})
 
 					It("emits whatever the table tells it to emit", func() {
-						Eventually(emitter.EmitCallCount).Should(Equal(3))
+						Eventually(natsEmitter.EmitCallCount).Should(Equal(3))
 
-						messagesToEmit := emitter.EmitArgsForCall(1)
+						messagesToEmit := natsEmitter.EmitArgsForCall(1)
 						Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
 
-						messagesToEmit = emitter.EmitArgsForCall(2)
+						messagesToEmit = natsEmitter.EmitArgsForCall(2)
 						Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
 					})
 				})
@@ -458,8 +458,8 @@ var _ = Describe("Watcher", func() {
 				})
 
 				It("should emit whatever the table tells it to emit", func() {
-					Eventually(emitter.EmitCallCount).Should(Equal(2))
-					messagesToEmit := emitter.EmitArgsForCall(1)
+					Eventually(natsEmitter.EmitCallCount).Should(Equal(2))
+					messagesToEmit := natsEmitter.EmitArgsForCall(1)
 					Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
 				})
 
@@ -537,9 +537,9 @@ var _ = Describe("Watcher", func() {
 					})
 
 					It("emits whatever the table tells it to emit", func() {
-						Eventually(emitter.EmitCallCount).Should(Equal(3))
+						Eventually(natsEmitter.EmitCallCount).Should(Equal(3))
 
-						messagesToEmit := emitter.EmitArgsForCall(2)
+						messagesToEmit := natsEmitter.EmitArgsForCall(2)
 						Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
 					})
 				})
@@ -583,12 +583,12 @@ var _ = Describe("Watcher", func() {
 					})
 
 					It("emits whatever the table tells it to emit", func() {
-						Eventually(emitter.EmitCallCount).Should(Equal(3))
+						Eventually(natsEmitter.EmitCallCount).Should(Equal(3))
 
-						messagesToEmit := emitter.EmitArgsForCall(1)
+						messagesToEmit := natsEmitter.EmitArgsForCall(1)
 						Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
 
-						messagesToEmit = emitter.EmitArgsForCall(2)
+						messagesToEmit = natsEmitter.EmitArgsForCall(2)
 						Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
 					})
 				})
@@ -611,9 +611,9 @@ var _ = Describe("Watcher", func() {
 					})
 
 					It("emits whatever the table tells it to emit", func() {
-						Eventually(emitter.EmitCallCount).Should(Equal(2))
+						Eventually(natsEmitter.EmitCallCount).Should(Equal(2))
 
-						messagesToEmit := emitter.EmitArgsForCall(1)
+						messagesToEmit := natsEmitter.EmitArgsForCall(1)
 						Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
 					})
 				})
@@ -651,9 +651,9 @@ var _ = Describe("Watcher", func() {
 				})
 
 				It("should emit whatever the table tells it to emit", func() {
-					Eventually(emitter.EmitCallCount).Should(Equal(2))
+					Eventually(natsEmitter.EmitCallCount).Should(Equal(2))
 
-					messagesToEmit := emitter.EmitArgsForCall(1)
+					messagesToEmit := natsEmitter.EmitArgsForCall(1)
 					Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
 				})
 
@@ -712,12 +712,12 @@ var _ = Describe("Watcher", func() {
 					})
 
 					It("emits whatever the table tells it to emit", func() {
-						Eventually(emitter.EmitCallCount).Should(Equal(3))
+						Eventually(natsEmitter.EmitCallCount).Should(Equal(3))
 
-						messagesToEmit := emitter.EmitArgsForCall(1)
+						messagesToEmit := natsEmitter.EmitArgsForCall(1)
 						Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
 
-						messagesToEmit = emitter.EmitArgsForCall(2)
+						messagesToEmit = natsEmitter.EmitArgsForCall(2)
 						Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
 					})
 				})
@@ -744,7 +744,7 @@ var _ = Describe("Watcher", func() {
 	Describe("Actual LRP changes", func() {
 		JustBeforeEach(func() {
 			syncEvents.Sync <- struct{}{}
-			Eventually(emitter.EmitCallCount).ShouldNot(Equal(0))
+			Eventually(natsEmitter.EmitCallCount).ShouldNot(Equal(0))
 		})
 
 		Context("when a create event occurs", func() {
@@ -812,9 +812,9 @@ var _ = Describe("Watcher", func() {
 				})
 
 				It("should emit whatever the table tells it to emit", func() {
-					Eventually(emitter.EmitCallCount).Should(Equal(3))
+					Eventually(natsEmitter.EmitCallCount).Should(Equal(3))
 
-					messagesToEmit := emitter.EmitArgsForCall(1)
+					messagesToEmit := natsEmitter.EmitArgsForCall(1)
 					Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
 				})
 
@@ -894,7 +894,7 @@ var _ = Describe("Watcher", func() {
 				})
 
 				It("doesn't emit", func() {
-					Eventually(emitter.EmitCallCount).Should(Equal(1))
+					Eventually(natsEmitter.EmitCallCount).Should(Equal(1))
 				})
 			})
 		})
@@ -981,9 +981,9 @@ var _ = Describe("Watcher", func() {
 				})
 
 				It("should emit whatever the table tells it to emit", func() {
-					Eventually(emitter.EmitCallCount).Should(Equal(3))
+					Eventually(natsEmitter.EmitCallCount).Should(Equal(3))
 
-					messagesToEmit := emitter.EmitArgsForCall(1)
+					messagesToEmit := natsEmitter.EmitArgsForCall(1)
 					Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
 				})
 
@@ -1099,9 +1099,9 @@ var _ = Describe("Watcher", func() {
 				})
 
 				It("should emit whatever the table tells it to emit", func() {
-					Eventually(emitter.EmitCallCount).Should(Equal(3))
+					Eventually(natsEmitter.EmitCallCount).Should(Equal(3))
 
-					messagesToEmit := emitter.EmitArgsForCall(1)
+					messagesToEmit := natsEmitter.EmitArgsForCall(1)
 					Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
 				})
 
@@ -1172,7 +1172,7 @@ var _ = Describe("Watcher", func() {
 				})
 
 				It("should not emit anything", func() {
-					Consistently(emitter.EmitCallCount).Should(Equal(1))
+					Consistently(natsEmitter.EmitCallCount).Should(Equal(1))
 				})
 			})
 
@@ -1246,12 +1246,12 @@ var _ = Describe("Watcher", func() {
 				})
 
 				It("should emit whatever the table tells it to emit", func() {
-					Eventually(emitter.EmitCallCount).Should(Equal(3))
+					Eventually(natsEmitter.EmitCallCount).Should(Equal(3))
 
-					messagesToEmit := emitter.EmitArgsForCall(1)
+					messagesToEmit := natsEmitter.EmitArgsForCall(1)
 					Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
 
-					messagesToEmit = emitter.EmitArgsForCall(2)
+					messagesToEmit = natsEmitter.EmitArgsForCall(2)
 					Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
 				})
 
@@ -1312,7 +1312,7 @@ var _ = Describe("Watcher", func() {
 				})
 
 				It("doesn't emit", func() {
-					Consistently(emitter.EmitCallCount).Should(Equal(1))
+					Consistently(natsEmitter.EmitCallCount).Should(Equal(1))
 				})
 			})
 		})
@@ -1321,12 +1321,12 @@ var _ = Describe("Watcher", func() {
 	Describe("Unrecognized events", func() {
 		JustBeforeEach(func() {
 			syncEvents.Sync <- struct{}{}
-			Eventually(emitter.EmitCallCount).Should(Equal(1))
+			Eventually(natsEmitter.EmitCallCount).Should(Equal(1))
 			Eventually(eventCh).Should(BeSent(EventHolder{&unrecognizedEvent{}}))
 		})
 
 		It("does not emit any more messages", func() {
-			Consistently(emitter.EmitCallCount).Should(Equal(1))
+			Consistently(natsEmitter.EmitCallCount).Should(Equal(1))
 		})
 	})
 
@@ -1381,8 +1381,8 @@ var _ = Describe("Watcher", func() {
 			})
 
 			It("emits", func() {
-				Eventually(emitter.EmitCallCount).Should(Equal(1))
-				Expect(emitter.EmitArgsForCall(0)).To(Equal(dummyMessagesToEmit))
+				Eventually(natsEmitter.EmitCallCount).Should(Equal(1))
+				Expect(natsEmitter.EmitArgsForCall(0)).To(Equal(dummyMessagesToEmit))
 			})
 
 			It("sends a 'routes total' metric", func() {
@@ -1663,8 +1663,8 @@ var _ = Describe("Watcher", func() {
 
 							ready <- struct{}{}
 
-							Eventually(emitter.EmitCallCount).Should(Equal(1))
-							Expect(emitter.EmitArgsForCall(0)).To(Equal(routing_table.MessagesToEmit{
+							Eventually(natsEmitter.EmitCallCount).Should(Equal(1))
+							Expect(natsEmitter.EmitArgsForCall(0)).To(Equal(routing_table.MessagesToEmit{
 								RegistrationMessages: []routing_table.RegistryMessage{
 									routing_table.RegistryMessageFor(endpoint2, routing_table.Route{Hostname: hostname2, LogGuid: "lg2"}),
 								},

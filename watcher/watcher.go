@@ -11,7 +11,7 @@ import (
 	"code.cloudfoundry.org/bbs/models"
 	"code.cloudfoundry.org/clock"
 	"code.cloudfoundry.org/lager"
-	"code.cloudfoundry.org/route-emitter/nats_emitter"
+	"code.cloudfoundry.org/route-emitter/emitter"
 	"code.cloudfoundry.org/route-emitter/routing_table"
 	"code.cloudfoundry.org/route-emitter/syncer"
 	"code.cloudfoundry.org/routing-info/cfroutes"
@@ -29,13 +29,13 @@ var (
 )
 
 type Watcher struct {
-	bbsClient  bbs.Client
-	clock      clock.Clock
-	table      routing_table.RoutingTable
-	emitter    nats_emitter.NATSEmitter
-	syncEvents syncer.Events
-	cellID     string
-	logger     lager.Logger
+	bbsClient   bbs.Client
+	clock       clock.Clock
+	table       routing_table.RoutingTable
+	natsEmitter emitter.Emitter
+	syncEvents  syncer.Events
+	cellID      string
+	logger      lager.Logger
 }
 
 type syncEndEvent struct {
@@ -62,18 +62,18 @@ func NewWatcher(
 	bbsClient bbs.Client,
 	clock clock.Clock,
 	table routing_table.RoutingTable,
-	emitter nats_emitter.NATSEmitter,
+	natsEmitter emitter.Emitter,
 	syncEvents syncer.Events,
 	logger lager.Logger,
 ) *Watcher {
 	return &Watcher{
-		bbsClient:  bbsClient,
-		clock:      clock,
-		table:      table,
-		emitter:    emitter,
-		syncEvents: syncEvents,
-		cellID:     cellID,
-		logger:     logger.Session("watcher"),
+		bbsClient:   bbsClient,
+		clock:       clock,
+		table:       table,
+		natsEmitter: natsEmitter,
+		syncEvents:  syncEvents,
+		cellID:      cellID,
+		logger:      logger.Session("watcher"),
 	}
 }
 
@@ -164,7 +164,10 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 
 		case <-watcher.syncEvents.Emit:
 			logger := watcher.logger.Session("emit")
-			watcher.emit(logger)
+			// emit HTTP events to nats for gorouter
+			watcher.emitNatsEvents(logger)
+			// emit TCP events to routing-api for TCP-Router
+			watcher.emitTCPEvents(logger)
 
 		case event := <-eventChan:
 			if syncing {
@@ -191,11 +194,14 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 	}
 }
 
-func (watcher *Watcher) emit(logger lager.Logger) {
+func (watcher *Watcher) emitTCPEvents(logger lager.Logger) {
+}
+
+func (watcher *Watcher) emitNatsEvents(logger lager.Logger) {
 	messagesToEmit := watcher.table.MessagesToEmit()
 
 	logger.Debug("emitting-messages", lager.Data{"messages": messagesToEmit})
-	err := watcher.emitter.Emit(messagesToEmit)
+	err := watcher.natsEmitter.Emit(messagesToEmit)
 	if err != nil {
 		logger.Error("failed-to-emit-routes", err)
 	}
@@ -339,8 +345,8 @@ func (watcher *Watcher) completeSync(syncEnd syncEndEvent, cachedEvents map[stri
 		return
 	}
 
-	emitter := watcher.emitter
-	watcher.emitter = nil
+	natsEmitter := watcher.natsEmitter
+	watcher.natsEmitter = nil
 
 	table := watcher.table
 	watcher.table = syncEnd.table
@@ -352,7 +358,7 @@ func (watcher *Watcher) completeSync(syncEnd syncEndEvent, cachedEvents map[stri
 	logger.Debug("done-handling-cached-events")
 
 	watcher.table = table
-	watcher.emitter = emitter
+	watcher.natsEmitter = natsEmitter
 
 	messages := watcher.table.Swap(syncEnd.table, syncEnd.domains)
 	logger.Debug("start-emitting-messages", lager.Data{
@@ -613,9 +619,9 @@ func (watcher *Watcher) removeAndEmit(logger lager.Logger, actualLRPInfo *routin
 }
 
 func (watcher *Watcher) emitMessages(logger lager.Logger, messagesToEmit routing_table.MessagesToEmit) {
-	if watcher.emitter != nil {
+	if watcher.natsEmitter != nil {
 		logger.Debug("emit-messages", lager.Data{"messages": messagesToEmit})
-		watcher.emitter.Emit(messagesToEmit)
+		watcher.natsEmitter.Emit(messagesToEmit)
 		routesRegistered.Add(messagesToEmit.RouteRegistrationCount())
 		routesUnregistered.Add(messagesToEmit.RouteUnregistrationCount())
 	}

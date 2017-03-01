@@ -23,7 +23,7 @@ import (
 
 const logGuid = "some-log-guid"
 
-var _ = Describe("Syncer", func() {
+var _ = Describe("NatsSyncer", func() {
 	const (
 		processGuid   = "process-guid-1"
 		containerPort = 8080
@@ -34,7 +34,7 @@ var _ = Describe("Syncer", func() {
 	var (
 		bbsClient    *fake_bbs.FakeClient
 		natsClient   *diegonats.FakeNATSClient
-		syncerRunner *syncer.Syncer
+		syncerRunner *syncer.NatsSyncer
 		process      ifrit.Process
 		clock        *fakeclock.FakeClock
 		clockStep    time.Duration
@@ -101,7 +101,7 @@ var _ = Describe("Syncer", func() {
 
 	JustBeforeEach(func() {
 		logger := lagertest.NewTestLogger("test")
-		syncerRunner = syncer.NewSyncer(clock, syncInterval, natsClient, logger)
+		syncerRunner = syncer.NewNatsSyncer(clock, syncInterval, natsClient, logger)
 
 		shutdown = make(chan struct{})
 

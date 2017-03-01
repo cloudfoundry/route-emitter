@@ -1,4 +1,4 @@
-package nats_emitter
+package emitter
 
 import (
 	"encoding/json"
@@ -13,7 +13,7 @@ import (
 
 var messagesEmitted = metric.Counter("MessagesEmitted")
 
-//go:generate counterfeiter -o fake_nats_emitter/fake_nats_emitter.go . NATSEmitter
+//go:generate counterfeiter -o fakes/fake_nats_emitter.go . NATSEmitter
 type NATSEmitter interface {
 	Emit(messagesToEmit routing_table.MessagesToEmit) error
 }
@@ -24,7 +24,7 @@ type natsEmitter struct {
 	logger     lager.Logger
 }
 
-func New(natsClient diegonats.NATSClient, workPool *workpool.WorkPool, logger lager.Logger) NATSEmitter {
+func NewNATSEmitter(natsClient diegonats.NATSClient, workPool *workpool.WorkPool, logger lager.Logger) NATSEmitter {
 	return &natsEmitter{
 		natsClient: natsClient,
 		workPool:   workPool,

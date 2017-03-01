@@ -1,4 +1,4 @@
-package nats_emitter_test
+package endpoint_test
 
 import (
 	. "github.com/onsi/ginkgo"
@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-func TestNatsEmitter(t *testing.T) {
+func TestEndpoint(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "NATS Emitter Suite")
+	RunSpecs(t, "Endpoint Suite")
 }

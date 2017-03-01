@@ -1,11 +1,11 @@
-package nats_emitter_test
+package emitter_test
 
 import (
 	"errors"
 
 	"code.cloudfoundry.org/lager/lagertest"
 	"code.cloudfoundry.org/route-emitter/diegonats"
-	"code.cloudfoundry.org/route-emitter/nats_emitter"
+	"code.cloudfoundry.org/route-emitter/emitter"
 	"code.cloudfoundry.org/route-emitter/routing_table"
 	"code.cloudfoundry.org/workpool"
 	fake_metrics_sender "github.com/cloudfoundry/dropsonde/metric_sender/fake"
@@ -17,7 +17,7 @@ import (
 )
 
 var _ = Describe("NatsEmitter", func() {
-	var emitter nats_emitter.NATSEmitter
+	var natsEmitter emitter.NATSEmitter
 	var natsClient *diegonats.FakeNATSClient
 	var fakeMetricSender *fake_metrics_sender.FakeMetricSender
 
@@ -37,14 +37,14 @@ var _ = Describe("NatsEmitter", func() {
 		logger := lagertest.NewTestLogger("test")
 		workPool, err := workpool.NewWorkPool(1)
 		Expect(err).NotTo(HaveOccurred())
-		emitter = nats_emitter.New(natsClient, workPool, logger)
+		natsEmitter = emitter.NewNATSEmitter(natsClient, workPool, logger)
 		fakeMetricSender = fake_metrics_sender.NewFakeMetricSender()
 		metrics.Initialize(fakeMetricSender, nil)
 	})
 
 	Describe("Emitting", func() {
 		It("should emit register and unregister messages", func() {
-			err := emitter.Emit(messagesToEmit)
+			err := natsEmitter.Emit(messagesToEmit)
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(natsClient.PublishedMessages("router.register")).To(HaveLen(2))
@@ -103,7 +103,7 @@ var _ = Describe("NatsEmitter", func() {
 			})
 
 			It("should error", func() {
-				Expect(emitter.Emit(messagesToEmit)).To(MatchError(errors.New("bam")))
+				Expect(natsEmitter.Emit(messagesToEmit)).To(MatchError(errors.New("bam")))
 			})
 		})
 	})
