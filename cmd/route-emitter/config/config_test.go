@@ -21,6 +21,7 @@ var _ = Describe("Config", func() {
 	BeforeEach(func() {
 		configData = `{
 			"dropsonde_port": 1234,
+			"healthcheck_address": "127.0.0.1:8090",
 			"cell_id": "cellID",
 			"consul_cluster": "consul.example.com",
 			"consul_session_name": "myconsulsession",
@@ -66,6 +67,7 @@ var _ = Describe("Config", func() {
 
 		expectedConfig := config.RouteEmitterConfig{
 			DropsondePort:                      1234,
+			HealthCheckAddress:                 "127.0.0.1:8090",
 			ConsulCluster:                      "consul.example.com",
 			CellID:                             "cellID",
 			CommunicationTimeout:               durationjson.Duration(2 * time.Second),

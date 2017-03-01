@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"net/http"
 	"net/url"
 	"os"
 	"time"
@@ -28,6 +29,7 @@ import (
 	"github.com/nu7hatch/gouuid"
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/ifrit/grouper"
+	"github.com/tedsuo/ifrit/http_server"
 	"github.com/tedsuo/ifrit/sigmon"
 )
 
@@ -96,16 +98,22 @@ func main() {
 		time.Duration(cfg.ConsulDownModeNotificationInterval),
 	)
 
-	members := grouper.Members{}
+	handler := func(resp http.ResponseWriter, req *http.Request) {
+		resp.WriteHeader(http.StatusOK)
+	}
+	healthCheckServer := http_server.New(cfg.HealthCheckAddress, http.HandlerFunc(handler))
+	members := grouper.Members{
+		{"nats-client", natsClientRunner},
+		{"healthcheck", healthCheckServer},
+	}
 
 	if cfg.CellID == "" {
-		// we are running in local mode
+		// we are running in global mode
 		members = append(members, grouper.Member{"lock-maintainer", lockMaintainer})
 	}
 
 	members = append(members,
 		grouper.Member{"consul-down-mode-notifier", consulDownModeNotifier},
-		grouper.Member{"nats-client", natsClientRunner},
 		grouper.Member{"watcher", watcher},
 		grouper.Member{"syncer", syncer},
 	)

@@ -2,6 +2,7 @@ package main_test
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -50,11 +51,13 @@ var _ = Describe("Route Emitter", func() {
 		routes        *models.Routes
 	)
 
-	createEmitterRunner := func(sessionName string, cellID string) *ginkgomon.Runner {
+	createEmitterRunner := func(sessionName string, cellID string, modifyConfig ...func(*config.RouteEmitterConfig)) *ginkgomon.Runner {
+
 		cfg := config.RouteEmitterConfig{
 			CellID:               cellID,
 			ConsulSessionName:    sessionName,
 			DropsondePort:        dropsondePort,
+			HealthCheckAddress:   healthCheckAddress,
 			NATSAddresses:        fmt.Sprintf("127.0.0.1:%d", natsPort),
 			BBSAddress:           bbsURL.String(),
 			CommunicationTimeout: durationjson.Duration(100 * time.Millisecond),
@@ -62,6 +65,9 @@ var _ = Describe("Route Emitter", func() {
 			LockRetryInterval:    durationjson.Duration(time.Second),
 			LockTTL:              durationjson.Duration(5 * time.Second),
 			ConsulCluster:        consulClusterAddress,
+		}
+		for _, f := range modifyConfig {
+			f(&cfg)
 		}
 
 		configFile, err := ioutil.TempFile("", "route-emitter-test")
@@ -172,6 +178,40 @@ var _ = Describe("Route Emitter", func() {
 		})
 	})
 
+	Context("does not start when NATS is not connected", func() {
+		var runner *ginkgomon.Runner
+		var emitter ifrit.Process
+
+		JustBeforeEach(func() {
+			runner = createEmitterRunner("emitter1", "", func(cfg *config.RouteEmitterConfig) {
+				// some invalid address
+				cfg.NATSAddresses = "localhost:0"
+			})
+			runner.StartCheck = "emitter1.started"
+
+			emitter = ginkgomon.Invoke(runner)
+		})
+
+		AfterEach(func() {
+			ginkgomon.Interrupt(emitter, emitterInterruptTimeout)
+		})
+
+		It("exits with non zero exit code", func() {
+			Eventually(emitter.Wait(), 6*time.Second).Should(Receive())
+			Expect(runner.ExitCode()).NotTo(Equal(0))
+		})
+
+		It("doesn't enable the healthcheck server", func() {
+			client := http.Client{
+				Timeout: time.Second,
+			}
+			Consistently(func() error {
+				_, err := client.Get("http://" + healthCheckAddress)
+				return err
+			}, 6*time.Second).Should(HaveOccurred(), "healthcheck unexpectedly started up")
+		})
+	})
+
 	Context("when the emitter is running", func() {
 		var (
 			emitter ifrit.Process
@@ -185,7 +225,24 @@ var _ = Describe("Route Emitter", func() {
 		})
 
 		AfterEach(func() {
+			By("killing the route-emitter")
 			ginkgomon.Interrupt(emitter, emitterInterruptTimeout)
+		})
+
+		It("enables the healthcheck server", func() {
+			client := http.Client{
+				Timeout: time.Second,
+			}
+			Eventually(func() error {
+				resp, err := client.Get("http://" + healthCheckAddress)
+				if err != nil {
+					return err
+				}
+				if resp.StatusCode != http.StatusOK {
+					return errors.New("received a non-200 status code")
+				}
+				return nil
+			}, 6*time.Second).ShouldNot(HaveOccurred(), "healthcheck server didn't start")
 		})
 
 		Context("and an lrp with routes is desired", func() {
@@ -371,7 +428,9 @@ var _ = Describe("Route Emitter", func() {
 			)
 
 			BeforeEach(func() {
-				secondRunner = createEmitterRunner("emitter2", "")
+				secondRunner = createEmitterRunner("emitter2", "", func(cfg *config.RouteEmitterConfig) {
+					cfg.HealthCheckAddress = fmt.Sprintf("127.0.0.1:%d", 4600+GinkgoParallelNode())
+				})
 				secondRunner.StartCheck = "lock.acquiring-lock"
 			})
 
@@ -391,7 +450,9 @@ var _ = Describe("Route Emitter", func() {
 
 				Context("runs in local mode", func() {
 					BeforeEach(func() {
-						secondRunner = createEmitterRunner("emitter2", "some-cell-id")
+						secondRunner = createEmitterRunner("emitter2", "some-cell-id", func(cfg *config.RouteEmitterConfig) {
+							cfg.HealthCheckAddress = fmt.Sprintf("127.0.0.1:%d", 4600+GinkgoParallelNode())
+						})
 						secondRunner.StartCheck = "emitter2.watcher.sync.complete"
 					})
 
