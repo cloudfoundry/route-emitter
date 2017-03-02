@@ -9,5 +9,5 @@ import (
 
 func TestTcpEmitter(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "TcpEmitter Suite")
+	RunSpecs(t, "Emitter Suite")
 }

@@ -15,7 +15,7 @@ import (
 
 var _ = Describe("RoutingTable", func() {
 	var (
-		table          routing_table.RoutingTable
+		table          routing_table.NATSRoutingTable
 		messagesToEmit routing_table.MessagesToEmit
 		logger         *lagertest.TestLogger
 	)
@@ -56,7 +56,7 @@ var _ = Describe("RoutingTable", func() {
 
 	BeforeEach(func() {
 		logger = lagertest.NewTestLogger("test-route-emitter")
-		table = routing_table.NewTable(logger)
+		table = routing_table.NewNATSTable(logger)
 	})
 
 	Describe("Evacuating endpoints", func() {
@@ -721,7 +721,7 @@ var _ = Describe("RoutingTable", func() {
 			})
 
 			Context("when the routing key disappears entirely", func() {
-				var tempTable routing_table.RoutingTable
+				var tempTable routing_table.NATSRoutingTable
 				var domainSet models.DomainSet
 
 				BeforeEach(func() {

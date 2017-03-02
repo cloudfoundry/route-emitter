@@ -27,7 +27,7 @@ func (fb *fakeBenchmarker) RecordValue(desc string, f float64, whatever ...inter
 
 var _ = Describe("Benchmarks", func() {
 	var (
-		rt                     routing_table.RoutingTable
+		rt                     routing_table.NATSRoutingTable
 		logger                 *lagertest.TestLogger
 		registrationMessages   int
 		unregistrationMessages int
@@ -35,7 +35,7 @@ var _ = Describe("Benchmarks", func() {
 
 	BeforeEach(func() {
 		logger = lagertest.NewTestLogger("route-emitter-benchmarks")
-		rt = routing_table.NewTable(logger)
+		rt = routing_table.NewNATSTable(logger)
 		registrationMessages, unregistrationMessages = 0, 0
 	})
 
@@ -115,8 +115,8 @@ var _ = Describe("Benchmarks", func() {
 		}
 	}
 
-	newRouteTable := func(startIndex int) routing_table.RoutingTable {
-		tmpRt := routing_table.NewTable(logger)
+	newRouteTable := func(startIndex int) routing_table.NATSRoutingTable {
+		tmpRt := routing_table.NewNATSTable(logger)
 		for i := startIndex; i < startIndex+MaxRoutes; i++ {
 			guid := "app-" + strconv.Itoa(i)
 			key := routing_table.RoutingKey{

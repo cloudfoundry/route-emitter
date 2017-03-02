@@ -1643,7 +1643,7 @@ var _ = Describe("Watcher", func() {
 							)
 
 							domains := models.NewDomainSet([]string{"domain"})
-							table = routing_table.NewTable(logger)
+							table = routing_table.NewNATSTable(logger)
 							table.Swap(tempTable, domains)
 						})
 

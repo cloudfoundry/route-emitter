@@ -2,8 +2,8 @@ package endpoint_test
 
 import (
 	"code.cloudfoundry.org/bbs/models"
+	"code.cloudfoundry.org/route-emitter/routing_table/schema/endpoint"
 	"code.cloudfoundry.org/routing-info/tcp_routes"
-	"code.cloudfoundry.org/tcp-emitter/routing_table/schema/endpoint"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
