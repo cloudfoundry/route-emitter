@@ -22,16 +22,16 @@ var (
 	routesTotal  = metric.Metric("RoutesTotal")
 	routesSynced = metric.Counter("RoutesSynced")
 
-	routeSyncDuration = metric.Duration("RouteEmitterSyncDuration")
+	//	routeSyncDuration = metric.Duration("RouteEmitterSyncDuration")
 
 	routesRegistered   = metric.Counter("RoutesRegistered")
 	routesUnregistered = metric.Counter("RoutesUnregistered")
 )
 
-type Watcher struct {
+type NATSWatcher struct {
 	bbsClient  bbs.Client
 	clock      clock.Clock
-	table      routing_table.RoutingTable
+	table      routing_table.NATSRoutingTable
 	emitter    emitter.NATSEmitter
 	syncEvents syncer.Events
 	cellID     string
@@ -39,9 +39,9 @@ type Watcher struct {
 }
 
 type syncEndEvent struct {
-	table    routing_table.RoutingTable
+	table    routing_table.NATSRoutingTable
 	domains  models.DomainSet
-	callback func(routing_table.RoutingTable)
+	callback func(routing_table.NATSRoutingTable)
 
 	logger lager.Logger
 }
@@ -57,16 +57,16 @@ func (set set) add(value interface{}) {
 	set[value] = struct{}{}
 }
 
-func NewWatcher(
+func NewNATSWatcher(
 	cellID string,
 	bbsClient bbs.Client,
 	clock clock.Clock,
-	table routing_table.RoutingTable,
+	table routing_table.NATSRoutingTable,
 	emitter emitter.NATSEmitter,
 	syncEvents syncer.Events,
 	logger lager.Logger,
-) *Watcher {
-	return &Watcher{
+) *NATSWatcher {
+	return &NATSWatcher{
 		bbsClient:  bbsClient,
 		clock:      clock,
 		table:      table,
@@ -77,7 +77,7 @@ func NewWatcher(
 	}
 }
 
-func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
+func (watcher *NATSWatcher) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
 	watcher.logger.Info("starting")
 
 	close(ready)
@@ -191,7 +191,7 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 	}
 }
 
-func (watcher *Watcher) emit(logger lager.Logger) {
+func (watcher *NATSWatcher) emit(logger lager.Logger) {
 	messagesToEmit := watcher.table.MessagesToEmit()
 
 	logger.Debug("emitting-messages", lager.Data{"messages": messagesToEmit})
@@ -207,7 +207,7 @@ func (watcher *Watcher) emit(logger lager.Logger) {
 	}
 }
 
-func (watcher *Watcher) sync(logger lager.Logger, syncEndChan chan syncEndEvent) {
+func (watcher *NATSWatcher) sync(logger lager.Logger, syncEndChan chan syncEndEvent) {
 	endEvent := syncEndEvent{logger: logger}
 	defer func() {
 		syncEndChan <- endEvent
@@ -316,7 +316,7 @@ func (watcher *Watcher) sync(logger lager.Logger, syncEndChan chan syncEndEvent)
 
 	endEvent.table = newTable
 	endEvent.domains = domains
-	endEvent.callback = func(table routing_table.RoutingTable) {
+	endEvent.callback = func(table routing_table.NATSRoutingTable) {
 		after := watcher.clock.Now()
 		err := routeSyncDuration.Send(after.Sub(before))
 		if err != nil {
@@ -325,7 +325,7 @@ func (watcher *Watcher) sync(logger lager.Logger, syncEndChan chan syncEndEvent)
 	}
 }
 
-func (watcher *Watcher) completeSync(syncEnd syncEndEvent, cachedEvents map[string]models.Event) {
+func (watcher *NATSWatcher) completeSync(syncEnd syncEndEvent, cachedEvents map[string]models.Event) {
 	logger := syncEnd.logger
 
 	if syncEnd.table == nil {
@@ -372,7 +372,7 @@ func (watcher *Watcher) completeSync(syncEnd syncEndEvent, cachedEvents map[stri
 
 // returns true if the event is relevant to the local cell, e.g. an actual lrp
 // started or stopped on the local cell
-func (watcher *Watcher) eventCellIDMatches(logger lager.Logger, event models.Event) bool {
+func (watcher *NATSWatcher) eventCellIDMatches(logger lager.Logger, event models.Event) bool {
 	if watcher.cellID == "" {
 		return true
 	}
@@ -406,7 +406,7 @@ func (watcher *Watcher) eventCellIDMatches(logger lager.Logger, event models.Eve
 	}
 }
 
-func (watcher *Watcher) handleEvent(logger lager.Logger, event models.Event) {
+func (watcher *NATSWatcher) handleEvent(logger lager.Logger, event models.Event) {
 	if !watcher.eventCellIDMatches(logger, event) {
 		logSkippedEvent(logger, event)
 		return
@@ -437,7 +437,7 @@ func (watcher *Watcher) handleEvent(logger lager.Logger, event models.Event) {
 	}
 }
 
-func (watcher *Watcher) handleDesiredCreate(logger lager.Logger, schedulingInfo *models.DesiredLRPSchedulingInfo) {
+func (watcher *NATSWatcher) handleDesiredCreate(logger lager.Logger, schedulingInfo *models.DesiredLRPSchedulingInfo) {
 	logger = logger.Session("handle-desired-create", desiredLRPData(schedulingInfo))
 	logger.Info("starting")
 	defer logger.Info("complete")
@@ -445,7 +445,7 @@ func (watcher *Watcher) handleDesiredCreate(logger lager.Logger, schedulingInfo 
 	watcher.setRoutesForDesired(logger, schedulingInfo)
 }
 
-func (watcher *Watcher) handleDesiredUpdate(logger lager.Logger, before, after *models.DesiredLRPSchedulingInfo) {
+func (watcher *NATSWatcher) handleDesiredUpdate(logger lager.Logger, before, after *models.DesiredLRPSchedulingInfo) {
 	logger = logger.Session("handling-desired-update", lager.Data{
 		"before": desiredLRPData(before),
 		"after":  desiredLRPData(after),
@@ -487,7 +487,7 @@ func (watcher *Watcher) handleDesiredUpdate(logger lager.Logger, before, after *
 	}
 }
 
-func (watcher *Watcher) setRoutesForDesired(logger lager.Logger, schedulingInfo *models.DesiredLRPSchedulingInfo) set {
+func (watcher *NATSWatcher) setRoutesForDesired(logger lager.Logger, schedulingInfo *models.DesiredLRPSchedulingInfo) set {
 	routes, _ := cfroutes.CFRoutesFromRoutingInfo(schedulingInfo.Routes)
 	routingKeySet := set{}
 
@@ -514,7 +514,7 @@ func (watcher *Watcher) setRoutesForDesired(logger lager.Logger, schedulingInfo 
 	return routingKeySet
 }
 
-func (watcher *Watcher) handleDesiredDelete(logger lager.Logger, schedulingInfo *models.DesiredLRPSchedulingInfo) {
+func (watcher *NATSWatcher) handleDesiredDelete(logger lager.Logger, schedulingInfo *models.DesiredLRPSchedulingInfo) {
 	logger = logger.Session("handling-desired-delete", desiredLRPData(schedulingInfo))
 	logger.Info("starting")
 	defer logger.Info("complete")
@@ -526,7 +526,7 @@ func (watcher *Watcher) handleDesiredDelete(logger lager.Logger, schedulingInfo 
 	}
 }
 
-func (watcher *Watcher) handleActualCreate(logger lager.Logger, actualLRPInfo *routing_table.ActualLRPRoutingInfo) {
+func (watcher *NATSWatcher) handleActualCreate(logger lager.Logger, actualLRPInfo *routing_table.ActualLRPRoutingInfo) {
 	logger = logger.Session("handling-actual-create", actualLRPData(actualLRPInfo))
 	logger.Info("starting")
 	defer logger.Info("complete")
@@ -536,7 +536,7 @@ func (watcher *Watcher) handleActualCreate(logger lager.Logger, actualLRPInfo *r
 	}
 }
 
-func (watcher *Watcher) handleActualUpdate(logger lager.Logger, before, after *routing_table.ActualLRPRoutingInfo) {
+func (watcher *NATSWatcher) handleActualUpdate(logger lager.Logger, before, after *routing_table.ActualLRPRoutingInfo) {
 	logger = logger.Session("handling-actual-update", lager.Data{
 		"before": actualLRPData(before),
 		"after":  actualLRPData(after),
@@ -552,7 +552,7 @@ func (watcher *Watcher) handleActualUpdate(logger lager.Logger, before, after *r
 	}
 }
 
-func (watcher *Watcher) handleActualDelete(logger lager.Logger, actualLRPInfo *routing_table.ActualLRPRoutingInfo) {
+func (watcher *NATSWatcher) handleActualDelete(logger lager.Logger, actualLRPInfo *routing_table.ActualLRPRoutingInfo) {
 	logger = logger.Session("handling-actual-delete", actualLRPData(actualLRPInfo))
 	logger.Info("starting")
 	defer logger.Info("complete")
@@ -562,7 +562,7 @@ func (watcher *Watcher) handleActualDelete(logger lager.Logger, actualLRPInfo *r
 	}
 }
 
-func (watcher *Watcher) addAndEmit(logger lager.Logger, actualLRPInfo *routing_table.ActualLRPRoutingInfo) {
+func (watcher *NATSWatcher) addAndEmit(logger lager.Logger, actualLRPInfo *routing_table.ActualLRPRoutingInfo) {
 	logger.Info("watcher-add-and-emit", lager.Data{"net_info": actualLRPInfo.ActualLRP.ActualLRPNetInfo})
 	endpoints, err := routing_table.EndpointsFromActual(actualLRPInfo)
 	if err != nil {
@@ -594,7 +594,7 @@ func (watcher *Watcher) addAndEmit(logger lager.Logger, actualLRPInfo *routing_t
 	}
 }
 
-func (watcher *Watcher) removeAndEmit(logger lager.Logger, actualLRPInfo *routing_table.ActualLRPRoutingInfo) {
+func (watcher *NATSWatcher) removeAndEmit(logger lager.Logger, actualLRPInfo *routing_table.ActualLRPRoutingInfo) {
 	logger.Info("watcher-remove-and-emit", lager.Data{"net_info": actualLRPInfo.ActualLRP.ActualLRPNetInfo})
 	endpoints, err := routing_table.EndpointsFromActual(actualLRPInfo)
 	if err != nil {
@@ -612,7 +612,7 @@ func (watcher *Watcher) removeAndEmit(logger lager.Logger, actualLRPInfo *routin
 	}
 }
 
-func (watcher *Watcher) emitMessages(logger lager.Logger, messagesToEmit routing_table.MessagesToEmit) {
+func (watcher *NATSWatcher) emitMessages(logger lager.Logger, messagesToEmit routing_table.MessagesToEmit) {
 	if watcher.emitter != nil {
 		logger.Debug("emit-messages", lager.Data{"messages": messagesToEmit})
 		watcher.emitter.Emit(messagesToEmit)

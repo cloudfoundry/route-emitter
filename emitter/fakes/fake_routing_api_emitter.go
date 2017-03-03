@@ -8,7 +8,7 @@ import (
 	"code.cloudfoundry.org/route-emitter/routing_table/schema/event"
 )
 
-type FakeEmitter struct {
+type FakeRoutingAPIEmitter struct {
 	EmitStub        func(routingEvents event.RoutingEvents) error
 	emitMutex       sync.RWMutex
 	emitArgsForCall []struct {
@@ -24,7 +24,7 @@ type FakeEmitter struct {
 	invocationsMutex sync.RWMutex
 }
 
-func (fake *FakeEmitter) Emit(routingEvents event.RoutingEvents) error {
+func (fake *FakeRoutingAPIEmitter) Emit(routingEvents event.RoutingEvents) error {
 	fake.emitMutex.Lock()
 	ret, specificReturn := fake.emitReturnsOnCall[len(fake.emitArgsForCall)]
 	fake.emitArgsForCall = append(fake.emitArgsForCall, struct {
@@ -41,26 +41,26 @@ func (fake *FakeEmitter) Emit(routingEvents event.RoutingEvents) error {
 	return fake.emitReturns.result1
 }
 
-func (fake *FakeEmitter) EmitCallCount() int {
+func (fake *FakeRoutingAPIEmitter) EmitCallCount() int {
 	fake.emitMutex.RLock()
 	defer fake.emitMutex.RUnlock()
 	return len(fake.emitArgsForCall)
 }
 
-func (fake *FakeEmitter) EmitArgsForCall(i int) event.RoutingEvents {
+func (fake *FakeRoutingAPIEmitter) EmitArgsForCall(i int) event.RoutingEvents {
 	fake.emitMutex.RLock()
 	defer fake.emitMutex.RUnlock()
 	return fake.emitArgsForCall[i].routingEvents
 }
 
-func (fake *FakeEmitter) EmitReturns(result1 error) {
+func (fake *FakeRoutingAPIEmitter) EmitReturns(result1 error) {
 	fake.EmitStub = nil
 	fake.emitReturns = struct {
 		result1 error
 	}{result1}
 }
 
-func (fake *FakeEmitter) EmitReturnsOnCall(i int, result1 error) {
+func (fake *FakeRoutingAPIEmitter) EmitReturnsOnCall(i int, result1 error) {
 	fake.EmitStub = nil
 	if fake.emitReturnsOnCall == nil {
 		fake.emitReturnsOnCall = make(map[int]struct {
@@ -72,7 +72,7 @@ func (fake *FakeEmitter) EmitReturnsOnCall(i int, result1 error) {
 	}{result1}
 }
 
-func (fake *FakeEmitter) Invocations() map[string][][]interface{} {
+func (fake *FakeRoutingAPIEmitter) Invocations() map[string][][]interface{} {
 	fake.invocationsMutex.RLock()
 	defer fake.invocationsMutex.RUnlock()
 	fake.emitMutex.RLock()
@@ -80,7 +80,7 @@ func (fake *FakeEmitter) Invocations() map[string][][]interface{} {
 	return fake.invocations
 }
 
-func (fake *FakeEmitter) recordInvocation(key string, args []interface{}) {
+func (fake *FakeRoutingAPIEmitter) recordInvocation(key string, args []interface{}) {
 	fake.invocationsMutex.Lock()
 	defer fake.invocationsMutex.Unlock()
 	if fake.invocations == nil {
@@ -92,4 +92,4 @@ func (fake *FakeEmitter) recordInvocation(key string, args []interface{}) {
 	fake.invocations[key] = append(fake.invocations[key], args)
 }
 
-var _ emitter.Emitter = new(FakeEmitter)
+var _ emitter.RoutingAPIEmitter = new(FakeRoutingAPIEmitter)

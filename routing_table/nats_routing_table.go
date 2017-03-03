@@ -10,7 +10,7 @@ import (
 
 var addressCollisions = metric.Counter("AddressCollisions")
 
-//go:generate counterfeiter -o fake_routing_table/fake_nats_routing_table.go . NATSRoutingTable
+//go:generate counterfeiter -o fakeroutingtable/fake_natsroutingtable.go . NATSRoutingTable
 
 type NATSRoutingTable interface {
 	RouteCount() int

@@ -19,14 +19,14 @@ import (
 	"github.com/onsi/gomega/gbytes"
 )
 
-var _ = Describe("TCPEmitter", func() {
+var _ = Describe("RoutingAPIEmitter", func() {
 
 	var (
 		routingApiClient        *fake_routing_api.FakeClient
 		routingEvents           event.RoutingEvents
 		routingKey1             endpoint.RoutingKey
 		routableEndpoints1      endpoint.RoutableEndpoints
-		tcpEmitter              emitter.Emitter
+		routingAPIEmitter       emitter.RoutingAPIEmitter
 		logger                  lager.Logger
 		ttl                     int
 		expectedMappingRequests []apimodels.TcpRouteMapping
@@ -38,7 +38,7 @@ var _ = Describe("TCPEmitter", func() {
 		logger = lagertest.NewTestLogger("test")
 		uaaClient := &testUaaClient.FakeClient{}
 		uaaClient.FetchTokenReturns(&uaa.Token{AccessToken: "some-token", ExpiresIn: 1234}, nil)
-		tcpEmitter = emitter.NewTCPEmitter(logger, routingApiClient, uaaClient, ttl)
+		routingAPIEmitter = emitter.NewRoutingAPIEmitter(logger, routingApiClient, uaaClient, ttl)
 
 		logGuid := "log-guid-1"
 		modificationTag := models.ModificationTag{Epoch: "abc", Index: 0}
@@ -72,7 +72,7 @@ var _ = Describe("TCPEmitter", func() {
 
 			Context("and there are registration events", func() {
 				It("emits valid upsert tcp routes", func() {
-					err := tcpEmitter.Emit(routingEvents)
+					err := routingAPIEmitter.Emit(routingEvents)
 					Expect(err).ShouldNot(HaveOccurred())
 					Expect(routingApiClient.UpsertTcpRouteMappingsCallCount()).To(Equal(1))
 					// Expect(uaaClient.FetchTokenCallCount()).To(Equal(1))
@@ -96,7 +96,7 @@ var _ = Describe("TCPEmitter", func() {
 				})
 
 				It("emits valid delete tcp routes", func() {
-					err := tcpEmitter.Emit(routingEvents)
+					err := routingAPIEmitter.Emit(routingEvents)
 					Expect(err).ShouldNot(HaveOccurred())
 					Expect(routingApiClient.DeleteTcpRouteMappingsCallCount()).To(Equal(1))
 					// Expect(uaaClient.FetchTokenCallCount()).To(Equal(1))
@@ -113,7 +113,7 @@ var _ = Describe("TCPEmitter", func() {
 			})
 
 			It("logs the error", func() {
-				err := tcpEmitter.Emit(routingEvents)
+				err := routingAPIEmitter.Emit(routingEvents)
 				Expect(err).ShouldNot(HaveOccurred())
 				Expect(logger).To(gbytes.Say("test.unable-to-upsert.*kabooom"))
 			})
@@ -125,7 +125,7 @@ var _ = Describe("TCPEmitter", func() {
 			})
 
 			It("retries once and logs the error", func() {
-				err := tcpEmitter.Emit(routingEvents)
+				err := routingAPIEmitter.Emit(routingEvents)
 				Expect(err).ShouldNot(HaveOccurred())
 				// Expect(routingApiClient.UpsertTcpRouteMappingsCallCount()).To(Equal(2))
 				// Expect(uaaClient.FetchTokenCallCount()).To(Equal(2))
@@ -147,7 +147,7 @@ var _ = Describe("TCPEmitter", func() {
 			})
 
 			It("logs error", func() {
-				err := tcpEmitter.Emit(routingEvents)
+				err := routingAPIEmitter.Emit(routingEvents)
 				Expect(err).ShouldNot(HaveOccurred())
 				Expect(logger).To(gbytes.Say("test.unable-to-delete.*kabooom"))
 			})
@@ -166,7 +166,7 @@ var _ = Describe("TCPEmitter", func() {
 			})
 
 			It("logs error", func() {
-				err := tcpEmitter.Emit(routingEvents)
+				err := routingAPIEmitter.Emit(routingEvents)
 				Expect(err).ShouldNot(HaveOccurred())
 				// Expect(routingApiClient.DeleteTcpRouteMappingsCallCount()).To(Equal(2))
 				// Expect(uaaClient.FetchTokenCallCount()).To(Equal(2))
@@ -216,7 +216,7 @@ var _ = Describe("TCPEmitter", func() {
 		})
 
 		It("returns \"Unable to build mapping request\" error", func() {
-			err := tcpEmitter.Emit(routingEvents)
+			err := routingAPIEmitter.Emit(routingEvents)
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(logger).To(gbytes.Say("test.invalid-routing-event"))
 		})

@@ -9,12 +9,12 @@ import (
 	uaaclient "code.cloudfoundry.org/uaa-go-client"
 )
 
-//go:generate counterfeiter -o fakes/fake_tcp_emitter.go . Emitter
-type Emitter interface {
+//go:generate counterfeiter -o fakes/fake_routing_api_emitter.go . RoutingAPIEmitter
+type RoutingAPIEmitter interface {
 	Emit(routingEvents event.RoutingEvents) error
 }
 
-type TCPEmitter struct {
+type routingAPIEmitter struct {
 	logger           lager.Logger
 	routingAPIClient routing_api.Client
 	ttl              int
@@ -22,8 +22,8 @@ type TCPEmitter struct {
 }
 
 //TODO: we need the uaaClient in the future
-func NewTCPEmitter(logger lager.Logger, routingAPIClient routing_api.Client, uaaClient uaaclient.Client, routeTTL int) Emitter {
-	return &TCPEmitter{
+func NewRoutingAPIEmitter(logger lager.Logger, routingAPIClient routing_api.Client, uaaClient uaaclient.Client, routeTTL int) RoutingAPIEmitter {
+	return &routingAPIEmitter{
 		logger:           logger,
 		routingAPIClient: routingAPIClient,
 		ttl:              routeTTL,
@@ -31,7 +31,7 @@ func NewTCPEmitter(logger lager.Logger, routingAPIClient routing_api.Client, uaa
 	}
 }
 
-func (t *TCPEmitter) Emit(tcpEvents event.RoutingEvents) error {
+func (t *routingAPIEmitter) Emit(tcpEvents event.RoutingEvents) error {
 	t.logRoutingEvents(tcpEvents)
 	defer t.logger.Debug("complete-emit")
 
@@ -56,7 +56,7 @@ func (t *TCPEmitter) Emit(tcpEvents event.RoutingEvents) error {
 	return nil
 }
 
-func (t *TCPEmitter) emit(registrationMappingRequests, unregistrationMappingRequests []models.TcpRouteMapping) error {
+func (t *routingAPIEmitter) emit(registrationMappingRequests, unregistrationMappingRequests []models.TcpRouteMapping) error {
 	emitted := true
 	if len(registrationMappingRequests) > 0 {
 		if err := t.routingAPIClient.UpsertTcpRouteMappings(registrationMappingRequests); err != nil {
@@ -86,7 +86,7 @@ func (t *TCPEmitter) emit(registrationMappingRequests, unregistrationMappingRequ
 	return nil
 }
 
-func (t *TCPEmitter) logRoutingEvents(routingEvents event.RoutingEvents) {
+func (t *routingAPIEmitter) logRoutingEvents(routingEvents event.RoutingEvents) {
 	for _, event := range routingEvents {
 		endpoints := make([]endpoint.Endpoint, 0)
 		for _, endpoint := range event.Entry.Endpoints {

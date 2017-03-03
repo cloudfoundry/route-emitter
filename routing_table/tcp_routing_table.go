@@ -17,8 +17,8 @@ type routeInfo struct {
 	Routes      map[string]*json.RawMessage
 }
 
-//go:generate counterfeiter -o fakes/fake_routing_table.go . RoutingTable
-type RoutingTable interface {
+//go:generate counterfeiter -o fakeroutingtable/fake_tcproutingtable.go . TCPRoutingTable
+type TCPRoutingTable interface {
 	RouteCount() int
 
 	AddRoutes(desiredLRP *models.DesiredLRP) event.RoutingEvents
@@ -28,7 +28,7 @@ type RoutingTable interface {
 	AddEndpoint(actualLRP *models.ActualLRPGroup) event.RoutingEvents
 	RemoveEndpoint(actualLRP *models.ActualLRPGroup) event.RoutingEvents
 
-	Swap(t RoutingTable) event.RoutingEvents
+	Swap(t TCPRoutingTable) event.RoutingEvents
 
 	GetRoutingEvents() event.RoutingEvents
 }
@@ -39,7 +39,7 @@ type tcpRoutingTable struct {
 	logger lager.Logger
 }
 
-func NewTCPTable(logger lager.Logger, entries map[endpoint.RoutingKey]endpoint.RoutableEndpoints) RoutingTable {
+func NewTCPTable(logger lager.Logger, entries map[endpoint.RoutingKey]endpoint.RoutableEndpoints) TCPRoutingTable {
 	if entries == nil {
 		entries = make(map[endpoint.RoutingKey]endpoint.RoutableEndpoints)
 	}
@@ -65,7 +65,7 @@ func (table *tcpRoutingTable) GetRoutingEvents() event.RoutingEvents {
 	return routingEvents
 }
 
-func (table *tcpRoutingTable) Swap(t RoutingTable) event.RoutingEvents {
+func (table *tcpRoutingTable) Swap(t TCPRoutingTable) event.RoutingEvents {
 
 	routingEvents := event.RoutingEvents{}
 

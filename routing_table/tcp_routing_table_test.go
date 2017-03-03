@@ -50,7 +50,7 @@ func (t *testRoutingTable) RemoveEndpoint(actualLRP *models.ActualLRPGroup) even
 	return event.RoutingEvents{}
 }
 
-func (t *testRoutingTable) Swap(table routing_table.RoutingTable) event.RoutingEvents {
+func (t *testRoutingTable) Swap(table routing_table.TCPRoutingTable) event.RoutingEvents {
 	return event.RoutingEvents{}
 }
 
@@ -58,10 +58,10 @@ func (t *testRoutingTable) GetRoutingEvents() event.RoutingEvents {
 	return event.RoutingEvents{}
 }
 
-var _ = Describe("RoutingTable", func() {
+var _ = Describe("TCPRoutingTable", func() {
 
 	var (
-		routingTable    routing_table.RoutingTable
+		routingTable    routing_table.TCPRoutingTable
 		modificationTag *models.ModificationTag
 		tcpRoutes       tcp_routes.TCPRoutes
 		logger          lager.Logger
@@ -270,7 +270,7 @@ var _ = Describe("RoutingTable", func() {
 
 		Describe("Swap", func() {
 			var (
-				tempRoutingTable routing_table.RoutingTable
+				tempRoutingTable routing_table.TCPRoutingTable
 				key              endpoint.RoutingKey
 				endpoints        map[endpoint.EndpointKey]endpoint.Endpoint
 				modificationTag  *models.ModificationTag
@@ -1297,7 +1297,7 @@ var _ = Describe("RoutingTable", func() {
 
 		Describe("Swap", func() {
 			var (
-				tempRoutingTable   routing_table.RoutingTable
+				tempRoutingTable   routing_table.TCPRoutingTable
 				key                endpoint.RoutingKey
 				existingKey        endpoint.RoutingKey
 				endpoints          map[endpoint.EndpointKey]endpoint.Endpoint
