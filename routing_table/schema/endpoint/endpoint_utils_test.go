@@ -14,8 +14,8 @@ var _ = Describe("LRP Utils", func() {
 		Context("when actual is not evacuating", func() {
 			It("builds a map of container port to endpoint", func() {
 				tag := models.ModificationTag{Epoch: "abc", Index: 0}
-				endpoints := endpoint.NewEndpointsFromActual(&models.ActualLRPGroup{
-					Instance: &models.ActualLRP{
+				actualInfo := &endpoint.ActualLRPRoutingInfo{
+					ActualLRP: &models.ActualLRP{
 						ActualLRPKey:         models.NewActualLRPKey("process-guid", 0, "domain"),
 						ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
 						ActualLRPNetInfo: models.NewActualLRPNetInfo(
@@ -26,8 +26,10 @@ var _ = Describe("LRP Utils", func() {
 						State:           models.ActualLRPStateRunning,
 						ModificationTag: tag,
 					},
-					Evacuating: nil,
-				})
+					Evacuating: false,
+				}
+
+				endpoints := endpoint.NewEndpointsFromActual(actualInfo)
 
 				Expect(endpoints).To(ConsistOf([]endpoint.Endpoint{
 					endpoint.NewEndpoint("instance-guid", false, "1.1.1.1", 11, 44, &tag),
@@ -39,9 +41,9 @@ var _ = Describe("LRP Utils", func() {
 		Context("when actual is evacuating", func() {
 			It("builds a map of container port to endpoint", func() {
 				tag := models.ModificationTag{Epoch: "abc", Index: 0}
-				endpoints := endpoint.NewEndpointsFromActual(&models.ActualLRPGroup{
-					Instance: nil,
-					Evacuating: &models.ActualLRP{
+
+				actualInfo := &endpoint.ActualLRPRoutingInfo{
+					ActualLRP: &models.ActualLRP{
 						ActualLRPKey:         models.NewActualLRPKey("process-guid", 0, "domain"),
 						ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
 						ActualLRPNetInfo: models.NewActualLRPNetInfo(
@@ -52,7 +54,10 @@ var _ = Describe("LRP Utils", func() {
 						State:           models.ActualLRPStateRunning,
 						ModificationTag: tag,
 					},
-				})
+					Evacuating: true,
+				}
+
+				endpoints := endpoint.NewEndpointsFromActual(actualInfo)
 
 				Expect(endpoints).To(ConsistOf([]endpoint.Endpoint{
 					endpoint.NewEndpoint("instance-guid", true, "1.1.1.1", 11, 44, &tag),
@@ -64,8 +69,8 @@ var _ = Describe("LRP Utils", func() {
 
 	Describe("NewRoutingKeysFromActual", func() {
 		It("creates a list of keys for an actual LRP", func() {
-			keys := endpoint.NewRoutingKeysFromActual(&models.ActualLRPGroup{
-				Instance: &models.ActualLRP{
+			keys := endpoint.NewRoutingKeysFromActual(&endpoint.ActualLRPRoutingInfo{
+				ActualLRP: &models.ActualLRP{
 					ActualLRPKey:         models.NewActualLRPKey("process-guid", 0, "domain"),
 					ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
 					ActualLRPNetInfo: models.NewActualLRPNetInfo(
@@ -84,8 +89,8 @@ var _ = Describe("LRP Utils", func() {
 
 		Context("when the actual lrp has no port mappings", func() {
 			It("returns no keys", func() {
-				keys := endpoint.NewRoutingKeysFromActual(&models.ActualLRPGroup{
-					Instance: &models.ActualLRP{
+				keys := endpoint.NewRoutingKeysFromActual(&endpoint.ActualLRPRoutingInfo{
+					ActualLRP: &models.ActualLRP{
 						ActualLRPKey:         models.NewActualLRPKey("process-guid", 0, "domain"),
 						ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
 						ActualLRPNetInfo: models.NewActualLRPNetInfo(
@@ -107,15 +112,15 @@ var _ = Describe("LRP Utils", func() {
 				{ExternalPort: 61001, ContainerPort: 9090},
 			}
 
-			desired := &models.DesiredLRP{
+			desired := (&models.DesiredLRP{
 				Domain:      "tests",
 				ProcessGuid: "process-guid",
 				Ports:       []uint32{8080, 9090},
 				Routes:      routes.RoutingInfo(),
 				LogGuid:     "abc-guid",
-			}
+			}).DesiredLRPSchedulingInfo()
 
-			keys := endpoint.NewRoutingKeysFromDesired(desired)
+			keys := endpoint.NewRoutingKeysFromDesired(&desired)
 
 			Expect(keys).To(HaveLen(2))
 			Expect(keys).To(ContainElement(endpoint.NewRoutingKey("process-guid", 8080)))
@@ -124,18 +129,16 @@ var _ = Describe("LRP Utils", func() {
 
 		Context("when the desired LRP does not define any container ports", func() {
 			It("returns no keys", func() {
-				routes := tcp_routes.TCPRoutes{
-					{ExternalPort: 61000, ContainerPort: 8080},
-				}
+				routes := tcp_routes.TCPRoutes{}
 
-				desired := &models.DesiredLRP{
+				desired := (&models.DesiredLRP{
 					Domain:      "tests",
 					ProcessGuid: "process-guid",
 					Routes:      routes.RoutingInfo(),
 					LogGuid:     "abc-guid",
-				}
+				}).DesiredLRPSchedulingInfo()
 
-				keys := endpoint.NewRoutingKeysFromDesired(desired)
+				keys := endpoint.NewRoutingKeysFromDesired(&desired)
 				Expect(keys).To(HaveLen(0))
 			})
 		})

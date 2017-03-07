@@ -6,6 +6,7 @@ import (
 
 	"code.cloudfoundry.org/bbs/models"
 	"code.cloudfoundry.org/route-emitter/routing_table"
+	"code.cloudfoundry.org/route-emitter/routing_table/schema/endpoint"
 	"code.cloudfoundry.org/route-emitter/routing_table/schema/event"
 )
 
@@ -19,10 +20,10 @@ type FakeTCPRoutingTable struct {
 	routeCountReturnsOnCall map[int]struct {
 		result1 int
 	}
-	AddRoutesStub        func(desiredLRP *models.DesiredLRP) event.RoutingEvents
+	AddRoutesStub        func(desiredLRP *models.DesiredLRPSchedulingInfo) event.RoutingEvents
 	addRoutesMutex       sync.RWMutex
 	addRoutesArgsForCall []struct {
-		desiredLRP *models.DesiredLRP
+		desiredLRP *models.DesiredLRPSchedulingInfo
 	}
 	addRoutesReturns struct {
 		result1 event.RoutingEvents
@@ -30,11 +31,11 @@ type FakeTCPRoutingTable struct {
 	addRoutesReturnsOnCall map[int]struct {
 		result1 event.RoutingEvents
 	}
-	UpdateRoutesStub        func(beforeLRP, afterLRP *models.DesiredLRP) event.RoutingEvents
+	UpdateRoutesStub        func(beforeLRP, afterLRP *models.DesiredLRPSchedulingInfo) event.RoutingEvents
 	updateRoutesMutex       sync.RWMutex
 	updateRoutesArgsForCall []struct {
-		beforeLRP *models.DesiredLRP
-		afterLRP  *models.DesiredLRP
+		beforeLRP *models.DesiredLRPSchedulingInfo
+		afterLRP  *models.DesiredLRPSchedulingInfo
 	}
 	updateRoutesReturns struct {
 		result1 event.RoutingEvents
@@ -42,10 +43,10 @@ type FakeTCPRoutingTable struct {
 	updateRoutesReturnsOnCall map[int]struct {
 		result1 event.RoutingEvents
 	}
-	RemoveRoutesStub        func(desiredLRP *models.DesiredLRP) event.RoutingEvents
+	RemoveRoutesStub        func(desiredLRP *models.DesiredLRPSchedulingInfo) event.RoutingEvents
 	removeRoutesMutex       sync.RWMutex
 	removeRoutesArgsForCall []struct {
-		desiredLRP *models.DesiredLRP
+		desiredLRP *models.DesiredLRPSchedulingInfo
 	}
 	removeRoutesReturns struct {
 		result1 event.RoutingEvents
@@ -53,10 +54,21 @@ type FakeTCPRoutingTable struct {
 	removeRoutesReturnsOnCall map[int]struct {
 		result1 event.RoutingEvents
 	}
-	AddEndpointStub        func(actualLRP *models.ActualLRPGroup) event.RoutingEvents
+	GetRoutesStub        func(key endpoint.RoutingKey) endpoint.ExternalEndpointInfos
+	getRoutesMutex       sync.RWMutex
+	getRoutesArgsForCall []struct {
+		key endpoint.RoutingKey
+	}
+	getRoutesReturns struct {
+		result1 endpoint.ExternalEndpointInfos
+	}
+	getRoutesReturnsOnCall map[int]struct {
+		result1 endpoint.ExternalEndpointInfos
+	}
+	AddEndpointStub        func(actualLRP *endpoint.ActualLRPRoutingInfo) event.RoutingEvents
 	addEndpointMutex       sync.RWMutex
 	addEndpointArgsForCall []struct {
-		actualLRP *models.ActualLRPGroup
+		actualLRP *endpoint.ActualLRPRoutingInfo
 	}
 	addEndpointReturns struct {
 		result1 event.RoutingEvents
@@ -64,10 +76,10 @@ type FakeTCPRoutingTable struct {
 	addEndpointReturnsOnCall map[int]struct {
 		result1 event.RoutingEvents
 	}
-	RemoveEndpointStub        func(actualLRP *models.ActualLRPGroup) event.RoutingEvents
+	RemoveEndpointStub        func(actualLRP *endpoint.ActualLRPRoutingInfo) event.RoutingEvents
 	removeEndpointMutex       sync.RWMutex
 	removeEndpointArgsForCall []struct {
-		actualLRP *models.ActualLRPGroup
+		actualLRP *endpoint.ActualLRPRoutingInfo
 	}
 	removeEndpointReturns struct {
 		result1 event.RoutingEvents
@@ -139,11 +151,11 @@ func (fake *FakeTCPRoutingTable) RouteCountReturnsOnCall(i int, result1 int) {
 	}{result1}
 }
 
-func (fake *FakeTCPRoutingTable) AddRoutes(desiredLRP *models.DesiredLRP) event.RoutingEvents {
+func (fake *FakeTCPRoutingTable) AddRoutes(desiredLRP *models.DesiredLRPSchedulingInfo) event.RoutingEvents {
 	fake.addRoutesMutex.Lock()
 	ret, specificReturn := fake.addRoutesReturnsOnCall[len(fake.addRoutesArgsForCall)]
 	fake.addRoutesArgsForCall = append(fake.addRoutesArgsForCall, struct {
-		desiredLRP *models.DesiredLRP
+		desiredLRP *models.DesiredLRPSchedulingInfo
 	}{desiredLRP})
 	fake.recordInvocation("AddRoutes", []interface{}{desiredLRP})
 	fake.addRoutesMutex.Unlock()
@@ -162,7 +174,7 @@ func (fake *FakeTCPRoutingTable) AddRoutesCallCount() int {
 	return len(fake.addRoutesArgsForCall)
 }
 
-func (fake *FakeTCPRoutingTable) AddRoutesArgsForCall(i int) *models.DesiredLRP {
+func (fake *FakeTCPRoutingTable) AddRoutesArgsForCall(i int) *models.DesiredLRPSchedulingInfo {
 	fake.addRoutesMutex.RLock()
 	defer fake.addRoutesMutex.RUnlock()
 	return fake.addRoutesArgsForCall[i].desiredLRP
@@ -187,12 +199,12 @@ func (fake *FakeTCPRoutingTable) AddRoutesReturnsOnCall(i int, result1 event.Rou
 	}{result1}
 }
 
-func (fake *FakeTCPRoutingTable) UpdateRoutes(beforeLRP *models.DesiredLRP, afterLRP *models.DesiredLRP) event.RoutingEvents {
+func (fake *FakeTCPRoutingTable) UpdateRoutes(beforeLRP *models.DesiredLRPSchedulingInfo, afterLRP *models.DesiredLRPSchedulingInfo) event.RoutingEvents {
 	fake.updateRoutesMutex.Lock()
 	ret, specificReturn := fake.updateRoutesReturnsOnCall[len(fake.updateRoutesArgsForCall)]
 	fake.updateRoutesArgsForCall = append(fake.updateRoutesArgsForCall, struct {
-		beforeLRP *models.DesiredLRP
-		afterLRP  *models.DesiredLRP
+		beforeLRP *models.DesiredLRPSchedulingInfo
+		afterLRP  *models.DesiredLRPSchedulingInfo
 	}{beforeLRP, afterLRP})
 	fake.recordInvocation("UpdateRoutes", []interface{}{beforeLRP, afterLRP})
 	fake.updateRoutesMutex.Unlock()
@@ -211,7 +223,7 @@ func (fake *FakeTCPRoutingTable) UpdateRoutesCallCount() int {
 	return len(fake.updateRoutesArgsForCall)
 }
 
-func (fake *FakeTCPRoutingTable) UpdateRoutesArgsForCall(i int) (*models.DesiredLRP, *models.DesiredLRP) {
+func (fake *FakeTCPRoutingTable) UpdateRoutesArgsForCall(i int) (*models.DesiredLRPSchedulingInfo, *models.DesiredLRPSchedulingInfo) {
 	fake.updateRoutesMutex.RLock()
 	defer fake.updateRoutesMutex.RUnlock()
 	return fake.updateRoutesArgsForCall[i].beforeLRP, fake.updateRoutesArgsForCall[i].afterLRP
@@ -236,11 +248,11 @@ func (fake *FakeTCPRoutingTable) UpdateRoutesReturnsOnCall(i int, result1 event.
 	}{result1}
 }
 
-func (fake *FakeTCPRoutingTable) RemoveRoutes(desiredLRP *models.DesiredLRP) event.RoutingEvents {
+func (fake *FakeTCPRoutingTable) RemoveRoutes(desiredLRP *models.DesiredLRPSchedulingInfo) event.RoutingEvents {
 	fake.removeRoutesMutex.Lock()
 	ret, specificReturn := fake.removeRoutesReturnsOnCall[len(fake.removeRoutesArgsForCall)]
 	fake.removeRoutesArgsForCall = append(fake.removeRoutesArgsForCall, struct {
-		desiredLRP *models.DesiredLRP
+		desiredLRP *models.DesiredLRPSchedulingInfo
 	}{desiredLRP})
 	fake.recordInvocation("RemoveRoutes", []interface{}{desiredLRP})
 	fake.removeRoutesMutex.Unlock()
@@ -259,7 +271,7 @@ func (fake *FakeTCPRoutingTable) RemoveRoutesCallCount() int {
 	return len(fake.removeRoutesArgsForCall)
 }
 
-func (fake *FakeTCPRoutingTable) RemoveRoutesArgsForCall(i int) *models.DesiredLRP {
+func (fake *FakeTCPRoutingTable) RemoveRoutesArgsForCall(i int) *models.DesiredLRPSchedulingInfo {
 	fake.removeRoutesMutex.RLock()
 	defer fake.removeRoutesMutex.RUnlock()
 	return fake.removeRoutesArgsForCall[i].desiredLRP
@@ -284,11 +296,59 @@ func (fake *FakeTCPRoutingTable) RemoveRoutesReturnsOnCall(i int, result1 event.
 	}{result1}
 }
 
-func (fake *FakeTCPRoutingTable) AddEndpoint(actualLRP *models.ActualLRPGroup) event.RoutingEvents {
+func (fake *FakeTCPRoutingTable) GetRoutes(key endpoint.RoutingKey) endpoint.ExternalEndpointInfos {
+	fake.getRoutesMutex.Lock()
+	ret, specificReturn := fake.getRoutesReturnsOnCall[len(fake.getRoutesArgsForCall)]
+	fake.getRoutesArgsForCall = append(fake.getRoutesArgsForCall, struct {
+		key endpoint.RoutingKey
+	}{key})
+	fake.recordInvocation("GetRoutes", []interface{}{key})
+	fake.getRoutesMutex.Unlock()
+	if fake.GetRoutesStub != nil {
+		return fake.GetRoutesStub(key)
+	}
+	if specificReturn {
+		return ret.result1
+	}
+	return fake.getRoutesReturns.result1
+}
+
+func (fake *FakeTCPRoutingTable) GetRoutesCallCount() int {
+	fake.getRoutesMutex.RLock()
+	defer fake.getRoutesMutex.RUnlock()
+	return len(fake.getRoutesArgsForCall)
+}
+
+func (fake *FakeTCPRoutingTable) GetRoutesArgsForCall(i int) endpoint.RoutingKey {
+	fake.getRoutesMutex.RLock()
+	defer fake.getRoutesMutex.RUnlock()
+	return fake.getRoutesArgsForCall[i].key
+}
+
+func (fake *FakeTCPRoutingTable) GetRoutesReturns(result1 endpoint.ExternalEndpointInfos) {
+	fake.GetRoutesStub = nil
+	fake.getRoutesReturns = struct {
+		result1 endpoint.ExternalEndpointInfos
+	}{result1}
+}
+
+func (fake *FakeTCPRoutingTable) GetRoutesReturnsOnCall(i int, result1 endpoint.ExternalEndpointInfos) {
+	fake.GetRoutesStub = nil
+	if fake.getRoutesReturnsOnCall == nil {
+		fake.getRoutesReturnsOnCall = make(map[int]struct {
+			result1 endpoint.ExternalEndpointInfos
+		})
+	}
+	fake.getRoutesReturnsOnCall[i] = struct {
+		result1 endpoint.ExternalEndpointInfos
+	}{result1}
+}
+
+func (fake *FakeTCPRoutingTable) AddEndpoint(actualLRP *endpoint.ActualLRPRoutingInfo) event.RoutingEvents {
 	fake.addEndpointMutex.Lock()
 	ret, specificReturn := fake.addEndpointReturnsOnCall[len(fake.addEndpointArgsForCall)]
 	fake.addEndpointArgsForCall = append(fake.addEndpointArgsForCall, struct {
-		actualLRP *models.ActualLRPGroup
+		actualLRP *endpoint.ActualLRPRoutingInfo
 	}{actualLRP})
 	fake.recordInvocation("AddEndpoint", []interface{}{actualLRP})
 	fake.addEndpointMutex.Unlock()
@@ -307,7 +367,7 @@ func (fake *FakeTCPRoutingTable) AddEndpointCallCount() int {
 	return len(fake.addEndpointArgsForCall)
 }
 
-func (fake *FakeTCPRoutingTable) AddEndpointArgsForCall(i int) *models.ActualLRPGroup {
+func (fake *FakeTCPRoutingTable) AddEndpointArgsForCall(i int) *endpoint.ActualLRPRoutingInfo {
 	fake.addEndpointMutex.RLock()
 	defer fake.addEndpointMutex.RUnlock()
 	return fake.addEndpointArgsForCall[i].actualLRP
@@ -332,11 +392,11 @@ func (fake *FakeTCPRoutingTable) AddEndpointReturnsOnCall(i int, result1 event.R
 	}{result1}
 }
 
-func (fake *FakeTCPRoutingTable) RemoveEndpoint(actualLRP *models.ActualLRPGroup) event.RoutingEvents {
+func (fake *FakeTCPRoutingTable) RemoveEndpoint(actualLRP *endpoint.ActualLRPRoutingInfo) event.RoutingEvents {
 	fake.removeEndpointMutex.Lock()
 	ret, specificReturn := fake.removeEndpointReturnsOnCall[len(fake.removeEndpointArgsForCall)]
 	fake.removeEndpointArgsForCall = append(fake.removeEndpointArgsForCall, struct {
-		actualLRP *models.ActualLRPGroup
+		actualLRP *endpoint.ActualLRPRoutingInfo
 	}{actualLRP})
 	fake.recordInvocation("RemoveEndpoint", []interface{}{actualLRP})
 	fake.removeEndpointMutex.Unlock()
@@ -355,7 +415,7 @@ func (fake *FakeTCPRoutingTable) RemoveEndpointCallCount() int {
 	return len(fake.removeEndpointArgsForCall)
 }
 
-func (fake *FakeTCPRoutingTable) RemoveEndpointArgsForCall(i int) *models.ActualLRPGroup {
+func (fake *FakeTCPRoutingTable) RemoveEndpointArgsForCall(i int) *endpoint.ActualLRPRoutingInfo {
 	fake.removeEndpointMutex.RLock()
 	defer fake.removeEndpointMutex.RUnlock()
 	return fake.removeEndpointArgsForCall[i].actualLRP
@@ -479,6 +539,8 @@ func (fake *FakeTCPRoutingTable) Invocations() map[string][][]interface{} {
 	defer fake.updateRoutesMutex.RUnlock()
 	fake.removeRoutesMutex.RLock()
 	defer fake.removeRoutesMutex.RUnlock()
+	fake.getRoutesMutex.RLock()
+	defer fake.getRoutesMutex.RUnlock()
 	fake.addEndpointMutex.RLock()
 	defer fake.addEndpointMutex.RUnlock()
 	fake.removeEndpointMutex.RLock()

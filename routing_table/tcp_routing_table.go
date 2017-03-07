@@ -21,12 +21,13 @@ type routeInfo struct {
 type TCPRoutingTable interface {
 	RouteCount() int
 
-	AddRoutes(desiredLRP *models.DesiredLRP) event.RoutingEvents
-	UpdateRoutes(beforeLRP, afterLRP *models.DesiredLRP) event.RoutingEvents
-	RemoveRoutes(desiredLRP *models.DesiredLRP) event.RoutingEvents
+	AddRoutes(desiredLRP *models.DesiredLRPSchedulingInfo) event.RoutingEvents
+	UpdateRoutes(beforeLRP, afterLRP *models.DesiredLRPSchedulingInfo) event.RoutingEvents
+	RemoveRoutes(desiredLRP *models.DesiredLRPSchedulingInfo) event.RoutingEvents
+	GetRoutes(key endpoint.RoutingKey) endpoint.ExternalEndpointInfos
 
-	AddEndpoint(actualLRP *models.ActualLRPGroup) event.RoutingEvents
-	RemoveEndpoint(actualLRP *models.ActualLRPGroup) event.RoutingEvents
+	AddEndpoint(actualLRP *endpoint.ActualLRPRoutingInfo) event.RoutingEvents
+	RemoveEndpoint(actualLRP *endpoint.ActualLRPRoutingInfo) event.RoutingEvents
 
 	Swap(t TCPRoutingTable) event.RoutingEvents
 
@@ -48,6 +49,14 @@ func NewTCPTable(logger lager.Logger, entries map[endpoint.RoutingKey]endpoint.R
 		Locker:  &sync.Mutex{},
 		logger:  logger,
 	}
+}
+
+func (table *tcpRoutingTable) GetRoutes(key endpoint.RoutingKey) endpoint.ExternalEndpointInfos {
+	table.Lock()
+	defer table.Unlock()
+
+	e := table.entries[key]
+	return e.ExternalEndpoints
 }
 
 func (table *tcpRoutingTable) GetRoutingEvents() event.RoutingEvents {
@@ -106,7 +115,7 @@ func (table *tcpRoutingTable) RouteCount() int {
 	return len(table.entries)
 }
 
-func (table *tcpRoutingTable) AddRoutes(desiredLRP *models.DesiredLRP) event.RoutingEvents {
+func (table *tcpRoutingTable) AddRoutes(desiredLRP *models.DesiredLRPSchedulingInfo) event.RoutingEvents {
 	logger := table.logger.Session("AddRoutes", lager.Data{"desired_lrp": util.DesiredLRPData(desiredLRP)})
 	logger.Debug("starting")
 	defer logger.Debug("completed")
@@ -117,24 +126,24 @@ func (table *tcpRoutingTable) AddRoutes(desiredLRP *models.DesiredLRP) event.Rou
 	return table.addRoutes(logger, desiredLRP)
 }
 
-func (table *tcpRoutingTable) addRoutes(logger lager.Logger, desiredLRP *models.DesiredLRP) event.RoutingEvents {
+func (table *tcpRoutingTable) addRoutes(logger lager.Logger, desiredLRP *models.DesiredLRPSchedulingInfo) event.RoutingEvents {
 	routingKeys := endpoint.NewRoutingKeysFromDesired(desiredLRP)
-	routes, _ := tcp_routes.TCPRoutesFromRoutingInfo(desiredLRP.Routes)
+	routes, _ := tcp_routes.TCPRoutesFromRoutingInfo(&desiredLRP.Routes)
 
 	routingEvents := event.RoutingEvents{}
 	for _, key := range routingKeys {
 		existingEntry := table.entries[key]
 		existingModificationTag := existingEntry.ModificationTag
-		if !existingModificationTag.SucceededBy(desiredLRP.ModificationTag) {
+		if !existingModificationTag.SucceededBy(&desiredLRP.ModificationTag) {
 			continue
 		}
 		routingEvents = append(routingEvents, table.mergeRoutes(logger, existingEntry,
-			routes, key, desiredLRP.LogGuid, desiredLRP.ModificationTag)...)
+			routes, key, desiredLRP.LogGuid, &desiredLRP.ModificationTag)...)
 	}
 	return routingEvents
 }
 
-func (table *tcpRoutingTable) UpdateRoutes(beforeLRP, afterLRP *models.DesiredLRP) event.RoutingEvents {
+func (table *tcpRoutingTable) UpdateRoutes(beforeLRP, afterLRP *models.DesiredLRPSchedulingInfo) event.RoutingEvents {
 	logger := table.logger.Session("UpdateRoutes", lager.Data{"before_lrp": util.DesiredLRPData(beforeLRP), "after_lrp": util.DesiredLRPData(afterLRP)})
 	logger.Debug("starting")
 	defer logger.Debug("completed")
@@ -150,11 +159,11 @@ func (table *tcpRoutingTable) UpdateRoutes(beforeLRP, afterLRP *models.DesiredLR
 
 	routingEvents := table.addRoutes(logger, afterLRP)
 	routingEvents = append(routingEvents,
-		table.removeRoutingKeys(logger, deletedRoutingKeys, afterLRP.ModificationTag)...)
+		table.removeRoutingKeys(logger, deletedRoutingKeys, &afterLRP.ModificationTag)...)
 	return routingEvents
 }
 
-func (table *tcpRoutingTable) RemoveRoutes(desiredLRP *models.DesiredLRP) event.RoutingEvents {
+func (table *tcpRoutingTable) RemoveRoutes(desiredLRP *models.DesiredLRPSchedulingInfo) event.RoutingEvents {
 	logger := table.logger.Session("RemoveRoutes", lager.Data{"desired_lrp": util.DesiredLRPData(desiredLRP)})
 	logger.Debug("starting")
 	defer logger.Debug("completed")
@@ -164,7 +173,7 @@ func (table *tcpRoutingTable) RemoveRoutes(desiredLRP *models.DesiredLRP) event.
 	table.Lock()
 	defer table.Unlock()
 
-	routingEvents := table.removeRoutingKeys(logger, routingKeys, desiredLRP.ModificationTag)
+	routingEvents := table.removeRoutingKeys(logger, routingKeys, &desiredLRP.ModificationTag)
 	return routingEvents
 }
 
@@ -237,7 +246,7 @@ func (table *tcpRoutingTable) mergeRoutes(
 	return routingEvents
 }
 
-func (table *tcpRoutingTable) AddEndpoint(actualLRP *models.ActualLRPGroup) event.RoutingEvents {
+func (table *tcpRoutingTable) AddEndpoint(actualLRP *endpoint.ActualLRPRoutingInfo) event.RoutingEvents {
 	logger := table.logger.Session("AddEndpoint", lager.Data{"actual_lrp": actualLRP})
 	logger.Debug("starting")
 	defer logger.Debug("completed")
@@ -275,7 +284,7 @@ func (table *tcpRoutingTable) addEndpoint(logger lager.Logger, key endpoint.Rout
 	return table.getRegistrationEvents(logger, key, currentEntry, newEntry)
 }
 
-func (table *tcpRoutingTable) RemoveEndpoint(actualLRP *models.ActualLRPGroup) event.RoutingEvents {
+func (table *tcpRoutingTable) RemoveEndpoint(actualLRP *endpoint.ActualLRPRoutingInfo) event.RoutingEvents {
 	logger := table.logger.Session("RemoveEndpoint", lager.Data{"actual_lrp": actualLRP})
 	logger.Debug("starting")
 	defer logger.Debug("completed")

@@ -3,6 +3,7 @@ package endpoint
 import (
 	"code.cloudfoundry.org/bbs/models"
 	"code.cloudfoundry.org/lager"
+	"code.cloudfoundry.org/routing-info/tcp_routes"
 )
 
 type EndpointKey struct {
@@ -80,9 +81,9 @@ func (entry RoutableEndpoints) Copy() RoutableEndpoints {
 	return clone
 }
 
-func NewEndpointsFromActual(actualGrp *models.ActualLRPGroup) map[uint32]Endpoint {
+func NewEndpointsFromActual(actualInfo *ActualLRPRoutingInfo) map[uint32]Endpoint {
 	endpoints := map[uint32]Endpoint{}
-	actual, evacuating := actualGrp.Resolve()
+	actual, evacuating := actualInfo.ActualLRP, actualInfo.Evacuating
 
 	for _, portMapping := range actual.Ports {
 		endpoint := NewEndpoint(
@@ -98,20 +99,23 @@ func NewEndpointsFromActual(actualGrp *models.ActualLRPGroup) map[uint32]Endpoin
 	return endpoints
 }
 
-func NewRoutingKeysFromActual(actualGrp *models.ActualLRPGroup) RoutingKeys {
+func NewRoutingKeysFromActual(actualInfo *ActualLRPRoutingInfo) RoutingKeys {
 	keys := RoutingKeys{}
-	actual, _ := actualGrp.Resolve()
-	for _, portMapping := range actual.Ports {
-		keys = append(keys, NewRoutingKey(actual.ProcessGuid, portMapping.ContainerPort))
+	for _, portMapping := range actualInfo.ActualLRP.Ports {
+		keys = append(keys, NewRoutingKey(actualInfo.ActualLRP.ProcessGuid, portMapping.ContainerPort))
 	}
 
 	return keys
 }
 
-func NewRoutingKeysFromDesired(desired *models.DesiredLRP) RoutingKeys {
+func NewRoutingKeysFromDesired(desired *models.DesiredLRPSchedulingInfo) RoutingKeys {
 	keys := RoutingKeys{}
-	for _, containerPort := range desired.Ports {
-		keys = append(keys, NewRoutingKey(desired.ProcessGuid, containerPort))
+	routes, err := tcp_routes.TCPRoutesFromRoutingInfo(&desired.Routes)
+	if err != nil {
+		return keys
+	}
+	for _, r := range routes {
+		keys = append(keys, NewRoutingKey(desired.ProcessGuid, r.ContainerPort))
 	}
 
 	return keys

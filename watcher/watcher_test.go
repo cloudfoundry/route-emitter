@@ -14,6 +14,7 @@ import (
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/lager/lagertest"
 	"code.cloudfoundry.org/route-emitter/routing_table"
+	"code.cloudfoundry.org/route-emitter/routing_table/schema/endpoint"
 	"code.cloudfoundry.org/route-emitter/watcher"
 	"code.cloudfoundry.org/route-emitter/watcher/fakes"
 	"code.cloudfoundry.org/routing-info/cfroutes"
@@ -565,10 +566,10 @@ var _ = Describe("Watcher", func() {
 					schedulingInfo1,
 					schedulingInfo2,
 				}
-				expectedActuals := []*routing_table.ActualLRPRoutingInfo{
-					routing_table.NewActualLRPRoutingInfo(actualLRPGroup1),
-					routing_table.NewActualLRPRoutingInfo(actualLRPGroup2),
-					routing_table.NewActualLRPRoutingInfo(actualLRPGroup3),
+				expectedActuals := []*endpoint.ActualLRPRoutingInfo{
+					endpoint.NewActualLRPRoutingInfo(actualLRPGroup1),
+					endpoint.NewActualLRPRoutingInfo(actualLRPGroup2),
+					endpoint.NewActualLRPRoutingInfo(actualLRPGroup3),
 				}
 
 				expectedDomains := models.DomainSet{}
@@ -641,7 +642,7 @@ var _ = Describe("Watcher", func() {
 					It("registers endpoints for lrps on this cell", func() {
 						Eventually(routeHandler.SyncCallCount).Should(Equal(1))
 						_, _, actual, _ := routeHandler.SyncArgsForCall(0)
-						routingInfo2 := routing_table.NewActualLRPRoutingInfo(actualLRPGroup2)
+						routingInfo2 := endpoint.NewActualLRPRoutingInfo(actualLRPGroup2)
 						Expect(actual).To(ContainElement(routingInfo2))
 					})
 

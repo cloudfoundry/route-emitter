@@ -6,7 +6,7 @@ import (
 
 	"code.cloudfoundry.org/bbs/models"
 	"code.cloudfoundry.org/lager"
-	"code.cloudfoundry.org/route-emitter/routing_table"
+	"code.cloudfoundry.org/route-emitter/routing_table/schema/endpoint"
 	"code.cloudfoundry.org/route-emitter/watcher"
 )
 
@@ -17,18 +17,18 @@ type FakeRouteHandler struct {
 		logger lager.Logger
 		event  models.Event
 	}
-	SyncStub        func(logger lager.Logger, desired []*models.DesiredLRPSchedulingInfo, runningActual []*routing_table.ActualLRPRoutingInfo, domains models.DomainSet)
+	SyncStub        func(logger lager.Logger, desired []*models.DesiredLRPSchedulingInfo, runningActual []*endpoint.ActualLRPRoutingInfo, domains models.DomainSet)
 	syncMutex       sync.RWMutex
 	syncArgsForCall []struct {
 		logger        lager.Logger
 		desired       []*models.DesiredLRPSchedulingInfo
-		runningActual []*routing_table.ActualLRPRoutingInfo
+		runningActual []*endpoint.ActualLRPRoutingInfo
 		domains       models.DomainSet
 	}
-	ShouldRefreshDesiredStub        func(*routing_table.ActualLRPRoutingInfo) bool
+	ShouldRefreshDesiredStub        func(*endpoint.ActualLRPRoutingInfo) bool
 	shouldRefreshDesiredMutex       sync.RWMutex
 	shouldRefreshDesiredArgsForCall []struct {
-		arg1 *routing_table.ActualLRPRoutingInfo
+		arg1 *endpoint.ActualLRPRoutingInfo
 	}
 	shouldRefreshDesiredReturns struct {
 		result1 bool
@@ -70,22 +70,22 @@ func (fake *FakeRouteHandler) HandleEventArgsForCall(i int) (lager.Logger, model
 	return fake.handleEventArgsForCall[i].logger, fake.handleEventArgsForCall[i].event
 }
 
-func (fake *FakeRouteHandler) Sync(logger lager.Logger, desired []*models.DesiredLRPSchedulingInfo, runningActual []*routing_table.ActualLRPRoutingInfo, domains models.DomainSet) {
+func (fake *FakeRouteHandler) Sync(logger lager.Logger, desired []*models.DesiredLRPSchedulingInfo, runningActual []*endpoint.ActualLRPRoutingInfo, domains models.DomainSet) {
 	var desiredCopy []*models.DesiredLRPSchedulingInfo
 	if desired != nil {
 		desiredCopy = make([]*models.DesiredLRPSchedulingInfo, len(desired))
 		copy(desiredCopy, desired)
 	}
-	var runningActualCopy []*routing_table.ActualLRPRoutingInfo
+	var runningActualCopy []*endpoint.ActualLRPRoutingInfo
 	if runningActual != nil {
-		runningActualCopy = make([]*routing_table.ActualLRPRoutingInfo, len(runningActual))
+		runningActualCopy = make([]*endpoint.ActualLRPRoutingInfo, len(runningActual))
 		copy(runningActualCopy, runningActual)
 	}
 	fake.syncMutex.Lock()
 	fake.syncArgsForCall = append(fake.syncArgsForCall, struct {
 		logger        lager.Logger
 		desired       []*models.DesiredLRPSchedulingInfo
-		runningActual []*routing_table.ActualLRPRoutingInfo
+		runningActual []*endpoint.ActualLRPRoutingInfo
 		domains       models.DomainSet
 	}{logger, desiredCopy, runningActualCopy, domains})
 	fake.recordInvocation("Sync", []interface{}{logger, desiredCopy, runningActualCopy, domains})
@@ -101,17 +101,17 @@ func (fake *FakeRouteHandler) SyncCallCount() int {
 	return len(fake.syncArgsForCall)
 }
 
-func (fake *FakeRouteHandler) SyncArgsForCall(i int) (lager.Logger, []*models.DesiredLRPSchedulingInfo, []*routing_table.ActualLRPRoutingInfo, models.DomainSet) {
+func (fake *FakeRouteHandler) SyncArgsForCall(i int) (lager.Logger, []*models.DesiredLRPSchedulingInfo, []*endpoint.ActualLRPRoutingInfo, models.DomainSet) {
 	fake.syncMutex.RLock()
 	defer fake.syncMutex.RUnlock()
 	return fake.syncArgsForCall[i].logger, fake.syncArgsForCall[i].desired, fake.syncArgsForCall[i].runningActual, fake.syncArgsForCall[i].domains
 }
 
-func (fake *FakeRouteHandler) ShouldRefreshDesired(arg1 *routing_table.ActualLRPRoutingInfo) bool {
+func (fake *FakeRouteHandler) ShouldRefreshDesired(arg1 *endpoint.ActualLRPRoutingInfo) bool {
 	fake.shouldRefreshDesiredMutex.Lock()
 	ret, specificReturn := fake.shouldRefreshDesiredReturnsOnCall[len(fake.shouldRefreshDesiredArgsForCall)]
 	fake.shouldRefreshDesiredArgsForCall = append(fake.shouldRefreshDesiredArgsForCall, struct {
-		arg1 *routing_table.ActualLRPRoutingInfo
+		arg1 *endpoint.ActualLRPRoutingInfo
 	}{arg1})
 	fake.recordInvocation("ShouldRefreshDesired", []interface{}{arg1})
 	fake.shouldRefreshDesiredMutex.Unlock()
@@ -130,7 +130,7 @@ func (fake *FakeRouteHandler) ShouldRefreshDesiredCallCount() int {
 	return len(fake.shouldRefreshDesiredArgsForCall)
 }
 
-func (fake *FakeRouteHandler) ShouldRefreshDesiredArgsForCall(i int) *routing_table.ActualLRPRoutingInfo {
+func (fake *FakeRouteHandler) ShouldRefreshDesiredArgsForCall(i int) *endpoint.ActualLRPRoutingInfo {
 	fake.shouldRefreshDesiredMutex.RLock()
 	defer fake.shouldRefreshDesiredMutex.RUnlock()
 	return fake.shouldRefreshDesiredArgsForCall[i].arg1

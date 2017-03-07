@@ -8,6 +8,7 @@ import (
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/lager/lagertest"
 	"code.cloudfoundry.org/route-emitter/routing_table"
+	"code.cloudfoundry.org/route-emitter/routing_table/fakeroutingtable"
 	"code.cloudfoundry.org/route-emitter/routing_table/schema/endpoint"
 	"code.cloudfoundry.org/route-emitter/routing_table/schema/event"
 	"code.cloudfoundry.org/routing-info/tcp_routes"
@@ -22,42 +23,6 @@ const (
 	DEFAULT_POLLING_INTERVAL = 5 * time.Millisecond
 )
 
-type testRoutingTable struct {
-	entries map[endpoint.RoutingKey]endpoint.RoutableEndpoints
-}
-
-func (t *testRoutingTable) RouteCount() int {
-	return 0
-}
-
-func (t *testRoutingTable) AddRoutes(desiredLRP *models.DesiredLRP) event.RoutingEvents {
-	return event.RoutingEvents{}
-}
-
-func (t *testRoutingTable) UpdateRoutes(before, after *models.DesiredLRP) event.RoutingEvents {
-	return event.RoutingEvents{}
-}
-
-func (t *testRoutingTable) RemoveRoutes(desiredLRP *models.DesiredLRP) event.RoutingEvents {
-	return event.RoutingEvents{}
-}
-
-func (t *testRoutingTable) AddEndpoint(actualLRP *models.ActualLRPGroup) event.RoutingEvents {
-	return event.RoutingEvents{}
-}
-
-func (t *testRoutingTable) RemoveEndpoint(actualLRP *models.ActualLRPGroup) event.RoutingEvents {
-	return event.RoutingEvents{}
-}
-
-func (t *testRoutingTable) Swap(table routing_table.TCPRoutingTable) event.RoutingEvents {
-	return event.RoutingEvents{}
-}
-
-func (t *testRoutingTable) GetRoutingEvents() event.RoutingEvents {
-	return event.RoutingEvents{}
-}
-
 var _ = Describe("TCPRoutingTable", func() {
 
 	var (
@@ -67,8 +32,11 @@ var _ = Describe("TCPRoutingTable", func() {
 		logger          lager.Logger
 	)
 
-	getDesiredLRP := func(processGuid, logGuid string,
-		tcpRoutes tcp_routes.TCPRoutes, modificationTag *models.ModificationTag) *models.DesiredLRP {
+	getDesiredLRP := func(
+		processGuid, logGuid string,
+		tcpRoutes tcp_routes.TCPRoutes,
+		modificationTag *models.ModificationTag,
+	) *models.DesiredLRPSchedulingInfo {
 		var desiredLRP models.DesiredLRP
 		portMap := map[uint32]struct{}{}
 		for _, tcpRoute := range tcpRoutes {
@@ -90,40 +58,28 @@ var _ = Describe("TCPRoutingTable", func() {
 		routingInfo := json.RawMessage([]byte(`{ "private_key": "fake-key" }`))
 		(*desiredLRP.Routes)["diego-ssh"] = &routingInfo
 
-		return &desiredLRP
+		info := desiredLRP.DesiredLRPSchedulingInfo()
+		return &info
 	}
 
-	getActualLRP := func(processGuid, instanceGuid, hostAddress string,
-		hostPort, containerPort uint32, evacuating bool,
-		modificationTag *models.ModificationTag) *models.ActualLRPGroup {
-		if evacuating {
-			return &models.ActualLRPGroup{
-				Instance: nil,
-				Evacuating: &models.ActualLRP{
-					ActualLRPKey:         models.NewActualLRPKey(processGuid, 0, "domain"),
-					ActualLRPInstanceKey: models.NewActualLRPInstanceKey(instanceGuid, "cell-id-1"),
-					ActualLRPNetInfo: models.NewActualLRPNetInfo(
-						hostAddress,
-						models.NewPortMapping(hostPort, containerPort),
-					),
-					State:           models.ActualLRPStateRunning,
-					ModificationTag: *modificationTag,
-				},
-			}
-		} else {
-			return &models.ActualLRPGroup{
-				Instance: &models.ActualLRP{
-					ActualLRPKey:         models.NewActualLRPKey(processGuid, 0, "domain"),
-					ActualLRPInstanceKey: models.NewActualLRPInstanceKey(instanceGuid, "cell-id-1"),
-					ActualLRPNetInfo: models.NewActualLRPNetInfo(
-						hostAddress,
-						models.NewPortMapping(hostPort, containerPort),
-					),
-					State:           models.ActualLRPStateRunning,
-					ModificationTag: *modificationTag,
-				},
-				Evacuating: nil,
-			}
+	getActualLRP := func(
+		processGuid, instanceGuid, hostAddress string,
+		hostPort, containerPort uint32,
+		evacuating bool,
+		modificationTag *models.ModificationTag,
+	) *endpoint.ActualLRPRoutingInfo {
+		return &endpoint.ActualLRPRoutingInfo{
+			ActualLRP: &models.ActualLRP{
+				ActualLRPKey:         models.NewActualLRPKey(processGuid, 0, "domain"),
+				ActualLRPInstanceKey: models.NewActualLRPInstanceKey(instanceGuid, "cell-id-1"),
+				ActualLRPNetInfo: models.NewActualLRPNetInfo(
+					hostAddress,
+					models.NewPortMapping(hostPort, containerPort),
+				),
+				State:           models.ActualLRPStateRunning,
+				ModificationTag: *modificationTag,
+			},
+			Evacuating: evacuating,
 		}
 	}
 
@@ -313,11 +269,21 @@ var _ = Describe("TCPRoutingTable", func() {
 			})
 		})
 
-		Describe("GetRoutingEvents", func() {
-			It("returns empty routing events", func() {
-				routingEvents := routingTable.GetRoutingEvents()
+		Context("when the routing tables are of different type", func() {
+			It("should not swap the tables", func() {
+				routingTable = routing_table.NewTCPTable(logger, nil)
+				fakeTable := &fakeroutingtable.FakeTCPRoutingTable{}
+				routingEvents := routingTable.Swap(fakeTable)
 				Expect(routingEvents).To(HaveLen(0))
+				Expect(routingTable.RouteCount()).Should(Equal(0))
 			})
+		})
+	})
+
+	Describe("GetRoutingEvents", func() {
+		It("returns empty routing events", func() {
+			routingEvents := routingTable.GetRoutingEvents()
+			Expect(routingEvents).To(HaveLen(0))
 		})
 	})
 
@@ -342,6 +308,16 @@ var _ = Describe("TCPRoutingTable", func() {
 				endpoint.NewEndpointKey("instance-guid-2", false): endpoint.NewEndpoint(
 					"instance-guid-2", false, "some-ip-2", 62004, 5222, modificationTag),
 			}
+		})
+
+		Describe("GetRoutes", func() {
+			It("returns the associated desired state", func() {
+				routingTable = routing_table.NewTCPTable(logger, map[endpoint.RoutingKey]endpoint.RoutableEndpoints{
+					key: endpoint.NewRoutableEndpoints(externalEndpoints, endpoints, logGuid, modificationTag),
+				})
+				Expect(routingTable.RouteCount()).To(Equal(1))
+				Expect(routingTable.GetRoutes(key)).To(Equal(externalEndpoints))
+			})
 		})
 
 		Describe("AddRoutes", func() {
@@ -1072,7 +1048,6 @@ var _ = Describe("TCPRoutingTable", func() {
 					It("does not emit any routing events", func() {
 						newModificationTag := &models.ModificationTag{Epoch: "abc", Index: 2}
 						desiredLRP := getDesiredLRP("process-guid-1", "log-guid-1", tcp_routes.TCPRoutes{}, newModificationTag)
-						desiredLRP.Ports = []uint32{5222}
 						routingEvents := routingTable.RemoveRoutes(desiredLRP)
 						Expect(routingEvents).To(HaveLen(0))
 					})
@@ -1423,43 +1398,4 @@ var _ = Describe("TCPRoutingTable", func() {
 			})
 		})
 	})
-
-	Describe("Swap", func() {
-
-		var (
-			tempRoutingTable testRoutingTable
-		)
-
-		BeforeEach(func() {
-			routingTable = routing_table.NewTCPTable(logger, nil)
-			tempRoutingTable = testRoutingTable{}
-
-			logGuid := "log-guid-1"
-			externalEndpoints := endpoint.ExternalEndpointInfos{
-				endpoint.NewExternalEndpointInfo("router-group-guid", 61000),
-			}
-			key := endpoint.NewRoutingKey("process-guid-1", 5222)
-			modificationTag := &models.ModificationTag{Epoch: "abc", Index: 1}
-			endpoints := map[endpoint.EndpointKey]endpoint.Endpoint{
-				endpoint.NewEndpointKey("instance-guid-1", false): endpoint.NewEndpoint(
-					"instance-guid-1", false, "some-ip-1", 62004, 5222, modificationTag),
-				endpoint.NewEndpointKey("instance-guid-2", false): endpoint.NewEndpoint(
-					"instance-guid-2", false, "some-ip-2", 62004, 5222, modificationTag),
-			}
-
-			tempRoutingTable.entries = map[endpoint.RoutingKey]endpoint.RoutableEndpoints{
-				key: endpoint.NewRoutableEndpoints(externalEndpoints, endpoints, logGuid, modificationTag),
-			}
-
-		})
-		Context("when the routing tables are of different type", func() {
-
-			It("should not swap the tables", func() {
-				routingEvents := routingTable.Swap(&tempRoutingTable)
-				Expect(routingEvents).To(HaveLen(0))
-				Expect(routingTable.RouteCount()).Should(Equal(0))
-			})
-		})
-	})
-
 })

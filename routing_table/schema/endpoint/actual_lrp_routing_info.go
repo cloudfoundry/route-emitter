@@ -1,4 +1,4 @@
-package routing_table
+package endpoint
 
 import "code.cloudfoundry.org/bbs/models"
 

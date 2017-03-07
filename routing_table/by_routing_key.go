@@ -4,6 +4,7 @@ import (
 	"errors"
 
 	"code.cloudfoundry.org/bbs/models"
+	"code.cloudfoundry.org/route-emitter/routing_table/schema/endpoint"
 	"code.cloudfoundry.org/routing-info/cfroutes"
 )
 
@@ -33,7 +34,7 @@ func RoutesByRoutingKeyFromSchedulingInfos(schedulingInfos []*models.DesiredLRPS
 	return routesByRoutingKey
 }
 
-func EndpointsByRoutingKeyFromActuals(actuals []*ActualLRPRoutingInfo, schedInfos map[string]*models.DesiredLRPSchedulingInfo) EndpointsByRoutingKey {
+func EndpointsByRoutingKeyFromActuals(actuals []*endpoint.ActualLRPRoutingInfo, schedInfos map[string]*models.DesiredLRPSchedulingInfo) EndpointsByRoutingKey {
 	endpointsByRoutingKey := EndpointsByRoutingKey{}
 	for _, actual := range actuals {
 		if schedInfo, ok := schedInfos[actual.ActualLRP.ProcessGuid]; ok {
@@ -57,7 +58,7 @@ func EndpointsByRoutingKeyFromActuals(actuals []*ActualLRPRoutingInfo, schedInfo
 	return endpointsByRoutingKey
 }
 
-func EndpointsFromActual(actualLRPInfo *ActualLRPRoutingInfo) (map[uint32]Endpoint, error) {
+func EndpointsFromActual(actualLRPInfo *endpoint.ActualLRPRoutingInfo) (map[uint32]Endpoint, error) {
 	endpoints := map[uint32]Endpoint{}
 	actual := actualLRPInfo.ActualLRP
 

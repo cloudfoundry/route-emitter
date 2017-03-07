@@ -12,7 +12,7 @@ import (
 	"code.cloudfoundry.org/bbs/models"
 	"code.cloudfoundry.org/clock"
 	"code.cloudfoundry.org/lager"
-	"code.cloudfoundry.org/route-emitter/routing_table"
+	"code.cloudfoundry.org/route-emitter/routing_table/schema/endpoint"
 	"code.cloudfoundry.org/runtimeschema/metric"
 )
 
@@ -26,11 +26,11 @@ type RouteHandler interface {
 	Sync(
 		logger lager.Logger,
 		desired []*models.DesiredLRPSchedulingInfo,
-		runningActual []*routing_table.ActualLRPRoutingInfo,
+		runningActual []*endpoint.ActualLRPRoutingInfo,
 		domains models.DomainSet,
 	)
 
-	ShouldRefreshDesired(*routing_table.ActualLRPRoutingInfo) bool
+	ShouldRefreshDesired(*endpoint.ActualLRPRoutingInfo) bool
 	RefreshDesired([]*models.DesiredLRPSchedulingInfo)
 }
 
@@ -64,7 +64,7 @@ func NewWatcher(
 type syncEventResult struct {
 	startTime     time.Time
 	desired       []*models.DesiredLRPSchedulingInfo
-	runningActual []*routing_table.ActualLRPRoutingInfo
+	runningActual []*endpoint.ActualLRPRoutingInfo
 	domains       models.DomainSet
 }
 
@@ -161,12 +161,12 @@ func (w *Watcher) cacheIncomingEvents(
 }
 
 func (w *Watcher) handleEvent(logger lager.Logger, event models.Event) {
-	var routingInfo *routing_table.ActualLRPRoutingInfo
+	var routingInfo *endpoint.ActualLRPRoutingInfo
 	switch event := event.(type) {
 	case *models.ActualLRPCreatedEvent:
-		routingInfo = routing_table.NewActualLRPRoutingInfo(event.ActualLrpGroup)
+		routingInfo = endpoint.NewActualLRPRoutingInfo(event.ActualLrpGroup)
 	case *models.ActualLRPChangedEvent:
-		routingInfo = routing_table.NewActualLRPRoutingInfo(event.After)
+		routingInfo = endpoint.NewActualLRPRoutingInfo(event.After)
 	default:
 	}
 
@@ -189,7 +189,7 @@ func (w *Watcher) handleEvent(logger lager.Logger, event models.Event) {
 
 func (w *Watcher) sync(logger lager.Logger) (*syncEventResult, error) {
 	var desiredSchedulingInfo []*models.DesiredLRPSchedulingInfo
-	var runningActualLRPs []*routing_table.ActualLRPRoutingInfo
+	var runningActualLRPs []*endpoint.ActualLRPRoutingInfo
 	var domains models.DomainSet
 
 	var actualErr, desiredErr, domainsErr error
@@ -209,11 +209,11 @@ func (w *Watcher) sync(logger lager.Logger) (*syncEventResult, error) {
 		}
 		logger.Debug("succeeded-getting-actual-lrps", lager.Data{"num-actual-responses": len(actualLRPGroups)})
 
-		runningActualLRPs = make([]*routing_table.ActualLRPRoutingInfo, 0, len(actualLRPGroups))
+		runningActualLRPs = make([]*endpoint.ActualLRPRoutingInfo, 0, len(actualLRPGroups))
 		for _, actualLRPGroup := range actualLRPGroups {
 			actualLRP, evacuating := actualLRPGroup.Resolve()
 			if actualLRP.State == models.ActualLRPStateRunning {
-				runningActualLRPs = append(runningActualLRPs, &routing_table.ActualLRPRoutingInfo{
+				runningActualLRPs = append(runningActualLRPs, &endpoint.ActualLRPRoutingInfo{
 					ActualLRP:  actualLRP,
 					Evacuating: evacuating,
 				})

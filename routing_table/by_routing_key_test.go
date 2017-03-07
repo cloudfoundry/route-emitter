@@ -4,6 +4,7 @@ import (
 	"code.cloudfoundry.org/bbs/models"
 	"code.cloudfoundry.org/bbs/models/test/model_helpers"
 	"code.cloudfoundry.org/route-emitter/routing_table"
+	"code.cloudfoundry.org/route-emitter/routing_table/schema/endpoint"
 	"code.cloudfoundry.org/routing-info/cfroutes"
 
 	. "github.com/onsi/ginkgo"
@@ -90,7 +91,7 @@ var _ = Describe("ByRoutingKey", func() {
 				schedInfo2 := model_helpers.NewValidDesiredLRP("def").DesiredLRPSchedulingInfo()
 				schedInfo2.Instances = 2
 
-				endpoints = routing_table.EndpointsByRoutingKeyFromActuals([]*routing_table.ActualLRPRoutingInfo{
+				endpoints = routing_table.EndpointsByRoutingKeyFromActuals([]*endpoint.ActualLRPRoutingInfo{
 					{
 						ActualLRP: &models.ActualLRP{
 							ActualLRPKey:     models.NewActualLRPKey(schedInfo1.ProcessGuid, 0, "domain"),
@@ -147,7 +148,7 @@ var _ = Describe("ByRoutingKey", func() {
 				schedInfo2 := model_helpers.NewValidDesiredLRP("def").DesiredLRPSchedulingInfo()
 				schedInfo2.Instances = 1
 
-				endpoints = routing_table.EndpointsByRoutingKeyFromActuals([]*routing_table.ActualLRPRoutingInfo{
+				endpoints = routing_table.EndpointsByRoutingKeyFromActuals([]*endpoint.ActualLRPRoutingInfo{
 					{
 						ActualLRP: &models.ActualLRP{
 							ActualLRPKey:     models.NewActualLRPKey("abc", 0, "domain"),
@@ -189,7 +190,7 @@ var _ = Describe("ByRoutingKey", func() {
 
 	Describe("EndpointsFromActual", func() {
 		It("builds a map of container port to endpoint", func() {
-			endpoints, err := routing_table.EndpointsFromActual(&routing_table.ActualLRPRoutingInfo{
+			endpoints, err := routing_table.EndpointsFromActual(&endpoint.ActualLRPRoutingInfo{
 				ActualLRP: &models.ActualLRP{
 					ActualLRPKey:         models.NewActualLRPKey("process-guid", 0, "domain"),
 					ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
