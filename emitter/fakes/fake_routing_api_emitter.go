@@ -5,7 +5,7 @@ import (
 	"sync"
 
 	"code.cloudfoundry.org/route-emitter/emitter"
-	"code.cloudfoundry.org/route-emitter/routing_table/schema/event"
+	"code.cloudfoundry.org/route-emitter/routingtable/schema/event"
 )
 
 type FakeRoutingAPIEmitter struct {

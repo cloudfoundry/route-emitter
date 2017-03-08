@@ -16,8 +16,8 @@ import (
 	"code.cloudfoundry.org/bbs/models"
 	"code.cloudfoundry.org/durationjson"
 	"code.cloudfoundry.org/route-emitter/cmd/route-emitter/config"
-	"code.cloudfoundry.org/route-emitter/routing_table"
-	. "code.cloudfoundry.org/route-emitter/routing_table/matchers"
+	"code.cloudfoundry.org/route-emitter/routingtable"
+	. "code.cloudfoundry.org/route-emitter/routingtable/matchers"
 	"code.cloudfoundry.org/routing-info/cfroutes"
 	"github.com/cloudfoundry/sonde-go/events"
 	"github.com/nats-io/nats"
@@ -34,8 +34,8 @@ const msgReceiveTimeout = 5 * time.Second
 
 var _ = Describe("Route Emitter", func() {
 	var (
-		registeredRoutes   <-chan routing_table.RegistryMessage
-		unregisteredRoutes <-chan routing_table.RegistryMessage
+		registeredRoutes   <-chan routingtable.RegistryMessage
+		unregisteredRoutes <-chan routingtable.RegistryMessage
 
 		processGuid string
 		domain      string
@@ -90,13 +90,13 @@ var _ = Describe("Route Emitter", func() {
 		})
 	}
 
-	listenForRoutes := func(subject string) <-chan routing_table.RegistryMessage {
-		routes := make(chan routing_table.RegistryMessage)
+	listenForRoutes := func(subject string) <-chan routingtable.RegistryMessage {
+		routes := make(chan routingtable.RegistryMessage)
 
 		natsClient.Subscribe(subject, func(msg *nats.Msg) {
 			defer GinkgoRecover()
 
-			var message routing_table.RegistryMessage
+			var message routingtable.RegistryMessage
 			err := json.Unmarshal(msg.Data, &message)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -141,7 +141,7 @@ var _ = Describe("Route Emitter", func() {
 		natsClient.Subscribe("router.greet", func(msg *nats.Msg) {
 			defer GinkgoRecover()
 
-			greeting := routing_table.RouterGreetingMessage{
+			greeting := routingtable.RouterGreetingMessage{
 				MinimumRegisterInterval: 2,
 				PruneThresholdInSeconds: 6,
 			}
@@ -258,10 +258,10 @@ var _ = Describe("Route Emitter", func() {
 				})
 
 				Context("when backing store loses its data", func() {
-					var msg1 routing_table.RegistryMessage
-					var msg2 routing_table.RegistryMessage
-					var msg3 routing_table.RegistryMessage
-					var msg4 routing_table.RegistryMessage
+					var msg1 routingtable.RegistryMessage
+					var msg2 routingtable.RegistryMessage
+					var msg3 routingtable.RegistryMessage
+					var msg4 routingtable.RegistryMessage
 
 					BeforeEach(func() {
 						// ensure it's seen the route at least once
@@ -278,7 +278,7 @@ var _ = Describe("Route Emitter", func() {
 					It("continues to broadcast routes", func() {
 						Eventually(registeredRoutes, 5).Should(Receive(&msg3))
 						Eventually(registeredRoutes, 5).Should(Receive(&msg4))
-						Expect([]routing_table.RegistryMessage{msg3, msg4}).To(ConsistOf(
+						Expect([]routingtable.RegistryMessage{msg3, msg4}).To(ConsistOf(
 							MatchRegistryMessage(msg1),
 							MatchRegistryMessage(msg2),
 						))
@@ -286,12 +286,12 @@ var _ = Describe("Route Emitter", func() {
 				})
 
 				It("emits its routes immediately", func() {
-					var msg1, msg2 routing_table.RegistryMessage
+					var msg1, msg2 routingtable.RegistryMessage
 					Eventually(registeredRoutes).Should(Receive(&msg1))
 					Eventually(registeredRoutes).Should(Receive(&msg2))
 
-					Expect([]routing_table.RegistryMessage{msg1, msg2}).To(ConsistOf(
-						MatchRegistryMessage(routing_table.RegistryMessage{
+					Expect([]routingtable.RegistryMessage{msg1, msg2}).To(ConsistOf(
+						MatchRegistryMessage(routingtable.RegistryMessage{
 							URIs:                 []string{hostnames[1]},
 							Host:                 netInfo.Address,
 							Port:                 netInfo.Ports[0].HostPort,
@@ -301,7 +301,7 @@ var _ = Describe("Route Emitter", func() {
 							RouteServiceUrl:      "https://awesome.com",
 							Tags:                 map[string]string{"component": "route-emitter"},
 						}),
-						MatchRegistryMessage(routing_table.RegistryMessage{
+						MatchRegistryMessage(routingtable.RegistryMessage{
 							URIs:                 []string{hostnames[0]},
 							Host:                 netInfo.Address,
 							Port:                 netInfo.Ports[0].HostPort,
@@ -347,12 +347,12 @@ var _ = Describe("Route Emitter", func() {
 				})
 
 				It("emits its routes immediately", func() {
-					var msg1, msg2 routing_table.RegistryMessage
+					var msg1, msg2 routingtable.RegistryMessage
 					Eventually(registeredRoutes).Should(Receive(&msg1))
 					Eventually(registeredRoutes).Should(Receive(&msg2))
 
-					Expect([]routing_table.RegistryMessage{msg1, msg2}).To(ConsistOf(
-						MatchRegistryMessage(routing_table.RegistryMessage{
+					Expect([]routingtable.RegistryMessage{msg1, msg2}).To(ConsistOf(
+						MatchRegistryMessage(routingtable.RegistryMessage{
 							URIs:                 []string{hostnames[1]},
 							Host:                 netInfo.Address,
 							Port:                 netInfo.Ports[0].HostPort,
@@ -362,7 +362,7 @@ var _ = Describe("Route Emitter", func() {
 							RouteServiceUrl:      "https://awesome.com",
 							Tags:                 map[string]string{"component": "route-emitter"},
 						}),
-						MatchRegistryMessage(routing_table.RegistryMessage{
+						MatchRegistryMessage(routingtable.RegistryMessage{
 							URIs:                 []string{hostnames[0]},
 							Host:                 netInfo.Address,
 							Port:                 netInfo.Ports[0].HostPort,
@@ -376,19 +376,19 @@ var _ = Describe("Route Emitter", func() {
 				})
 
 				It("repeats the route message at the interval given by the router", func() {
-					var msg1 routing_table.RegistryMessage
-					var msg2 routing_table.RegistryMessage
+					var msg1 routingtable.RegistryMessage
+					var msg2 routingtable.RegistryMessage
 					Eventually(registeredRoutes).Should(Receive(&msg1))
 					Eventually(registeredRoutes).Should(Receive(&msg2))
 					t1 := time.Now()
 
-					var msg3 routing_table.RegistryMessage
-					var msg4 routing_table.RegistryMessage
+					var msg3 routingtable.RegistryMessage
+					var msg4 routingtable.RegistryMessage
 					Eventually(registeredRoutes, 5).Should(Receive(&msg3))
 					Eventually(registeredRoutes, 5).Should(Receive(&msg4))
 					t2 := time.Now()
 
-					Expect([]routing_table.RegistryMessage{msg3, msg4}).To(ConsistOf(
+					Expect([]routingtable.RegistryMessage{msg3, msg4}).To(ConsistOf(
 						MatchRegistryMessage(msg1),
 						MatchRegistryMessage(msg2),
 					))
@@ -396,10 +396,10 @@ var _ = Describe("Route Emitter", func() {
 				})
 
 				Context("when backing store goes away", func() {
-					var msg1 routing_table.RegistryMessage
-					var msg2 routing_table.RegistryMessage
-					var msg3 routing_table.RegistryMessage
-					var msg4 routing_table.RegistryMessage
+					var msg1 routingtable.RegistryMessage
+					var msg2 routingtable.RegistryMessage
+					var msg3 routingtable.RegistryMessage
+					var msg4 routingtable.RegistryMessage
 
 					BeforeEach(func() {
 						// ensure it's seen the route at least once
@@ -412,7 +412,7 @@ var _ = Describe("Route Emitter", func() {
 					It("continues to broadcast routes", func() {
 						Eventually(registeredRoutes, 5).Should(Receive(&msg3))
 						Eventually(registeredRoutes, 5).Should(Receive(&msg4))
-						Expect([]routing_table.RegistryMessage{msg3, msg4}).To(ConsistOf(
+						Expect([]routingtable.RegistryMessage{msg3, msg4}).To(ConsistOf(
 							MatchRegistryMessage(msg1),
 							MatchRegistryMessage(msg2),
 						))
@@ -532,8 +532,8 @@ var _ = Describe("Route Emitter", func() {
 
 		Context("when consul goes down", func() {
 			var (
-				msg1 routing_table.RegistryMessage
-				msg2 routing_table.RegistryMessage
+				msg1 routingtable.RegistryMessage
+				msg2 routingtable.RegistryMessage
 			)
 
 			BeforeEach(func() {
@@ -578,12 +578,12 @@ var _ = Describe("Route Emitter", func() {
 			})
 
 			It("repeats the route message at the interval given by the router", func() {
-				var msg3 routing_table.RegistryMessage
-				var msg4 routing_table.RegistryMessage
+				var msg3 routingtable.RegistryMessage
+				var msg4 routingtable.RegistryMessage
 				Eventually(registeredRoutes, 5).Should(Receive(&msg3))
 				Eventually(registeredRoutes, 5).Should(Receive(&msg4))
 
-				Expect([]routing_table.RegistryMessage{msg3, msg4}).To(ConsistOf(
+				Expect([]routingtable.RegistryMessage{msg3, msg4}).To(ConsistOf(
 					MatchRegistryMessage(msg1),
 					MatchRegistryMessage(msg2),
 				))
@@ -612,12 +612,12 @@ var _ = Describe("Route Emitter", func() {
 			})
 
 			It("immediately emits all routes", func() {
-				var msg1, msg2 routing_table.RegistryMessage
+				var msg1, msg2 routingtable.RegistryMessage
 				Eventually(registeredRoutes).Should(Receive(&msg1))
 				Eventually(registeredRoutes).Should(Receive(&msg2))
 
-				Expect([]routing_table.RegistryMessage{msg1, msg2}).To(ConsistOf(
-					MatchRegistryMessage(routing_table.RegistryMessage{
+				Expect([]routingtable.RegistryMessage{msg1, msg2}).To(ConsistOf(
+					MatchRegistryMessage(routingtable.RegistryMessage{
 						URIs:                 []string{"route-1"},
 						Host:                 "1.2.3.4",
 						Port:                 65100,
@@ -627,7 +627,7 @@ var _ = Describe("Route Emitter", func() {
 						RouteServiceUrl:      "https://awesome.com",
 						Tags:                 map[string]string{"component": "route-emitter"},
 					}),
-					MatchRegistryMessage(routing_table.RegistryMessage{
+					MatchRegistryMessage(routingtable.RegistryMessage{
 						URIs:                 []string{"route-2"},
 						Host:                 "1.2.3.4",
 						Port:                 65100,
@@ -657,14 +657,14 @@ var _ = Describe("Route Emitter", func() {
 				})
 
 				It("immediately emits router.register", func() {
-					var msg1, msg2, msg3 routing_table.RegistryMessage
+					var msg1, msg2, msg3 routingtable.RegistryMessage
 					Eventually(registeredRoutes).Should(Receive(&msg1))
 					Eventually(registeredRoutes).Should(Receive(&msg2))
 					Eventually(registeredRoutes).Should(Receive(&msg3))
 
-					registryMessages := []routing_table.RegistryMessage{}
+					registryMessages := []routingtable.RegistryMessage{}
 					for _, hostname := range hostnames {
-						registryMessages = append(registryMessages, routing_table.RegistryMessage{
+						registryMessages = append(registryMessages, routingtable.RegistryMessage{
 							URIs:                 []string{hostname},
 							Host:                 "1.2.3.4",
 							Port:                 65100,
@@ -674,7 +674,7 @@ var _ = Describe("Route Emitter", func() {
 							Tags:                 map[string]string{"component": "route-emitter"},
 						})
 					}
-					Expect([]routing_table.RegistryMessage{msg1, msg2, msg3}).To(ConsistOf(
+					Expect([]routingtable.RegistryMessage{msg1, msg2, msg3}).To(ConsistOf(
 						MatchRegistryMessage(registryMessages[0]),
 						MatchRegistryMessage(registryMessages[1]),
 						MatchRegistryMessage(registryMessages[2]),
@@ -696,7 +696,7 @@ var _ = Describe("Route Emitter", func() {
 				It("immediately emits router.unregister when domain is fresh", func() {
 					bbsClient.UpsertDomain(logger, domain, 2*time.Second)
 					Eventually(unregisteredRoutes, msgReceiveTimeout).Should(Receive(
-						MatchRegistryMessage(routing_table.RegistryMessage{
+						MatchRegistryMessage(routingtable.RegistryMessage{
 							URIs:                 []string{"route-1"},
 							Host:                 "1.2.3.4",
 							Port:                 65100,
@@ -708,7 +708,7 @@ var _ = Describe("Route Emitter", func() {
 						}),
 					))
 					Eventually(registeredRoutes, msgReceiveTimeout).Should(Receive(
-						MatchRegistryMessage(routing_table.RegistryMessage{
+						MatchRegistryMessage(routingtable.RegistryMessage{
 							URIs:                 []string{"route-2"},
 							Host:                 "1.2.3.4",
 							Port:                 65100,

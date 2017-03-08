@@ -6,7 +6,7 @@ import (
 	"code.cloudfoundry.org/lager/lagertest"
 	"code.cloudfoundry.org/route-emitter/diegonats"
 	"code.cloudfoundry.org/route-emitter/emitter"
-	"code.cloudfoundry.org/route-emitter/routing_table"
+	"code.cloudfoundry.org/route-emitter/routingtable"
 	"code.cloudfoundry.org/workpool"
 	fake_metrics_sender "github.com/cloudfoundry/dropsonde/metric_sender/fake"
 	"github.com/cloudfoundry/dropsonde/metrics"
@@ -21,12 +21,12 @@ var _ = Describe("NatsEmitter", func() {
 	var natsClient *diegonats.FakeNATSClient
 	var fakeMetricSender *fake_metrics_sender.FakeMetricSender
 
-	messagesToEmit := routing_table.MessagesToEmit{
-		RegistrationMessages: []routing_table.RegistryMessage{
+	messagesToEmit := routingtable.MessagesToEmit{
+		RegistrationMessages: []routingtable.RegistryMessage{
 			{URIs: []string{"foo.com", "bar.com"}, Host: "1.1.1.1", Port: 11},
 			{URIs: []string{"baz.com"}, Host: "2.2.2.2", Port: 22},
 		},
-		UnregistrationMessages: []routing_table.RegistryMessage{
+		UnregistrationMessages: []routingtable.RegistryMessage{
 			{URIs: []string{"wibble.com"}, Host: "1.1.1.1", Port: 11},
 			{URIs: []string{"baz.com"}, Host: "3.3.3.3", Port: 33},
 		},

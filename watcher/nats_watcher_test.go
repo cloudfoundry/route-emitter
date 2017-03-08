@@ -21,8 +21,8 @@ package watcher_test
 //	"github.com/tedsuo/ifrit"
 //
 //	"code.cloudfoundry.org/route-emitter/emitter/fakes"
-//	"code.cloudfoundry.org/route-emitter/routing_table"
-//	"code.cloudfoundry.org/route-emitter/routing_table/fake_routing_table"
+//	"code.cloudfoundry.org/route-emitter/routingtable"
+//	"code.cloudfoundry.org/route-emitter/routingtable/fake_routingtable"
 //	"code.cloudfoundry.org/route-emitter/syncer"
 //	"code.cloudfoundry.org/route-emitter/watcher"
 //	"code.cloudfoundry.org/routing-info/cfroutes"
@@ -55,8 +55,8 @@ package watcher_test
 //	var (
 //		eventSource *eventfakes.FakeEventSource
 //		bbsClient   *fake_bbs.FakeClient
-//		fakeTable   *fake_routing_table.FakeRoutingTable
-//		table       routing_table.RoutingTable
+//		fakeTable   *fake_routingtable.FakeRoutingTable
+//		table       routingtable.RoutingTable
 //		natsEmitter *fakes.FakeNATSEmitter
 //		syncEvents  syncer.Events
 //		cellID      string
@@ -66,14 +66,14 @@ package watcher_test
 //		process        ifrit.Process
 //
 //		expectedRoutes     []string
-//		expectedRoutingKey routing_table.RoutingKey
+//		expectedRoutingKey routingtable.RoutingKey
 //		expectedCFRoute    cfroutes.CFRoute
 //
 //		expectedAdditionalRoutes     []string
-//		expectedAdditionalRoutingKey routing_table.RoutingKey
+//		expectedAdditionalRoutingKey routingtable.RoutingKey
 //		expectedAdditionalCFRoute    cfroutes.CFRoute
 //
-//		dummyMessagesToEmit routing_table.MessagesToEmit
+//		dummyMessagesToEmit routingtable.MessagesToEmit
 //		fakeMetricSender    *fake_metrics_sender.FakeMetricSender
 //
 //		logger *lagertest.TestLogger
@@ -89,7 +89,7 @@ package watcher_test
 //		bbsClient.DomainsReturns([]string{expectedDomain}, nil)
 //		cellID = ""
 //
-//		fakeTable = &fake_routing_table.FakeRoutingTable{}
+//		fakeTable = &fake_routingtable.FakeRoutingTable{}
 //		table = fakeTable
 //		natsEmitter = &fakes.FakeNATSEmitter{}
 //		syncEvents = syncer.Events{
@@ -98,25 +98,25 @@ package watcher_test
 //		}
 //		logger = lagertest.NewTestLogger("test")
 //
-//		dummyEndpoint := routing_table.Endpoint{InstanceGuid: expectedInstanceGuid, Index: expectedIndex, Host: expectedHost, Port: expectedContainerPort}
-//		dummyMessageFoo := routing_table.RegistryMessageFor(dummyEndpoint, routing_table.Route{Hostname: "foo.com", LogGuid: logGuid})
-//		dummyMessageBar := routing_table.RegistryMessageFor(dummyEndpoint, routing_table.Route{Hostname: "bar.com", LogGuid: logGuid})
-//		dummyMessagesToEmit = routing_table.MessagesToEmit{
-//			RegistrationMessages: []routing_table.RegistryMessage{dummyMessageFoo, dummyMessageBar},
+//		dummyEndpoint := routingtable.Endpoint{InstanceGuid: expectedInstanceGuid, Index: expectedIndex, Host: expectedHost, Port: expectedContainerPort}
+//		dummyMessageFoo := routingtable.RegistryMessageFor(dummyEndpoint, routingtable.Route{Hostname: "foo.com", LogGuid: logGuid})
+//		dummyMessageBar := routingtable.RegistryMessageFor(dummyEndpoint, routingtable.Route{Hostname: "bar.com", LogGuid: logGuid})
+//		dummyMessagesToEmit = routingtable.MessagesToEmit{
+//			RegistrationMessages: []routingtable.RegistryMessage{dummyMessageFoo, dummyMessageBar},
 //		}
 //
 //		clock = fakeclock.NewFakeClock(time.Now())
 //
 //		expectedRoutes = []string{"route-1", "route-2"}
 //		expectedCFRoute = cfroutes.CFRoute{Hostnames: expectedRoutes, Port: expectedContainerPort, RouteServiceUrl: expectedRouteServiceUrl}
-//		expectedRoutingKey = routing_table.RoutingKey{
+//		expectedRoutingKey = routingtable.RoutingKey{
 //			ProcessGuid:   expectedProcessGuid,
 //			ContainerPort: expectedContainerPort,
 //		}
 //
 //		expectedAdditionalRoutes = []string{"additional-1", "additional-2"}
 //		expectedAdditionalCFRoute = cfroutes.CFRoute{Hostnames: expectedAdditionalRoutes, Port: expectedAdditionalContainerPort}
-//		expectedAdditionalRoutingKey = routing_table.RoutingKey{
+//		expectedAdditionalRoutingKey = routingtable.RoutingKey{
 //			ProcessGuid:   expectedProcessGuid,
 //			ContainerPort: expectedAdditionalContainerPort,
 //		}
@@ -212,12 +212,12 @@ package watcher_test
 //					key, routes, _ := fakeTable.SetRoutesArgsForCall(0)
 //					Expect(key).To(Equal(expectedRoutingKey))
 //					Expect(routes).To(ConsistOf(
-//						routing_table.Route{
+//						routingtable.Route{
 //							Hostname:        expectedRoutes[0],
 //							LogGuid:         logGuid,
 //							RouteServiceUrl: expectedRouteServiceUrl,
 //						},
-//						routing_table.Route{
+//						routingtable.Route{
 //							Hostname:        expectedRoutes[1],
 //							LogGuid:         logGuid,
 //							RouteServiceUrl: expectedRouteServiceUrl,
@@ -296,12 +296,12 @@ package watcher_test
 //						key, routes, _ := fakeTable.SetRoutesArgsForCall(0)
 //						Expect(key).To(Equal(expectedRoutingKey))
 //						Expect(routes).To(ConsistOf(
-//							routing_table.Route{
+//							routingtable.Route{
 //								Hostname:        "route-1",
 //								LogGuid:         logGuid,
 //								RouteServiceUrl: expectedRouteServiceUrl,
 //							},
-//							routing_table.Route{
+//							routingtable.Route{
 //								Hostname: "route-2",
 //								LogGuid:  logGuid,
 //							},
@@ -327,27 +327,27 @@ package watcher_test
 //
 //						key1, routes1, _ := fakeTable.SetRoutesArgsForCall(0)
 //						key2, routes2, _ := fakeTable.SetRoutesArgsForCall(1)
-//						var routes = []routing_table.Route{}
+//						var routes = []routingtable.Route{}
 //						routes = append(routes, routes1...)
 //						routes = append(routes, routes2...)
 //
-//						Expect([]routing_table.RoutingKey{key1, key2}).To(ConsistOf(expectedRoutingKey, expectedAdditionalRoutingKey))
+//						Expect([]routingtable.RoutingKey{key1, key2}).To(ConsistOf(expectedRoutingKey, expectedAdditionalRoutingKey))
 //						Expect(routes).To(ConsistOf(
-//							routing_table.Route{
+//							routingtable.Route{
 //								Hostname:        expectedRoutes[0],
 //								LogGuid:         logGuid,
 //								RouteServiceUrl: expectedRouteServiceUrl,
 //							},
-//							routing_table.Route{
+//							routingtable.Route{
 //								Hostname:        expectedRoutes[1],
 //								LogGuid:         logGuid,
 //								RouteServiceUrl: expectedRouteServiceUrl,
 //							},
-//							routing_table.Route{
+//							routingtable.Route{
 //								Hostname: expectedAdditionalRoutes[0],
 //								LogGuid:  logGuid,
 //							},
-//							routing_table.Route{
+//							routingtable.Route{
 //								Hostname: expectedAdditionalRoutes[1],
 //								LogGuid:  logGuid,
 //							},
@@ -409,8 +409,8 @@ package watcher_test
 //					BeforeEach(func() {
 //						changedDesiredLRP.Instances = 1
 //
-//						fakeTable.EndpointsForIndexStub = func(key routing_table.RoutingKey, index int32) []routing_table.Endpoint {
-//							endpoint := routing_table.Endpoint{
+//						fakeTable.EndpointsForIndexStub = func(key routingtable.RoutingKey, index int32) []routingtable.Endpoint {
+//							endpoint := routingtable.Endpoint{
 //								InstanceGuid:  fmt.Sprintf("instance-guid-%d", index),
 //								Index:         index,
 //								Host:          fmt.Sprintf("1.1.1.%d", index),
@@ -420,7 +420,7 @@ package watcher_test
 //								Evacuating:    false,
 //							}
 //
-//							return []routing_table.Endpoint{endpoint}
+//							return []routingtable.Endpoint{endpoint}
 //						}
 //					})
 //
@@ -434,11 +434,11 @@ package watcher_test
 //					key, routes, _ := fakeTable.SetRoutesArgsForCall(0)
 //					Expect(key).To(Equal(expectedRoutingKey))
 //					Expect(routes).To(ConsistOf(
-//						routing_table.Route{
+//						routingtable.Route{
 //							Hostname: expectedRoutes[0],
 //							LogGuid:  logGuid,
 //						},
-//						routing_table.Route{
+//						routingtable.Route{
 //							Hostname: expectedRoutes[1],
 //							LogGuid:  logGuid,
 //						},
@@ -509,27 +509,27 @@ package watcher_test
 //
 //						key1, routes1, _ := fakeTable.SetRoutesArgsForCall(0)
 //						key2, routes2, _ := fakeTable.SetRoutesArgsForCall(1)
-//						var routes = []routing_table.Route{}
+//						var routes = []routingtable.Route{}
 //						routes = append(routes, routes1...)
 //						routes = append(routes, routes2...)
 //
-//						Expect([]routing_table.RoutingKey{key1, key2}).To(ConsistOf(expectedRoutingKey, expectedAdditionalRoutingKey))
+//						Expect([]routingtable.RoutingKey{key1, key2}).To(ConsistOf(expectedRoutingKey, expectedAdditionalRoutingKey))
 //						Expect(routes).To(ConsistOf(
-//							routing_table.Route{
+//							routingtable.Route{
 //								Hostname:        expectedRoutes[0],
 //								LogGuid:         logGuid,
 //								RouteServiceUrl: expectedRouteServiceUrl,
 //							},
-//							routing_table.Route{
+//							routingtable.Route{
 //								Hostname:        expectedRoutes[1],
 //								LogGuid:         logGuid,
 //								RouteServiceUrl: expectedRouteServiceUrl,
 //							},
-//							routing_table.Route{
+//							routingtable.Route{
 //								Hostname: expectedAdditionalRoutes[0],
 //								LogGuid:  logGuid,
 //							},
-//							routing_table.Route{
+//							routingtable.Route{
 //								Hostname: expectedAdditionalRoutes[1],
 //								LogGuid:  logGuid,
 //							},
@@ -555,27 +555,27 @@ package watcher_test
 //
 //						key1, routes1, _ := fakeTable.SetRoutesArgsForCall(0)
 //						key2, routes2, _ := fakeTable.SetRoutesArgsForCall(1)
-//						var routes = []routing_table.Route{}
+//						var routes = []routingtable.Route{}
 //						routes = append(routes, routes1...)
 //						routes = append(routes, routes2...)
 //
-//						Expect([]routing_table.RoutingKey{key1, key2}).To(ConsistOf(expectedRoutingKey, expectedAdditionalRoutingKey))
+//						Expect([]routingtable.RoutingKey{key1, key2}).To(ConsistOf(expectedRoutingKey, expectedAdditionalRoutingKey))
 //						Expect(routes).To(ConsistOf(
-//							routing_table.Route{
+//							routingtable.Route{
 //								Hostname:        expectedRoutes[0],
 //								LogGuid:         logGuid,
 //								RouteServiceUrl: expectedRouteServiceUrl,
 //							},
-//							routing_table.Route{
+//							routingtable.Route{
 //								Hostname:        expectedRoutes[1],
 //								LogGuid:         logGuid,
 //								RouteServiceUrl: expectedRouteServiceUrl,
 //							},
-//							routing_table.Route{
+//							routingtable.Route{
 //								Hostname: expectedAdditionalRoutes[0],
 //								LogGuid:  logGuid,
 //							},
-//							routing_table.Route{
+//							routingtable.Route{
 //								Hostname: expectedAdditionalRoutes[1],
 //								LogGuid:  logGuid,
 //							},
@@ -598,7 +598,7 @@ package watcher_test
 //						routes := cfroutes.CFRoutes{}.RoutingInfo()
 //						changedDesiredLRP.Routes = &routes
 //
-//						fakeTable.SetRoutesReturns(routing_table.MessagesToEmit{})
+//						fakeTable.SetRoutesReturns(routingtable.MessagesToEmit{})
 //						fakeTable.RemoveRoutesReturns(dummyMessagesToEmit)
 //					})
 //
@@ -751,7 +751,7 @@ package watcher_test
 //			var (
 //				actualLRPGroup       *models.ActualLRPGroup
 //				actualLRP            *models.ActualLRP
-//				actualLRPRoutingInfo *routing_table.ActualLRPRoutingInfo
+//				actualLRPRoutingInfo *routingtable.ActualLRPRoutingInfo
 //			)
 //
 //			Context("when the resulting LRP is in the RUNNING state", func() {
@@ -771,7 +771,7 @@ package watcher_test
 //						Instance: actualLRP,
 //					}
 //
-//					actualLRPRoutingInfo = &routing_table.ActualLRPRoutingInfo{
+//					actualLRPRoutingInfo = &routingtable.ActualLRPRoutingInfo{
 //						ActualLRP:  actualLRP,
 //						Evacuating: false,
 //					}
@@ -798,8 +798,8 @@ package watcher_test
 //				It("should add/update the endpoints on the table", func() {
 //					Eventually(fakeTable.AddEndpointCallCount).Should(Equal(2))
 //
-//					keys := routing_table.RoutingKeysFromActual(actualLRP)
-//					endpoints, err := routing_table.EndpointsFromActual(actualLRPRoutingInfo)
+//					keys := routingtable.RoutingKeysFromActual(actualLRP)
+//					endpoints, err := routingtable.EndpointsFromActual(actualLRPRoutingInfo)
 //					Expect(err).NotTo(HaveOccurred())
 //
 //					key, endpoint := fakeTable.AddEndpointArgsForCall(0)
@@ -951,8 +951,8 @@ package watcher_test
 //
 //					// Verify the arguments that were passed to AddEndpoint independent of which call was made first.
 //					type endpointArgs struct {
-//						key      routing_table.RoutingKey
-//						endpoint routing_table.Endpoint
+//						key      routingtable.RoutingKey
+//						endpoint routingtable.Endpoint
 //					}
 //					args := make([]endpointArgs, 2)
 //					key, endpoint := fakeTable.AddEndpointArgsForCall(0)
@@ -961,7 +961,7 @@ package watcher_test
 //					args[1] = endpointArgs{key, endpoint}
 //
 //					Expect(args).To(ConsistOf([]endpointArgs{
-//						endpointArgs{expectedRoutingKey, routing_table.Endpoint{
+//						endpointArgs{expectedRoutingKey, routingtable.Endpoint{
 //							InstanceGuid:  expectedInstanceGuid,
 //							Index:         expectedIndex,
 //							Host:          expectedHost,
@@ -969,7 +969,7 @@ package watcher_test
 //							Port:          expectedExternalPort,
 //							ContainerPort: expectedContainerPort,
 //						}},
-//						endpointArgs{expectedAdditionalRoutingKey, routing_table.Endpoint{
+//						endpointArgs{expectedAdditionalRoutingKey, routingtable.Endpoint{
 //							InstanceGuid:  expectedInstanceGuid,
 //							Index:         expectedIndex,
 //							Host:          expectedHost,
@@ -1076,7 +1076,7 @@ package watcher_test
 //
 //					key, endpoint := fakeTable.RemoveEndpointArgsForCall(0)
 //					Expect(key).To(Equal(expectedRoutingKey))
-//					Expect(endpoint).To(Equal(routing_table.Endpoint{
+//					Expect(endpoint).To(Equal(routingtable.Endpoint{
 //						InstanceGuid:  expectedInstanceGuid,
 //						Index:         expectedIndex,
 //						Host:          expectedHost,
@@ -1087,7 +1087,7 @@ package watcher_test
 //
 //					key, endpoint = fakeTable.RemoveEndpointArgsForCall(1)
 //					Expect(key).To(Equal(expectedAdditionalRoutingKey))
-//					Expect(endpoint).To(Equal(routing_table.Endpoint{
+//					Expect(endpoint).To(Equal(routingtable.Endpoint{
 //						InstanceGuid:  expectedInstanceGuid,
 //						Index:         expectedIndex,
 //						Host:          expectedHost,
@@ -1223,7 +1223,7 @@ package watcher_test
 //
 //					key, endpoint := fakeTable.RemoveEndpointArgsForCall(0)
 //					Expect(key).To(Equal(expectedRoutingKey))
-//					Expect(endpoint).To(Equal(routing_table.Endpoint{
+//					Expect(endpoint).To(Equal(routingtable.Endpoint{
 //						InstanceGuid:  expectedInstanceGuid,
 //						Index:         expectedIndex,
 //						Host:          expectedHost,
@@ -1234,7 +1234,7 @@ package watcher_test
 //
 //					key, endpoint = fakeTable.RemoveEndpointArgsForCall(1)
 //					Expect(key).To(Equal(expectedAdditionalRoutingKey))
-//					Expect(endpoint).To(Equal(routing_table.Endpoint{
+//					Expect(endpoint).To(Equal(routingtable.Endpoint{
 //						InstanceGuid:  expectedInstanceGuid,
 //						Index:         expectedIndex,
 //						Host:          expectedHost,
@@ -1403,9 +1403,9 @@ package watcher_test
 //			hostname1 := "foo.example.com"
 //			hostname2 := "bar.example.com"
 //			hostname3 := "baz.example.com"
-//			endpoint1 := routing_table.Endpoint{InstanceGuid: "ig-1", Host: "1.1.1.1", Index: 0, Port: 11, ContainerPort: 8080, Evacuating: false, ModificationTag: currentTag}
-//			endpoint2 := routing_table.Endpoint{InstanceGuid: "ig-2", Host: "2.2.2.2", Index: 0, Port: 22, ContainerPort: 8080, Evacuating: false, ModificationTag: currentTag}
-//			endpoint3 := routing_table.Endpoint{InstanceGuid: "ig-3", Host: "2.2.2.2", Index: 1, Port: 23, ContainerPort: 8080, Evacuating: false, ModificationTag: currentTag}
+//			endpoint1 := routingtable.Endpoint{InstanceGuid: "ig-1", Host: "1.1.1.1", Index: 0, Port: 11, ContainerPort: 8080, Evacuating: false, ModificationTag: currentTag}
+//			endpoint2 := routingtable.Endpoint{InstanceGuid: "ig-2", Host: "2.2.2.2", Index: 0, Port: 22, ContainerPort: 8080, Evacuating: false, ModificationTag: currentTag}
+//			endpoint3 := routingtable.Endpoint{InstanceGuid: "ig-3", Host: "2.2.2.2", Index: 1, Port: 23, ContainerPort: 8080, Evacuating: false, ModificationTag: currentTag}
 //
 //			schedulingInfo1 := &models.DesiredLRPSchedulingInfo{
 //				DesiredLRPKey: models.NewDesiredLRPKey("pg-1", "tests", "lg1"),
@@ -1622,18 +1622,18 @@ package watcher_test
 //
 //					Context("a table with a single routable endpoint", func() {
 //						BeforeEach(func() {
-//							actualLRPRoutingInfo1 := &routing_table.ActualLRPRoutingInfo{
+//							actualLRPRoutingInfo1 := &routingtable.ActualLRPRoutingInfo{
 //								ActualLRP:  actualLRPGroup1.Instance,
 //								Evacuating: false,
 //							}
 //
-//							actualLRPRoutingInfo2 := &routing_table.ActualLRPRoutingInfo{
+//							actualLRPRoutingInfo2 := &routingtable.ActualLRPRoutingInfo{
 //								ActualLRP:  actualLRPGroup2.Instance,
 //								Evacuating: false,
 //							}
-//							tempTable := routing_table.NewTempTable(
-//								routing_table.RoutesByRoutingKeyFromSchedulingInfos([]*models.DesiredLRPSchedulingInfo{schedulingInfo1, schedulingInfo2}),
-//								routing_table.EndpointsByRoutingKeyFromActuals([]*routing_table.ActualLRPRoutingInfo{
+//							tempTable := routingtable.NewTempTable(
+//								routingtable.RoutesByRoutingKeyFromSchedulingInfos([]*models.DesiredLRPSchedulingInfo{schedulingInfo1, schedulingInfo2}),
+//								routingtable.EndpointsByRoutingKeyFromActuals([]*routingtable.ActualLRPRoutingInfo{
 //									actualLRPRoutingInfo1,
 //									actualLRPRoutingInfo2,
 //								},
@@ -1643,7 +1643,7 @@ package watcher_test
 //							)
 //
 //							domains := models.NewDomainSet([]string{"domain"})
-//							table = routing_table.NewNATSTable(logger)
+//							table = routingtable.NewNATSTable(logger)
 //							table.Swap(tempTable, domains)
 //						})
 //
@@ -1664,12 +1664,12 @@ package watcher_test
 //							ready <- struct{}{}
 //
 //							Eventually(natsEmitter.EmitCallCount).Should(Equal(1))
-//							Expect(natsEmitter.EmitArgsForCall(0)).To(Equal(routing_table.MessagesToEmit{
-//								RegistrationMessages: []routing_table.RegistryMessage{
-//									routing_table.RegistryMessageFor(endpoint2, routing_table.Route{Hostname: hostname2, LogGuid: "lg2"}),
+//							Expect(natsEmitter.EmitArgsForCall(0)).To(Equal(routingtable.MessagesToEmit{
+//								RegistrationMessages: []routingtable.RegistryMessage{
+//									routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname2, LogGuid: "lg2"}),
 //								},
-//								UnregistrationMessages: []routing_table.RegistryMessage{
-//									routing_table.RegistryMessageFor(endpoint1, routing_table.Route{Hostname: hostname1, LogGuid: "lg1", RouteServiceUrl: "https://rs.example.com"}),
+//								UnregistrationMessages: []routingtable.RegistryMessage{
+//									routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGuid: "lg1", RouteServiceUrl: "https://rs.example.com"}),
 //								},
 //							}))
 //						})
@@ -1677,7 +1677,7 @@ package watcher_test
 //
 //					Context("when the cell id is set", func() {
 //						var (
-//							routingTable routing_table.RoutingTable
+//							routingTable routingtable.RoutingTable
 //						)
 //
 //						BeforeEach(func() {
@@ -1705,14 +1705,14 @@ package watcher_test
 //							})
 //
 //							It("does not register endpoints for lrps on other cells", func() {
-//								keys := routing_table.RoutingKeysFromActual(actualLRPGroup1.Instance)
+//								keys := routingtable.RoutingKeysFromActual(actualLRPGroup1.Instance)
 //								Expect(keys).To(HaveLen(1))
 //								endpoints := routingTable.EndpointsForIndex(keys[0], 0)
 //								Expect(endpoints).To(HaveLen(0))
 //							})
 //
 //							It("registers endpoints for lrps on this cell", func() {
-//								keys := routing_table.RoutingKeysFromActual(actualLRPGroup2.Instance)
+//								keys := routingtable.RoutingKeysFromActual(actualLRPGroup2.Instance)
 //								Expect(keys).To(HaveLen(1))
 //								endpoints := routingTable.EndpointsForIndex(keys[0], 0)
 //								Expect(endpoints).To(HaveLen(1))

@@ -21,7 +21,7 @@ import (
 	"code.cloudfoundry.org/route-emitter/consuldownmodenotifier"
 	"code.cloudfoundry.org/route-emitter/diegonats"
 	"code.cloudfoundry.org/route-emitter/nats_emitter"
-	"code.cloudfoundry.org/route-emitter/routing_table"
+	"code.cloudfoundry.org/route-emitter/routingtable"
 	"code.cloudfoundry.org/route-emitter/syncer"
 	"code.cloudfoundry.org/route-emitter/watcher"
 	"code.cloudfoundry.org/workpool"
@@ -201,8 +201,8 @@ func initializeNatsEmitter(
 	return nats_emitter.New(natsClient, workPool, logger)
 }
 
-func initializeRoutingTable(logger lager.Logger) routing_table.RoutingTable {
-	return routing_table.NewTable(logger)
+func initializeRoutingTable(logger lager.Logger) routingtable.RoutingTable {
+	return routingtable.NewTable(logger)
 }
 
 func initializeConsulClient(logger lager.Logger, consulCluster string) consuladapter.Client {

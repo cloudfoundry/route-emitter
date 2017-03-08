@@ -8,9 +8,9 @@ import (
 	"code.cloudfoundry.org/lager/lagertest"
 	"code.cloudfoundry.org/route-emitter/emitter/fakes"
 	"code.cloudfoundry.org/route-emitter/routehandlers"
-	"code.cloudfoundry.org/route-emitter/routing_table"
-	"code.cloudfoundry.org/route-emitter/routing_table/fakeroutingtable"
-	"code.cloudfoundry.org/route-emitter/routing_table/schema/endpoint"
+	"code.cloudfoundry.org/route-emitter/routingtable"
+	"code.cloudfoundry.org/route-emitter/routingtable/fakeroutingtable"
+	"code.cloudfoundry.org/route-emitter/routingtable/schema/endpoint"
 	"code.cloudfoundry.org/routing-info/cfroutes"
 
 	. "github.com/onsi/ginkgo"
@@ -52,7 +52,7 @@ var _ = Describe("NATSHandler", func() {
 		expectedAdditionalRoutingKey endpoint.RoutingKey
 		expectedAdditionalCFRoute    cfroutes.CFRoute
 
-		dummyMessagesToEmit routing_table.MessagesToEmit
+		dummyMessagesToEmit routingtable.MessagesToEmit
 		// fakeMetricSender    *fake_metrics_sender.FakeMetricSender
 
 		logger *lagertest.TestLogger
@@ -65,11 +65,11 @@ var _ = Describe("NATSHandler", func() {
 		natsEmitter = &fakes.FakeNATSEmitter{}
 		logger = lagertest.NewTestLogger("test")
 
-		dummyEndpoint := routing_table.Endpoint{InstanceGuid: expectedInstanceGuid, Index: expectedIndex, Host: expectedHost, Port: expectedContainerPort}
-		dummyMessageFoo := routing_table.RegistryMessageFor(dummyEndpoint, routing_table.Route{Hostname: "foo.com", LogGuid: logGuid})
-		dummyMessageBar := routing_table.RegistryMessageFor(dummyEndpoint, routing_table.Route{Hostname: "bar.com", LogGuid: logGuid})
-		dummyMessagesToEmit = routing_table.MessagesToEmit{
-			RegistrationMessages: []routing_table.RegistryMessage{dummyMessageFoo, dummyMessageBar},
+		dummyEndpoint := routingtable.Endpoint{InstanceGuid: expectedInstanceGuid, Index: expectedIndex, Host: expectedHost, Port: expectedContainerPort}
+		dummyMessageFoo := routingtable.RegistryMessageFor(dummyEndpoint, routingtable.Route{Hostname: "foo.com", LogGuid: logGuid})
+		dummyMessageBar := routingtable.RegistryMessageFor(dummyEndpoint, routingtable.Route{Hostname: "bar.com", LogGuid: logGuid})
+		dummyMessagesToEmit = routingtable.MessagesToEmit{
+			RegistrationMessages: []routingtable.RegistryMessage{dummyMessageFoo, dummyMessageBar},
 		}
 
 		expectedRoutes = []string{"route-1", "route-2"}
@@ -122,12 +122,12 @@ var _ = Describe("NATSHandler", func() {
 				key, routes, _ := fakeTable.SetRoutesArgsForCall(0)
 				Expect(key).To(Equal(expectedRoutingKey))
 				Expect(routes).To(ConsistOf(
-					routing_table.Route{
+					routingtable.Route{
 						Hostname:        expectedRoutes[0],
 						LogGuid:         logGuid,
 						RouteServiceUrl: expectedRouteServiceUrl,
 					},
-					routing_table.Route{
+					routingtable.Route{
 						Hostname:        expectedRoutes[1],
 						LogGuid:         logGuid,
 						RouteServiceUrl: expectedRouteServiceUrl,
@@ -206,12 +206,12 @@ var _ = Describe("NATSHandler", func() {
 					key, routes, _ := fakeTable.SetRoutesArgsForCall(0)
 					Expect(key).To(Equal(expectedRoutingKey))
 					Expect(routes).To(ConsistOf(
-						routing_table.Route{
+						routingtable.Route{
 							Hostname:        "route-1",
 							LogGuid:         logGuid,
 							RouteServiceUrl: expectedRouteServiceUrl,
 						},
-						routing_table.Route{
+						routingtable.Route{
 							Hostname: "route-2",
 							LogGuid:  logGuid,
 						},
@@ -237,27 +237,27 @@ var _ = Describe("NATSHandler", func() {
 
 					key1, routes1, _ := fakeTable.SetRoutesArgsForCall(0)
 					key2, routes2, _ := fakeTable.SetRoutesArgsForCall(1)
-					var routes = []routing_table.Route{}
+					var routes = []routingtable.Route{}
 					routes = append(routes, routes1...)
 					routes = append(routes, routes2...)
 
 					Expect([]endpoint.RoutingKey{key1, key2}).To(ConsistOf(expectedRoutingKey, expectedAdditionalRoutingKey))
 					Expect(routes).To(ConsistOf(
-						routing_table.Route{
+						routingtable.Route{
 							Hostname:        expectedRoutes[0],
 							LogGuid:         logGuid,
 							RouteServiceUrl: expectedRouteServiceUrl,
 						},
-						routing_table.Route{
+						routingtable.Route{
 							Hostname:        expectedRoutes[1],
 							LogGuid:         logGuid,
 							RouteServiceUrl: expectedRouteServiceUrl,
 						},
-						routing_table.Route{
+						routingtable.Route{
 							Hostname: expectedAdditionalRoutes[0],
 							LogGuid:  logGuid,
 						},
-						routing_table.Route{
+						routingtable.Route{
 							Hostname: expectedAdditionalRoutes[1],
 							LogGuid:  logGuid,
 						},
@@ -316,8 +316,8 @@ var _ = Describe("NATSHandler", func() {
 				BeforeEach(func() {
 					changedDesiredLRP.Instances = 1
 
-					fakeTable.EndpointsForIndexStub = func(key endpoint.RoutingKey, index int32) []routing_table.Endpoint {
-						endpoint := routing_table.Endpoint{
+					fakeTable.EndpointsForIndexStub = func(key endpoint.RoutingKey, index int32) []routingtable.Endpoint {
+						endpoint := routingtable.Endpoint{
 							InstanceGuid:  fmt.Sprintf("instance-guid-%d", index),
 							Index:         index,
 							Host:          fmt.Sprintf("1.1.1.%d", index),
@@ -327,7 +327,7 @@ var _ = Describe("NATSHandler", func() {
 							Evacuating:    false,
 						}
 
-						return []routing_table.Endpoint{endpoint}
+						return []routingtable.Endpoint{endpoint}
 					}
 				})
 
@@ -341,11 +341,11 @@ var _ = Describe("NATSHandler", func() {
 				key, routes, _ := fakeTable.SetRoutesArgsForCall(0)
 				Expect(key).To(Equal(expectedRoutingKey))
 				Expect(routes).To(ConsistOf(
-					routing_table.Route{
+					routingtable.Route{
 						Hostname: expectedRoutes[0],
 						LogGuid:  logGuid,
 					},
-					routing_table.Route{
+					routingtable.Route{
 						Hostname: expectedRoutes[1],
 						LogGuid:  logGuid,
 					},
@@ -416,27 +416,27 @@ var _ = Describe("NATSHandler", func() {
 
 					key1, routes1, _ := fakeTable.SetRoutesArgsForCall(0)
 					key2, routes2, _ := fakeTable.SetRoutesArgsForCall(1)
-					var routes = []routing_table.Route{}
+					var routes = []routingtable.Route{}
 					routes = append(routes, routes1...)
 					routes = append(routes, routes2...)
 
 					Expect([]endpoint.RoutingKey{key1, key2}).To(ConsistOf(expectedRoutingKey, expectedAdditionalRoutingKey))
 					Expect(routes).To(ConsistOf(
-						routing_table.Route{
+						routingtable.Route{
 							Hostname:        expectedRoutes[0],
 							LogGuid:         logGuid,
 							RouteServiceUrl: expectedRouteServiceUrl,
 						},
-						routing_table.Route{
+						routingtable.Route{
 							Hostname:        expectedRoutes[1],
 							LogGuid:         logGuid,
 							RouteServiceUrl: expectedRouteServiceUrl,
 						},
-						routing_table.Route{
+						routingtable.Route{
 							Hostname: expectedAdditionalRoutes[0],
 							LogGuid:  logGuid,
 						},
-						routing_table.Route{
+						routingtable.Route{
 							Hostname: expectedAdditionalRoutes[1],
 							LogGuid:  logGuid,
 						},
@@ -462,27 +462,27 @@ var _ = Describe("NATSHandler", func() {
 
 					key1, routes1, _ := fakeTable.SetRoutesArgsForCall(0)
 					key2, routes2, _ := fakeTable.SetRoutesArgsForCall(1)
-					var routes = []routing_table.Route{}
+					var routes = []routingtable.Route{}
 					routes = append(routes, routes1...)
 					routes = append(routes, routes2...)
 
 					Expect([]endpoint.RoutingKey{key1, key2}).To(ConsistOf(expectedRoutingKey, expectedAdditionalRoutingKey))
 					Expect(routes).To(ConsistOf(
-						routing_table.Route{
+						routingtable.Route{
 							Hostname:        expectedRoutes[0],
 							LogGuid:         logGuid,
 							RouteServiceUrl: expectedRouteServiceUrl,
 						},
-						routing_table.Route{
+						routingtable.Route{
 							Hostname:        expectedRoutes[1],
 							LogGuid:         logGuid,
 							RouteServiceUrl: expectedRouteServiceUrl,
 						},
-						routing_table.Route{
+						routingtable.Route{
 							Hostname: expectedAdditionalRoutes[0],
 							LogGuid:  logGuid,
 						},
-						routing_table.Route{
+						routingtable.Route{
 							Hostname: expectedAdditionalRoutes[1],
 							LogGuid:  logGuid,
 						},
@@ -505,7 +505,7 @@ var _ = Describe("NATSHandler", func() {
 					routes := cfroutes.CFRoutes{}.RoutingInfo()
 					changedDesiredLRP.Routes = &routes
 
-					fakeTable.SetRoutesReturns(routing_table.MessagesToEmit{})
+					fakeTable.SetRoutesReturns(routingtable.MessagesToEmit{})
 					fakeTable.RemoveRoutesReturns(dummyMessagesToEmit)
 				})
 
@@ -684,8 +684,8 @@ var _ = Describe("NATSHandler", func() {
 				It("should add/update the endpoints on the table", func() {
 					Eventually(fakeTable.AddEndpointCallCount).Should(Equal(2))
 
-					keys := routing_table.RoutingKeysFromActual(actualLRP)
-					endpoints, err := routing_table.EndpointsFromActual(actualLRPRoutingInfo)
+					keys := routingtable.RoutingKeysFromActual(actualLRP)
+					endpoints, err := routingtable.EndpointsFromActual(actualLRPRoutingInfo)
 					Expect(err).NotTo(HaveOccurred())
 
 					key, endpoint := fakeTable.AddEndpointArgsForCall(0)
@@ -812,7 +812,7 @@ var _ = Describe("NATSHandler", func() {
 					// Verify the arguments that were passed to AddEndpoint independent of which call was made first.
 					type endpointArgs struct {
 						key      endpoint.RoutingKey
-						endpoint routing_table.Endpoint
+						endpoint routingtable.Endpoint
 					}
 					args := make([]endpointArgs, 2)
 					key, endpoint := fakeTable.AddEndpointArgsForCall(0)
@@ -821,7 +821,7 @@ var _ = Describe("NATSHandler", func() {
 					args[1] = endpointArgs{key, endpoint}
 
 					Expect(args).To(ConsistOf([]endpointArgs{
-						endpointArgs{expectedRoutingKey, routing_table.Endpoint{
+						endpointArgs{expectedRoutingKey, routingtable.Endpoint{
 							InstanceGuid:  expectedInstanceGuid,
 							Index:         expectedIndex,
 							Host:          expectedHost,
@@ -829,7 +829,7 @@ var _ = Describe("NATSHandler", func() {
 							Port:          expectedExternalPort,
 							ContainerPort: expectedContainerPort,
 						}},
-						endpointArgs{expectedAdditionalRoutingKey, routing_table.Endpoint{
+						endpointArgs{expectedAdditionalRoutingKey, routingtable.Endpoint{
 							InstanceGuid:  expectedInstanceGuid,
 							Index:         expectedIndex,
 							Host:          expectedHost,
@@ -909,7 +909,7 @@ var _ = Describe("NATSHandler", func() {
 
 					key, endpoint := fakeTable.RemoveEndpointArgsForCall(0)
 					Expect(key).To(Equal(expectedRoutingKey))
-					Expect(endpoint).To(Equal(routing_table.Endpoint{
+					Expect(endpoint).To(Equal(routingtable.Endpoint{
 						InstanceGuid:  expectedInstanceGuid,
 						Index:         expectedIndex,
 						Host:          expectedHost,
@@ -920,7 +920,7 @@ var _ = Describe("NATSHandler", func() {
 
 					key, endpoint = fakeTable.RemoveEndpointArgsForCall(1)
 					Expect(key).To(Equal(expectedAdditionalRoutingKey))
-					Expect(endpoint).To(Equal(routing_table.Endpoint{
+					Expect(endpoint).To(Equal(routingtable.Endpoint{
 						InstanceGuid:  expectedInstanceGuid,
 						Index:         expectedIndex,
 						Host:          expectedHost,
@@ -1030,7 +1030,7 @@ var _ = Describe("NATSHandler", func() {
 
 					key, endpoint := fakeTable.RemoveEndpointArgsForCall(0)
 					Expect(key).To(Equal(expectedRoutingKey))
-					Expect(endpoint).To(Equal(routing_table.Endpoint{
+					Expect(endpoint).To(Equal(routingtable.Endpoint{
 						InstanceGuid:  expectedInstanceGuid,
 						Index:         expectedIndex,
 						Host:          expectedHost,
@@ -1041,7 +1041,7 @@ var _ = Describe("NATSHandler", func() {
 
 					key, endpoint = fakeTable.RemoveEndpointArgsForCall(1)
 					Expect(key).To(Equal(expectedAdditionalRoutingKey))
-					Expect(endpoint).To(Equal(routing_table.Endpoint{
+					Expect(endpoint).To(Equal(routingtable.Endpoint{
 						InstanceGuid:  expectedInstanceGuid,
 						Index:         expectedIndex,
 						Host:          expectedHost,
@@ -1125,7 +1125,7 @@ var _ = Describe("NATSHandler", func() {
 				actualInfo  []*endpoint.ActualLRPRoutingInfo
 				domains     models.DomainSet
 
-				endpoint1 routing_table.Endpoint
+				endpoint1 routingtable.Endpoint
 			)
 
 			BeforeEach(func() {
@@ -1133,9 +1133,9 @@ var _ = Describe("NATSHandler", func() {
 				hostname1 := "foo.example.com"
 				hostname2 := "bar.example.com"
 				hostname3 := "baz.example.com"
-				endpoint1 = routing_table.Endpoint{InstanceGuid: "ig-1", Host: "1.1.1.1", Index: 0, Port: 11, ContainerPort: 8080, Evacuating: false, ModificationTag: currentTag}
-				endpoint2 := routing_table.Endpoint{InstanceGuid: "ig-2", Host: "2.2.2.2", Index: 0, Port: 22, ContainerPort: 8080, Evacuating: false, ModificationTag: currentTag}
-				endpoint3 := routing_table.Endpoint{InstanceGuid: "ig-3", Host: "2.2.2.2", Index: 1, Port: 23, ContainerPort: 8080, Evacuating: false, ModificationTag: currentTag}
+				endpoint1 = routingtable.Endpoint{InstanceGuid: "ig-1", Host: "1.1.1.1", Index: 0, Port: 11, ContainerPort: 8080, Evacuating: false, ModificationTag: currentTag}
+				endpoint2 := routingtable.Endpoint{InstanceGuid: "ig-2", Host: "2.2.2.2", Index: 0, Port: 22, ContainerPort: 8080, Evacuating: false, ModificationTag: currentTag}
+				endpoint3 := routingtable.Endpoint{InstanceGuid: "ig-3", Host: "2.2.2.2", Index: 1, Port: 23, ContainerPort: 8080, Evacuating: false, ModificationTag: currentTag}
 
 				schedulingInfo1 := &models.DesiredLRPSchedulingInfo{
 					DesiredLRPKey: models.NewDesiredLRPKey("pg-1", "tests", "lg1"),
@@ -1209,18 +1209,18 @@ var _ = Describe("NATSHandler", func() {
 
 				domains = models.NewDomainSet([]string{"domain"})
 
-				fakeTable.SwapStub = func(t routing_table.NATSRoutingTable, d models.DomainSet) routing_table.MessagesToEmit {
-					routes := routing_table.RoutesByRoutingKeyFromSchedulingInfos(desiredInfo)
-					routesList := make([]routing_table.Route, 3)
+				fakeTable.SwapStub = func(t routingtable.NATSRoutingTable, d models.DomainSet) routingtable.MessagesToEmit {
+					routes := routingtable.RoutesByRoutingKeyFromSchedulingInfos(desiredInfo)
+					routesList := make([]routingtable.Route, 3)
 					for _, route := range routes {
 						routesList = append(routesList, route[0])
 					}
 
-					return routing_table.MessagesToEmit{
-						RegistrationMessages: []routing_table.RegistryMessage{
-							routing_table.RegistryMessageFor(endpoint1, routesList[0]),
-							routing_table.RegistryMessageFor(endpoint2, routesList[1]),
-							routing_table.RegistryMessageFor(endpoint3, routesList[2]),
+					return routingtable.MessagesToEmit{
+						RegistrationMessages: []routingtable.RegistryMessage{
+							routingtable.RegistryMessageFor(endpoint1, routesList[0]),
+							routingtable.RegistryMessageFor(endpoint2, routesList[1]),
+							routingtable.RegistryMessageFor(endpoint3, routesList[2]),
 						},
 					}
 				}
@@ -1240,7 +1240,7 @@ var _ = Describe("NATSHandler", func() {
 
 	Describe("RefreshDesired", func() {
 		BeforeEach(func() {
-			fakeTable.SetRoutesReturns(routing_table.MessagesToEmit{})
+			fakeTable.SetRoutesReturns(routingtable.MessagesToEmit{})
 		})
 
 		It("adds the desired info to the routing table", func() {
@@ -1260,7 +1260,7 @@ var _ = Describe("NATSHandler", func() {
 			Expect(fakeTable.SetRoutesCallCount()).To(Equal(1))
 			key, routes, _ := fakeTable.SetRoutesArgsForCall(0)
 			Expect(key).To(Equal(endpoint.RoutingKey{"pg-1", 8080}))
-			Expect(routes).To(Equal([]routing_table.Route{{Hostname: "foo.example.com", LogGuid: "lg1", RouteServiceUrl: "https://rs.example.com"}}))
+			Expect(routes).To(Equal([]routingtable.Route{{Hostname: "foo.example.com", LogGuid: "lg1", RouteServiceUrl: "https://rs.example.com"}}))
 			Expect(natsEmitter.EmitCallCount()).Should(Equal(1))
 		})
 	})
@@ -1273,7 +1273,7 @@ var _ = Describe("NATSHandler", func() {
 		BeforeEach(func() {
 			currentTag := models.ModificationTag{Epoch: "abc", Index: 1}
 			hostname = "foo.example.com"
-			endpoint1 := routing_table.Endpoint{
+			endpoint1 := routingtable.Endpoint{
 				InstanceGuid:    "ig-1",
 				Host:            "1.1.1.1",
 				Index:           0,
@@ -1297,8 +1297,8 @@ var _ = Describe("NATSHandler", func() {
 
 		Context("when corresponding desired state exists in the table", func() {
 			BeforeEach(func() {
-				fakeTable.GetRoutesReturns([]routing_table.Route{
-					routing_table.Route{Hostname: hostname, LogGuid: "skldjfls", RouteServiceUrl: "https://rs.example.com"},
+				fakeTable.GetRoutesReturns([]routingtable.Route{
+					routingtable.Route{Hostname: hostname, LogGuid: "skldjfls", RouteServiceUrl: "https://rs.example.com"},
 				})
 			})
 

@@ -8,7 +8,7 @@ import (
 	"code.cloudfoundry.org/clock"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/route-emitter/diegonats"
-	"code.cloudfoundry.org/route-emitter/routing_table"
+	"code.cloudfoundry.org/route-emitter/routingtable"
 	"github.com/nats-io/nats"
 	uuid "github.com/nu7hatch/gouuid"
 )
@@ -160,7 +160,7 @@ func (s *NatsSyncer) greetRouter(replyUUID string) error {
 }
 
 func (s *NatsSyncer) handleRouterGreet(msg *nats.Msg) {
-	var response routing_table.RouterGreetingMessage
+	var response routingtable.RouterGreetingMessage
 
 	err := json.Unmarshal(msg.Data, &response)
 	if err != nil {

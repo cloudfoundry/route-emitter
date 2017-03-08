@@ -6,21 +6,21 @@ import (
 	"code.cloudfoundry.org/bbs/models"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/route-emitter/emitter"
-	"code.cloudfoundry.org/route-emitter/routing_table"
-	"code.cloudfoundry.org/route-emitter/routing_table/schema/endpoint"
-	"code.cloudfoundry.org/route-emitter/routing_table/schema/event"
-	"code.cloudfoundry.org/route-emitter/routing_table/util"
+	"code.cloudfoundry.org/route-emitter/routingtable"
+	"code.cloudfoundry.org/route-emitter/routingtable/schema/endpoint"
+	"code.cloudfoundry.org/route-emitter/routingtable/schema/event"
+	"code.cloudfoundry.org/route-emitter/routingtable/util"
 	"code.cloudfoundry.org/route-emitter/watcher"
 )
 
 type RoutingAPIHandler struct {
-	routingTable routing_table.TCPRoutingTable
+	routingTable routingtable.TCPRoutingTable
 	emitter      emitter.RoutingAPIEmitter
 }
 
 var _ watcher.RouteHandler = new(RoutingAPIHandler)
 
-func NewRoutingAPIHandler(routingTable routing_table.TCPRoutingTable, emitter emitter.RoutingAPIEmitter) *RoutingAPIHandler {
+func NewRoutingAPIHandler(routingTable routingtable.TCPRoutingTable, emitter emitter.RoutingAPIEmitter) *RoutingAPIHandler {
 	return &RoutingAPIHandler{
 		routingTable: routingTable,
 		emitter:      emitter,
@@ -63,9 +63,9 @@ func (handler *RoutingAPIHandler) Sync(
 	logger.Debug("starting")
 	defer logger.Debug("completed")
 
-	var tempRoutingTable routing_table.TCPRoutingTable
+	var tempRoutingTable routingtable.TCPRoutingTable
 
-	tempRoutingTable = routing_table.NewTCPTable(logger, nil)
+	tempRoutingTable = routingtable.NewTCPTable(logger, nil)
 	logger.Debug("construct-routing-table")
 	for _, desireLrp := range desired {
 		tempRoutingTable.AddRoutes(desireLrp)

@@ -6,10 +6,10 @@ import (
 	"code.cloudfoundry.org/lager/lagertest"
 	emitterfakes "code.cloudfoundry.org/route-emitter/emitter/fakes"
 	"code.cloudfoundry.org/route-emitter/routehandlers"
-	"code.cloudfoundry.org/route-emitter/routing_table"
-	"code.cloudfoundry.org/route-emitter/routing_table/fakeroutingtable"
-	"code.cloudfoundry.org/route-emitter/routing_table/schema/endpoint"
-	"code.cloudfoundry.org/route-emitter/routing_table/schema/event"
+	"code.cloudfoundry.org/route-emitter/routingtable"
+	"code.cloudfoundry.org/route-emitter/routingtable/fakeroutingtable"
+	"code.cloudfoundry.org/route-emitter/routingtable/schema/endpoint"
+	"code.cloudfoundry.org/route-emitter/routingtable/schema/event"
 	"code.cloudfoundry.org/routing-info/tcp_routes"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -641,7 +641,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 					},
 				}
 
-				fakeRoutingTable.SwapStub = func(t routing_table.TCPRoutingTable) event.RoutingEvents {
+				fakeRoutingTable.SwapStub = func(t routingtable.TCPRoutingTable) event.RoutingEvents {
 					routingEvents := event.RoutingEvents{
 						event.RoutingEvent{
 							EventType: event.RouteRegistrationEvent,

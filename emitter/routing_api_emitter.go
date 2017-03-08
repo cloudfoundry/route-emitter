@@ -2,8 +2,8 @@ package emitter
 
 import (
 	"code.cloudfoundry.org/lager"
-	"code.cloudfoundry.org/route-emitter/routing_table/schema/endpoint"
-	"code.cloudfoundry.org/route-emitter/routing_table/schema/event"
+	"code.cloudfoundry.org/route-emitter/routingtable/schema/endpoint"
+	"code.cloudfoundry.org/route-emitter/routingtable/schema/event"
 	"code.cloudfoundry.org/routing-api"
 	"code.cloudfoundry.org/routing-api/models"
 	uaaclient "code.cloudfoundry.org/uaa-go-client"

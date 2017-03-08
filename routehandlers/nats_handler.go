@@ -4,21 +4,21 @@ import (
 	"code.cloudfoundry.org/bbs/models"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/route-emitter/emitter"
-	"code.cloudfoundry.org/route-emitter/routing_table"
-	"code.cloudfoundry.org/route-emitter/routing_table/schema/endpoint"
-	"code.cloudfoundry.org/route-emitter/routing_table/util"
+	"code.cloudfoundry.org/route-emitter/routingtable"
+	"code.cloudfoundry.org/route-emitter/routingtable/schema/endpoint"
+	"code.cloudfoundry.org/route-emitter/routingtable/util"
 	"code.cloudfoundry.org/route-emitter/watcher"
 	"code.cloudfoundry.org/routing-info/cfroutes"
 )
 
 type NATSHandler struct {
-	routingTable routing_table.NATSRoutingTable
+	routingTable routingtable.NATSRoutingTable
 	emitter      emitter.NATSEmitter
 }
 
 var _ watcher.RouteHandler = new(NATSHandler)
 
-func NewNATSHandler(routingTable routing_table.NATSRoutingTable, natsEmitter emitter.NATSEmitter) *NATSHandler {
+func NewNATSHandler(routingTable routingtable.NATSRoutingTable, natsEmitter emitter.NATSEmitter) *NATSHandler {
 	return &NATSHandler{
 		routingTable: routingTable,
 		emitter:      natsEmitter,
@@ -63,9 +63,9 @@ func (handler *NATSHandler) Sync(
 		schedInfoMap[schedInfo.ProcessGuid] = schedInfo
 	}
 
-	newTable := routing_table.NewTempTable(
-		routing_table.RoutesByRoutingKeyFromSchedulingInfos(desired),
-		routing_table.EndpointsByRoutingKeyFromActuals(actuals, schedInfoMap),
+	newTable := routingtable.NewTempTable(
+		routingtable.RoutesByRoutingKeyFromSchedulingInfos(desired),
+		routingtable.EndpointsByRoutingKeyFromActuals(actuals, schedInfoMap),
 	)
 
 	if newTable.RouteCount() == 0 {
@@ -119,7 +119,7 @@ func (handler *NATSHandler) handleDesiredUpdate(logger lager.Logger, before, aft
 
 	afterKeysSet := handler.setRoutesForDesired(logger, after)
 
-	beforeRoutingKeys := routing_table.RoutingKeysFromSchedulingInfo(before)
+	beforeRoutingKeys := routingtable.RoutingKeysFromSchedulingInfo(before)
 	afterRoutes, _ := cfroutes.CFRoutesFromRoutingInfo(after.Routes)
 
 	afterContainerPorts := set{}
@@ -155,7 +155,7 @@ func (handler *NATSHandler) handleDesiredDelete(logger lager.Logger, schedulingI
 	logger = logger.Session("handling-desired-delete", util.DesiredLRPData(schedulingInfo))
 	logger.Info("starting")
 	defer logger.Info("complete")
-	for _, key := range routing_table.RoutingKeysFromSchedulingInfo(schedulingInfo) {
+	for _, key := range routingtable.RoutingKeysFromSchedulingInfo(schedulingInfo) {
 		messagesToEmit := handler.routingTable.RemoveRoutes(key, &schedulingInfo.ModificationTag)
 		handler.emitMessages(logger, messagesToEmit)
 	}
@@ -210,14 +210,14 @@ func (handler *NATSHandler) setRoutesForDesired(logger lager.Logger, schedulingI
 	routes, _ := cfroutes.CFRoutesFromRoutingInfo(schedulingInfo.Routes)
 	routingKeySet := set{}
 
-	routeEntries := make(map[endpoint.RoutingKey][]routing_table.Route)
+	routeEntries := make(map[endpoint.RoutingKey][]routingtable.Route)
 	for _, route := range routes {
 		key := endpoint.RoutingKey{ProcessGUID: schedulingInfo.ProcessGuid, ContainerPort: route.Port}
 		routingKeySet.add(key)
 
-		routes := []routing_table.Route{}
+		routes := []routingtable.Route{}
 		for _, hostname := range route.Hostnames {
-			routes = append(routes, routing_table.Route{
+			routes = append(routes, routingtable.Route{
 				Hostname:        hostname,
 				LogGuid:         schedulingInfo.LogGuid,
 				RouteServiceUrl: route.RouteServiceUrl,
@@ -233,7 +233,7 @@ func (handler *NATSHandler) setRoutesForDesired(logger lager.Logger, schedulingI
 	return routingKeySet
 }
 
-func (handler *NATSHandler) emitMessages(logger lager.Logger, messagesToEmit routing_table.MessagesToEmit) {
+func (handler *NATSHandler) emitMessages(logger lager.Logger, messagesToEmit routingtable.MessagesToEmit) {
 	if handler.emitter != nil {
 		logger.Debug("emit-messages", lager.Data{"messages": messagesToEmit})
 		handler.emitter.Emit(messagesToEmit)
@@ -244,7 +244,7 @@ func (handler *NATSHandler) emitMessages(logger lager.Logger, messagesToEmit rou
 
 func (handler *NATSHandler) addAndEmit(logger lager.Logger, actualLRPInfo *endpoint.ActualLRPRoutingInfo) {
 	logger.Info("handler-add-and-emit", lager.Data{"net_info": actualLRPInfo.ActualLRP.ActualLRPNetInfo})
-	endpoints, err := routing_table.EndpointsFromActual(actualLRPInfo)
+	endpoints, err := routingtable.EndpointsFromActual(actualLRPInfo)
 	if err != nil {
 		logger.Error("failed-to-extract-endpoint-from-actual", err)
 		return
@@ -258,13 +258,13 @@ func (handler *NATSHandler) addAndEmit(logger lager.Logger, actualLRPInfo *endpo
 
 func (handler *NATSHandler) removeAndEmit(logger lager.Logger, actualLRPInfo *endpoint.ActualLRPRoutingInfo) {
 	logger.Info("handler-remove-and-emit", lager.Data{"net_info": actualLRPInfo.ActualLRP.ActualLRPNetInfo})
-	endpoints, err := routing_table.EndpointsFromActual(actualLRPInfo)
+	endpoints, err := routingtable.EndpointsFromActual(actualLRPInfo)
 	if err != nil {
 		logger.Error("failed-to-extract-endpoint-from-actual", err)
 		return
 	}
 
-	for _, key := range routing_table.RoutingKeysFromActual(actualLRPInfo.ActualLRP) {
+	for _, key := range routingtable.RoutingKeysFromActual(actualLRPInfo.ActualLRP) {
 		for _, endpoint := range endpoints {
 			if key.ContainerPort == endpoint.ContainerPort {
 				messagesToEmit := handler.routingTable.RemoveEndpoint(key, endpoint)

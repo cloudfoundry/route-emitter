@@ -12,7 +12,7 @@ package watcher
 // 	"code.cloudfoundry.org/clock"
 // 	"code.cloudfoundry.org/lager"
 // 	"code.cloudfoundry.org/route-emitter/emitter"
-// 	"code.cloudfoundry.org/route-emitter/routing_table"
+// 	"code.cloudfoundry.org/route-emitter/routingtable"
 // 	"code.cloudfoundry.org/route-emitter/syncer"
 // 	"code.cloudfoundry.org/routing-info/cfroutes"
 // 	"code.cloudfoundry.org/runtimeschema/metric"
@@ -29,7 +29,7 @@ package watcher
 // type NATSWatcher struct {
 // 	bbsClient  bbs.Client
 // 	clock      clock.Clock
-// 	table      routing_table.NATSRoutingTable
+// 	table      routingtable.NATSRoutingTable
 // 	emitter    emitter.NATSEmitter
 // 	syncEvents syncer.Events
 // 	cellID     string
@@ -37,9 +37,9 @@ package watcher
 // }
 
 // type syncEndEvent struct {
-// 	table    routing_table.NATSRoutingTable
+// 	table    routingtable.NATSRoutingTable
 // 	domains  models.DomainSet
-// 	callback func(routing_table.NATSRoutingTable)
+// 	callback func(routingtable.NATSRoutingTable)
 
 // 	logger lager.Logger
 // }
@@ -59,7 +59,7 @@ package watcher
 // 	cellID string,
 // 	bbsClient bbs.Client,
 // 	clock clock.Clock,
-// 	table routing_table.NATSRoutingTable,
+// 	table routingtable.NATSRoutingTable,
 // 	emitter emitter.NATSEmitter,
 // 	syncEvents syncer.Events,
 // 	logger lager.Logger,
@@ -213,7 +213,7 @@ package watcher
 
 // 	before := watcher.clock.Now()
 
-// 	var runningActualLRPs []*routing_table.ActualLRPRoutingInfo
+// 	var runningActualLRPs []*routingtable.ActualLRPRoutingInfo
 // 	var getActualLRPsErr error
 // 	var schedulingInfos []*models.DesiredLRPSchedulingInfo
 // 	var getSchedulingInfosErr error
@@ -249,11 +249,11 @@ package watcher
 // 		}
 // 		logger.Debug("succeeded-getting-actual-lrps", lager.Data{"num-actual-responses": len(actualLRPGroups)})
 
-// 		runningActualLRPs = make([]*routing_table.ActualLRPRoutingInfo, 0, len(actualLRPGroups))
+// 		runningActualLRPs = make([]*routingtable.ActualLRPRoutingInfo, 0, len(actualLRPGroups))
 // 		for _, actualLRPGroup := range actualLRPGroups {
 // 			actualLRP, evacuating := actualLRPGroup.Resolve()
 // 			if actualLRP.State == models.ActualLRPStateRunning {
-// 				runningActualLRPs = append(runningActualLRPs, &routing_table.ActualLRPRoutingInfo{
+// 				runningActualLRPs = append(runningActualLRPs, &routingtable.ActualLRPRoutingInfo{
 // 					ActualLRP:  actualLRP,
 // 					Evacuating: evacuating,
 // 				})
@@ -307,14 +307,14 @@ package watcher
 // 		schedInfoMap[schedInfo.ProcessGuid] = schedInfo
 // 	}
 
-// 	newTable := routing_table.NewTempTable(
-// 		routing_table.RoutesByRoutingKeyFromSchedulingInfos(schedulingInfos),
-// 		routing_table.EndpointsByRoutingKeyFromActuals(runningActualLRPs, schedInfoMap),
+// 	newTable := routingtable.NewTempTable(
+// 		routingtable.RoutesByRoutingKeyFromSchedulingInfos(schedulingInfos),
+// 		routingtable.EndpointsByRoutingKeyFromActuals(runningActualLRPs, schedInfoMap),
 // 	)
 
 // 	endEvent.table = newTable
 // 	endEvent.domains = domains
-// 	endEvent.callback = func(table routing_table.NATSRoutingTable) {
+// 	endEvent.callback = func(table routingtable.NATSRoutingTable) {
 // 		after := watcher.clock.Now()
 // 		err := routeSyncDuration.Send(after.Sub(before))
 // 		if err != nil {
@@ -422,14 +422,14 @@ package watcher
 // 		schedulingInfo := event.DesiredLrp.DesiredLRPSchedulingInfo()
 // 		watcher.handleDesiredDelete(logger, &schedulingInfo)
 // 	case *models.ActualLRPCreatedEvent:
-// 		watcher.handleActualCreate(logger, routing_table.NewActualLRPRoutingInfo(event.ActualLrpGroup))
+// 		watcher.handleActualCreate(logger, routingtable.NewActualLRPRoutingInfo(event.ActualLrpGroup))
 // 	case *models.ActualLRPChangedEvent:
 // 		watcher.handleActualUpdate(logger,
-// 			routing_table.NewActualLRPRoutingInfo(event.Before),
-// 			routing_table.NewActualLRPRoutingInfo(event.After),
+// 			routingtable.NewActualLRPRoutingInfo(event.Before),
+// 			routingtable.NewActualLRPRoutingInfo(event.After),
 // 		)
 // 	case *models.ActualLRPRemovedEvent:
-// 		watcher.handleActualDelete(logger, routing_table.NewActualLRPRoutingInfo(event.ActualLrpGroup))
+// 		watcher.handleActualDelete(logger, routingtable.NewActualLRPRoutingInfo(event.ActualLrpGroup))
 // 	default:
 // 		logger.Info("did-not-handle-unrecognizable-event", lager.Data{"event-type": event.EventType()})
 // 	}
@@ -453,7 +453,7 @@ package watcher
 
 // 	afterKeysSet := watcher.setRoutesForDesired(logger, after)
 
-// 	beforeRoutingKeys := routing_table.RoutingKeysFromSchedulingInfo(before)
+// 	beforeRoutingKeys := routingtable.RoutingKeysFromSchedulingInfo(before)
 // 	afterRoutes, _ := cfroutes.CFRoutesFromRoutingInfo(after.Routes)
 
 // 	afterContainerPorts := set{}
@@ -489,14 +489,14 @@ package watcher
 // 	routes, _ := cfroutes.CFRoutesFromRoutingInfo(schedulingInfo.Routes)
 // 	routingKeySet := set{}
 
-// 	routeEntries := make(map[routing_table.RoutingKey][]routing_table.Route)
+// 	routeEntries := make(map[routingtable.RoutingKey][]routingtable.Route)
 // 	for _, route := range routes {
-// 		key := routing_table.RoutingKey{ProcessGuid: schedulingInfo.ProcessGuid, ContainerPort: route.Port}
+// 		key := routingtable.RoutingKey{ProcessGuid: schedulingInfo.ProcessGuid, ContainerPort: route.Port}
 // 		routingKeySet.add(key)
 
-// 		routes := []routing_table.Route{}
+// 		routes := []routingtable.Route{}
 // 		for _, hostname := range route.Hostnames {
-// 			routes = append(routes, routing_table.Route{
+// 			routes = append(routes, routingtable.Route{
 // 				Hostname:        hostname,
 // 				LogGuid:         schedulingInfo.LogGuid,
 // 				RouteServiceUrl: route.RouteServiceUrl,
@@ -517,14 +517,14 @@ package watcher
 // 	logger.Info("starting")
 // 	defer logger.Info("complete")
 
-// 	for _, key := range routing_table.RoutingKeysFromSchedulingInfo(schedulingInfo) {
+// 	for _, key := range routingtable.RoutingKeysFromSchedulingInfo(schedulingInfo) {
 // 		messagesToEmit := watcher.table.RemoveRoutes(key, &schedulingInfo.ModificationTag)
 
 // 		watcher.emitMessages(logger, messagesToEmit)
 // 	}
 // }
 
-// func (watcher *NATSWatcher) handleActualCreate(logger lager.Logger, actualLRPInfo *routing_table.ActualLRPRoutingInfo) {
+// func (watcher *NATSWatcher) handleActualCreate(logger lager.Logger, actualLRPInfo *routingtable.ActualLRPRoutingInfo) {
 // 	logger = logger.Session("handling-actual-create", actualLRPData(actualLRPInfo))
 // 	logger.Info("starting")
 // 	defer logger.Info("complete")
@@ -534,7 +534,7 @@ package watcher
 // 	}
 // }
 
-// func (watcher *NATSWatcher) handleActualUpdate(logger lager.Logger, before, after *routing_table.ActualLRPRoutingInfo) {
+// func (watcher *NATSWatcher) handleActualUpdate(logger lager.Logger, before, after *routingtable.ActualLRPRoutingInfo) {
 // 	logger = logger.Session("handling-actual-update", lager.Data{
 // 		"before": actualLRPData(before),
 // 		"after":  actualLRPData(after),
@@ -550,7 +550,7 @@ package watcher
 // 	}
 // }
 
-// func (watcher *NATSWatcher) handleActualDelete(logger lager.Logger, actualLRPInfo *routing_table.ActualLRPRoutingInfo) {
+// func (watcher *NATSWatcher) handleActualDelete(logger lager.Logger, actualLRPInfo *routingtable.ActualLRPRoutingInfo) {
 // 	logger = logger.Session("handling-actual-delete", actualLRPData(actualLRPInfo))
 // 	logger.Info("starting")
 // 	defer logger.Info("complete")
@@ -560,16 +560,16 @@ package watcher
 // 	}
 // }
 
-// func (watcher *NATSWatcher) addAndEmit(logger lager.Logger, actualLRPInfo *routing_table.ActualLRPRoutingInfo) {
+// func (watcher *NATSWatcher) addAndEmit(logger lager.Logger, actualLRPInfo *routingtable.ActualLRPRoutingInfo) {
 // 	logger.Info("watcher-add-and-emit", lager.Data{"net_info": actualLRPInfo.ActualLRP.ActualLRPNetInfo})
-// 	endpoints, err := routing_table.EndpointsFromActual(actualLRPInfo)
+// 	endpoints, err := routingtable.EndpointsFromActual(actualLRPInfo)
 // 	if err != nil {
 // 		logger.Error("failed-to-extract-endpoint-from-actual", err)
 // 		return
 // 	}
 
 // 	for _, endpoint := range endpoints {
-// 		key := routing_table.RoutingKey{ProcessGuid: actualLRPInfo.ActualLRP.ProcessGuid, ContainerPort: uint32(endpoint.ContainerPort)}
+// 		key := routingtable.RoutingKey{ProcessGuid: actualLRPInfo.ActualLRP.ProcessGuid, ContainerPort: uint32(endpoint.ContainerPort)}
 // 		routes := watcher.table.GetRoutes(key)
 
 // 		if len(routes) == 0 {
@@ -592,15 +592,15 @@ package watcher
 // 	}
 // }
 
-// func (watcher *NATSWatcher) removeAndEmit(logger lager.Logger, actualLRPInfo *routing_table.ActualLRPRoutingInfo) {
+// func (watcher *NATSWatcher) removeAndEmit(logger lager.Logger, actualLRPInfo *routingtable.ActualLRPRoutingInfo) {
 // 	logger.Info("watcher-remove-and-emit", lager.Data{"net_info": actualLRPInfo.ActualLRP.ActualLRPNetInfo})
-// 	endpoints, err := routing_table.EndpointsFromActual(actualLRPInfo)
+// 	endpoints, err := routingtable.EndpointsFromActual(actualLRPInfo)
 // 	if err != nil {
 // 		logger.Error("failed-to-extract-endpoint-from-actual", err)
 // 		return
 // 	}
 
-// 	for _, key := range routing_table.RoutingKeysFromActual(actualLRPInfo.ActualLRP) {
+// 	for _, key := range routingtable.RoutingKeysFromActual(actualLRPInfo.ActualLRP) {
 // 		for _, endpoint := range endpoints {
 // 			if key.ContainerPort == endpoint.ContainerPort {
 // 				messagesToEmit := watcher.table.RemoveEndpoint(key, endpoint)
@@ -610,7 +610,7 @@ package watcher
 // 	}
 // }
 
-// func (watcher *NATSWatcher) emitMessages(logger lager.Logger, messagesToEmit routing_table.MessagesToEmit) {
+// func (watcher *NATSWatcher) emitMessages(logger lager.Logger, messagesToEmit routingtable.MessagesToEmit) {
 // 	if watcher.emitter != nil {
 // 		logger.Debug("emit-messages", lager.Data{"messages": messagesToEmit})
 // 		watcher.emitter.Emit(messagesToEmit)
@@ -634,17 +634,17 @@ package watcher
 // 	data := lager.Data{"event-type": event.EventType()}
 // 	switch e := event.(type) {
 // 	case *models.ActualLRPCreatedEvent:
-// 		data["lrp"] = actualLRPData(routing_table.NewActualLRPRoutingInfo(e.ActualLrpGroup))
+// 		data["lrp"] = actualLRPData(routingtable.NewActualLRPRoutingInfo(e.ActualLrpGroup))
 // 	case *models.ActualLRPRemovedEvent:
-// 		data["lrp"] = actualLRPData(routing_table.NewActualLRPRoutingInfo(e.ActualLrpGroup))
+// 		data["lrp"] = actualLRPData(routingtable.NewActualLRPRoutingInfo(e.ActualLrpGroup))
 // 	case *models.ActualLRPChangedEvent:
-// 		data["before"] = actualLRPData(routing_table.NewActualLRPRoutingInfo(e.Before))
-// 		data["after"] = actualLRPData(routing_table.NewActualLRPRoutingInfo(e.After))
+// 		data["before"] = actualLRPData(routingtable.NewActualLRPRoutingInfo(e.Before))
+// 		data["after"] = actualLRPData(routingtable.NewActualLRPRoutingInfo(e.After))
 // 	}
 // 	logger.Debug("skipping-event", data)
 // }
 
-// func actualLRPData(lrpRoutingInfo *routing_table.ActualLRPRoutingInfo) lager.Data {
+// func actualLRPData(lrpRoutingInfo *routingtable.ActualLRPRoutingInfo) lager.Data {
 // 	lrp := lrpRoutingInfo.ActualLRP
 // 	return lager.Data{
 // 		"process-guid":  lrp.ProcessGuid,

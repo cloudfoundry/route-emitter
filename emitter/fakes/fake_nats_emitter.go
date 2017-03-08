@@ -5,14 +5,14 @@ import (
 	"sync"
 
 	"code.cloudfoundry.org/route-emitter/emitter"
-	"code.cloudfoundry.org/route-emitter/routing_table"
+	"code.cloudfoundry.org/route-emitter/routingtable"
 )
 
 type FakeNATSEmitter struct {
-	EmitStub        func(messagesToEmit routing_table.MessagesToEmit) error
+	EmitStub        func(messagesToEmit routingtable.MessagesToEmit) error
 	emitMutex       sync.RWMutex
 	emitArgsForCall []struct {
-		messagesToEmit routing_table.MessagesToEmit
+		messagesToEmit routingtable.MessagesToEmit
 	}
 	emitReturns struct {
 		result1 error
@@ -24,11 +24,11 @@ type FakeNATSEmitter struct {
 	invocationsMutex sync.RWMutex
 }
 
-func (fake *FakeNATSEmitter) Emit(messagesToEmit routing_table.MessagesToEmit) error {
+func (fake *FakeNATSEmitter) Emit(messagesToEmit routingtable.MessagesToEmit) error {
 	fake.emitMutex.Lock()
 	ret, specificReturn := fake.emitReturnsOnCall[len(fake.emitArgsForCall)]
 	fake.emitArgsForCall = append(fake.emitArgsForCall, struct {
-		messagesToEmit routing_table.MessagesToEmit
+		messagesToEmit routingtable.MessagesToEmit
 	}{messagesToEmit})
 	fake.recordInvocation("Emit", []interface{}{messagesToEmit})
 	fake.emitMutex.Unlock()
@@ -47,7 +47,7 @@ func (fake *FakeNATSEmitter) EmitCallCount() int {
 	return len(fake.emitArgsForCall)
 }
 
-func (fake *FakeNATSEmitter) EmitArgsForCall(i int) routing_table.MessagesToEmit {
+func (fake *FakeNATSEmitter) EmitArgsForCall(i int) routingtable.MessagesToEmit {
 	fake.emitMutex.RLock()
 	defer fake.emitMutex.RUnlock()
 	return fake.emitArgsForCall[i].messagesToEmit

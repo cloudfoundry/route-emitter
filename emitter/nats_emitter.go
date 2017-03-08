@@ -6,7 +6,7 @@ import (
 
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/route-emitter/diegonats"
-	"code.cloudfoundry.org/route-emitter/routing_table"
+	"code.cloudfoundry.org/route-emitter/routingtable"
 	"code.cloudfoundry.org/runtimeschema/metric"
 	"code.cloudfoundry.org/workpool"
 )
@@ -15,7 +15,7 @@ var messagesEmitted = metric.Counter("MessagesEmitted")
 
 //go:generate counterfeiter -o fakes/fake_nats_emitter.go . NATSEmitter
 type NATSEmitter interface {
-	Emit(messagesToEmit routing_table.MessagesToEmit) error
+	Emit(messagesToEmit routingtable.MessagesToEmit) error
 }
 
 type natsEmitter struct {
@@ -32,7 +32,7 @@ func NewNATSEmitter(natsClient diegonats.NATSClient, workPool *workpool.WorkPool
 	}
 }
 
-func (n *natsEmitter) Emit(messagesToEmit routing_table.MessagesToEmit) error {
+func (n *natsEmitter) Emit(messagesToEmit routingtable.MessagesToEmit) error {
 	errors := make(chan error, 1)
 	var wg sync.WaitGroup
 	wg.Add(len(messagesToEmit.RegistrationMessages))
@@ -59,7 +59,7 @@ func (n *natsEmitter) Emit(messagesToEmit routing_table.MessagesToEmit) error {
 	return nil
 }
 
-func (n *natsEmitter) emit(subject string, message routing_table.RegistryMessage, wg *sync.WaitGroup, errors chan error) {
+func (n *natsEmitter) emit(subject string, message routingtable.RegistryMessage, wg *sync.WaitGroup, errors chan error) {
 	n.workPool.Submit(func() {
 		var err error
 		defer func() {
