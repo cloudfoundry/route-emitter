@@ -715,7 +715,7 @@ var _ = Describe("Watcher", func() {
 
 							Eventually(routeHandler.ShouldRefreshDesiredCallCount).Should(Equal(1))
 							Eventually(routeHandler.RefreshDesiredCallCount).Should(Equal(1))
-							desiredInfo := routeHandler.RefreshDesiredArgsForCall(0)
+							_, desiredInfo := routeHandler.RefreshDesiredArgsForCall(0)
 							Expect(desiredInfo).To(ContainElement(schedulingInfo3))
 
 							Eventually(routeHandler.HandleEventCallCount).Should(Equal(1))

@@ -8,8 +8,8 @@ import (
 	"code.cloudfoundry.org/routing-info/cfroutes"
 )
 
-type RoutesByRoutingKey map[RoutingKey][]Route
-type EndpointsByRoutingKey map[RoutingKey][]Endpoint
+type RoutesByRoutingKey map[endpoint.RoutingKey][]Route
+type EndpointsByRoutingKey map[endpoint.RoutingKey][]Endpoint
 
 func RoutesByRoutingKeyFromSchedulingInfos(schedulingInfos []*models.DesiredLRPSchedulingInfo) RoutesByRoutingKey {
 	routesByRoutingKey := RoutesByRoutingKey{}
@@ -17,7 +17,7 @@ func RoutesByRoutingKeyFromSchedulingInfos(schedulingInfos []*models.DesiredLRPS
 		routes, err := cfroutes.CFRoutesFromRoutingInfo(desired.Routes)
 		if err == nil && len(routes) > 0 {
 			for _, cfRoute := range routes {
-				key := RoutingKey{ProcessGuid: desired.ProcessGuid, ContainerPort: cfRoute.Port}
+				key := endpoint.RoutingKey{ProcessGUID: desired.ProcessGuid, ContainerPort: cfRoute.Port}
 				var routeEntries []Route
 				for _, hostname := range cfRoute.Hostnames {
 					routeEntries = append(routeEntries, Route{
@@ -49,9 +49,9 @@ func EndpointsByRoutingKeyFromActuals(actuals []*endpoint.ActualLRPRoutingInfo, 
 			continue
 		}
 
-		for containerPort, endpoint := range endpoints {
-			key := RoutingKey{ProcessGuid: actual.ActualLRP.ProcessGuid, ContainerPort: containerPort}
-			endpointsByRoutingKey[key] = append(endpointsByRoutingKey[key], endpoint)
+		for containerPort, routingEndpoint := range endpoints {
+			key := endpoint.RoutingKey{ProcessGUID: actual.ActualLRP.ProcessGuid, ContainerPort: containerPort}
+			endpointsByRoutingKey[key] = append(endpointsByRoutingKey[key], routingEndpoint)
 		}
 	}
 
@@ -84,24 +84,24 @@ func EndpointsFromActual(actualLRPInfo *endpoint.ActualLRPRoutingInfo) (map[uint
 	return endpoints, nil
 }
 
-func RoutingKeysFromActual(actual *models.ActualLRP) []RoutingKey {
-	keys := []RoutingKey{}
+func RoutingKeysFromActual(actual *models.ActualLRP) []endpoint.RoutingKey {
+	keys := []endpoint.RoutingKey{}
 	for _, portMapping := range actual.Ports {
 		if portMapping != nil {
-			keys = append(keys, RoutingKey{ProcessGuid: actual.ProcessGuid, ContainerPort: uint32(portMapping.ContainerPort)})
+			keys = append(keys, endpoint.RoutingKey{ProcessGUID: actual.ProcessGuid, ContainerPort: uint32(portMapping.ContainerPort)})
 		}
 	}
 
 	return keys
 }
 
-func RoutingKeysFromSchedulingInfo(schedulingInfo *models.DesiredLRPSchedulingInfo) []RoutingKey {
-	keys := []RoutingKey{}
+func RoutingKeysFromSchedulingInfo(schedulingInfo *models.DesiredLRPSchedulingInfo) []endpoint.RoutingKey {
+	keys := []endpoint.RoutingKey{}
 
 	routes, err := cfroutes.CFRoutesFromRoutingInfo(schedulingInfo.Routes)
 	if err == nil && len(routes) > 0 {
 		for _, cfRoute := range routes {
-			keys = append(keys, RoutingKey{ProcessGuid: schedulingInfo.ProcessGuid, ContainerPort: cfRoute.Port})
+			keys = append(keys, endpoint.RoutingKey{ProcessGUID: schedulingInfo.ProcessGuid, ContainerPort: cfRoute.Port})
 		}
 	}
 	return keys

@@ -578,7 +578,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 				Routes:          *tcpRoutes.RoutingInfo(),
 				ModificationTag: modificationTag,
 			}
-			routeHandler.RefreshDesired([]*models.DesiredLRPSchedulingInfo{desiredInfo})
+			routeHandler.RefreshDesired(logger, []*models.DesiredLRPSchedulingInfo{desiredInfo})
 
 			Expect(fakeRoutingTable.AddRoutesCallCount()).To(Equal(1))
 			info := fakeRoutingTable.AddRoutesArgsForCall(0)

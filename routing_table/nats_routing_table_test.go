@@ -8,6 +8,7 @@ import (
 	"code.cloudfoundry.org/route-emitter/routing_table"
 
 	. "code.cloudfoundry.org/route-emitter/routing_table/matchers"
+	"code.cloudfoundry.org/route-emitter/routing_table/schema/endpoint"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	. "github.com/onsi/gomega/gbytes"
@@ -20,7 +21,7 @@ var _ = Describe("RoutingTable", func() {
 		logger         *lagertest.TestLogger
 	)
 
-	key := routing_table.RoutingKey{ProcessGuid: "some-process-guid", ContainerPort: 8080}
+	key := endpoint.RoutingKey{ProcessGUID: "some-process-guid", ContainerPort: 8080}
 
 	hostname1 := "foo.example.com"
 	hostname2 := "bar.example.com"
@@ -1356,7 +1357,7 @@ var _ = Describe("RoutingTable", func() {
 
 	Describe("EndpointsForIndex", func() {
 		It("returns endpoints for evacuation and non-evacuating instances", func() {
-			table.SetRoutes(routing_table.RoutingKey{ProcessGuid: "fake-process-guid"}, []routing_table.Route{
+			table.SetRoutes(endpoint.RoutingKey{ProcessGUID: "fake-process-guid"}, []routing_table.Route{
 				routing_table.Route{Hostname: "fake-route-url", LogGuid: logGuid},
 			}, nil)
 			table.AddEndpoint(key, endpoint1)
@@ -1370,10 +1371,10 @@ var _ = Describe("RoutingTable", func() {
 	Describe("GetRoutes", func() {
 		It("returns routes for routing key ", func() {
 			expectedRoute := routing_table.Route{Hostname: "fake-route-url", LogGuid: logGuid}
-			table.SetRoutes(routing_table.RoutingKey{ProcessGuid: "fake-process-guid"}, []routing_table.Route{
+			table.SetRoutes(endpoint.RoutingKey{ProcessGUID: "fake-process-guid"}, []routing_table.Route{
 				routing_table.Route{Hostname: "fake-route-url", LogGuid: logGuid},
 			}, nil)
-			actualRoutes := table.GetRoutes(routing_table.RoutingKey{ProcessGuid: "fake-process-guid"})
+			actualRoutes := table.GetRoutes(endpoint.RoutingKey{ProcessGUID: "fake-process-guid"})
 			Expect(actualRoutes).To(HaveLen(1))
 			Expect(actualRoutes[0].Hostname).To(Equal(expectedRoute.Hostname))
 			Expect(actualRoutes[0].LogGuid).To(Equal(expectedRoute.LogGuid))
@@ -1387,7 +1388,7 @@ var _ = Describe("RoutingTable", func() {
 		})
 
 		It("returns 1 after adding a route to a single process", func() {
-			table.SetRoutes(routing_table.RoutingKey{ProcessGuid: "fake-process-guid"}, []routing_table.Route{
+			table.SetRoutes(endpoint.RoutingKey{ProcessGUID: "fake-process-guid"}, []routing_table.Route{
 				routing_table.Route{Hostname: "fake-route-url", LogGuid: logGuid},
 			}, nil)
 
@@ -1395,7 +1396,7 @@ var _ = Describe("RoutingTable", func() {
 		})
 
 		It("returns 2 after associating 2 urls with a single process", func() {
-			table.SetRoutes(routing_table.RoutingKey{ProcessGuid: "fake-process-guid"}, []routing_table.Route{
+			table.SetRoutes(endpoint.RoutingKey{ProcessGUID: "fake-process-guid"}, []routing_table.Route{
 				routing_table.Route{Hostname: "fake-route-url-1", LogGuid: logGuid},
 				routing_table.Route{Hostname: "fake-route-url-2", LogGuid: logGuid},
 			}, nil)
@@ -1404,11 +1405,11 @@ var _ = Describe("RoutingTable", func() {
 		})
 
 		It("returns 4 after associating 2 urls with two processes", func() {
-			table.SetRoutes(routing_table.RoutingKey{ProcessGuid: "fake-process-guid-a"}, []routing_table.Route{
+			table.SetRoutes(endpoint.RoutingKey{ProcessGUID: "fake-process-guid-a"}, []routing_table.Route{
 				routing_table.Route{Hostname: "fake-route-url-a-1", LogGuid: logGuid},
 				routing_table.Route{Hostname: "fake-route-url-a-2", LogGuid: logGuid},
 			}, nil)
-			table.SetRoutes(routing_table.RoutingKey{ProcessGuid: "fake-process-guid-b"}, []routing_table.Route{
+			table.SetRoutes(endpoint.RoutingKey{ProcessGUID: "fake-process-guid-b"}, []routing_table.Route{
 				routing_table.Route{Hostname: "fake-route-url-b-1", LogGuid: logGuid},
 				routing_table.Route{Hostname: "fake-route-url-b-2", LogGuid: logGuid},
 			}, nil)

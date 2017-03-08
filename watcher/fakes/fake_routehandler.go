@@ -36,10 +36,11 @@ type FakeRouteHandler struct {
 	shouldRefreshDesiredReturnsOnCall map[int]struct {
 		result1 bool
 	}
-	RefreshDesiredStub        func([]*models.DesiredLRPSchedulingInfo)
+	RefreshDesiredStub        func(lager.Logger, []*models.DesiredLRPSchedulingInfo)
 	refreshDesiredMutex       sync.RWMutex
 	refreshDesiredArgsForCall []struct {
-		arg1 []*models.DesiredLRPSchedulingInfo
+		arg1 lager.Logger
+		arg2 []*models.DesiredLRPSchedulingInfo
 	}
 	invocations      map[string][][]interface{}
 	invocationsMutex sync.RWMutex
@@ -155,20 +156,21 @@ func (fake *FakeRouteHandler) ShouldRefreshDesiredReturnsOnCall(i int, result1 b
 	}{result1}
 }
 
-func (fake *FakeRouteHandler) RefreshDesired(arg1 []*models.DesiredLRPSchedulingInfo) {
-	var arg1Copy []*models.DesiredLRPSchedulingInfo
-	if arg1 != nil {
-		arg1Copy = make([]*models.DesiredLRPSchedulingInfo, len(arg1))
-		copy(arg1Copy, arg1)
+func (fake *FakeRouteHandler) RefreshDesired(arg1 lager.Logger, arg2 []*models.DesiredLRPSchedulingInfo) {
+	var arg2Copy []*models.DesiredLRPSchedulingInfo
+	if arg2 != nil {
+		arg2Copy = make([]*models.DesiredLRPSchedulingInfo, len(arg2))
+		copy(arg2Copy, arg2)
 	}
 	fake.refreshDesiredMutex.Lock()
 	fake.refreshDesiredArgsForCall = append(fake.refreshDesiredArgsForCall, struct {
-		arg1 []*models.DesiredLRPSchedulingInfo
-	}{arg1Copy})
-	fake.recordInvocation("RefreshDesired", []interface{}{arg1Copy})
+		arg1 lager.Logger
+		arg2 []*models.DesiredLRPSchedulingInfo
+	}{arg1, arg2Copy})
+	fake.recordInvocation("RefreshDesired", []interface{}{arg1, arg2Copy})
 	fake.refreshDesiredMutex.Unlock()
 	if fake.RefreshDesiredStub != nil {
-		fake.RefreshDesiredStub(arg1)
+		fake.RefreshDesiredStub(arg1, arg2)
 	}
 }
 
@@ -178,10 +180,10 @@ func (fake *FakeRouteHandler) RefreshDesiredCallCount() int {
 	return len(fake.refreshDesiredArgsForCall)
 }
 
-func (fake *FakeRouteHandler) RefreshDesiredArgsForCall(i int) []*models.DesiredLRPSchedulingInfo {
+func (fake *FakeRouteHandler) RefreshDesiredArgsForCall(i int) (lager.Logger, []*models.DesiredLRPSchedulingInfo) {
 	fake.refreshDesiredMutex.RLock()
 	defer fake.refreshDesiredMutex.RUnlock()
-	return fake.refreshDesiredArgsForCall[i].arg1
+	return fake.refreshDesiredArgsForCall[i].arg1, fake.refreshDesiredArgsForCall[i].arg2
 }
 
 func (fake *FakeRouteHandler) Invocations() map[string][][]interface{} {

@@ -43,11 +43,6 @@ type RoutableEndpoints struct {
 	ModificationTag *models.ModificationTag
 }
 
-type RoutingKey struct {
-	ProcessGuid   string
-	ContainerPort uint32
-}
-
 func NewRoutableEndpoints() RoutableEndpoints {
 	return RoutableEndpoints{
 		Endpoints: map[EndpointKey]Endpoint{},

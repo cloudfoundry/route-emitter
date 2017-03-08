@@ -31,7 +31,7 @@ type RouteHandler interface {
 	)
 
 	ShouldRefreshDesired(*endpoint.ActualLRPRoutingInfo) bool
-	RefreshDesired([]*models.DesiredLRPSchedulingInfo)
+	RefreshDesired(lager.Logger, []*models.DesiredLRPSchedulingInfo)
 }
 
 type Watcher struct {
@@ -179,7 +179,7 @@ func (w *Watcher) handleEvent(logger lager.Logger, event models.Event) {
 			if err != nil {
 				logger.Error("failed-getting-desired-lrps-for-missing-actual-lrp", err)
 			} else {
-				w.routeHandler.RefreshDesired(desiredLRPs)
+				w.routeHandler.RefreshDesired(logger, desiredLRPs)
 			}
 		}
 	}

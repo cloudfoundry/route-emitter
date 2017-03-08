@@ -28,19 +28,19 @@ var _ = Describe("ByRoutingKey", func() {
 			})
 
 			Expect(routes).To(HaveLen(3))
-			Expect(routes[routing_table.RoutingKey{ProcessGuid: "abc", ContainerPort: 8080}][0].Hostname).To(Equal("foo.com"))
-			Expect(routes[routing_table.RoutingKey{ProcessGuid: "abc", ContainerPort: 8080}][0].LogGuid).To(Equal("abc-guid"))
-			Expect(routes[routing_table.RoutingKey{ProcessGuid: "abc", ContainerPort: 8080}][0].RouteServiceUrl).To(Equal("https://something.creative"))
+			Expect(routes[endpoint.RoutingKey{ProcessGUID: "abc", ContainerPort: 8080}][0].Hostname).To(Equal("foo.com"))
+			Expect(routes[endpoint.RoutingKey{ProcessGUID: "abc", ContainerPort: 8080}][0].LogGuid).To(Equal("abc-guid"))
+			Expect(routes[endpoint.RoutingKey{ProcessGUID: "abc", ContainerPort: 8080}][0].RouteServiceUrl).To(Equal("https://something.creative"))
 
-			Expect(routes[routing_table.RoutingKey{ProcessGuid: "abc", ContainerPort: 8080}][1].Hostname).To(Equal("bar.com"))
-			Expect(routes[routing_table.RoutingKey{ProcessGuid: "abc", ContainerPort: 8080}][1].LogGuid).To(Equal("abc-guid"))
-			Expect(routes[routing_table.RoutingKey{ProcessGuid: "abc", ContainerPort: 8080}][1].RouteServiceUrl).To(Equal("https://something.creative"))
+			Expect(routes[endpoint.RoutingKey{ProcessGUID: "abc", ContainerPort: 8080}][1].Hostname).To(Equal("bar.com"))
+			Expect(routes[endpoint.RoutingKey{ProcessGUID: "abc", ContainerPort: 8080}][1].LogGuid).To(Equal("abc-guid"))
+			Expect(routes[endpoint.RoutingKey{ProcessGUID: "abc", ContainerPort: 8080}][1].RouteServiceUrl).To(Equal("https://something.creative"))
 
-			Expect(routes[routing_table.RoutingKey{ProcessGuid: "abc", ContainerPort: 9090}][0].Hostname).To(Equal("foo.example.com"))
-			Expect(routes[routing_table.RoutingKey{ProcessGuid: "abc", ContainerPort: 9090}][0].LogGuid).To(Equal("abc-guid"))
+			Expect(routes[endpoint.RoutingKey{ProcessGUID: "abc", ContainerPort: 9090}][0].Hostname).To(Equal("foo.example.com"))
+			Expect(routes[endpoint.RoutingKey{ProcessGUID: "abc", ContainerPort: 9090}][0].LogGuid).To(Equal("abc-guid"))
 
-			Expect(routes[routing_table.RoutingKey{ProcessGuid: "def", ContainerPort: 8080}][0].Hostname).To(Equal("baz.com"))
-			Expect(routes[routing_table.RoutingKey{ProcessGuid: "def", ContainerPort: 8080}][0].LogGuid).To(Equal("def-guid"))
+			Expect(routes[endpoint.RoutingKey{ProcessGUID: "def", ContainerPort: 8080}][0].Hostname).To(Equal("baz.com"))
+			Expect(routes[endpoint.RoutingKey{ProcessGUID: "def", ContainerPort: 8080}][0].LogGuid).To(Equal("def-guid"))
 		})
 
 		Context("when multiple hosts have the same key, but one hostname is bound to a route service and the other is not", func() {
@@ -59,16 +59,16 @@ var _ = Describe("ByRoutingKey", func() {
 				})
 
 				Expect(routes).To(HaveLen(2))
-				Expect(routes[routing_table.RoutingKey{ProcessGuid: "abc", ContainerPort: 8080}][0].Hostname).To(Equal("foo.com"))
-				Expect(routes[routing_table.RoutingKey{ProcessGuid: "abc", ContainerPort: 8080}][0].LogGuid).To(Equal("abc-guid"))
-				Expect(routes[routing_table.RoutingKey{ProcessGuid: "abc", ContainerPort: 8080}][0].RouteServiceUrl).To(Equal("https://something.creative"))
+				Expect(routes[endpoint.RoutingKey{ProcessGUID: "abc", ContainerPort: 8080}][0].Hostname).To(Equal("foo.com"))
+				Expect(routes[endpoint.RoutingKey{ProcessGUID: "abc", ContainerPort: 8080}][0].LogGuid).To(Equal("abc-guid"))
+				Expect(routes[endpoint.RoutingKey{ProcessGUID: "abc", ContainerPort: 8080}][0].RouteServiceUrl).To(Equal("https://something.creative"))
 
-				Expect(routes[routing_table.RoutingKey{ProcessGuid: "abc", ContainerPort: 8080}][1].Hostname).To(Equal("bar.com"))
-				Expect(routes[routing_table.RoutingKey{ProcessGuid: "abc", ContainerPort: 8080}][1].LogGuid).To(Equal("abc-guid"))
-				Expect(routes[routing_table.RoutingKey{ProcessGuid: "abc", ContainerPort: 8080}][1].RouteServiceUrl).To(Equal(""))
+				Expect(routes[endpoint.RoutingKey{ProcessGUID: "abc", ContainerPort: 8080}][1].Hostname).To(Equal("bar.com"))
+				Expect(routes[endpoint.RoutingKey{ProcessGUID: "abc", ContainerPort: 8080}][1].LogGuid).To(Equal("abc-guid"))
+				Expect(routes[endpoint.RoutingKey{ProcessGUID: "abc", ContainerPort: 8080}][1].RouteServiceUrl).To(Equal(""))
 
-				Expect(routes[routing_table.RoutingKey{ProcessGuid: "def", ContainerPort: 8080}][0].Hostname).To(Equal("baz.com"))
-				Expect(routes[routing_table.RoutingKey{ProcessGuid: "def", ContainerPort: 8080}][0].LogGuid).To(Equal("def-guid"))
+				Expect(routes[endpoint.RoutingKey{ProcessGUID: "def", ContainerPort: 8080}][0].Hostname).To(Equal("baz.com"))
+				Expect(routes[endpoint.RoutingKey{ProcessGUID: "def", ContainerPort: 8080}][0].LogGuid).To(Equal("def-guid"))
 			})
 		})
 		Context("when the routing info is nil", func() {
@@ -126,15 +126,15 @@ var _ = Describe("ByRoutingKey", func() {
 			It("should build a map of endpoints, ignoring those without ports", func() {
 				Expect(endpoints).To(HaveLen(3))
 
-				Expect(endpoints[routing_table.RoutingKey{ProcessGuid: "abc", ContainerPort: 44}]).To(ConsistOf([]routing_table.Endpoint{
+				Expect(endpoints[endpoint.RoutingKey{ProcessGUID: "abc", ContainerPort: 44}]).To(ConsistOf([]routing_table.Endpoint{
 					routing_table.Endpoint{Host: "1.1.1.1", Index: 0, Domain: "domain", Port: 11, ContainerPort: 44},
 					routing_table.Endpoint{Host: "2.2.2.2", Index: 1, Domain: "domain", Port: 22, ContainerPort: 44}}))
 
-				Expect(endpoints[routing_table.RoutingKey{ProcessGuid: "abc", ContainerPort: 99}]).To(ConsistOf([]routing_table.Endpoint{
+				Expect(endpoints[endpoint.RoutingKey{ProcessGUID: "abc", ContainerPort: 99}]).To(ConsistOf([]routing_table.Endpoint{
 					routing_table.Endpoint{Host: "1.1.1.1", Index: 0, Domain: "domain", Port: 66, ContainerPort: 99},
 					routing_table.Endpoint{Host: "2.2.2.2", Index: 1, Domain: "domain", Port: 88, ContainerPort: 99}}))
 
-				Expect(endpoints[routing_table.RoutingKey{ProcessGuid: "def", ContainerPort: 55}]).To(ConsistOf([]routing_table.Endpoint{
+				Expect(endpoints[endpoint.RoutingKey{ProcessGUID: "def", ContainerPort: 55}]).To(ConsistOf([]routing_table.Endpoint{
 					routing_table.Endpoint{Host: "3.3.3.3", Index: 0, Domain: "domain", Port: 33, ContainerPort: 55}}))
 			})
 		})
@@ -177,11 +177,11 @@ var _ = Describe("ByRoutingKey", func() {
 			It("should build a map of endpoints, excluding actuals that aren't desired", func() {
 				Expect(endpoints).To(HaveLen(3))
 
-				Expect(endpoints[routing_table.RoutingKey{ProcessGuid: "abc", ContainerPort: 44}]).To(ConsistOf([]routing_table.Endpoint{
+				Expect(endpoints[endpoint.RoutingKey{ProcessGUID: "abc", ContainerPort: 44}]).To(ConsistOf([]routing_table.Endpoint{
 					routing_table.Endpoint{Host: "1.1.1.1", Domain: "domain", Port: 11, ContainerPort: 44}}))
-				Expect(endpoints[routing_table.RoutingKey{ProcessGuid: "abc", ContainerPort: 99}]).To(ConsistOf([]routing_table.Endpoint{
+				Expect(endpoints[endpoint.RoutingKey{ProcessGUID: "abc", ContainerPort: 99}]).To(ConsistOf([]routing_table.Endpoint{
 					routing_table.Endpoint{Host: "1.1.1.1", Domain: "domain", Port: 66, ContainerPort: 99}}))
-				Expect(endpoints[routing_table.RoutingKey{ProcessGuid: "def", ContainerPort: 55}]).To(ConsistOf([]routing_table.Endpoint{
+				Expect(endpoints[endpoint.RoutingKey{ProcessGUID: "def", ContainerPort: 55}]).To(ConsistOf([]routing_table.Endpoint{
 					routing_table.Endpoint{Host: "3.3.3.3", Domain: "domain", Port: 33, ContainerPort: 55}}))
 			})
 		})
@@ -215,8 +215,8 @@ var _ = Describe("ByRoutingKey", func() {
 				ActualLRPNetInfo:     models.NewActualLRPNetInfo("1.1.1.1", models.NewPortMapping(11, 44), models.NewPortMapping(66, 99)),
 			})
 			Expect(keys).To(HaveLen(2))
-			Expect(keys).To(ContainElement(routing_table.RoutingKey{ProcessGuid: "process-guid", ContainerPort: 44}))
-			Expect(keys).To(ContainElement(routing_table.RoutingKey{ProcessGuid: "process-guid", ContainerPort: 99}))
+			Expect(keys).To(ContainElement(endpoint.RoutingKey{ProcessGUID: "process-guid", ContainerPort: 44}))
+			Expect(keys).To(ContainElement(endpoint.RoutingKey{ProcessGUID: "process-guid", ContainerPort: 99}))
 		})
 
 		Context("when the actual lrp has no port mappings", func() {
@@ -247,8 +247,8 @@ var _ = Describe("ByRoutingKey", func() {
 			keys := routing_table.RoutingKeysFromSchedulingInfo(schedulingInfo)
 
 			Expect(keys).To(HaveLen(2))
-			Expect(keys).To(ContainElement(routing_table.RoutingKey{ProcessGuid: "process-guid", ContainerPort: 8080}))
-			Expect(keys).To(ContainElement(routing_table.RoutingKey{ProcessGuid: "process-guid", ContainerPort: 9090}))
+			Expect(keys).To(ContainElement(endpoint.RoutingKey{ProcessGUID: "process-guid", ContainerPort: 8080}))
+			Expect(keys).To(ContainElement(endpoint.RoutingKey{ProcessGUID: "process-guid", ContainerPort: 9090}))
 		})
 
 		Context("when the desired LRP does not define any container ports", func() {
@@ -260,7 +260,7 @@ var _ = Describe("ByRoutingKey", func() {
 
 				keys := routing_table.RoutingKeysFromSchedulingInfo(schedulingInfo)
 				Expect(keys).To(HaveLen(1))
-				Expect(keys).To(ContainElement(routing_table.RoutingKey{ProcessGuid: "process-guid", ContainerPort: 8080}))
+				Expect(keys).To(ContainElement(endpoint.RoutingKey{ProcessGUID: "process-guid", ContainerPort: 8080}))
 			})
 		})
 	})

@@ -5,6 +5,7 @@ import (
 
 	"code.cloudfoundry.org/bbs/models"
 	"code.cloudfoundry.org/lager"
+	"code.cloudfoundry.org/route-emitter/routing_table/schema/endpoint"
 	"code.cloudfoundry.org/runtimeschema/metric"
 )
 
@@ -17,12 +18,12 @@ type NATSRoutingTable interface {
 
 	Swap(newTable NATSRoutingTable, domains models.DomainSet) MessagesToEmit
 
-	SetRoutes(key RoutingKey, routes []Route, modTag *models.ModificationTag) MessagesToEmit
-	GetRoutes(key RoutingKey) []Route
-	RemoveRoutes(key RoutingKey, modTag *models.ModificationTag) MessagesToEmit
-	AddEndpoint(key RoutingKey, endpoint Endpoint) MessagesToEmit
-	RemoveEndpoint(key RoutingKey, endpoint Endpoint) MessagesToEmit
-	EndpointsForIndex(key RoutingKey, index int32) []Endpoint
+	SetRoutes(key endpoint.RoutingKey, routes []Route, modTag *models.ModificationTag) MessagesToEmit
+	GetRoutes(key endpoint.RoutingKey) []Route
+	RemoveRoutes(key endpoint.RoutingKey, modTag *models.ModificationTag) MessagesToEmit
+	AddEndpoint(key endpoint.RoutingKey, routingEndpoint Endpoint) MessagesToEmit
+	RemoveEndpoint(key endpoint.RoutingKey, routingEndpoint Endpoint) MessagesToEmit
+	EndpointsForIndex(key endpoint.RoutingKey, index int32) []Endpoint
 
 	MessagesToEmit() MessagesToEmit
 }
@@ -33,7 +34,7 @@ func (noopLocker) Lock()   {}
 func (noopLocker) Unlock() {}
 
 type natsRoutingTable struct {
-	entries        map[RoutingKey]RoutableEndpoints
+	entries        map[endpoint.RoutingKey]RoutableEndpoints
 	addressEntries map[Address]EndpointKey // for collision detection
 	sync.Locker
 	messageBuilder MessageBuilder
@@ -41,7 +42,7 @@ type natsRoutingTable struct {
 }
 
 func NewTempTable(routesMap RoutesByRoutingKey, endpointsByKey EndpointsByRoutingKey) NATSRoutingTable {
-	entries := make(map[RoutingKey]RoutableEndpoints)
+	entries := make(map[endpoint.RoutingKey]RoutableEndpoints)
 	addressEntries := make(map[Address]EndpointKey)
 
 	for key, routes := range routesMap {
@@ -72,7 +73,7 @@ func NewTempTable(routesMap RoutesByRoutingKey, endpointsByKey EndpointsByRoutin
 
 func NewNATSTable(logger lager.Logger) NATSRoutingTable {
 	return &natsRoutingTable{
-		entries:        make(map[RoutingKey]RoutableEndpoints),
+		entries:        make(map[endpoint.RoutingKey]RoutableEndpoints),
 		addressEntries: make(map[Address]EndpointKey),
 		Locker:         &sync.Mutex{},
 		messageBuilder: MessagesToEmitBuilder{},
@@ -80,7 +81,7 @@ func NewNATSTable(logger lager.Logger) NATSRoutingTable {
 	}
 }
 
-func (table *natsRoutingTable) EndpointsForIndex(key RoutingKey, index int32) []Endpoint {
+func (table *natsRoutingTable) EndpointsForIndex(key endpoint.RoutingKey, index int32) []Endpoint {
 	table.Lock()
 	defer table.Unlock()
 
@@ -116,7 +117,7 @@ func (table *natsRoutingTable) Swap(t NATSRoutingTable, domains models.DomainSet
 		return messagesToEmit
 	}
 	newEntries := newTable.entries
-	updatedEntries := make(map[RoutingKey]RoutableEndpoints)
+	updatedEntries := make(map[endpoint.RoutingKey]RoutableEndpoints)
 	updatedAddressEntries := make(map[Address]EndpointKey)
 
 	table.Lock()
@@ -168,7 +169,7 @@ func (table *natsRoutingTable) MessagesToEmit() MessagesToEmit {
 	return messagesToEmit
 }
 
-func (table *natsRoutingTable) SetRoutes(key RoutingKey, routes []Route, modTag *models.ModificationTag) MessagesToEmit {
+func (table *natsRoutingTable) SetRoutes(key endpoint.RoutingKey, routes []Route, modTag *models.ModificationTag) MessagesToEmit {
 	table.Lock()
 	defer table.Unlock()
 
@@ -185,7 +186,7 @@ func (table *natsRoutingTable) SetRoutes(key RoutingKey, routes []Route, modTag 
 	return table.emit(key, currentEntry, newEntry)
 }
 
-func (table *natsRoutingTable) GetRoutes(key RoutingKey) []Route {
+func (table *natsRoutingTable) GetRoutes(key endpoint.RoutingKey) []Route {
 	table.Lock()
 	defer table.Unlock()
 
@@ -194,7 +195,7 @@ func (table *natsRoutingTable) GetRoutes(key RoutingKey) []Route {
 	return currentEntry.Routes
 }
 
-func (table *natsRoutingTable) RemoveRoutes(key RoutingKey, modTag *models.ModificationTag) MessagesToEmit {
+func (table *natsRoutingTable) RemoveRoutes(key endpoint.RoutingKey, modTag *models.ModificationTag) MessagesToEmit {
 	table.Lock()
 	defer table.Unlock()
 
@@ -211,42 +212,42 @@ func (table *natsRoutingTable) RemoveRoutes(key RoutingKey, modTag *models.Modif
 	return table.emit(key, currentEntry, newEntry)
 }
 
-func (table *natsRoutingTable) AddEndpoint(key RoutingKey, endpoint Endpoint) MessagesToEmit {
+func (table *natsRoutingTable) AddEndpoint(key endpoint.RoutingKey, routingEndpoint Endpoint) MessagesToEmit {
 	table.Lock()
 	defer table.Unlock()
 
 	currentEntry := table.entries[key]
 	newEntry := currentEntry.copy()
-	newEntry.Endpoints[endpoint.key()] = endpoint
+	newEntry.Endpoints[routingEndpoint.key()] = routingEndpoint
 	table.entries[key] = newEntry
 
-	address := endpoint.address()
+	address := routingEndpoint.address()
 
 	if existingEndpointKey, ok := table.addressEntries[address]; ok {
-		if existingEndpointKey.InstanceGuid != endpoint.InstanceGuid {
+		if existingEndpointKey.InstanceGuid != routingEndpoint.InstanceGuid {
 			addressCollisions.Add(1)
 			existingInstanceGuid := existingEndpointKey.InstanceGuid
 			table.logger.Info("collision-detected-with-endpoint", lager.Data{
 				"instance_guid_a": existingInstanceGuid,
-				"instance_guid_b": endpoint.InstanceGuid,
-				"Address":         endpoint.address(),
+				"instance_guid_b": routingEndpoint.InstanceGuid,
+				"Address":         routingEndpoint.address(),
 			})
 		}
 	}
 
-	table.addressEntries[address] = endpoint.key()
+	table.addressEntries[address] = routingEndpoint.key()
 
 	return table.emit(key, currentEntry, newEntry)
 }
 
-func (table *natsRoutingTable) RemoveEndpoint(key RoutingKey, endpoint Endpoint) MessagesToEmit {
+func (table *natsRoutingTable) RemoveEndpoint(key endpoint.RoutingKey, routingEndpoint Endpoint) MessagesToEmit {
 	table.Lock()
 	defer table.Unlock()
 
 	currentEntry := table.entries[key]
-	endpointKey := endpoint.key()
+	endpointKey := routingEndpoint.key()
 	currentEndpoint, ok := currentEntry.Endpoints[endpointKey]
-	if !ok || !(currentEndpoint.ModificationTag.Equal(endpoint.ModificationTag) || currentEndpoint.ModificationTag.SucceededBy(endpoint.ModificationTag)) {
+	if !ok || !(currentEndpoint.ModificationTag.Equal(routingEndpoint.ModificationTag) || currentEndpoint.ModificationTag.SucceededBy(routingEndpoint.ModificationTag)) {
 		return MessagesToEmit{}
 	}
 
@@ -254,12 +255,12 @@ func (table *natsRoutingTable) RemoveEndpoint(key RoutingKey, endpoint Endpoint)
 	delete(newEntry.Endpoints, endpointKey)
 	table.entries[key] = newEntry
 
-	delete(table.addressEntries, endpoint.address())
+	delete(table.addressEntries, routingEndpoint.address())
 
 	return table.emit(key, currentEntry, newEntry)
 }
 
-func (table *natsRoutingTable) emit(key RoutingKey, oldEntry, newEntry RoutableEndpoints) MessagesToEmit {
+func (table *natsRoutingTable) emit(key endpoint.RoutingKey, oldEntry, newEntry RoutableEndpoints) MessagesToEmit {
 	messagesToEmit := table.messageBuilder.RegistrationsFor(&oldEntry, &newEntry)
 	messagesToEmit = messagesToEmit.merge(table.messageBuilder.UnregistrationsFor(&oldEntry, &newEntry, nil))
 

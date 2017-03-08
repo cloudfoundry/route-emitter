@@ -84,7 +84,7 @@ func (handler *RoutingAPIHandler) Sync(
 	handler.emit(routingEvents)
 }
 
-func (handler *RoutingAPIHandler) RefreshDesired(desiredInfo []*models.DesiredLRPSchedulingInfo) {
+func (handler *RoutingAPIHandler) RefreshDesired(logger lager.Logger, desiredInfo []*models.DesiredLRPSchedulingInfo) {
 	var routingEvents event.RoutingEvents
 	for _, desiredLRP := range desiredInfo {
 		routingEvents = append(routingEvents, handler.routingTable.AddRoutes(desiredLRP)...)

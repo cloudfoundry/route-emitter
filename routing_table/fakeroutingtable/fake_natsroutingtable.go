@@ -6,6 +6,7 @@ import (
 
 	"code.cloudfoundry.org/bbs/models"
 	"code.cloudfoundry.org/route-emitter/routing_table"
+	"code.cloudfoundry.org/route-emitter/routing_table/schema/endpoint"
 )
 
 type FakeNATSRoutingTable struct {
@@ -30,10 +31,10 @@ type FakeNATSRoutingTable struct {
 	swapReturnsOnCall map[int]struct {
 		result1 routing_table.MessagesToEmit
 	}
-	SetRoutesStub        func(key routing_table.RoutingKey, routes []routing_table.Route, modTag *models.ModificationTag) routing_table.MessagesToEmit
+	SetRoutesStub        func(key endpoint.RoutingKey, routes []routing_table.Route, modTag *models.ModificationTag) routing_table.MessagesToEmit
 	setRoutesMutex       sync.RWMutex
 	setRoutesArgsForCall []struct {
-		key    routing_table.RoutingKey
+		key    endpoint.RoutingKey
 		routes []routing_table.Route
 		modTag *models.ModificationTag
 	}
@@ -43,10 +44,10 @@ type FakeNATSRoutingTable struct {
 	setRoutesReturnsOnCall map[int]struct {
 		result1 routing_table.MessagesToEmit
 	}
-	GetRoutesStub        func(key routing_table.RoutingKey) []routing_table.Route
+	GetRoutesStub        func(key endpoint.RoutingKey) []routing_table.Route
 	getRoutesMutex       sync.RWMutex
 	getRoutesArgsForCall []struct {
-		key routing_table.RoutingKey
+		key endpoint.RoutingKey
 	}
 	getRoutesReturns struct {
 		result1 []routing_table.Route
@@ -54,10 +55,10 @@ type FakeNATSRoutingTable struct {
 	getRoutesReturnsOnCall map[int]struct {
 		result1 []routing_table.Route
 	}
-	RemoveRoutesStub        func(key routing_table.RoutingKey, modTag *models.ModificationTag) routing_table.MessagesToEmit
+	RemoveRoutesStub        func(key endpoint.RoutingKey, modTag *models.ModificationTag) routing_table.MessagesToEmit
 	removeRoutesMutex       sync.RWMutex
 	removeRoutesArgsForCall []struct {
-		key    routing_table.RoutingKey
+		key    endpoint.RoutingKey
 		modTag *models.ModificationTag
 	}
 	removeRoutesReturns struct {
@@ -66,11 +67,11 @@ type FakeNATSRoutingTable struct {
 	removeRoutesReturnsOnCall map[int]struct {
 		result1 routing_table.MessagesToEmit
 	}
-	AddEndpointStub        func(key routing_table.RoutingKey, endpoint routing_table.Endpoint) routing_table.MessagesToEmit
+	AddEndpointStub        func(key endpoint.RoutingKey, routingEndpoint routing_table.Endpoint) routing_table.MessagesToEmit
 	addEndpointMutex       sync.RWMutex
 	addEndpointArgsForCall []struct {
-		key      routing_table.RoutingKey
-		endpoint routing_table.Endpoint
+		key             endpoint.RoutingKey
+		routingEndpoint routing_table.Endpoint
 	}
 	addEndpointReturns struct {
 		result1 routing_table.MessagesToEmit
@@ -78,11 +79,11 @@ type FakeNATSRoutingTable struct {
 	addEndpointReturnsOnCall map[int]struct {
 		result1 routing_table.MessagesToEmit
 	}
-	RemoveEndpointStub        func(key routing_table.RoutingKey, endpoint routing_table.Endpoint) routing_table.MessagesToEmit
+	RemoveEndpointStub        func(key endpoint.RoutingKey, routingEndpoint routing_table.Endpoint) routing_table.MessagesToEmit
 	removeEndpointMutex       sync.RWMutex
 	removeEndpointArgsForCall []struct {
-		key      routing_table.RoutingKey
-		endpoint routing_table.Endpoint
+		key             endpoint.RoutingKey
+		routingEndpoint routing_table.Endpoint
 	}
 	removeEndpointReturns struct {
 		result1 routing_table.MessagesToEmit
@@ -90,10 +91,10 @@ type FakeNATSRoutingTable struct {
 	removeEndpointReturnsOnCall map[int]struct {
 		result1 routing_table.MessagesToEmit
 	}
-	EndpointsForIndexStub        func(key routing_table.RoutingKey, index int32) []routing_table.Endpoint
+	EndpointsForIndexStub        func(key endpoint.RoutingKey, index int32) []routing_table.Endpoint
 	endpointsForIndexMutex       sync.RWMutex
 	endpointsForIndexArgsForCall []struct {
-		key   routing_table.RoutingKey
+		key   endpoint.RoutingKey
 		index int32
 	}
 	endpointsForIndexReturns struct {
@@ -204,7 +205,7 @@ func (fake *FakeNATSRoutingTable) SwapReturnsOnCall(i int, result1 routing_table
 	}{result1}
 }
 
-func (fake *FakeNATSRoutingTable) SetRoutes(key routing_table.RoutingKey, routes []routing_table.Route, modTag *models.ModificationTag) routing_table.MessagesToEmit {
+func (fake *FakeNATSRoutingTable) SetRoutes(key endpoint.RoutingKey, routes []routing_table.Route, modTag *models.ModificationTag) routing_table.MessagesToEmit {
 	var routesCopy []routing_table.Route
 	if routes != nil {
 		routesCopy = make([]routing_table.Route, len(routes))
@@ -213,7 +214,7 @@ func (fake *FakeNATSRoutingTable) SetRoutes(key routing_table.RoutingKey, routes
 	fake.setRoutesMutex.Lock()
 	ret, specificReturn := fake.setRoutesReturnsOnCall[len(fake.setRoutesArgsForCall)]
 	fake.setRoutesArgsForCall = append(fake.setRoutesArgsForCall, struct {
-		key    routing_table.RoutingKey
+		key    endpoint.RoutingKey
 		routes []routing_table.Route
 		modTag *models.ModificationTag
 	}{key, routesCopy, modTag})
@@ -234,7 +235,7 @@ func (fake *FakeNATSRoutingTable) SetRoutesCallCount() int {
 	return len(fake.setRoutesArgsForCall)
 }
 
-func (fake *FakeNATSRoutingTable) SetRoutesArgsForCall(i int) (routing_table.RoutingKey, []routing_table.Route, *models.ModificationTag) {
+func (fake *FakeNATSRoutingTable) SetRoutesArgsForCall(i int) (endpoint.RoutingKey, []routing_table.Route, *models.ModificationTag) {
 	fake.setRoutesMutex.RLock()
 	defer fake.setRoutesMutex.RUnlock()
 	return fake.setRoutesArgsForCall[i].key, fake.setRoutesArgsForCall[i].routes, fake.setRoutesArgsForCall[i].modTag
@@ -259,11 +260,11 @@ func (fake *FakeNATSRoutingTable) SetRoutesReturnsOnCall(i int, result1 routing_
 	}{result1}
 }
 
-func (fake *FakeNATSRoutingTable) GetRoutes(key routing_table.RoutingKey) []routing_table.Route {
+func (fake *FakeNATSRoutingTable) GetRoutes(key endpoint.RoutingKey) []routing_table.Route {
 	fake.getRoutesMutex.Lock()
 	ret, specificReturn := fake.getRoutesReturnsOnCall[len(fake.getRoutesArgsForCall)]
 	fake.getRoutesArgsForCall = append(fake.getRoutesArgsForCall, struct {
-		key routing_table.RoutingKey
+		key endpoint.RoutingKey
 	}{key})
 	fake.recordInvocation("GetRoutes", []interface{}{key})
 	fake.getRoutesMutex.Unlock()
@@ -282,7 +283,7 @@ func (fake *FakeNATSRoutingTable) GetRoutesCallCount() int {
 	return len(fake.getRoutesArgsForCall)
 }
 
-func (fake *FakeNATSRoutingTable) GetRoutesArgsForCall(i int) routing_table.RoutingKey {
+func (fake *FakeNATSRoutingTable) GetRoutesArgsForCall(i int) endpoint.RoutingKey {
 	fake.getRoutesMutex.RLock()
 	defer fake.getRoutesMutex.RUnlock()
 	return fake.getRoutesArgsForCall[i].key
@@ -307,11 +308,11 @@ func (fake *FakeNATSRoutingTable) GetRoutesReturnsOnCall(i int, result1 []routin
 	}{result1}
 }
 
-func (fake *FakeNATSRoutingTable) RemoveRoutes(key routing_table.RoutingKey, modTag *models.ModificationTag) routing_table.MessagesToEmit {
+func (fake *FakeNATSRoutingTable) RemoveRoutes(key endpoint.RoutingKey, modTag *models.ModificationTag) routing_table.MessagesToEmit {
 	fake.removeRoutesMutex.Lock()
 	ret, specificReturn := fake.removeRoutesReturnsOnCall[len(fake.removeRoutesArgsForCall)]
 	fake.removeRoutesArgsForCall = append(fake.removeRoutesArgsForCall, struct {
-		key    routing_table.RoutingKey
+		key    endpoint.RoutingKey
 		modTag *models.ModificationTag
 	}{key, modTag})
 	fake.recordInvocation("RemoveRoutes", []interface{}{key, modTag})
@@ -331,7 +332,7 @@ func (fake *FakeNATSRoutingTable) RemoveRoutesCallCount() int {
 	return len(fake.removeRoutesArgsForCall)
 }
 
-func (fake *FakeNATSRoutingTable) RemoveRoutesArgsForCall(i int) (routing_table.RoutingKey, *models.ModificationTag) {
+func (fake *FakeNATSRoutingTable) RemoveRoutesArgsForCall(i int) (endpoint.RoutingKey, *models.ModificationTag) {
 	fake.removeRoutesMutex.RLock()
 	defer fake.removeRoutesMutex.RUnlock()
 	return fake.removeRoutesArgsForCall[i].key, fake.removeRoutesArgsForCall[i].modTag
@@ -356,17 +357,17 @@ func (fake *FakeNATSRoutingTable) RemoveRoutesReturnsOnCall(i int, result1 routi
 	}{result1}
 }
 
-func (fake *FakeNATSRoutingTable) AddEndpoint(key routing_table.RoutingKey, endpoint routing_table.Endpoint) routing_table.MessagesToEmit {
+func (fake *FakeNATSRoutingTable) AddEndpoint(key endpoint.RoutingKey, routingEndpoint routing_table.Endpoint) routing_table.MessagesToEmit {
 	fake.addEndpointMutex.Lock()
 	ret, specificReturn := fake.addEndpointReturnsOnCall[len(fake.addEndpointArgsForCall)]
 	fake.addEndpointArgsForCall = append(fake.addEndpointArgsForCall, struct {
-		key      routing_table.RoutingKey
-		endpoint routing_table.Endpoint
-	}{key, endpoint})
-	fake.recordInvocation("AddEndpoint", []interface{}{key, endpoint})
+		key             endpoint.RoutingKey
+		routingEndpoint routing_table.Endpoint
+	}{key, routingEndpoint})
+	fake.recordInvocation("AddEndpoint", []interface{}{key, routingEndpoint})
 	fake.addEndpointMutex.Unlock()
 	if fake.AddEndpointStub != nil {
-		return fake.AddEndpointStub(key, endpoint)
+		return fake.AddEndpointStub(key, routingEndpoint)
 	}
 	if specificReturn {
 		return ret.result1
@@ -380,10 +381,10 @@ func (fake *FakeNATSRoutingTable) AddEndpointCallCount() int {
 	return len(fake.addEndpointArgsForCall)
 }
 
-func (fake *FakeNATSRoutingTable) AddEndpointArgsForCall(i int) (routing_table.RoutingKey, routing_table.Endpoint) {
+func (fake *FakeNATSRoutingTable) AddEndpointArgsForCall(i int) (endpoint.RoutingKey, routing_table.Endpoint) {
 	fake.addEndpointMutex.RLock()
 	defer fake.addEndpointMutex.RUnlock()
-	return fake.addEndpointArgsForCall[i].key, fake.addEndpointArgsForCall[i].endpoint
+	return fake.addEndpointArgsForCall[i].key, fake.addEndpointArgsForCall[i].routingEndpoint
 }
 
 func (fake *FakeNATSRoutingTable) AddEndpointReturns(result1 routing_table.MessagesToEmit) {
@@ -405,17 +406,17 @@ func (fake *FakeNATSRoutingTable) AddEndpointReturnsOnCall(i int, result1 routin
 	}{result1}
 }
 
-func (fake *FakeNATSRoutingTable) RemoveEndpoint(key routing_table.RoutingKey, endpoint routing_table.Endpoint) routing_table.MessagesToEmit {
+func (fake *FakeNATSRoutingTable) RemoveEndpoint(key endpoint.RoutingKey, routingEndpoint routing_table.Endpoint) routing_table.MessagesToEmit {
 	fake.removeEndpointMutex.Lock()
 	ret, specificReturn := fake.removeEndpointReturnsOnCall[len(fake.removeEndpointArgsForCall)]
 	fake.removeEndpointArgsForCall = append(fake.removeEndpointArgsForCall, struct {
-		key      routing_table.RoutingKey
-		endpoint routing_table.Endpoint
-	}{key, endpoint})
-	fake.recordInvocation("RemoveEndpoint", []interface{}{key, endpoint})
+		key             endpoint.RoutingKey
+		routingEndpoint routing_table.Endpoint
+	}{key, routingEndpoint})
+	fake.recordInvocation("RemoveEndpoint", []interface{}{key, routingEndpoint})
 	fake.removeEndpointMutex.Unlock()
 	if fake.RemoveEndpointStub != nil {
-		return fake.RemoveEndpointStub(key, endpoint)
+		return fake.RemoveEndpointStub(key, routingEndpoint)
 	}
 	if specificReturn {
 		return ret.result1
@@ -429,10 +430,10 @@ func (fake *FakeNATSRoutingTable) RemoveEndpointCallCount() int {
 	return len(fake.removeEndpointArgsForCall)
 }
 
-func (fake *FakeNATSRoutingTable) RemoveEndpointArgsForCall(i int) (routing_table.RoutingKey, routing_table.Endpoint) {
+func (fake *FakeNATSRoutingTable) RemoveEndpointArgsForCall(i int) (endpoint.RoutingKey, routing_table.Endpoint) {
 	fake.removeEndpointMutex.RLock()
 	defer fake.removeEndpointMutex.RUnlock()
-	return fake.removeEndpointArgsForCall[i].key, fake.removeEndpointArgsForCall[i].endpoint
+	return fake.removeEndpointArgsForCall[i].key, fake.removeEndpointArgsForCall[i].routingEndpoint
 }
 
 func (fake *FakeNATSRoutingTable) RemoveEndpointReturns(result1 routing_table.MessagesToEmit) {
@@ -454,11 +455,11 @@ func (fake *FakeNATSRoutingTable) RemoveEndpointReturnsOnCall(i int, result1 rou
 	}{result1}
 }
 
-func (fake *FakeNATSRoutingTable) EndpointsForIndex(key routing_table.RoutingKey, index int32) []routing_table.Endpoint {
+func (fake *FakeNATSRoutingTable) EndpointsForIndex(key endpoint.RoutingKey, index int32) []routing_table.Endpoint {
 	fake.endpointsForIndexMutex.Lock()
 	ret, specificReturn := fake.endpointsForIndexReturnsOnCall[len(fake.endpointsForIndexArgsForCall)]
 	fake.endpointsForIndexArgsForCall = append(fake.endpointsForIndexArgsForCall, struct {
-		key   routing_table.RoutingKey
+		key   endpoint.RoutingKey
 		index int32
 	}{key, index})
 	fake.recordInvocation("EndpointsForIndex", []interface{}{key, index})
@@ -478,7 +479,7 @@ func (fake *FakeNATSRoutingTable) EndpointsForIndexCallCount() int {
 	return len(fake.endpointsForIndexArgsForCall)
 }
 
-func (fake *FakeNATSRoutingTable) EndpointsForIndexArgsForCall(i int) (routing_table.RoutingKey, int32) {
+func (fake *FakeNATSRoutingTable) EndpointsForIndexArgsForCall(i int) (endpoint.RoutingKey, int32) {
 	fake.endpointsForIndexMutex.RLock()
 	defer fake.endpointsForIndexMutex.RUnlock()
 	return fake.endpointsForIndexArgsForCall[i].key, fake.endpointsForIndexArgsForCall[i].index

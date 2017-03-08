@@ -16,6 +16,7 @@ func DesiredLRPData(lrp *models.DesiredLRPSchedulingInfo) lager.Data {
 	return lager.Data{
 		"process-guid": lrp.ProcessGuid,
 		"routes":       logRoutes,
+		"instances":    lrp.GetInstances(),
 	}
 }
 
