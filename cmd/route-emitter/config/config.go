@@ -11,6 +11,21 @@ import (
 	"code.cloudfoundry.org/locket"
 )
 
+type RoutingAPIConfig struct {
+	URI          string `yaml:"uri"`
+	Port         int    `yaml:"port"`
+	AuthDisabled bool   `yaml:"auth_disabled"`
+}
+
+type OAuthConfig struct {
+	TokenEndpoint     string `yaml:"token_endpoint"`
+	Port              int    `yaml:"port"`
+	SkipSSLValidation bool   `yaml:"skip_ssl_validation"`
+	ClientName        string `yaml:"client_name"`
+	ClientSecret      string `yaml:"client_secret"`
+	CACerts           string `yaml:"ca_certs"`
+}
+
 type RouteEmitterConfig struct {
 	BBSAddress                         string                `json:"bbs_address"`
 	BBSCACertFile                      string                `json:"bbs_ca_cert_file"`
@@ -32,6 +47,8 @@ type RouteEmitterConfig struct {
 	NATSPassword                       string                `json:"nats_password,omitempty"`
 	RouteEmittingWorkers               int                   `json:"route_emitting_workers,omitempty"`
 	SyncInterval                       durationjson.Duration `json:"sync_interval,omitempty"`
+	OAuth                              OAuthConfig           `yaml:"oauth"`
+	RoutingAPI                         RoutingAPIConfig      `yaml:"routing_api"`
 	lagerflags.LagerConfig
 	debugserver.DebugServerConfig
 }
