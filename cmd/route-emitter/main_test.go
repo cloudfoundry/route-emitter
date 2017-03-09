@@ -17,7 +17,10 @@ import (
 	"time"
 
 	"code.cloudfoundry.org/bbs/models"
+	"code.cloudfoundry.org/bbs/test_helpers"
+	"code.cloudfoundry.org/bbs/test_helpers/sqlrunner"
 	"code.cloudfoundry.org/durationjson"
+	"code.cloudfoundry.org/lager/lagerflags"
 	"code.cloudfoundry.org/route-emitter/cmd/route-emitter/config"
 	"code.cloudfoundry.org/route-emitter/routing_table"
 	. "code.cloudfoundry.org/route-emitter/routing_table/matchers"
@@ -75,6 +78,9 @@ var _ = Describe("Route Emitter", func() {
 			LockRetryInterval:    durationjson.Duration(time.Second),
 			LockTTL:              durationjson.Duration(5 * time.Second),
 			ConsulCluster:        consulClusterAddress,
+			LagerConfig: lagerflags.LagerConfig{
+				LogLevel: lagerflags.DEBUG,
+			},
 		}
 		for _, f := range modifyConfig {
 			f(&cfg)
@@ -93,6 +99,8 @@ var _ = Describe("Route Emitter", func() {
 				string(emitterPath),
 				"-config", configPath,
 			),
+
+			Name: sessionName,
 
 			StartCheck: "route-emitter.watcher.sync.complete",
 
@@ -200,8 +208,8 @@ var _ = Describe("Route Emitter", func() {
 			runner                     *ginkgomon.Runner
 			cfgs                       []func(*config.RouteEmitterConfig)
 			routingAPIArgs             routingtestrunner.Args
-			dbAllocator                routingtestrunner.DbAllocator
-			dbId                       string
+			sqlRunner                  sqlrunner.SQLRunner
+			sqlProcess                 ifrit.Process
 		)
 
 		BeforeEach(func() {
@@ -209,22 +217,26 @@ var _ = Describe("Route Emitter", func() {
 			bbsServer = ghttp.NewServer()
 			bbsServer.AllowUnhandledRequests = true
 			bbsServer.UnhandledRequestStatusCode = http.StatusOK
-			routingApiClient = routing_api.NewClient(routingAPIAddress, false)
-
 			routingAPIPort = uint16(6900 + GinkgoParallelNode())
 			routingAPIAddress = fmt.Sprintf("http://127.0.0.1:%d", routingAPIPort)
+			routingApiClient = routing_api.NewClient(routingAPIAddress, false)
 
 			expectedTcpRouteMapping = apimodels.NewTcpRouteMapping("", 5222, "some-ip", 62003, 120)
 			notExpectedTcpRouteMapping = apimodels.NewTcpRouteMapping("", 1883, "some-ip-1", 62003, 120)
-			dbAllocator = routingtestrunner.NewDbAllocator(4001 + GinkgoParallelNode())
+			dbName := fmt.Sprintf("routingapi_%d", GinkgoParallelNode())
+			sqlRunner = test_helpers.NewSQLRunner(dbName)
+			sqlProcess = ginkgomon.Invoke(sqlRunner)
 			var err error
-			dbId, err = dbAllocator.Create()
 			routingAPIArgs, err = routingtestrunner.NewRoutingAPIArgs(
 				"127.0.0.1",
 				routingAPIPort,
-				dbId,
+				dbName,
 				consulRunner.URL())
 			Expect(err).NotTo(HaveOccurred())
+		})
+
+		AfterEach(func() {
+			ginkgomon.Interrupt(sqlProcess)
 		})
 
 		getDesiredLRP := func(processGuid, logGuid, routerGroupGuid string, externalPort, containerPort, modificationIndex uint32) models.DesiredLRP {
@@ -279,7 +291,7 @@ var _ = Describe("Route Emitter", func() {
 					w.WriteHeader(http.StatusOK)
 					w.Write(data)
 				})
-			server.RouteToHandler("POST", "/v1/desired_lrps/list.r1",
+			server.RouteToHandler("POST", "/v1/desired_lrps/list.r2",
 				func(w http.ResponseWriter, req *http.Request) {
 					desiredLRP1 := getDesiredLRP("some-guid", "log-guid", routerGroupGuid, 5222, 5222, 1)
 					desiredLRPs := []*models.DesiredLRP{
@@ -397,7 +409,7 @@ var _ = Describe("Route Emitter", func() {
 		})
 
 		AfterEach(func() {
-			ginkgomon.Interrupt(emitter)
+			ginkgomon.Interrupt(emitter, emitterInterruptTimeout)
 		})
 
 		Context("when tcp emitter cannot connect to bbs", func() {
@@ -445,7 +457,6 @@ var _ = Describe("Route Emitter", func() {
 			AfterEach(func() {
 				defer close(exitChannel)
 				logger.Info("shutting-down")
-				ginkgomon.Interrupt(emitter)
 				ginkgomon.Interrupt(routingApiProcess)
 			})
 
@@ -482,19 +493,20 @@ var _ = Describe("Route Emitter", func() {
 				cfgs = append(cfgs, func(cfg *config.RouteEmitterConfig) {
 					cfg.BBSAddress = bbsServer.URL()
 					cfg.SyncInterval = durationjson.Duration(1 * time.Second)
+					cfg.RoutingAPI.URI = "http://127.0.0.1"
+					cfg.RoutingAPI.Port = int(routingAPIPort)
 				})
 			})
 
 			AfterEach(func() {
 				defer close(exitChannel)
 				logger.Info("shutting-down")
-				ginkgomon.Interrupt(emitter)
-				ginkgomon.Interrupt(routingApiProcess)
+				ginkgomon.Interrupt(routingApiProcess, 10*time.Second)
 			})
 
 			It("does not call oauth server to get the auth token", func() {
 				Eventually(runner.Buffer()).Should(gbytes.Say("creating-noop-uaa-client"))
-				Eventually(runner.Buffer()).Should(gbytes.Say("tcp-emitter.started"))
+				Eventually(runner.Buffer()).Should(gbytes.Say("emitter1.started"))
 				Eventually(runner.Buffer()).Should(gbytes.Say("successfully-emitted-registration-events"))
 				checkTcpRouteMapping(expectedTcpRouteMapping, true)
 			})

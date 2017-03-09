@@ -110,12 +110,13 @@ func main() {
 	// 	os.Exit(1)
 	// }
 
-	tcpEmitter := tcp_emitter.NewEmitter(logger, routingAPIClient, uaaClient, int(time.Duration(cfg.TCPRouteTTL).Seconds()))
-	tcpTable := schema.NewTable(logger, nil)
-	routingTableHandler := tcpRoutingTable.NewRoutingTableHandler(logger, tcpTable, tcpEmitter, bbsClient)
+	tcpLogger := logger.Session("tcp")
+	tcpEmitter := tcp_emitter.NewEmitter(tcpLogger, routingAPIClient, uaaClient, int(time.Duration(cfg.TCPRouteTTL).Seconds()))
+	tcpTable := schema.NewTable(tcpLogger, nil)
+	routingTableHandler := tcpRoutingTable.NewRoutingTableHandler(tcpLogger, tcpTable, tcpEmitter, bbsClient)
 	syncChannel := make(chan struct{})
-	tcpSyncRunner := tcpSyncer.New(clock, time.Duration(cfg.SyncInterval), syncChannel, logger)
-	tcpWatcherRunner := tcpWatcher.NewWatcher(bbsClient, clock, routingTableHandler, syncChannel, logger)
+	tcpSyncRunner := tcpSyncer.New(clock, time.Duration(cfg.SyncInterval), syncChannel, tcpLogger)
+	tcpWatcherRunner := tcpWatcher.NewWatcher(bbsClient, clock, routingTableHandler, syncChannel, tcpLogger)
 
 	lockMaintainer := initializeLockMaintainer(
 		logger,
