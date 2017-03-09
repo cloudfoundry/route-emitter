@@ -198,6 +198,7 @@ var _ = Describe("Route Emitter", func() {
 			cfgs                       []func(*config.RouteEmitterConfig)
 			sqlRunner                  sqlrunner.SQLRunner
 			sqlProcess                 ifrit.Process
+			cellID                     string
 		)
 
 		BeforeEach(func() {
@@ -240,7 +241,7 @@ var _ = Describe("Route Emitter", func() {
 		}
 
 		JustBeforeEach(func() {
-			runner = createEmitterRunner("emitter1", "", cfgs...)
+			runner = createEmitterRunner("emitter1", cellID, cfgs...)
 			runner.StartCheck = "emitter1.started"
 			emitter = ginkgomon.Invoke(runner)
 		})
@@ -330,6 +331,19 @@ var _ = Describe("Route Emitter", func() {
 						mappings, _ := routingAPIRunner.GetClient().TcpRouteMappings()
 						return contains(mappings, expectedTcpRouteMapping)
 					}, 5*time.Second).Should(BeTrue())
+				})
+
+				Context("and the route-emitter cell id doesn't match the actual lrp cell", func() {
+					BeforeEach(func() {
+						cellID = "some-random-cell-id"
+					})
+
+					It("does not emit the route", func() {
+						Consistently(func() bool {
+							mappings, _ := routingAPIRunner.GetClient().TcpRouteMappings()
+							return contains(mappings, expectedTcpRouteMapping)
+						}, 5*time.Second).Should(BeFalse())
+					})
 				})
 
 				Context("the instance has no routes", func() {
@@ -518,10 +532,11 @@ var _ = Describe("Route Emitter", func() {
 		var (
 			emitter ifrit.Process
 			runner  *ginkgomon.Runner
+			cellID  string
 		)
 
-		BeforeEach(func() {
-			runner = createEmitterRunner("emitter1", "")
+		JustBeforeEach(func() {
+			runner = createEmitterRunner("emitter1", cellID)
 			runner.StartCheck = "emitter1.started"
 			emitter = ginkgomon.Invoke(runner)
 		})
@@ -565,7 +580,7 @@ var _ = Describe("Route Emitter", func() {
 					var msg3 routing_table.RegistryMessage
 					var msg4 routing_table.RegistryMessage
 
-					BeforeEach(func() {
+					JustBeforeEach(func() {
 						// ensure it's seen the route at least once
 						Eventually(registeredRoutes).Should(Receive(&msg1))
 						Eventually(registeredRoutes).Should(Receive(&msg2))
@@ -614,6 +629,16 @@ var _ = Describe("Route Emitter", func() {
 							Tags:                 map[string]string{"component": "route-emitter"},
 						}),
 					))
+				})
+
+				Context("and the route-emitter cell id doesn't match the actual lrp cell", func() {
+					BeforeEach(func() {
+						cellID = "some-random-cell-id"
+					})
+
+					It("does not emit the route", func() {
+						Consistently(registeredRoutes).ShouldNot(Receive())
+					})
 				})
 			})
 
@@ -703,7 +728,7 @@ var _ = Describe("Route Emitter", func() {
 					var msg3 routing_table.RegistryMessage
 					var msg4 routing_table.RegistryMessage
 
-					BeforeEach(func() {
+					JustBeforeEach(func() {
 						// ensure it's seen the route at least once
 						Eventually(registeredRoutes).Should(Receive(&msg1))
 						Eventually(registeredRoutes).Should(Receive(&msg2))
@@ -765,7 +790,7 @@ var _ = Describe("Route Emitter", func() {
 			})
 
 			Context("and the first emitter goes away", func() {
-				BeforeEach(func() {
+				JustBeforeEach(func() {
 					ginkgomon.Interrupt(emitter, emitterInterruptTimeout)
 				})
 
