@@ -86,6 +86,7 @@ var _ = Describe("Config", func() {
 			LockTTL:                            durationjson.Duration(20 * time.Second),
 			ConsulSessionName:                  "myconsulsession",
 			RouteEmittingWorkers:               18,
+			TCPRouteTTL:                        durationjson.Duration(2 * time.Minute),
 			DebugServerConfig: debugserver.DebugServerConfig{
 				DebugAddress: "127.0.0.1:9999",
 			},
@@ -114,43 +115,6 @@ var _ = Describe("Config", func() {
 			Expect(err).To(HaveOccurred())
 		})
 	})
-
-	// Context("tcp route emitter configs", func() {
-	// 	XContext("when oauth section has some missing fields", func() {
-	// 		It("loads config and defaults missing fields", func() {
-	// 			expectedCfg := config.Config{
-	// 				OAuth: config.OAuthConfig{
-	// 					TokenEndpoint:     "uaa.service.cf.internal",
-	// 					Port:              8443,
-	// 					SkipSSLValidation: true,
-	// 					ClientName:        "",
-	// 					ClientSecret:      "",
-	// 				},
-	// 				RoutingAPI: config.RoutingAPIConfig{
-	// 					URI:  "http://routing-api.service.cf.internal",
-	// 					Port: 3000,
-	// 				},
-	// 			}
-	// 			cfg, err := config.New("fixtures/missing_oauth_fields.yml")
-	// 			Expect(err).NotTo(HaveOccurred())
-	// 			Expect(*cfg).To(Equal(expectedCfg))
-	// 		})
-	// 	})
-
-	// 	XContext("when oauth section is  missing", func() {
-	// 		It("loads only routing api section", func() {
-	// 			expectedCfg := config.Config{
-	// 				RoutingAPI: config.RoutingAPIConfig{
-	// 					URI:  "http://routing-api.service.cf.internal",
-	// 					Port: 3000,
-	// 				},
-	// 			}
-	// 			cfg, err := config.New("fixtures/no_oauth.yml")
-	// 			Expect(err).NotTo(HaveOccurred())
-	// 			Expect(*cfg).To(Equal(expectedCfg))
-	// 		})
-	// 	})
-	// })
 
 	Context("DefaultConfig", func() {
 		BeforeEach(func() {

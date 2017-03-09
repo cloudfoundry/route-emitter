@@ -1,7 +1,6 @@
 package main_test
 
 import (
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,8 +10,6 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"os/exec"
-	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -22,24 +19,20 @@ import (
 	"code.cloudfoundry.org/durationjson"
 	"code.cloudfoundry.org/lager/lagerflags"
 	"code.cloudfoundry.org/route-emitter/cmd/route-emitter/config"
+	"code.cloudfoundry.org/route-emitter/cmd/route-emitter/runners"
 	"code.cloudfoundry.org/route-emitter/routing_table"
 	. "code.cloudfoundry.org/route-emitter/routing_table/matchers"
-	"code.cloudfoundry.org/routing-api"
-	routingtestrunner "code.cloudfoundry.org/routing-api/cmd/routing-api/testrunner"
 	apimodels "code.cloudfoundry.org/routing-api/models"
 	"code.cloudfoundry.org/routing-info/cfroutes"
 	"code.cloudfoundry.org/routing-info/tcp_routes"
 	"github.com/cloudfoundry/sonde-go/events"
-	"github.com/gogo/protobuf/proto"
 	"github.com/nats-io/nats"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gbytes"
-	"github.com/onsi/gomega/ghttp"
 	"github.com/onsi/gomega/types"
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/ifrit/ginkgomon"
-	"github.com/vito/go-sse/sse"
 )
 
 const emitterInterruptTimeout = 5 * time.Second
@@ -200,50 +193,27 @@ var _ = Describe("Route Emitter", func() {
 		var (
 			expectedTcpRouteMapping    apimodels.TcpRouteMapping
 			notExpectedTcpRouteMapping apimodels.TcpRouteMapping
-			bbsServer                  *ghttp.Server
-			routingApiClient           routing_api.Client
-			routingAPIAddress          string
-			routingAPIPort             uint16
 			emitter                    ifrit.Process
 			runner                     *ginkgomon.Runner
 			cfgs                       []func(*config.RouteEmitterConfig)
-			routingAPIArgs             routingtestrunner.Args
 			sqlRunner                  sqlrunner.SQLRunner
 			sqlProcess                 ifrit.Process
 		)
 
 		BeforeEach(func() {
 			cfgs = nil
-			bbsServer = ghttp.NewServer()
-			bbsServer.AllowUnhandledRequests = true
-			bbsServer.UnhandledRequestStatusCode = http.StatusOK
-			routingAPIPort = uint16(6900 + GinkgoParallelNode())
-			routingAPIAddress = fmt.Sprintf("http://127.0.0.1:%d", routingAPIPort)
-			routingApiClient = routing_api.NewClient(routingAPIAddress, false)
-
 			expectedTcpRouteMapping = apimodels.NewTcpRouteMapping("", 5222, "some-ip", 62003, 120)
 			notExpectedTcpRouteMapping = apimodels.NewTcpRouteMapping("", 1883, "some-ip-1", 62003, 120)
 			dbName := fmt.Sprintf("routingapi_%d", GinkgoParallelNode())
 			sqlRunner = test_helpers.NewSQLRunner(dbName)
 			sqlProcess = ginkgomon.Invoke(sqlRunner)
-			var err error
-			routingAPIArgs, err = routingtestrunner.NewRoutingAPIArgs(
-				"127.0.0.1",
-				routingAPIPort,
-				dbName,
-				consulRunner.URL())
-			Expect(err).NotTo(HaveOccurred())
 		})
 
 		AfterEach(func() {
 			ginkgomon.Interrupt(sqlProcess)
 		})
 
-		getDesiredLRP := func(processGuid, logGuid, routerGroupGuid string, externalPort, containerPort, modificationIndex uint32) models.DesiredLRP {
-			desiredLRP := models.DesiredLRP{}
-			desiredLRP.ProcessGuid = processGuid
-			desiredLRP.Ports = []uint32{containerPort}
-			desiredLRP.LogGuid = logGuid
+		getDesiredLRP := func(processGuid, routerGroupGuid string, externalPort, containerPort uint32) models.DesiredLRP {
 			tcpRoutes := tcp_routes.TCPRoutes{
 				tcp_routes.TCPRoute{
 					RouterGroupGuid: routerGroupGuid,
@@ -251,154 +221,21 @@ var _ = Describe("Route Emitter", func() {
 					ContainerPort:   containerPort,
 				},
 			}
-			desiredLRP.Routes = tcpRoutes.RoutingInfo()
-			desiredLRP.ModificationTag = &models.ModificationTag{Epoch: "abc", Index: modificationIndex}
-			return desiredLRP
-		}
 
-		getActualLRP := func(processGuid, instanceGuid, ipAddress string, containerPort uint32) models.ActualLRPGroup {
-			return models.ActualLRPGroup{
-				Instance: &models.ActualLRP{
-					ActualLRPKey:         models.NewActualLRPKey(processGuid, 0, "domain"),
-					ActualLRPInstanceKey: models.NewActualLRPInstanceKey(instanceGuid, "cell-id-1"),
-					ActualLRPNetInfo: models.NewActualLRPNetInfo(
-						ipAddress,
-						models.NewPortMapping(62003, containerPort),
-					),
-					State: models.ActualLRPStateRunning,
-				},
-				Evacuating: nil,
-			}
-		}
-
-		setupBbsServer := func(server *ghttp.Server, includeSecondLRP bool, exitChannel chan struct{}, routerGroupGuid string) {
-			server.RouteToHandler("POST", "/v1/actual_lrp_groups/list",
-				func(w http.ResponseWriter, req *http.Request) {
-					actualLRP1 := getActualLRP("some-guid", "instance-guid", "some-ip", 5222)
-					actualLRPs := []*models.ActualLRPGroup{
-						&actualLRP1,
-					}
-					if includeSecondLRP {
-						actualLRP2 := getActualLRP("some-guid-1", "instance-guid-1", "some-ip-1", 1883)
-						actualLRPs = append(actualLRPs, &actualLRP2)
-					}
-					actualLRPResponse := models.ActualLRPGroupsResponse{
-						ActualLrpGroups: actualLRPs,
-					}
-					data, _ := proto.Marshal(&actualLRPResponse)
-					w.Header().Set("Content-Length", strconv.Itoa(len(data)))
-					w.Header().Set("Content-Type", "application/x-protobuf")
-					w.WriteHeader(http.StatusOK)
-					w.Write(data)
-				})
-			server.RouteToHandler("POST", "/v1/desired_lrps/list.r2",
-				func(w http.ResponseWriter, req *http.Request) {
-					desiredLRP1 := getDesiredLRP("some-guid", "log-guid", routerGroupGuid, 5222, 5222, 1)
-					desiredLRPs := []*models.DesiredLRP{
-						&desiredLRP1,
-					}
-					if includeSecondLRP {
-						desiredLRP2 := getDesiredLRP("some-guid-1", "log-guid-1", routerGroupGuid, 1883, 1883, 1)
-						desiredLRPs = append(desiredLRPs, &desiredLRP2)
-					}
-					desiredLRPResponse := models.DesiredLRPsResponse{
-						DesiredLrps: desiredLRPs,
-					}
-					data, _ := proto.Marshal(&desiredLRPResponse)
-					w.Header().Set("Content-Length", strconv.Itoa(len(data)))
-					w.Header().Set("Content-Type", "application/x-protobuf")
-					w.WriteHeader(http.StatusOK)
-					w.Write(data)
-				})
-
-			deletedDesiredLRP := getDesiredLRP("some-guid-1", "log-guid-1", routerGroupGuid, 1883, 1883, 2)
-			desiredLRPEvent := models.NewDesiredLRPRemovedEvent(&deletedDesiredLRP)
-			eventData, err := proto.Marshal(desiredLRPEvent)
-			b64EventData := base64.StdEncoding.EncodeToString(eventData)
-
-			Expect(err).ToNot(HaveOccurred())
-			sseEvent := sse.Event{
-				ID:   "1",
-				Name: models.EventTypeDesiredLRPRemoved,
-				Data: []byte(b64EventData),
-			}
-			server.RouteToHandler("GET", "/v1/events",
-				func(w http.ResponseWriter, req *http.Request) {
-					flusher := w.(http.Flusher)
-					headers := w.Header()
-					headers["Content-Type"] = []string{"text/event-stream; charset=utf-8"}
-					w.WriteHeader(http.StatusOK)
-					flusher.Flush()
-					for {
-						select {
-						case <-exitChannel:
-							return
-						default:
-							sseEvent.Write(w)
-							flusher.Flush()
-							time.Sleep(1 * time.Second)
-						}
-					}
-				})
-
-			server.RouteToHandler("POST", "/v1/ping",
-				func(w http.ResponseWriter, req *http.Request) {
-					response := &models.PingResponse{}
-					response.Available = true
-					responseBytes, err := proto.Marshal(response)
-					Expect(err).NotTo(HaveOccurred())
-
-					w.Header().Set("Content-Length", strconv.Itoa(len(responseBytes)))
-					w.Header().Set("Content-Type", "application/x-protobuf")
-					w.WriteHeader(http.StatusOK)
-
-					w.Write(responseBytes)
-				})
-		}
-
-		getRouterGroupGuid := func(port uint16) string {
-			client := routing_api.NewClient(fmt.Sprintf("http://127.0.0.1:%d", port), false)
-			var routerGroups []apimodels.RouterGroup
-			Eventually(func() error {
-				var err error
-				routerGroups, err = client.RouterGroups()
-				return err
-			}, "30s", "1s").ShouldNot(HaveOccurred(), "Failed to connect to Routing API server after 30s.")
-			Expect(routerGroups).ToNot(HaveLen(0))
-			return routerGroups[0].Guid
-		}
-
-		setupRoutingApiServer := func(path string, args routingtestrunner.Args) (ifrit.Process, string) {
-			routingApiServer := routingtestrunner.New(path, args)
-			process := ifrit.Invoke(routingApiServer)
-			routerGroupGuid := getRouterGroupGuid(args.Port)
-			expectedTcpRouteMapping.RouterGroupGuid = routerGroupGuid
-			notExpectedTcpRouteMapping.RouterGroupGuid = routerGroupGuid
-			return process, routerGroupGuid
-		}
-
-		eventsEndpointRequests := func() int {
-			requests := make([]*http.Request, 0)
-			receivedRequests := bbsServer.ReceivedRequests()
-			for _, req := range receivedRequests {
-				if strings.Contains(req.RequestURI, "/v1/events") {
-					requests = append(requests, req)
-				}
-			}
-			return len(requests)
-		}
-
-		checkTcpRouteMapping := func(tcpRouteMapping apimodels.TcpRouteMapping, present bool) {
-			if present {
-				Eventually(func() bool {
-					mappings, _ := routingApiClient.TcpRouteMappings()
-					return contains(mappings, tcpRouteMapping)
-				}, 5*time.Second).Should(BeTrue())
-			} else {
-				Eventually(func() []apimodels.TcpRouteMapping {
-					tcpRouteMappings, _ := routingApiClient.TcpRouteMappings()
-					return tcpRouteMappings
-				}, 5*time.Second).ShouldNot(ContainElement(tcpRouteMapping))
+			return models.DesiredLRP{
+				Domain:      domain,
+				ProcessGuid: processGuid,
+				Ports:       []uint32{containerPort},
+				Routes:      tcpRoutes.RoutingInfo(),
+				Instances:   5,
+				RootFs:      "some:rootfs",
+				MemoryMb:    1024,
+				DiskMb:      512,
+				LogGuid:     "some-log-guid",
+				Action: models.WrapAction(&models.RunAction{
+					User: "me",
+					Path: "ls",
+				}),
 			}
 		}
 
@@ -412,56 +249,206 @@ var _ = Describe("Route Emitter", func() {
 			ginkgomon.Interrupt(emitter, emitterInterruptTimeout)
 		})
 
-		Context("when tcp emitter cannot connect to bbs", func() {
-			Context("when invalid bbs address is passed to tcp emitter", func() {
+		Context("and an lrp with routes is desired", func() {
+			var (
+				routingApiProcess      ifrit.Process
+				routingAPIRunner       *runners.RoutingAPIRunner
+				expectedTCPProcessGUID string
+				desiredLRP             models.DesiredLRP
+			)
+
+			BeforeEach(func() {
+				var err error
+				routingAPIRunner, err = runners.NewRoutingAPIRunner(routingAPIPath, consulRunner.URL(), sqlRunner)
+				Expect(err).NotTo(HaveOccurred())
+				routingApiProcess = ginkgomon.Invoke(routingAPIRunner)
+				var routerGUID string
+				Eventually(func() error {
+					guid, err := routingAPIRunner.GetGUID()
+					if err != nil {
+						return err
+					}
+					expectedTcpRouteMapping.RouterGroupGuid = guid
+					notExpectedTcpRouteMapping.RouterGroupGuid = guid
+					routerGUID = guid
+					return nil
+				}).Should(Succeed())
+				logger.Info("started-routing-api-server")
+				cfgs = append(cfgs, func(cfg *config.RouteEmitterConfig) {
+					cfg.BBSAddress = bbsURL.String()
+					cfg.SyncInterval = durationjson.Duration(1 * time.Second)
+					cfg.RoutingAPI.URI = "http://127.0.0.1"
+					cfg.RoutingAPI.Port = routingAPIRunner.Config.Port
+				})
+
+				expectedTCPProcessGUID = "some-guid"
+				desiredLRP = getDesiredLRP(expectedTCPProcessGUID, routerGUID, 5222, 5222)
+			})
+
+			JustBeforeEach(func() {
+				Expect(bbsClient.DesireLRP(logger, &desiredLRP)).NotTo(HaveOccurred())
+			})
+
+			AfterEach(func() {
+				logger.Info("shutting-down")
+				ginkgomon.Interrupt(routingApiProcess, 10*time.Second)
+			})
+
+			Context("and an instance is started", func() {
 				BeforeEach(func() {
-					cfgs = append(cfgs, func(cfg *config.RouteEmitterConfig) {
-						cfg.BBSAddress = "127.0.0.1"
+					lrpKey = models.NewActualLRPKey(expectedTCPProcessGUID, 0, domain)
+					instanceKey = models.NewActualLRPInstanceKey("instance-guid", "cell-id")
+					netInfo = models.NewActualLRPNetInfo("some-ip", models.NewPortMapping(62003, 5222))
+					Expect(bbsClient.StartActualLRP(logger, &lrpKey, &instanceKey, &netInfo))
+				})
+
+				Context("when backing store loses its data", func() {
+					JustBeforeEach(func() {
+						// ensure it's seen the route at least once
+						Eventually(func() bool {
+							mappings, _ := routingAPIRunner.GetClient().TcpRouteMappings()
+							return contains(mappings, expectedTcpRouteMapping)
+						}, 5*time.Second).Should(BeTrue())
+
+						sqlRunner.Reset()
+
+						// Only start actual LRP, do not repopulate Desired
+						err := bbsClient.StartActualLRP(logger, &lrpKey, &instanceKey, &netInfo)
+						Expect(err).NotTo(HaveOccurred())
+					})
+
+					It("continues to broadcast routes", func() {
+						Consistently(func() bool {
+							mappings, _ := routingAPIRunner.GetClient().TcpRouteMappings()
+							return contains(mappings, expectedTcpRouteMapping)
+						}, 5*time.Second).Should(BeTrue())
 					})
 				})
 
-				It("fails to come up", func() {
-					Eventually(emitter.Wait()).Should(Receive())
-					Eventually(runner.Buffer()).Should(gbytes.Say("invalid-scheme-in-bbs-address"))
+				It("emits its routes immediately", func() {
+					Eventually(func() bool {
+						mappings, _ := routingAPIRunner.GetClient().TcpRouteMappings()
+						return contains(mappings, expectedTcpRouteMapping)
+					}, 5*time.Second).Should(BeTrue())
+				})
+
+				Context("the instance has no routes", func() {
+					var (
+						routes *models.Routes
+					)
+
+					BeforeEach(func() {
+						routes = desiredLRP.Routes
+						desiredLRP.Routes = &models.Routes{}
+					})
+
+					JustBeforeEach(func() {
+						Consistently(func() bool {
+							mappings, _ := routingAPIRunner.GetClient().TcpRouteMappings()
+							return contains(mappings, expectedTcpRouteMapping)
+						}, 5*time.Second).Should(BeFalse())
+					})
+
+					Context("and routes are added", func() {
+						JustBeforeEach(func() {
+							update := &models.DesiredLRPUpdate{
+								Routes: routes,
+							}
+							err := bbsClient.UpdateDesiredLRP(logger, desiredLRP.ProcessGuid, update)
+							Expect(err).NotTo(HaveOccurred())
+						})
+
+						It("immediately registers the route", func() {
+							Eventually(func() error {
+								mappings, err := routingAPIRunner.GetClient().TcpRouteMappings()
+								if err != nil {
+									return err
+								}
+
+								if !contains(mappings, expectedTcpRouteMapping) {
+									return fmt.Errorf("%v does not contain the route mappings", mappings)
+								}
+								return nil
+							}).Should(Succeed())
+						})
+					})
+				})
+
+				Context("and routes are removed", func() {
+					JustBeforeEach(func() {
+						Eventually(func() bool {
+							mappings, _ := routingAPIRunner.GetClient().TcpRouteMappings()
+							return contains(mappings, expectedTcpRouteMapping)
+						}, 5*time.Second).Should(BeTrue())
+						update := &models.DesiredLRPUpdate{
+							Routes: &models.Routes{},
+						}
+						err := bbsClient.UpdateDesiredLRP(logger, desiredLRP.ProcessGuid, update)
+						Expect(err).NotTo(HaveOccurred())
+					})
+
+					It("immediately unregisters the route", func() {
+						Eventually(func() error {
+							mappings, err := routingAPIRunner.GetClient().TcpRouteMappings()
+							if err != nil {
+								return err
+							}
+
+							if len(mappings) != 0 {
+								return fmt.Errorf("%v is not empty", mappings)
+							}
+
+							return nil
+						}).Should(Succeed())
+					})
 				})
 			})
 
-			Context("when the bbs host address does not exist or is down", func() {
-				BeforeEach(func() {
-					cfgs = append(cfgs, func(cfg *config.RouteEmitterConfig) {
-						cfg.BBSAddress = "http://127.0.0.1"
-					})
+			Context("and an instance is claimed", func() {
+				JustBeforeEach(func() {
+					err := bbsClient.ClaimActualLRP(logger, expectedTCPProcessGUID, int(index), &instanceKey)
+					Expect(err).NotTo(HaveOccurred())
 				})
 
-				It("fails to come up", func() {
-					Eventually(emitter.Wait()).Should(Receive())
-					Eventually(runner.Buffer()).Should(gbytes.Say("failed-to-connect-to-bbs"))
+				It("does not emit routes", func() {
+					Consistently(func() []apimodels.TcpRouteMapping {
+						mappings, _ := routingAPIRunner.GetClient().TcpRouteMappings()
+						return mappings
+					}).Should(BeEmpty())
 				})
 			})
 		})
 
 		Context("when routing api server is down but bbs is running", func() {
 			var (
-				exitChannel       chan struct{}
 				routingApiProcess ifrit.Process
+				routingAPIPort    int
 			)
 
 			BeforeEach(func() {
-				exitChannel = make(chan struct{})
-				setupBbsServer(bbsServer, false, exitChannel, "some-guid")
+				routingAPIPort = 6900 + GinkgoParallelNode()
 				cfgs = append(cfgs, func(cfg *config.RouteEmitterConfig) {
-					cfg.BBSAddress = bbsServer.URL()
+					cfg.BBSAddress = bbsURL.String()
+					cfg.RoutingAPI.URI = "http://127.0.0.1"
+					cfg.RoutingAPI.Port = int(routingAPIPort)
 				})
+
+				desiredLRP := getDesiredLRP("some-guid-1", "some-guid", 1883, 1883)
+				Expect(bbsClient.DesireLRP(logger, &desiredLRP)).NotTo(HaveOccurred())
+
+				key := models.NewActualLRPKey("some-guid-1", 0, domain)
+				instanceKey := models.NewActualLRPInstanceKey("instance-guid-1", "cell-id")
+				netInfo := models.NewActualLRPNetInfo("some-ip-1", models.NewPortMapping(62003, 1883))
+				Expect(bbsClient.StartActualLRP(logger, &key, &instanceKey, &netInfo))
 			})
 
 			AfterEach(func() {
-				defer close(exitChannel)
 				logger.Info("shutting-down")
-				ginkgomon.Interrupt(routingApiProcess)
+				ginkgomon.Interrupt(routingApiProcess, 10*time.Second)
 			})
 
 			It("starts an SSE connection to the bbs and continues to try to emit to routing api", func() {
-				Eventually(eventsEndpointRequests, 5*time.Second).Should(BeNumerically(">=", 1))
+				// Eventually(eventsEndpointRequests, 5*time.Second).Should(BeNumerically(">=", 1))
 
 				// Do not use Say matcher as ordering of 'subscribed-to-bbs-event' log message
 				// is not defined in relation to the 'tcp-emitter.started' message
@@ -472,45 +459,25 @@ var _ = Describe("Route Emitter", func() {
 				Consistently(emitter.Wait()).ShouldNot(Receive())
 
 				By("starting routing api server")
-				routingApiProcess, _ = setupRoutingApiServer(routingAPIPath, routingAPIArgs)
+				routingAPIRunner, err := runners.NewRoutingAPIRunner(routingAPIPath, consulRunner.URL(), sqlRunner, func(cfg *runners.Config) {
+					cfg.Port = routingAPIPort
+				})
+				Expect(err).NotTo(HaveOccurred())
+				routingApiProcess = ginkgomon.Invoke(routingAPIRunner)
+				Eventually(func() error {
+					guid, err := routingAPIRunner.GetGUID()
+					if err != nil {
+						return err
+					}
+					expectedTcpRouteMapping.RouterGroupGuid = guid
+					notExpectedTcpRouteMapping.RouterGroupGuid = guid
+					return nil
+				}).Should(Succeed())
 				logger.Info("started-routing-api-server")
 				Eventually(runner.Buffer()).Should(gbytes.Say("unable-to-upsert.*some-guid not found"))
 			})
 		})
 
-		Context("when routing api auth is disabled", func() {
-			var (
-				routingApiProcess ifrit.Process
-				exitChannel       chan struct{}
-				routerGroupGuid   string
-			)
-
-			BeforeEach(func() {
-				exitChannel = make(chan struct{})
-				routingApiProcess, routerGroupGuid = setupRoutingApiServer(routingAPIPath, routingAPIArgs)
-				setupBbsServer(bbsServer, true, exitChannel, routerGroupGuid)
-				logger.Info("started-routing-api-server")
-				cfgs = append(cfgs, func(cfg *config.RouteEmitterConfig) {
-					cfg.BBSAddress = bbsServer.URL()
-					cfg.SyncInterval = durationjson.Duration(1 * time.Second)
-					cfg.RoutingAPI.URI = "http://127.0.0.1"
-					cfg.RoutingAPI.Port = int(routingAPIPort)
-				})
-			})
-
-			AfterEach(func() {
-				defer close(exitChannel)
-				logger.Info("shutting-down")
-				ginkgomon.Interrupt(routingApiProcess, 10*time.Second)
-			})
-
-			It("does not call oauth server to get the auth token", func() {
-				Eventually(runner.Buffer()).Should(gbytes.Say("creating-noop-uaa-client"))
-				Eventually(runner.Buffer()).Should(gbytes.Say("emitter1.started"))
-				Eventually(runner.Buffer()).Should(gbytes.Say("successfully-emitted-registration-events"))
-				checkTcpRouteMapping(expectedTcpRouteMapping, true)
-			})
-		})
 	})
 
 	Context("does not start when NATS is not connected", func() {
