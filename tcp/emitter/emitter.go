@@ -1,8 +1,6 @@
 package emitter
 
 import (
-	"fmt"
-
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/route-emitter/tcp/routing_table/schema/endpoint"
 	"code.cloudfoundry.org/route-emitter/tcp/routing_table/schema/event"
@@ -58,7 +56,6 @@ func (emitter *tcpEmitter) Emit(routingEvents event.RoutingEvents) error {
 }
 
 func (emitter *tcpEmitter) emit(registrationMappingRequests, unregistrationMappingRequests []models.TcpRouteMapping) error {
-	fmt.Println("HELLLLLLOOOO")
 	emitted := true
 	if len(registrationMappingRequests) > 0 {
 		if err := emitter.routingAPIClient.UpsertTcpRouteMappings(registrationMappingRequests); err != nil {

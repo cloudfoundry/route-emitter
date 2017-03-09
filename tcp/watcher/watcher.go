@@ -1,7 +1,6 @@
 package watcher
 
 import (
-	"fmt"
 	"os"
 	"sync/atomic"
 
@@ -65,7 +64,6 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 			watcher.routingTableHandler.HandleEvent(event)
 
 		case <-watcher.syncChannel:
-			fmt.Println("********************WATCHER 2 sync")
 			watcher.routingTableHandler.Sync()
 
 		case err := <-resubscribeChannel:
