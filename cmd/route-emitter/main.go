@@ -23,7 +23,14 @@ import (
 	"code.cloudfoundry.org/route-emitter/nats_emitter"
 	"code.cloudfoundry.org/route-emitter/routing_table"
 	"code.cloudfoundry.org/route-emitter/syncer"
+	tcp_emitter "code.cloudfoundry.org/route-emitter/tcp/emitter"
+	tcpRoutingTable "code.cloudfoundry.org/route-emitter/tcp/routing_table"
+	"code.cloudfoundry.org/route-emitter/tcp/routing_table/schema"
+	tcpSyncer "code.cloudfoundry.org/route-emitter/tcp/syncer"
+	tcpWatcher "code.cloudfoundry.org/route-emitter/tcp/watcher"
 	"code.cloudfoundry.org/route-emitter/watcher"
+	"code.cloudfoundry.org/routing-api"
+	uaaclient "code.cloudfoundry.org/uaa-go-client"
 	"code.cloudfoundry.org/workpool"
 	"github.com/cloudfoundry/dropsonde"
 	"github.com/nu7hatch/gouuid"
@@ -68,11 +75,13 @@ func main() {
 
 	natsClientRunner := diegonats.NewClientRunner(cfg.NATSAddresses, cfg.NATSUsername, cfg.NATSPassword, logger, natsClient)
 
+	bbsClient := initializeBBSClient(logger, cfg)
+
 	table := initializeRoutingTable(logger)
 	emitter := initializeNatsEmitter(logger, natsClient, cfg.RouteEmittingWorkers)
 	watcher := watcher.NewWatcher(
 		cfg.CellID,
-		initializeBBSClient(logger, cfg),
+		bbsClient,
 		clock,
 		table,
 		emitter,
@@ -81,6 +90,32 @@ func main() {
 	)
 
 	consulClient := initializeConsulClient(logger, cfg.ConsulCluster)
+
+	routingAPIAddress := fmt.Sprintf("%s:%d", cfg.RoutingAPI.URI, cfg.RoutingAPI.Port)
+	logger.Debug("creating-routing-api-client", lager.Data{"api-location": routingAPIAddress})
+
+	routingAPIClient := routing_api.NewClient(routingAPIAddress, false)
+
+	// if cfg.TCPRouteTTL.Seconds() > 65535 {
+	// 	logger.Error("invalid-route-ttl", errors.New("route TTL value too large"))
+	// 	os.Exit(1)
+	// }
+	logger.Debug("creating-noop-uaa-client")
+	uaaClient := uaaclient.NewNoOpUaaClient()
+
+	// Check UAA connectivity
+	// _, err = uaaClient.FetchKey()
+	// if err != nil {
+	// 	logger.Error("failed-connecting-to-uaa", err)
+	// 	os.Exit(1)
+	// }
+
+	tcpEmitter := tcp_emitter.NewEmitter(logger, routingAPIClient, uaaClient, int(time.Duration(cfg.TCPRouteTTL).Seconds()))
+	tcpTable := schema.NewTable(logger, nil)
+	routingTableHandler := tcpRoutingTable.NewRoutingTableHandler(logger, tcpTable, tcpEmitter, bbsClient)
+	syncChannel := make(chan struct{})
+	tcpSyncRunner := tcpSyncer.New(clock, time.Duration(cfg.SyncInterval), syncChannel, logger)
+	tcpWatcherRunner := tcpWatcher.NewWatcher(bbsClient, clock, routingTableHandler, syncChannel, logger)
 
 	lockMaintainer := initializeLockMaintainer(
 		logger,
@@ -116,6 +151,8 @@ func main() {
 		grouper.Member{"consul-down-mode-notifier", consulDownModeNotifier},
 		grouper.Member{"watcher", watcher},
 		grouper.Member{"syncer", syncer},
+		grouper.Member{"tcp-watcher", tcpWatcherRunner},
+		grouper.Member{"tcp-syncer", tcpSyncRunner},
 	)
 
 	if cfg.DebugAddress != "" {

@@ -173,6 +173,7 @@ var _ = Describe("Config", func() {
 				NATSPassword:                       "nats",
 				RouteEmittingWorkers:               20,
 				SyncInterval:                       durationjson.Duration(time.Minute),
+				TCPRouteTTL:                        durationjson.Duration(2 * time.Minute),
 				LagerConfig: lagerflags.LagerConfig{
 					LogLevel: "info",
 				},
