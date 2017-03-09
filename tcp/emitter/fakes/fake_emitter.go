@@ -4,8 +4,8 @@ package fakes
 import (
 	"sync"
 
-	"code.cloudfoundry.org/tcp-emitter/emitter"
-	"code.cloudfoundry.org/tcp-emitter/routing_table/schema/event"
+	"code.cloudfoundry.org/route-emitter/tcp/emitter"
+	"code.cloudfoundry.org/route-emitter/tcp/routing_table/schema/event"
 )
 
 type FakeEmitter struct {
@@ -17,6 +17,8 @@ type FakeEmitter struct {
 	emitReturns struct {
 		result1 error
 	}
+	invocations      map[string][][]interface{}
+	invocationsMutex sync.RWMutex
 }
 
 func (fake *FakeEmitter) Emit(routingEvents event.RoutingEvents) error {
@@ -24,6 +26,7 @@ func (fake *FakeEmitter) Emit(routingEvents event.RoutingEvents) error {
 	fake.emitArgsForCall = append(fake.emitArgsForCall, struct {
 		routingEvents event.RoutingEvents
 	}{routingEvents})
+	fake.recordInvocation("Emit", []interface{}{routingEvents})
 	fake.emitMutex.Unlock()
 	if fake.EmitStub != nil {
 		return fake.EmitStub(routingEvents)
@@ -49,6 +52,26 @@ func (fake *FakeEmitter) EmitReturns(result1 error) {
 	fake.emitReturns = struct {
 		result1 error
 	}{result1}
+}
+
+func (fake *FakeEmitter) Invocations() map[string][][]interface{} {
+	fake.invocationsMutex.RLock()
+	defer fake.invocationsMutex.RUnlock()
+	fake.emitMutex.RLock()
+	defer fake.emitMutex.RUnlock()
+	return fake.invocations
+}
+
+func (fake *FakeEmitter) recordInvocation(key string, args []interface{}) {
+	fake.invocationsMutex.Lock()
+	defer fake.invocationsMutex.Unlock()
+	if fake.invocations == nil {
+		fake.invocations = map[string][][]interface{}{}
+	}
+	if fake.invocations[key] == nil {
+		fake.invocations[key] = [][]interface{}{}
+	}
+	fake.invocations[key] = append(fake.invocations[key], args)
 }
 
 var _ emitter.Emitter = new(FakeEmitter)

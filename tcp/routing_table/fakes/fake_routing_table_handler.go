@@ -5,7 +5,7 @@ import (
 	"sync"
 
 	"code.cloudfoundry.org/bbs/models"
-	"code.cloudfoundry.org/tcp-emitter/routing_table"
+	"code.cloudfoundry.org/route-emitter/tcp/routing_table"
 )
 
 type FakeRoutingTableHandler struct {
@@ -23,6 +23,8 @@ type FakeRoutingTableHandler struct {
 	syncingReturns     struct {
 		result1 bool
 	}
+	invocations      map[string][][]interface{}
+	invocationsMutex sync.RWMutex
 }
 
 func (fake *FakeRoutingTableHandler) HandleEvent(event models.Event) {
@@ -30,6 +32,7 @@ func (fake *FakeRoutingTableHandler) HandleEvent(event models.Event) {
 	fake.handleEventArgsForCall = append(fake.handleEventArgsForCall, struct {
 		event models.Event
 	}{event})
+	fake.recordInvocation("HandleEvent", []interface{}{event})
 	fake.handleEventMutex.Unlock()
 	if fake.HandleEventStub != nil {
 		fake.HandleEventStub(event)
@@ -51,6 +54,7 @@ func (fake *FakeRoutingTableHandler) HandleEventArgsForCall(i int) models.Event 
 func (fake *FakeRoutingTableHandler) Sync() {
 	fake.syncMutex.Lock()
 	fake.syncArgsForCall = append(fake.syncArgsForCall, struct{}{})
+	fake.recordInvocation("Sync", []interface{}{})
 	fake.syncMutex.Unlock()
 	if fake.SyncStub != nil {
 		fake.SyncStub()
@@ -66,6 +70,7 @@ func (fake *FakeRoutingTableHandler) SyncCallCount() int {
 func (fake *FakeRoutingTableHandler) Syncing() bool {
 	fake.syncingMutex.Lock()
 	fake.syncingArgsForCall = append(fake.syncingArgsForCall, struct{}{})
+	fake.recordInvocation("Syncing", []interface{}{})
 	fake.syncingMutex.Unlock()
 	if fake.SyncingStub != nil {
 		return fake.SyncingStub()
@@ -85,6 +90,30 @@ func (fake *FakeRoutingTableHandler) SyncingReturns(result1 bool) {
 	fake.syncingReturns = struct {
 		result1 bool
 	}{result1}
+}
+
+func (fake *FakeRoutingTableHandler) Invocations() map[string][][]interface{} {
+	fake.invocationsMutex.RLock()
+	defer fake.invocationsMutex.RUnlock()
+	fake.handleEventMutex.RLock()
+	defer fake.handleEventMutex.RUnlock()
+	fake.syncMutex.RLock()
+	defer fake.syncMutex.RUnlock()
+	fake.syncingMutex.RLock()
+	defer fake.syncingMutex.RUnlock()
+	return fake.invocations
+}
+
+func (fake *FakeRoutingTableHandler) recordInvocation(key string, args []interface{}) {
+	fake.invocationsMutex.Lock()
+	defer fake.invocationsMutex.Unlock()
+	if fake.invocations == nil {
+		fake.invocations = map[string][][]interface{}{}
+	}
+	if fake.invocations[key] == nil {
+		fake.invocations[key] = [][]interface{}{}
+	}
+	fake.invocations[key] = append(fake.invocations[key], args)
 }
 
 var _ routing_table.RoutingTableHandler = new(FakeRoutingTableHandler)
