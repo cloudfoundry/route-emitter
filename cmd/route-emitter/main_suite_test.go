@@ -46,6 +46,8 @@ var (
 	bbsRunner  *ginkgomon.Runner
 	bbsProcess ifrit.Process
 
+	routingAPIPath string
+
 	consulRunner         *consulrunner.ClusterRunner
 	gnatsdRunner         ifrit.Process
 	natsClient           diegonats.NATSClient
@@ -74,9 +76,13 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 	bbs, err := gexec.Build("code.cloudfoundry.org/bbs/cmd/bbs", "-race")
 	Expect(err).NotTo(HaveOccurred())
 
+	routingAPI, err := gexec.Build("code.cloudfoundry.org/routing-api/cmd/routing-api", "-race")
+	Expect(err).NotTo(HaveOccurred())
+
 	payload, err := json.Marshal(map[string]string{
-		"emitter": emitter,
-		"bbs":     bbs,
+		"emitter":     emitter,
+		"bbs":         bbs,
+		"routing-api": routingAPI,
 	})
 
 	Expect(err).NotTo(HaveOccurred())
@@ -112,6 +118,7 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 	bbsHealthPort := bbsPort + 1
 	bbsAddress := fmt.Sprintf("127.0.0.1:%d", bbsPort)
 	bbsHealthAddress := fmt.Sprintf("127.0.0.1:%d", bbsHealthPort)
+	routingAPIPath = string(binaries["routing-api"])
 
 	bbsURL = &url.URL{
 		Scheme: "http",

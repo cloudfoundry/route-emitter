@@ -41,7 +41,8 @@ var _ = Describe("Config", func() {
 			"lock_retry_interval": "15s",
 			"lock_ttl": "20s",
 			"log_level": "debug",
-			"debug_address": "127.0.0.1:9999"
+			"debug_address": "127.0.0.1:9999",
+			"enable_tcp_emitter": true
 		}`
 	})
 
@@ -86,6 +87,8 @@ var _ = Describe("Config", func() {
 			LockTTL:                            durationjson.Duration(20 * time.Second),
 			ConsulSessionName:                  "myconsulsession",
 			RouteEmittingWorkers:               18,
+			TCPRouteTTL:                        durationjson.Duration(2 * time.Minute),
+			EnableTCPEmitter:                   true,
 			DebugServerConfig: debugserver.DebugServerConfig{
 				DebugAddress: "127.0.0.1:9999",
 			},
@@ -136,6 +139,8 @@ var _ = Describe("Config", func() {
 				NATSPassword:                       "nats",
 				RouteEmittingWorkers:               20,
 				SyncInterval:                       durationjson.Duration(time.Minute),
+				TCPRouteTTL:                        durationjson.Duration(2 * time.Minute),
+				EnableTCPEmitter:                   false,
 				LagerConfig: lagerflags.LagerConfig{
 					LogLevel: "info",
 				},

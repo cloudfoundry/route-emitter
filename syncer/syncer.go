@@ -8,12 +8,12 @@ import (
 	"code.cloudfoundry.org/clock"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/route-emitter/diegonats"
-	"code.cloudfoundry.org/route-emitter/routing_table"
+	"code.cloudfoundry.org/route-emitter/routingtable"
 	"github.com/nats-io/nats"
 	uuid "github.com/nu7hatch/gouuid"
 )
 
-type Syncer struct {
+type NatsSyncer struct {
 	natsClient   diegonats.NATSClient
 	clock        clock.Clock
 	syncInterval time.Duration
@@ -28,8 +28,8 @@ func NewSyncer(
 	syncInterval time.Duration,
 	natsClient diegonats.NATSClient,
 	logger lager.Logger,
-) *Syncer {
-	return &Syncer{
+) *NatsSyncer {
+	return &NatsSyncer{
 		natsClient: natsClient,
 
 		clock:        clock,
@@ -45,7 +45,7 @@ func NewSyncer(
 	}
 }
 
-func (s *Syncer) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
+func (s *NatsSyncer) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
 	s.logger.Info("starting")
 	replyUuid, err := uuid.NewV4()
 	if err != nil {
@@ -115,11 +115,11 @@ GREET_LOOP:
 	return nil
 }
 
-func (s *Syncer) Events() Events {
+func (s *NatsSyncer) Events() Events {
 	return s.events
 }
 
-func (s *Syncer) emit() {
+func (s *NatsSyncer) emit() {
 	select {
 	case s.events.Emit <- struct{}{}:
 	default:
@@ -127,7 +127,7 @@ func (s *Syncer) emit() {
 	}
 }
 
-func (s *Syncer) sync() {
+func (s *NatsSyncer) sync() {
 	select {
 	case s.events.Sync <- struct{}{}:
 	default:
@@ -135,7 +135,7 @@ func (s *Syncer) sync() {
 	}
 }
 
-func (s *Syncer) listenForRouter(replyUUID string) error {
+func (s *NatsSyncer) listenForRouter(replyUUID string) error {
 	_, err := s.natsClient.Subscribe("router.start", s.handleRouterGreet)
 	if err != nil {
 		return err
@@ -150,7 +150,7 @@ func (s *Syncer) listenForRouter(replyUUID string) error {
 	return nil
 }
 
-func (s *Syncer) greetRouter(replyUUID string) error {
+func (s *NatsSyncer) greetRouter(replyUUID string) error {
 	err := s.natsClient.PublishRequest("router.greet", replyUUID, []byte{})
 	if err != nil {
 		return err
@@ -159,8 +159,8 @@ func (s *Syncer) greetRouter(replyUUID string) error {
 	return nil
 }
 
-func (s *Syncer) handleRouterGreet(msg *nats.Msg) {
-	var response routing_table.RouterGreetingMessage
+func (s *NatsSyncer) handleRouterGreet(msg *nats.Msg) {
+	var response routingtable.RouterGreetingMessage
 
 	err := json.Unmarshal(msg.Data, &response)
 	if err != nil {

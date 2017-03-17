@@ -9,16 +9,23 @@ import (
 	"net/http/httptest"
 	"net/http/httputil"
 	"net/url"
+	"os"
 	"os/exec"
 	"sync"
 	"time"
 
 	"code.cloudfoundry.org/bbs/models"
+	"code.cloudfoundry.org/bbs/test_helpers"
+	"code.cloudfoundry.org/bbs/test_helpers/sqlrunner"
 	"code.cloudfoundry.org/durationjson"
+	"code.cloudfoundry.org/lager/lagerflags"
 	"code.cloudfoundry.org/route-emitter/cmd/route-emitter/config"
-	"code.cloudfoundry.org/route-emitter/routing_table"
-	. "code.cloudfoundry.org/route-emitter/routing_table/matchers"
+	"code.cloudfoundry.org/route-emitter/cmd/route-emitter/runners"
+	"code.cloudfoundry.org/route-emitter/routingtable"
+	. "code.cloudfoundry.org/route-emitter/routingtable/matchers"
+	apimodels "code.cloudfoundry.org/routing-api/models"
 	"code.cloudfoundry.org/routing-info/cfroutes"
+	"code.cloudfoundry.org/routing-info/tcp_routes"
 	"github.com/cloudfoundry/sonde-go/events"
 	"github.com/nats-io/nats"
 	. "github.com/onsi/ginkgo"
@@ -29,13 +36,16 @@ import (
 	"github.com/tedsuo/ifrit/ginkgomon"
 )
 
-const emitterInterruptTimeout = 5 * time.Second
-const msgReceiveTimeout = 5 * time.Second
+const (
+	emitterInterruptTimeout    = 5 * time.Second
+	routingAPIInterruptTimeout = 10 * time.Second
+	msgReceiveTimeout          = 5 * time.Second
+)
 
 var _ = Describe("Route Emitter", func() {
 	var (
-		registeredRoutes   <-chan routing_table.RegistryMessage
-		unregisteredRoutes <-chan routing_table.RegistryMessage
+		registeredRoutes   <-chan routingtable.RegistryMessage
+		unregisteredRoutes <-chan routingtable.RegistryMessage
 
 		processGuid string
 		domain      string
@@ -49,6 +59,11 @@ var _ = Describe("Route Emitter", func() {
 		hostnames     []string
 		containerPort uint32
 		routes        *models.Routes
+
+		routingApiProcess ifrit.Process
+		routingAPIRunner  *runners.RoutingAPIRunner
+		routerGUID        string
+		cfgs              []func(*config.RouteEmitterConfig)
 	)
 
 	createEmitterRunner := func(sessionName string, cellID string, modifyConfig ...func(*config.RouteEmitterConfig)) *ginkgomon.Runner {
@@ -65,6 +80,9 @@ var _ = Describe("Route Emitter", func() {
 			LockRetryInterval:    durationjson.Duration(time.Second),
 			LockTTL:              durationjson.Duration(5 * time.Second),
 			ConsulCluster:        consulClusterAddress,
+			LagerConfig: lagerflags.LagerConfig{
+				LogLevel: lagerflags.DEBUG,
+			},
 		}
 		for _, f := range modifyConfig {
 			f(&cfg)
@@ -84,19 +102,24 @@ var _ = Describe("Route Emitter", func() {
 				"-config", configPath,
 			),
 
+			Name: sessionName,
+
 			StartCheck: "route-emitter.watcher.sync.complete",
 
 			AnsiColorCode: "97m",
+			Cleanup: func() {
+				os.RemoveAll(configPath)
+			},
 		})
 	}
 
-	listenForRoutes := func(subject string) <-chan routing_table.RegistryMessage {
-		routes := make(chan routing_table.RegistryMessage)
+	listenForRoutes := func(subject string) <-chan routingtable.RegistryMessage {
+		routes := make(chan routingtable.RegistryMessage)
 
 		natsClient.Subscribe(subject, func(msg *nats.Msg) {
 			defer GinkgoRecover()
 
-			var message routing_table.RegistryMessage
+			var message routingtable.RegistryMessage
 			err := json.Unmarshal(msg.Data, &message)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -141,7 +164,7 @@ var _ = Describe("Route Emitter", func() {
 		natsClient.Subscribe("router.greet", func(msg *nats.Msg) {
 			defer GinkgoRecover()
 
-			greeting := routing_table.RouterGreetingMessage{
+			greeting := routingtable.RouterGreetingMessage{
 				MinimumRegisterInterval: 2,
 				PruneThresholdInSeconds: 6,
 			}
@@ -152,10 +175,38 @@ var _ = Describe("Route Emitter", func() {
 			err = natsClient.Publish(msg.Reply, response)
 			Expect(err).NotTo(HaveOccurred())
 		})
+		var err error
+		sqlConfig := runners.SQLConfig{
+			Port:       sqlRunner.Port(),
+			DBName:     sqlRunner.DBName(),
+			DriverName: sqlRunner.DriverName(),
+			Username:   sqlRunner.Username(),
+			Password:   sqlRunner.Password(),
+		}
+		routingAPIRunner, err = runners.NewRoutingAPIRunner(routingAPIPath, consulRunner.URL(), sqlConfig)
+		Expect(err).NotTo(HaveOccurred())
+		routingApiProcess = ginkgomon.Invoke(routingAPIRunner)
+
+		Eventually(func() error {
+			guid, err := routingAPIRunner.GetGUID()
+			if err != nil {
+				return err
+			}
+			routerGUID = guid
+			return nil
+		}).Should(Succeed())
+		logger.Info("started-routing-api-server")
+		cfgs = nil
+		cfgs = append(cfgs, func(cfg *config.RouteEmitterConfig) {
+			cfg.BBSAddress = bbsURL.String()
+			cfg.RoutingAPI.URI = "http://127.0.0.1"
+			cfg.RoutingAPI.Port = routingAPIRunner.Config.Port
+		})
 	})
 
 	AfterEach(func() {
-		// os.RemoveAll(configPath)
+		logger.Info("shutting-down")
+		ginkgomon.Interrupt(routingApiProcess, routingAPIInterruptTimeout)
 	})
 
 	Context("Ping interval for nats client", func() {
@@ -163,7 +214,7 @@ var _ = Describe("Route Emitter", func() {
 		var emitter ifrit.Process
 
 		BeforeEach(func() {
-			runner = createEmitterRunner("emitter1", "")
+			runner = createEmitterRunner("emitter1", "", cfgs...)
 			runner.StartCheck = "emitter1.started"
 			emitter = ginkgomon.Invoke(runner)
 		})
@@ -178,15 +229,306 @@ var _ = Describe("Route Emitter", func() {
 		})
 	})
 
-	Context("does not start when NATS is not connected", func() {
+	Context("when emitter is started with invalid configuration", func() {
+		var (
+			runner  *ginkgomon.Runner
+			emitter ifrit.Process
+		)
+
+		JustBeforeEach(func() {
+			runner = createEmitterRunner("emitter1", "", cfgs...)
+			emitter = ifrit.Invoke(runner)
+		})
+
+		Context("ttl is too high", func() {
+			BeforeEach(func() {
+				cfgs = append(cfgs, func(cfg *config.RouteEmitterConfig) {
+					cfg.TCPRouteTTL = durationjson.Duration(24 * time.Hour)
+				})
+			})
+
+			It("logs an error and exit", func() {
+				var err error
+				Eventually(emitter.Wait()).Should(Receive(&err))
+				Expect(err).To(HaveOccurred())
+				Expect(runner.Buffer()).To(gbytes.Say("invalid-route-ttl"))
+			})
+		})
+	})
+
+	Context("when the tcp route emitter is enabled", func() {
+		var (
+			expectedTcpRouteMapping    apimodels.TcpRouteMapping
+			notExpectedTcpRouteMapping apimodels.TcpRouteMapping
+			emitter                    ifrit.Process
+			runner                     *ginkgomon.Runner
+			sqlRunner                  sqlrunner.SQLRunner
+			sqlProcess                 ifrit.Process
+			cellID                     string
+		)
+
+		BeforeEach(func() {
+			cfgs = append(cfgs, func(cfg *config.RouteEmitterConfig) {
+				cfg.EnableTCPEmitter = true
+			})
+			expectedTcpRouteMapping = apimodels.NewTcpRouteMapping("", 5222, "some-ip", 62003, 120)
+			notExpectedTcpRouteMapping = apimodels.NewTcpRouteMapping("", 1883, "some-ip-1", 62003, 120)
+			expectedTcpRouteMapping.RouterGroupGuid = routerGUID
+			notExpectedTcpRouteMapping.RouterGroupGuid = routerGUID
+			dbName := fmt.Sprintf("routingapi_%d", GinkgoParallelNode())
+			sqlRunner = test_helpers.NewSQLRunner(dbName)
+			sqlProcess = ginkgomon.Invoke(sqlRunner)
+			cellID = ""
+		})
+
+		AfterEach(func() {
+			ginkgomon.Interrupt(sqlProcess)
+		})
+
+		getDesiredLRP := func(processGuid, routerGroupGuid string, externalPort, containerPort uint32) models.DesiredLRP {
+			tcpRoutes := tcp_routes.TCPRoutes{
+				tcp_routes.TCPRoute{
+					RouterGroupGuid: routerGroupGuid,
+					ExternalPort:    externalPort,
+					ContainerPort:   containerPort,
+				},
+			}
+
+			return models.DesiredLRP{
+				Domain:      domain,
+				ProcessGuid: processGuid,
+				Ports:       []uint32{containerPort},
+				Routes:      tcpRoutes.RoutingInfo(),
+				Instances:   5,
+				RootFs:      "some:rootfs",
+				MemoryMb:    1024,
+				DiskMb:      512,
+				LogGuid:     "some-log-guid",
+				Action: models.WrapAction(&models.RunAction{
+					User: "me",
+					Path: "ls",
+				}),
+			}
+		}
+
+		JustBeforeEach(func() {
+			runner = createEmitterRunner("emitter1", cellID, cfgs...)
+			runner.StartCheck = "emitter1.started"
+			emitter = ginkgomon.Invoke(runner)
+		})
+
+		AfterEach(func() {
+			ginkgomon.Interrupt(emitter, emitterInterruptTimeout)
+		})
+
+		Context("and an lrp with routes is desired", func() {
+			var (
+				expectedTCPProcessGUID string
+				desiredLRP             models.DesiredLRP
+			)
+
+			BeforeEach(func() {
+				cfgs = append(cfgs, func(cfg *config.RouteEmitterConfig) {
+					cfg.BBSAddress = bbsURL.String()
+					cfg.SyncInterval = durationjson.Duration(1 * time.Second)
+					cfg.RoutingAPI.URI = "http://127.0.0.1"
+					cfg.RoutingAPI.Port = routingAPIRunner.Config.Port
+				})
+
+				expectedTCPProcessGUID = "some-guid"
+				desiredLRP = getDesiredLRP(expectedTCPProcessGUID, routerGUID, 5222, 5222)
+			})
+
+			JustBeforeEach(func() {
+				Expect(bbsClient.DesireLRP(logger, &desiredLRP)).NotTo(HaveOccurred())
+			})
+
+			Context("and an instance is started", func() {
+				BeforeEach(func() {
+					lrpKey = models.NewActualLRPKey(expectedTCPProcessGUID, 0, domain)
+					instanceKey = models.NewActualLRPInstanceKey("instance-guid", "cell-id")
+					netInfo = models.NewActualLRPNetInfo("some-ip", models.NewPortMapping(62003, 5222))
+					Expect(bbsClient.StartActualLRP(logger, &lrpKey, &instanceKey, &netInfo))
+				})
+
+				Context("when backing store loses its data", func() {
+					JustBeforeEach(func() {
+						// ensure it's seen the route at least once
+						Eventually(func() bool {
+							mappings, _ := routingAPIRunner.GetClient().TcpRouteMappings()
+							return contains(mappings, expectedTcpRouteMapping)
+						}, 5*time.Second).Should(BeTrue())
+
+						sqlRunner.Reset()
+
+						// Only start actual LRP, do not repopulate Desired
+						err := bbsClient.StartActualLRP(logger, &lrpKey, &instanceKey, &netInfo)
+						Expect(err).NotTo(HaveOccurred())
+					})
+
+					It("continues to broadcast routes", func() {
+						Consistently(func() bool {
+							mappings, _ := routingAPIRunner.GetClient().TcpRouteMappings()
+							return contains(mappings, expectedTcpRouteMapping)
+						}, 5*time.Second).Should(BeTrue())
+					})
+				})
+
+				It("emits its routes immediately", func() {
+					Eventually(func() bool {
+						mappings, _ := routingAPIRunner.GetClient().TcpRouteMappings()
+						return contains(mappings, expectedTcpRouteMapping)
+					}, 5*time.Second).Should(BeTrue())
+				})
+
+				Context("and the route-emitter cell id doesn't match the actual lrp cell", func() {
+					BeforeEach(func() {
+						cellID = "some-random-cell-id"
+					})
+
+					It("does not emit the route", func() {
+						Consistently(func() bool {
+							mappings, _ := routingAPIRunner.GetClient().TcpRouteMappings()
+							return contains(mappings, expectedTcpRouteMapping)
+						}, 5*time.Second).Should(BeFalse())
+					})
+				})
+
+				Context("the instance has no routes", func() {
+					var (
+						routes *models.Routes
+					)
+
+					BeforeEach(func() {
+						routes = desiredLRP.Routes
+						desiredLRP.Routes = &models.Routes{}
+					})
+
+					JustBeforeEach(func() {
+						Consistently(func() bool {
+							mappings, _ := routingAPIRunner.GetClient().TcpRouteMappings()
+							return contains(mappings, expectedTcpRouteMapping)
+						}, 5*time.Second).Should(BeFalse())
+					})
+
+					Context("and routes are added", func() {
+						JustBeforeEach(func() {
+							update := &models.DesiredLRPUpdate{
+								Routes: routes,
+							}
+							err := bbsClient.UpdateDesiredLRP(logger, desiredLRP.ProcessGuid, update)
+							Expect(err).NotTo(HaveOccurred())
+						})
+
+						It("immediately registers the route", func() {
+							Eventually(func() error {
+								mappings, err := routingAPIRunner.GetClient().TcpRouteMappings()
+								if err != nil {
+									return err
+								}
+
+								if !contains(mappings, expectedTcpRouteMapping) {
+									return fmt.Errorf("%v does not contain the route mappings", mappings)
+								}
+								return nil
+							}).Should(Succeed())
+						})
+					})
+				})
+
+				Context("and routes are removed", func() {
+					JustBeforeEach(func() {
+						Eventually(func() bool {
+							mappings, _ := routingAPIRunner.GetClient().TcpRouteMappings()
+							return contains(mappings, expectedTcpRouteMapping)
+						}, 5*time.Second).Should(BeTrue())
+						update := &models.DesiredLRPUpdate{
+							Routes: &models.Routes{},
+						}
+						err := bbsClient.UpdateDesiredLRP(logger, desiredLRP.ProcessGuid, update)
+						Expect(err).NotTo(HaveOccurred())
+					})
+
+					It("immediately unregisters the route", func() {
+						Eventually(func() error {
+							mappings, err := routingAPIRunner.GetClient().TcpRouteMappings()
+							if err != nil {
+								return err
+							}
+
+							if len(mappings) != 0 {
+								return fmt.Errorf("%v is not empty", mappings)
+							}
+
+							return nil
+						}).Should(Succeed())
+					})
+				})
+			})
+
+			Context("and an instance is claimed", func() {
+				JustBeforeEach(func() {
+					err := bbsClient.ClaimActualLRP(logger, expectedTCPProcessGUID, int(index), &instanceKey)
+					Expect(err).NotTo(HaveOccurred())
+				})
+
+				It("does not emit routes", func() {
+					Consistently(func() []apimodels.TcpRouteMapping {
+						mappings, _ := routingAPIRunner.GetClient().TcpRouteMappings()
+						return mappings
+					}).Should(BeEmpty())
+				})
+			})
+		})
+
+		Context("when routing api server is down but bbs is running", func() {
+			JustBeforeEach(func() {
+				ginkgomon.Interrupt(routingApiProcess, routingAPIInterruptTimeout)
+				desiredLRP := getDesiredLRP("some-guid-1", "some-guid", 1883, 1883)
+				Expect(bbsClient.DesireLRP(logger, &desiredLRP)).NotTo(HaveOccurred())
+
+				key := models.NewActualLRPKey("some-guid-1", 0, domain)
+				instanceKey := models.NewActualLRPInstanceKey("instance-guid-1", "cell-id")
+				netInfo := models.NewActualLRPNetInfo("some-ip-1", models.NewPortMapping(62003, 1883))
+				Expect(bbsClient.StartActualLRP(logger, &key, &instanceKey, &netInfo))
+			})
+
+			It("starts an SSE connection to the bbs and continues to try to emit to routing api", func() {
+				// Do not use Say matcher as ordering of 'subscribed-to-bbs-event' log message
+				// is not defined in relation to the 'tcp-emitter.started' message
+				Eventually(runner.Buffer().Contents).Should(ContainSubstring("subscribed-to-bbs-event"))
+				Eventually(runner.Buffer()).Should(gbytes.Say("syncer.syncing"))
+				Eventually(runner.Buffer()).Should(gbytes.Say("unable-to-upsert.*connection refused"))
+				Consistently(runner.Buffer()).ShouldNot(gbytes.Say("successfully-emitted-event"))
+				Consistently(emitter.Wait()).ShouldNot(Receive())
+
+				By("starting routing api server")
+				routingApiProcess = ginkgomon.Invoke(routingAPIRunner)
+				Eventually(func() error {
+					guid, err := routingAPIRunner.GetGUID()
+					if err != nil {
+						return err
+					}
+					expectedTcpRouteMapping.RouterGroupGuid = guid
+					notExpectedTcpRouteMapping.RouterGroupGuid = guid
+					return nil
+				}).Should(Succeed())
+				logger.Info("started-routing-api-server")
+				Eventually(runner.Buffer()).Should(gbytes.Say("unable-to-upsert.*some-guid not found"))
+			})
+		})
+	})
+
+	Context("when NATS is unreachable", func() {
 		var runner *ginkgomon.Runner
 		var emitter ifrit.Process
 
 		JustBeforeEach(func() {
-			runner = createEmitterRunner("emitter1", "", func(cfg *config.RouteEmitterConfig) {
+			cfgs = append(cfgs, func(cfg *config.RouteEmitterConfig) {
 				// some invalid address
 				cfg.NATSAddresses = "localhost:0"
 			})
+			runner = createEmitterRunner("emitter1", "", cfgs...)
 			runner.StartCheck = "emitter1.started"
 
 			emitter = ginkgomon.Invoke(runner)
@@ -212,14 +554,22 @@ var _ = Describe("Route Emitter", func() {
 		})
 	})
 
-	Context("when the emitter is running", func() {
+	Context("when only the nats emitter is running", func() {
 		var (
 			emitter ifrit.Process
 			runner  *ginkgomon.Runner
+			cellID  string
 		)
 
 		BeforeEach(func() {
-			runner = createEmitterRunner("emitter1", "")
+			cellID = ""
+		})
+
+		JustBeforeEach(func() {
+			cfgs = append(cfgs, func(cfg *config.RouteEmitterConfig) {
+				cfg.EnableTCPEmitter = false
+			})
+			runner = createEmitterRunner("emitter1", cellID, cfgs...)
 			runner.StartCheck = "emitter1.started"
 			emitter = ginkgomon.Invoke(runner)
 		})
@@ -258,12 +608,12 @@ var _ = Describe("Route Emitter", func() {
 				})
 
 				Context("when backing store loses its data", func() {
-					var msg1 routing_table.RegistryMessage
-					var msg2 routing_table.RegistryMessage
-					var msg3 routing_table.RegistryMessage
-					var msg4 routing_table.RegistryMessage
+					var msg1 routingtable.RegistryMessage
+					var msg2 routingtable.RegistryMessage
+					var msg3 routingtable.RegistryMessage
+					var msg4 routingtable.RegistryMessage
 
-					BeforeEach(func() {
+					JustBeforeEach(func() {
 						// ensure it's seen the route at least once
 						Eventually(registeredRoutes).Should(Receive(&msg1))
 						Eventually(registeredRoutes).Should(Receive(&msg2))
@@ -278,7 +628,7 @@ var _ = Describe("Route Emitter", func() {
 					It("continues to broadcast routes", func() {
 						Eventually(registeredRoutes, 5).Should(Receive(&msg3))
 						Eventually(registeredRoutes, 5).Should(Receive(&msg4))
-						Expect([]routing_table.RegistryMessage{msg3, msg4}).To(ConsistOf(
+						Expect([]routingtable.RegistryMessage{msg3, msg4}).To(ConsistOf(
 							MatchRegistryMessage(msg1),
 							MatchRegistryMessage(msg2),
 						))
@@ -286,12 +636,12 @@ var _ = Describe("Route Emitter", func() {
 				})
 
 				It("emits its routes immediately", func() {
-					var msg1, msg2 routing_table.RegistryMessage
+					var msg1, msg2 routingtable.RegistryMessage
 					Eventually(registeredRoutes).Should(Receive(&msg1))
 					Eventually(registeredRoutes).Should(Receive(&msg2))
 
-					Expect([]routing_table.RegistryMessage{msg1, msg2}).To(ConsistOf(
-						MatchRegistryMessage(routing_table.RegistryMessage{
+					Expect([]routingtable.RegistryMessage{msg1, msg2}).To(ConsistOf(
+						MatchRegistryMessage(routingtable.RegistryMessage{
 							URIs:                 []string{hostnames[1]},
 							Host:                 netInfo.Address,
 							Port:                 netInfo.Ports[0].HostPort,
@@ -301,7 +651,7 @@ var _ = Describe("Route Emitter", func() {
 							RouteServiceUrl:      "https://awesome.com",
 							Tags:                 map[string]string{"component": "route-emitter"},
 						}),
-						MatchRegistryMessage(routing_table.RegistryMessage{
+						MatchRegistryMessage(routingtable.RegistryMessage{
 							URIs:                 []string{hostnames[0]},
 							Host:                 netInfo.Address,
 							Port:                 netInfo.Ports[0].HostPort,
@@ -312,6 +662,16 @@ var _ = Describe("Route Emitter", func() {
 							Tags:                 map[string]string{"component": "route-emitter"},
 						}),
 					))
+				})
+
+				Context("and the route-emitter cell id doesn't match the actual lrp cell", func() {
+					BeforeEach(func() {
+						cellID = "some-random-cell-id"
+					})
+
+					It("does not emit the route", func() {
+						Consistently(registeredRoutes).ShouldNot(Receive())
+					})
 				})
 			})
 
@@ -347,12 +707,12 @@ var _ = Describe("Route Emitter", func() {
 				})
 
 				It("emits its routes immediately", func() {
-					var msg1, msg2 routing_table.RegistryMessage
+					var msg1, msg2 routingtable.RegistryMessage
 					Eventually(registeredRoutes).Should(Receive(&msg1))
 					Eventually(registeredRoutes).Should(Receive(&msg2))
 
-					Expect([]routing_table.RegistryMessage{msg1, msg2}).To(ConsistOf(
-						MatchRegistryMessage(routing_table.RegistryMessage{
+					Expect([]routingtable.RegistryMessage{msg1, msg2}).To(ConsistOf(
+						MatchRegistryMessage(routingtable.RegistryMessage{
 							URIs:                 []string{hostnames[1]},
 							Host:                 netInfo.Address,
 							Port:                 netInfo.Ports[0].HostPort,
@@ -362,7 +722,7 @@ var _ = Describe("Route Emitter", func() {
 							RouteServiceUrl:      "https://awesome.com",
 							Tags:                 map[string]string{"component": "route-emitter"},
 						}),
-						MatchRegistryMessage(routing_table.RegistryMessage{
+						MatchRegistryMessage(routingtable.RegistryMessage{
 							URIs:                 []string{hostnames[0]},
 							Host:                 netInfo.Address,
 							Port:                 netInfo.Ports[0].HostPort,
@@ -376,19 +736,19 @@ var _ = Describe("Route Emitter", func() {
 				})
 
 				It("repeats the route message at the interval given by the router", func() {
-					var msg1 routing_table.RegistryMessage
-					var msg2 routing_table.RegistryMessage
+					var msg1 routingtable.RegistryMessage
+					var msg2 routingtable.RegistryMessage
 					Eventually(registeredRoutes).Should(Receive(&msg1))
 					Eventually(registeredRoutes).Should(Receive(&msg2))
 					t1 := time.Now()
 
-					var msg3 routing_table.RegistryMessage
-					var msg4 routing_table.RegistryMessage
+					var msg3 routingtable.RegistryMessage
+					var msg4 routingtable.RegistryMessage
 					Eventually(registeredRoutes, 5).Should(Receive(&msg3))
 					Eventually(registeredRoutes, 5).Should(Receive(&msg4))
 					t2 := time.Now()
 
-					Expect([]routing_table.RegistryMessage{msg3, msg4}).To(ConsistOf(
+					Expect([]routingtable.RegistryMessage{msg3, msg4}).To(ConsistOf(
 						MatchRegistryMessage(msg1),
 						MatchRegistryMessage(msg2),
 					))
@@ -396,12 +756,12 @@ var _ = Describe("Route Emitter", func() {
 				})
 
 				Context("when backing store goes away", func() {
-					var msg1 routing_table.RegistryMessage
-					var msg2 routing_table.RegistryMessage
-					var msg3 routing_table.RegistryMessage
-					var msg4 routing_table.RegistryMessage
+					var msg1 routingtable.RegistryMessage
+					var msg2 routingtable.RegistryMessage
+					var msg3 routingtable.RegistryMessage
+					var msg4 routingtable.RegistryMessage
 
-					BeforeEach(func() {
+					JustBeforeEach(func() {
 						// ensure it's seen the route at least once
 						Eventually(registeredRoutes).Should(Receive(&msg1))
 						Eventually(registeredRoutes).Should(Receive(&msg2))
@@ -410,9 +770,9 @@ var _ = Describe("Route Emitter", func() {
 					})
 
 					It("continues to broadcast routes", func() {
-						Eventually(registeredRoutes, 5).Should(Receive(&msg3))
-						Eventually(registeredRoutes, 5).Should(Receive(&msg4))
-						Expect([]routing_table.RegistryMessage{msg3, msg4}).To(ConsistOf(
+						Eventually(registeredRoutes, 10).Should(Receive(&msg3))
+						Eventually(registeredRoutes, 10).Should(Receive(&msg4))
+						Expect([]routingtable.RegistryMessage{msg3, msg4}).To(ConsistOf(
 							MatchRegistryMessage(msg1),
 							MatchRegistryMessage(msg2),
 						))
@@ -423,14 +783,16 @@ var _ = Describe("Route Emitter", func() {
 
 		Context("and another emitter starts", func() {
 			var (
-				secondRunner  *ginkgomon.Runner
-				secondEmitter ifrit.Process
+				secondRunner        *ginkgomon.Runner
+				secondEmitter       ifrit.Process
+				secondEmitterConfig []func(*config.RouteEmitterConfig)
 			)
 
 			BeforeEach(func() {
-				secondRunner = createEmitterRunner("emitter2", "", func(cfg *config.RouteEmitterConfig) {
+				secondEmitterConfig = append(cfgs, func(cfg *config.RouteEmitterConfig) {
 					cfg.HealthCheckAddress = fmt.Sprintf("127.0.0.1:%d", 4600+GinkgoParallelNode())
 				})
+				secondRunner = createEmitterRunner("emitter2", "", secondEmitterConfig...)
 				secondRunner.StartCheck = "lock.acquiring-lock"
 			})
 
@@ -450,9 +812,7 @@ var _ = Describe("Route Emitter", func() {
 
 				Context("runs in local mode", func() {
 					BeforeEach(func() {
-						secondRunner = createEmitterRunner("emitter2", "some-cell-id", func(cfg *config.RouteEmitterConfig) {
-							cfg.HealthCheckAddress = fmt.Sprintf("127.0.0.1:%d", 4600+GinkgoParallelNode())
-						})
+						secondRunner = createEmitterRunner("emitter2", "some-cell-id", secondEmitterConfig...)
 						secondRunner.StartCheck = "emitter2.watcher.sync.complete"
 					})
 
@@ -463,7 +823,7 @@ var _ = Describe("Route Emitter", func() {
 			})
 
 			Context("and the first emitter goes away", func() {
-				BeforeEach(func() {
+				JustBeforeEach(func() {
 					ginkgomon.Interrupt(emitter, emitterInterruptTimeout)
 				})
 
@@ -520,7 +880,7 @@ var _ = Describe("Route Emitter", func() {
 			fakeConsul.Start()
 
 			consulClusterAddress = fakeConsul.URL
-			runner = createEmitterRunner("emitter1", "")
+			runner = createEmitterRunner("emitter1", "", cfgs...)
 			runner.StartCheck = "emitter1.started"
 			emitter = ginkgomon.Invoke(runner)
 		})
@@ -532,8 +892,8 @@ var _ = Describe("Route Emitter", func() {
 
 		Context("when consul goes down", func() {
 			var (
-				msg1 routing_table.RegistryMessage
-				msg2 routing_table.RegistryMessage
+				msg1 routingtable.RegistryMessage
+				msg2 routingtable.RegistryMessage
 			)
 
 			BeforeEach(func() {
@@ -578,12 +938,12 @@ var _ = Describe("Route Emitter", func() {
 			})
 
 			It("repeats the route message at the interval given by the router", func() {
-				var msg3 routing_table.RegistryMessage
-				var msg4 routing_table.RegistryMessage
+				var msg3 routingtable.RegistryMessage
+				var msg4 routingtable.RegistryMessage
 				Eventually(registeredRoutes, 5).Should(Receive(&msg3))
 				Eventually(registeredRoutes, 5).Should(Receive(&msg4))
 
-				Expect([]routing_table.RegistryMessage{msg3, msg4}).To(ConsistOf(
+				Expect([]routingtable.RegistryMessage{msg3, msg4}).To(ConsistOf(
 					MatchRegistryMessage(msg1),
 					MatchRegistryMessage(msg2),
 				))
@@ -604,7 +964,7 @@ var _ = Describe("Route Emitter", func() {
 
 		Context("and the emitter is started", func() {
 			BeforeEach(func() {
-				emitter = ginkgomon.Invoke(createEmitterRunner("route-emitter", ""))
+				emitter = ginkgomon.Invoke(createEmitterRunner("route-emitter", "", cfgs...))
 			})
 
 			AfterEach(func() {
@@ -612,12 +972,12 @@ var _ = Describe("Route Emitter", func() {
 			})
 
 			It("immediately emits all routes", func() {
-				var msg1, msg2 routing_table.RegistryMessage
+				var msg1, msg2 routingtable.RegistryMessage
 				Eventually(registeredRoutes).Should(Receive(&msg1))
 				Eventually(registeredRoutes).Should(Receive(&msg2))
 
-				Expect([]routing_table.RegistryMessage{msg1, msg2}).To(ConsistOf(
-					MatchRegistryMessage(routing_table.RegistryMessage{
+				Expect([]routingtable.RegistryMessage{msg1, msg2}).To(ConsistOf(
+					MatchRegistryMessage(routingtable.RegistryMessage{
 						URIs:                 []string{"route-1"},
 						Host:                 "1.2.3.4",
 						Port:                 65100,
@@ -627,7 +987,7 @@ var _ = Describe("Route Emitter", func() {
 						RouteServiceUrl:      "https://awesome.com",
 						Tags:                 map[string]string{"component": "route-emitter"},
 					}),
-					MatchRegistryMessage(routing_table.RegistryMessage{
+					MatchRegistryMessage(routingtable.RegistryMessage{
 						URIs:                 []string{"route-2"},
 						Host:                 "1.2.3.4",
 						Port:                 65100,
@@ -657,14 +1017,14 @@ var _ = Describe("Route Emitter", func() {
 				})
 
 				It("immediately emits router.register", func() {
-					var msg1, msg2, msg3 routing_table.RegistryMessage
+					var msg1, msg2, msg3 routingtable.RegistryMessage
 					Eventually(registeredRoutes).Should(Receive(&msg1))
 					Eventually(registeredRoutes).Should(Receive(&msg2))
 					Eventually(registeredRoutes).Should(Receive(&msg3))
 
-					registryMessages := []routing_table.RegistryMessage{}
+					registryMessages := []routingtable.RegistryMessage{}
 					for _, hostname := range hostnames {
-						registryMessages = append(registryMessages, routing_table.RegistryMessage{
+						registryMessages = append(registryMessages, routingtable.RegistryMessage{
 							URIs:                 []string{hostname},
 							Host:                 "1.2.3.4",
 							Port:                 65100,
@@ -674,7 +1034,7 @@ var _ = Describe("Route Emitter", func() {
 							Tags:                 map[string]string{"component": "route-emitter"},
 						})
 					}
-					Expect([]routing_table.RegistryMessage{msg1, msg2, msg3}).To(ConsistOf(
+					Expect([]routingtable.RegistryMessage{msg1, msg2, msg3}).To(ConsistOf(
 						MatchRegistryMessage(registryMessages[0]),
 						MatchRegistryMessage(registryMessages[1]),
 						MatchRegistryMessage(registryMessages[2]),
@@ -696,7 +1056,7 @@ var _ = Describe("Route Emitter", func() {
 				It("immediately emits router.unregister when domain is fresh", func() {
 					bbsClient.UpsertDomain(logger, domain, 2*time.Second)
 					Eventually(unregisteredRoutes, msgReceiveTimeout).Should(Receive(
-						MatchRegistryMessage(routing_table.RegistryMessage{
+						MatchRegistryMessage(routingtable.RegistryMessage{
 							URIs:                 []string{"route-1"},
 							Host:                 "1.2.3.4",
 							Port:                 65100,
@@ -708,7 +1068,7 @@ var _ = Describe("Route Emitter", func() {
 						}),
 					))
 					Eventually(registeredRoutes, msgReceiveTimeout).Should(Receive(
-						MatchRegistryMessage(routing_table.RegistryMessage{
+						MatchRegistryMessage(routingtable.RegistryMessage{
 							URIs:                 []string{"route-2"},
 							Host:                 "1.2.3.4",
 							Port:                 65100,
@@ -755,4 +1115,13 @@ func matchMetricAndValue(target metricAndValue) types.GomegaMatcher {
 			return int32(*source.ValueMetric.Value)
 		}, Equal(target.Value)),
 	)
+}
+
+func contains(ms []apimodels.TcpRouteMapping, tcpRouteMapping apimodels.TcpRouteMapping) bool {
+	for _, m := range ms {
+		if m.Matches(tcpRouteMapping) {
+			return true
+		}
+	}
+	return false
 }

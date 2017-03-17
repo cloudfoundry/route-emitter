@@ -11,6 +11,21 @@ import (
 	"code.cloudfoundry.org/locket"
 )
 
+type RoutingAPIConfig struct {
+	URI          string `json:"uri"`
+	Port         int    `json:"port"`
+	AuthDisabled bool   `json:"auth_disabled"`
+}
+
+type OAuthConfig struct {
+	TokenEndpoint     string `json:"token_endpoint"`
+	Port              int    `json:"port"`
+	SkipSSLValidation bool   `json:"skip_ssl_validation"`
+	ClientName        string `json:"client_name"`
+	ClientSecret      string `json:"client_secret"`
+	CACerts           string `json:"ca_certs"`
+}
+
 type RouteEmitterConfig struct {
 	BBSAddress                         string                `json:"bbs_address"`
 	BBSCACertFile                      string                `json:"bbs_ca_cert_file"`
@@ -32,6 +47,10 @@ type RouteEmitterConfig struct {
 	NATSPassword                       string                `json:"nats_password,omitempty"`
 	RouteEmittingWorkers               int                   `json:"route_emitting_workers,omitempty"`
 	SyncInterval                       durationjson.Duration `json:"sync_interval,omitempty"`
+	TCPRouteTTL                        durationjson.Duration `json:"tcp_route_ttl,omitempty"`
+	OAuth                              OAuthConfig           `json:"oauth"`
+	RoutingAPI                         RoutingAPIConfig      `json:"routing_api"`
+	EnableTCPEmitter                   bool                  `json:"enable_tcp_emitter"`
 	lagerflags.LagerConfig
 	debugserver.DebugServerConfig
 }
@@ -49,7 +68,9 @@ func DefaultRouteEmitterConfig() RouteEmitterConfig {
 		NATSPassword:                       "nats",
 		RouteEmittingWorkers:               20,
 		SyncInterval:                       durationjson.Duration(time.Minute),
+		TCPRouteTTL:                        durationjson.Duration(2 * time.Minute),
 		LagerConfig:                        lagerflags.DefaultLagerConfig(),
+		EnableTCPEmitter:                   false,
 	}
 }
 

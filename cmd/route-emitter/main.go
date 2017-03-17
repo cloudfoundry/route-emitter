@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"net/http"
@@ -20,10 +21,13 @@ import (
 	"code.cloudfoundry.org/route-emitter/consuldownchecker"
 	"code.cloudfoundry.org/route-emitter/consuldownmodenotifier"
 	"code.cloudfoundry.org/route-emitter/diegonats"
-	"code.cloudfoundry.org/route-emitter/nats_emitter"
-	"code.cloudfoundry.org/route-emitter/routing_table"
+	"code.cloudfoundry.org/route-emitter/emitter"
+	"code.cloudfoundry.org/route-emitter/routehandlers"
+	"code.cloudfoundry.org/route-emitter/routingtable"
 	"code.cloudfoundry.org/route-emitter/syncer"
 	"code.cloudfoundry.org/route-emitter/watcher"
+	"code.cloudfoundry.org/routing-api"
+	uaaclient "code.cloudfoundry.org/uaa-go-client"
 	"code.cloudfoundry.org/workpool"
 	"github.com/cloudfoundry/dropsonde"
 	"github.com/nu7hatch/gouuid"
@@ -68,14 +72,38 @@ func main() {
 
 	natsClientRunner := diegonats.NewClientRunner(cfg.NATSAddresses, cfg.NATSUsername, cfg.NATSPassword, logger, natsClient)
 
+	bbsClient := initializeBBSClient(logger, cfg)
+
 	table := initializeRoutingTable(logger)
-	emitter := initializeNatsEmitter(logger, natsClient, cfg.RouteEmittingWorkers)
+	natsEmitter := initializeNatsEmitter(logger, natsClient, cfg.RouteEmittingWorkers)
+	natsHandler := routehandlers.NewNATSHandler(table, natsEmitter)
+	handlers := []watcher.RouteHandler{natsHandler}
+
+	routeTTL := time.Duration(cfg.TCPRouteTTL)
+	if routeTTL.Seconds() > 65535 {
+		logger.Fatal("invalid-route-ttl", errors.New("route TTL value too large"), lager.Data{"ttl": routeTTL.Seconds()})
+		os.Exit(1)
+	}
+
+	if cfg.EnableTCPEmitter {
+		tcpLogger := logger.Session("tcp")
+		logger.Debug("creating-noop-uaa-client")
+		uaaClient := uaaclient.NewNoOpUaaClient()
+		routingAPIAddress := fmt.Sprintf("%s:%d", cfg.RoutingAPI.URI, cfg.RoutingAPI.Port)
+		logger.Debug("creating-routing-api-client", lager.Data{"api-location": routingAPIAddress})
+		routingAPIClient := routing_api.NewClient(routingAPIAddress, false)
+		routingAPIEmitter := emitter.NewRoutingAPIEmitter(tcpLogger, routingAPIClient, uaaClient, int(routeTTL.Seconds()))
+		tcpTable := routingtable.NewTCPTable(tcpLogger, nil)
+		routingAPIHandler := routehandlers.NewRoutingAPIHandler(tcpTable, routingAPIEmitter)
+		handlers = append(handlers, routingAPIHandler)
+	}
+
+	handler := routehandlers.NewMultiHandler(handlers...)
 	watcher := watcher.NewWatcher(
 		cfg.CellID,
-		initializeBBSClient(logger, cfg),
+		bbsClient,
 		clock,
-		table,
-		emitter,
+		handler,
 		syncer.Events(),
 		logger,
 	)
@@ -98,10 +126,10 @@ func main() {
 		time.Duration(cfg.ConsulDownModeNotificationInterval),
 	)
 
-	handler := func(resp http.ResponseWriter, req *http.Request) {
+	healthHandler := func(resp http.ResponseWriter, req *http.Request) {
 		resp.WriteHeader(http.StatusOK)
 	}
-	healthCheckServer := http_server.New(cfg.HealthCheckAddress, http.HandlerFunc(handler))
+	healthCheckServer := http_server.New(cfg.HealthCheckAddress, http.HandlerFunc(healthHandler))
 	members := grouper.Members{
 		{"nats-client", natsClientRunner},
 		{"healthcheck", healthCheckServer},
@@ -192,17 +220,17 @@ func initializeNatsEmitter(
 	logger lager.Logger,
 	natsClient diegonats.NATSClient,
 	routeEmittingWorkers int,
-) nats_emitter.NATSEmitter {
+) emitter.NATSEmitter {
 	workPool, err := workpool.NewWorkPool(routeEmittingWorkers)
 	if err != nil {
 		logger.Fatal("failed-to-construct-nats-emitter-workpool", err, lager.Data{"num-workers": routeEmittingWorkers}) // should never happen
 	}
 
-	return nats_emitter.New(natsClient, workPool, logger)
+	return emitter.NewNATSEmitter(natsClient, workPool, logger)
 }
 
-func initializeRoutingTable(logger lager.Logger) routing_table.RoutingTable {
-	return routing_table.NewTable(logger)
+func initializeRoutingTable(logger lager.Logger) routingtable.NATSRoutingTable {
+	return routingtable.NewNATSTable(logger)
 }
 
 func initializeConsulClient(logger lager.Logger, consulCluster string) consuladapter.Client {

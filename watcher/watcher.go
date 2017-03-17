@@ -1,6 +1,7 @@
 package watcher
 
 import (
+	"fmt"
 	"os"
 	"sync"
 	"sync/atomic"
@@ -11,171 +12,129 @@ import (
 	"code.cloudfoundry.org/bbs/models"
 	"code.cloudfoundry.org/clock"
 	"code.cloudfoundry.org/lager"
-	"code.cloudfoundry.org/route-emitter/nats_emitter"
-	"code.cloudfoundry.org/route-emitter/routing_table"
+	"code.cloudfoundry.org/route-emitter/routingtable/schema/endpoint"
 	"code.cloudfoundry.org/route-emitter/syncer"
-	"code.cloudfoundry.org/routing-info/cfroutes"
 	"code.cloudfoundry.org/runtimeschema/metric"
 )
 
 var (
-	routesTotal  = metric.Metric("RoutesTotal")
-	routesSynced = metric.Counter("RoutesSynced")
-
 	routeSyncDuration = metric.Duration("RouteEmitterSyncDuration")
-
-	routesRegistered   = metric.Counter("RoutesRegistered")
-	routesUnregistered = metric.Counter("RoutesUnregistered")
 )
 
+//go:generate counterfeiter -o fakes/fake_routehandler.go . RouteHandler
+type RouteHandler interface {
+	HandleEvent(logger lager.Logger, event models.Event)
+	Sync(
+		logger lager.Logger,
+		desired []*models.DesiredLRPSchedulingInfo,
+		runningActual []*endpoint.ActualLRPRoutingInfo,
+		domains models.DomainSet,
+		cachedEvents map[string]models.Event,
+	)
+	Emit(logger lager.Logger)
+	ShouldRefreshDesired(*endpoint.ActualLRPRoutingInfo) bool
+	RefreshDesired(lager.Logger, []*models.DesiredLRPSchedulingInfo)
+}
+
 type Watcher struct {
-	bbsClient  bbs.Client
-	clock      clock.Clock
-	table      routing_table.RoutingTable
-	emitter    nats_emitter.NATSEmitter
-	syncEvents syncer.Events
-	cellID     string
-	logger     lager.Logger
-}
-
-type syncEndEvent struct {
-	table    routing_table.RoutingTable
-	domains  models.DomainSet
-	callback func(routing_table.RoutingTable)
-
-	logger lager.Logger
-}
-
-type set map[interface{}]struct{}
-
-func (set set) contains(value interface{}) bool {
-	_, found := set[value]
-	return found
-}
-
-func (set set) add(value interface{}) {
-	set[value] = struct{}{}
+	cellID       string
+	bbsClient    bbs.Client
+	clock        clock.Clock
+	routeHandler RouteHandler
+	syncEvents   syncer.Events
+	logger       lager.Logger
 }
 
 func NewWatcher(
 	cellID string,
 	bbsClient bbs.Client,
 	clock clock.Clock,
-	table routing_table.RoutingTable,
-	emitter nats_emitter.NATSEmitter,
+	routeHandler RouteHandler,
 	syncEvents syncer.Events,
 	logger lager.Logger,
 ) *Watcher {
 	return &Watcher{
-		bbsClient:  bbsClient,
-		clock:      clock,
-		table:      table,
-		emitter:    emitter,
-		syncEvents: syncEvents,
-		cellID:     cellID,
-		logger:     logger.Session("watcher"),
+		cellID:       cellID,
+		bbsClient:    bbsClient,
+		clock:        clock,
+		routeHandler: routeHandler,
+		syncEvents:   syncEvents,
+		logger:       logger.Session("watcher"),
 	}
 }
 
+type syncEventResult struct {
+	startTime     time.Time
+	desired       []*models.DesiredLRPSchedulingInfo
+	runningActual []*endpoint.ActualLRPRoutingInfo
+	domains       models.DomainSet
+}
+
 func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
-	watcher.logger.Info("starting")
-
-	close(ready)
-	watcher.logger.Info("started")
-	defer watcher.logger.Info("finished")
-
-	var cachedEvents map[string]models.Event
+	watcher.logger.Debug("starting")
+	defer watcher.logger.Debug("finished")
 
 	eventChan := make(chan models.Event)
-	syncEndChan := make(chan syncEndEvent)
+	cachedEventsChan := make(chan map[string]models.Event)
+	resubscribeChannel := make(chan error)
 
-	syncing := false
-
-	var eventSource atomic.Value
+	eventSource := &atomic.Value{}
 	var stopEventSource int32
 
-	startEventSource := func() {
-		go func() {
-			var err error
-			var es events.EventSource
+	go checkForEvents(watcher.bbsClient, resubscribeChannel,
+		eventChan, eventSource, watcher.logger)
+	watcher.logger.Debug("listening-on-channels")
+	close(ready)
+	watcher.logger.Debug("started")
 
-			for {
-				if atomic.LoadInt32(&stopEventSource) == 1 {
-					watcher.logger.Info("stop-event-source-received")
-					return
-				}
-
-				es, err = watcher.bbsClient.SubscribeToEvents(watcher.logger)
-				if err != nil {
-					watcher.logger.Error("failed-subscribing-to-events", err)
-					continue
-				}
-
-				watcher.logger.Info("succeeded-subscribing-to-events")
-				eventSource.Store(es)
-
-				var event models.Event
-				for {
-					event, err = es.Next()
-					if err != nil {
-						watcher.logger.Error("failed-getting-next-event", err)
-						watcher.logger.Debug("closing-event-source-on-error")
-						closeErr := es.Close()
-						if closeErr != nil {
-							watcher.logger.Error("failed-closing-event-source", closeErr)
-						}
-						// wait a bit before retrying
-						time.Sleep(time.Second)
-						break
-					}
-
-					if event != nil {
-						eventChan <- event
-					}
-				}
-			}
-		}()
-	}
-
-	startedEventSource := false
 	for {
 		select {
-		case <-watcher.syncEvents.Sync:
-			if syncing == false {
-				logger := watcher.logger.Session("sync")
-				logger.Info("starting")
-
-				cachedEvents = make(map[string]models.Event)
-				syncing = true
-
-				if !startedEventSource {
-					startedEventSource = true
-					startEventSource()
-				}
-
-				go watcher.sync(logger, syncEndChan)
-			}
-
-		case syncEnd := <-syncEndChan:
-			watcher.completeSync(syncEnd, cachedEvents)
-			cachedEvents = nil
-			syncing = false
-			syncEnd.logger.Info("complete")
-
+		case event := <-eventChan:
+			logger := watcher.logger.Session("handling-event")
+			watcher.handleEvent(logger, event)
 		case <-watcher.syncEvents.Emit:
 			logger := watcher.logger.Session("emit")
-			watcher.emit(logger)
+			watcher.routeHandler.Emit(logger)
+		case <-watcher.syncEvents.Sync:
+			logger := watcher.logger.Session("sync")
+			logger.Debug("starting")
 
-		case event := <-eventChan:
-			if syncing {
-				watcher.logger.Info("caching-event", lager.Data{
-					"type": event.EventType(),
-				})
+			done := make(chan struct{})
+			go watcher.cacheIncomingEvents(eventChan, cachedEventsChan, done)
+			syncEvent, err := watcher.sync(logger)
 
-				cachedEvents[event.Key()] = event
-			} else {
-				watcher.handleEvent(watcher.logger, event)
+			close(done)
+
+			if err != nil {
+				logger.Error("failed-to-sync-events", err)
+				continue
 			}
+
+			watcher.routeHandler.Sync(logger,
+				syncEvent.desired,
+				syncEvent.runningActual,
+				syncEvent.domains,
+				<-cachedEventsChan,
+			)
+
+			after := watcher.clock.Now()
+			err = routeSyncDuration.Send(after.Sub(syncEvent.startTime))
+
+			if err != nil {
+				watcher.logger.Error("failed-to-send-route-sync-duration-metric", err)
+			}
+
+			logger.Debug("complete")
+		case err := <-resubscribeChannel:
+			watcher.logger.Error("event-source-error", err)
+			if es := eventSource.Load(); es != nil {
+				err := es.(events.EventSource).Close()
+				if err != nil {
+					watcher.logger.Error("failed-closing-event-source", err)
+				}
+			}
+			go checkForEvents(watcher.bbsClient, resubscribeChannel,
+				eventChan, eventSource, watcher.logger)
 
 		case <-signals:
 			watcher.logger.Info("stopping")
@@ -191,470 +150,178 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 	}
 }
 
-func (watcher *Watcher) emit(logger lager.Logger) {
-	messagesToEmit := watcher.table.MessagesToEmit()
-
-	logger.Debug("emitting-messages", lager.Data{"messages": messagesToEmit})
-	err := watcher.emitter.Emit(messagesToEmit)
-	if err != nil {
-		logger.Error("failed-to-emit-routes", err)
-	}
-
-	routesSynced.Add(messagesToEmit.RouteRegistrationCount())
-	err = routesTotal.Send(watcher.table.RouteCount())
-	if err != nil {
-		logger.Error("failed-to-send-routes-total-metric", err)
+func (w *Watcher) cacheIncomingEvents(
+	eventChan chan models.Event,
+	cachedEventsChan chan map[string]models.Event,
+	done chan struct{},
+) {
+	cachedEvents := make(map[string]models.Event)
+	for {
+		select {
+		case event := <-eventChan:
+			w.logger.Info("caching-event", lager.Data{
+				"type": event.EventType(),
+			})
+			cachedEvents[event.Key()] = event
+		case <-done:
+			cachedEventsChan <- cachedEvents
+			return
+		}
 	}
 }
 
-func (watcher *Watcher) sync(logger lager.Logger, syncEndChan chan syncEndEvent) {
-	endEvent := syncEndEvent{logger: logger}
-	defer func() {
-		syncEndChan <- endEvent
-	}()
+func (w *Watcher) handleEvent(logger lager.Logger, event models.Event) {
+	var routingInfo *endpoint.ActualLRPRoutingInfo
+	switch event := event.(type) {
+	case *models.ActualLRPCreatedEvent:
+		routingInfo = endpoint.NewActualLRPRoutingInfo(event.ActualLrpGroup)
+	case *models.ActualLRPChangedEvent:
+		routingInfo = endpoint.NewActualLRPRoutingInfo(event.After)
+	default:
+	}
 
-	before := watcher.clock.Now()
+	if routingInfo != nil && routingInfo.ActualLRP.State == models.ActualLRPStateRunning {
+		if w.routeHandler.ShouldRefreshDesired(routingInfo) {
+			logger.Debug("refreshing-desired-lrp-info", lager.Data{"routing-info": routingInfo})
+			desiredLRPs, err := w.bbsClient.DesiredLRPSchedulingInfos(logger, models.DesiredLRPFilter{
+				ProcessGuids: []string{routingInfo.ActualLRP.ProcessGuid},
+			})
+			if err != nil {
+				logger.Error("failed-getting-desired-lrps-for-missing-actual-lrp", err)
+			} else {
+				w.routeHandler.RefreshDesired(logger, desiredLRPs)
+			}
+		}
+	}
 
-	var runningActualLRPs []*routing_table.ActualLRPRoutingInfo
-	var getActualLRPsErr error
-	var schedulingInfos []*models.DesiredLRPSchedulingInfo
-	var getSchedulingInfosErr error
+	w.routeHandler.HandleEvent(logger, event)
+}
+
+func (w *Watcher) sync(logger lager.Logger) (*syncEventResult, error) {
+	var desiredSchedulingInfo []*models.DesiredLRPSchedulingInfo
+	var runningActualLRPs []*endpoint.ActualLRPRoutingInfo
 	var domains models.DomainSet
-	var getDomainErr error
+
+	var actualErr, desiredErr, domainsErr error
+	before := w.clock.Now()
 
 	wg := sync.WaitGroup{}
-
-	getSchedulingInfos := func(guids []string) {
-		logger.Debug("getting-scheduling-infos", lager.Data{"guids-length": len(guids)})
-		var err error
-		schedulingInfos, err = watcher.bbsClient.DesiredLRPSchedulingInfos(logger, models.DesiredLRPFilter{
-			ProcessGuids: guids,
-		})
-		if err != nil {
-			logger.Error("failed-getting-desired-lrps", err)
-			getSchedulingInfosErr = err
-			return
-		}
-		logger.Debug("succeeded-getting-scheduling-infos", lager.Data{"num-desired-responses": len(schedulingInfos)})
-	}
 
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-
 		logger.Debug("getting-actual-lrps")
-		actualLRPGroups, err := watcher.bbsClient.ActualLRPGroups(logger, models.ActualLRPFilter{CellID: watcher.cellID})
-		if err != nil {
-			logger.Error("failed-getting-actual-lrps", err)
-			getActualLRPsErr = err
+		var actualLRPGroups []*models.ActualLRPGroup
+		actualLRPGroups, actualErr = w.bbsClient.ActualLRPGroups(logger, models.ActualLRPFilter{CellID: w.cellID})
+		if actualErr != nil {
+			logger.Error("failed-getting-actual-lrps", actualErr)
 			return
 		}
 		logger.Debug("succeeded-getting-actual-lrps", lager.Data{"num-actual-responses": len(actualLRPGroups)})
 
-		runningActualLRPs = make([]*routing_table.ActualLRPRoutingInfo, 0, len(actualLRPGroups))
+		runningActualLRPs = make([]*endpoint.ActualLRPRoutingInfo, 0, len(actualLRPGroups))
 		for _, actualLRPGroup := range actualLRPGroups {
 			actualLRP, evacuating := actualLRPGroup.Resolve()
 			if actualLRP.State == models.ActualLRPStateRunning {
-				runningActualLRPs = append(runningActualLRPs, &routing_table.ActualLRPRoutingInfo{
+				runningActualLRPs = append(runningActualLRPs, &endpoint.ActualLRPRoutingInfo{
 					ActualLRP:  actualLRP,
 					Evacuating: evacuating,
 				})
 			}
 		}
 
-		if watcher.cellID != "" {
+		if w.cellID != "" {
 			guids := make([]string, 0, len(runningActualLRPs))
 			// filter the desired lrp scheduling info by process guids
-			for _, actualLRP := range actualLRPGroups {
-				lrp, _ := actualLRP.Resolve()
-				guids = append(guids, lrp.ProcessGuid)
+			for _, lrpInfo := range runningActualLRPs {
+				guids = append(guids, lrpInfo.ActualLRP.ProcessGuid)
 			}
 			if len(guids) > 0 {
-				getSchedulingInfos(guids)
+				desiredSchedulingInfo, desiredErr = getSchedulingInfos(logger, w.bbsClient, guids)
 			}
 		}
 	}()
 
-	if watcher.cellID == "" {
+	if w.cellID == "" {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			getSchedulingInfos(nil)
+			desiredSchedulingInfo, desiredErr = getSchedulingInfos(logger, w.bbsClient, nil)
 		}()
 	}
 
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-
-		logger.Debug("getting-domains")
-		domainArray, err := watcher.bbsClient.Domains(logger)
-		if err != nil {
-			logger.Error("failed-getting-domains", err)
-			getDomainErr = err
+		var domainArray []string
+		domainArray, domainsErr = w.bbsClient.Domains(logger)
+		if domainsErr != nil {
+			logger.Error("failed-getting-domains", domainsErr)
 			return
 		}
+
 		domains = models.NewDomainSet(domainArray)
 		logger.Debug("succeeded-getting-domains", lager.Data{"num-domains": len(domains)})
 	}()
 
 	wg.Wait()
 
-	if getActualLRPsErr != nil || getSchedulingInfosErr != nil || getDomainErr != nil {
+	if actualErr != nil || desiredErr != nil || domainsErr != nil {
+		return nil, fmt.Errorf("failed to sync: %s, %s, %s", actualErr, desiredErr, domainsErr)
+	}
+
+	return &syncEventResult{
+		startTime:     before,
+		desired:       desiredSchedulingInfo,
+		runningActual: runningActualLRPs,
+		domains:       domains,
+	}, nil
+}
+
+func checkForEvents(bbsClient bbs.Client, resubscribeChannel chan error,
+	eventChan chan models.Event, eventSource *atomic.Value, logger lager.Logger) {
+	var err error
+	var es events.EventSource
+
+	logger.Info("subscribing-to-bbs-events")
+	es, err = bbsClient.SubscribeToEvents(logger)
+	if err != nil {
+		resubscribeChannel <- err
 		return
 	}
+	logger.Info("subscribed-to-bbs-events")
 
-	schedInfoMap := make(map[string]*models.DesiredLRPSchedulingInfo)
-	for _, schedInfo := range schedulingInfos {
-		schedInfoMap[schedInfo.ProcessGuid] = schedInfo
-	}
+	eventSource.Store(es)
 
-	newTable := routing_table.NewTempTable(
-		routing_table.RoutesByRoutingKeyFromSchedulingInfos(schedulingInfos),
-		routing_table.EndpointsByRoutingKeyFromActuals(runningActualLRPs, schedInfoMap),
-	)
-
-	endEvent.table = newTable
-	endEvent.domains = domains
-	endEvent.callback = func(table routing_table.RoutingTable) {
-		after := watcher.clock.Now()
-		err := routeSyncDuration.Send(after.Sub(before))
+	var event models.Event
+	for {
+		event, err = es.Next()
 		if err != nil {
-			logger.Error("failed-to-send-route-sync-duration-metric", err)
-		}
-	}
-}
-
-func (watcher *Watcher) completeSync(syncEnd syncEndEvent, cachedEvents map[string]models.Event) {
-	logger := syncEnd.logger
-
-	if syncEnd.table == nil {
-		// sync failed, process the events on the current table
-		logger.Debug("handling-events-from-failed-sync")
-		for _, e := range cachedEvents {
-			watcher.handleEvent(logger, e)
-		}
-		logger.Debug("done-handling-events-from-failed-sync")
-
-		return
-	}
-
-	emitter := watcher.emitter
-	watcher.emitter = nil
-
-	table := watcher.table
-	watcher.table = syncEnd.table
-
-	logger.Debug("handling-cached-events")
-	for _, e := range cachedEvents {
-		watcher.handleEvent(logger, e)
-	}
-	logger.Debug("done-handling-cached-events")
-
-	watcher.table = table
-	watcher.emitter = emitter
-
-	messages := watcher.table.Swap(syncEnd.table, syncEnd.domains)
-	logger.Debug("start-emitting-messages", lager.Data{
-		"num-registration-messages":   len(messages.RegistrationMessages),
-		"num-unregistration-messages": len(messages.UnregistrationMessages),
-	})
-	watcher.emitMessages(logger, messages)
-	logger.Debug("done-emitting-messages", lager.Data{
-		"num-registration-messages":   len(messages.RegistrationMessages),
-		"num-unregistration-messages": len(messages.UnregistrationMessages),
-	})
-
-	if syncEnd.callback != nil {
-		syncEnd.callback(watcher.table)
-	}
-}
-
-// returns true if the event is relevant to the local cell, e.g. an actual lrp
-// started or stopped on the local cell
-func (watcher *Watcher) eventCellIDMatches(logger lager.Logger, event models.Event) bool {
-	if watcher.cellID == "" {
-		return true
-	}
-
-	switch event := event.(type) {
-	case *models.DesiredLRPCreatedEvent:
-		return true
-	case *models.DesiredLRPChangedEvent:
-		return true
-	case *models.DesiredLRPRemovedEvent:
-		return true
-	case *models.ActualLRPCreatedEvent:
-		lrp, _ := event.ActualLrpGroup.Resolve()
-		return lrp.ActualLRPInstanceKey.CellId == watcher.cellID
-	case *models.ActualLRPChangedEvent:
-		beforeLRP, _ := event.Before.Resolve()
-		afterLRP, _ := event.After.Resolve()
-		if beforeLRP.State == models.ActualLRPStateRunning {
-			return beforeLRP.ActualLRPInstanceKey.CellId == watcher.cellID
-		} else if afterLRP.State == models.ActualLRPStateRunning {
-			return afterLRP.ActualLRPInstanceKey.CellId == watcher.cellID
-		}
-		// this shouldn't matter if we pass it through or not, since the event is
-		// a no-op from the route-emitter point of view
-		return false
-	case *models.ActualLRPRemovedEvent:
-		lrp, _ := event.ActualLrpGroup.Resolve()
-		return lrp.ActualLRPInstanceKey.CellId == watcher.cellID
-	default:
-		return false
-	}
-}
-
-func (watcher *Watcher) handleEvent(logger lager.Logger, event models.Event) {
-	if !watcher.eventCellIDMatches(logger, event) {
-		logSkippedEvent(logger, event)
-		return
-	}
-
-	switch event := event.(type) {
-	case *models.DesiredLRPCreatedEvent:
-		schedulingInfo := event.DesiredLrp.DesiredLRPSchedulingInfo()
-		watcher.handleDesiredCreate(logger, &schedulingInfo)
-	case *models.DesiredLRPChangedEvent:
-		before := event.Before.DesiredLRPSchedulingInfo()
-		after := event.After.DesiredLRPSchedulingInfo()
-		watcher.handleDesiredUpdate(logger, &before, &after)
-	case *models.DesiredLRPRemovedEvent:
-		schedulingInfo := event.DesiredLrp.DesiredLRPSchedulingInfo()
-		watcher.handleDesiredDelete(logger, &schedulingInfo)
-	case *models.ActualLRPCreatedEvent:
-		watcher.handleActualCreate(logger, routing_table.NewActualLRPRoutingInfo(event.ActualLrpGroup))
-	case *models.ActualLRPChangedEvent:
-		watcher.handleActualUpdate(logger,
-			routing_table.NewActualLRPRoutingInfo(event.Before),
-			routing_table.NewActualLRPRoutingInfo(event.After),
-		)
-	case *models.ActualLRPRemovedEvent:
-		watcher.handleActualDelete(logger, routing_table.NewActualLRPRoutingInfo(event.ActualLrpGroup))
-	default:
-		logger.Info("did-not-handle-unrecognizable-event", lager.Data{"event-type": event.EventType()})
-	}
-}
-
-func (watcher *Watcher) handleDesiredCreate(logger lager.Logger, schedulingInfo *models.DesiredLRPSchedulingInfo) {
-	logger = logger.Session("handle-desired-create", desiredLRPData(schedulingInfo))
-	logger.Info("starting")
-	defer logger.Info("complete")
-
-	watcher.setRoutesForDesired(logger, schedulingInfo)
-}
-
-func (watcher *Watcher) handleDesiredUpdate(logger lager.Logger, before, after *models.DesiredLRPSchedulingInfo) {
-	logger = logger.Session("handling-desired-update", lager.Data{
-		"before": desiredLRPData(before),
-		"after":  desiredLRPData(after),
-	})
-	logger.Info("starting")
-	defer logger.Info("complete")
-
-	afterKeysSet := watcher.setRoutesForDesired(logger, after)
-
-	beforeRoutingKeys := routing_table.RoutingKeysFromSchedulingInfo(before)
-	afterRoutes, _ := cfroutes.CFRoutesFromRoutingInfo(after.Routes)
-
-	afterContainerPorts := set{}
-	for _, route := range afterRoutes {
-		afterContainerPorts.add(route.Port)
-	}
-
-	requestedInstances := after.Instances - before.Instances
-
-	for _, key := range beforeRoutingKeys {
-		if !afterKeysSet.contains(key) || !afterContainerPorts.contains(key.ContainerPort) {
-			messagesToEmit := watcher.table.RemoveRoutes(key, &after.ModificationTag)
-			watcher.emitMessages(logger, messagesToEmit)
-		}
-
-		// in case of scale down, remove endpoints
-		if requestedInstances < 0 {
-			logger.Info("removing-endpoints", lager.Data{"removal_count": -1 * requestedInstances, "routing_key": key})
-
-			for index := before.Instances - 1; index >= after.Instances; index-- {
-				endpoints := watcher.table.EndpointsForIndex(key, index)
-
-				for i, _ := range endpoints {
-					messagesToEmit := watcher.table.RemoveEndpoint(key, endpoints[i])
-					watcher.emitMessages(logger, messagesToEmit)
-				}
+			switch err {
+			case events.ErrUnrecognizedEventType:
+				logger.Error("failed-getting-next-event", err)
+			default:
+				resubscribeChannel <- err
+				return
 			}
 		}
-	}
-}
 
-func (watcher *Watcher) setRoutesForDesired(logger lager.Logger, schedulingInfo *models.DesiredLRPSchedulingInfo) set {
-	routes, _ := cfroutes.CFRoutesFromRoutingInfo(schedulingInfo.Routes)
-	routingKeySet := set{}
-
-	routeEntries := make(map[routing_table.RoutingKey][]routing_table.Route)
-	for _, route := range routes {
-		key := routing_table.RoutingKey{ProcessGuid: schedulingInfo.ProcessGuid, ContainerPort: route.Port}
-		routingKeySet.add(key)
-
-		routes := []routing_table.Route{}
-		for _, hostname := range route.Hostnames {
-			routes = append(routes, routing_table.Route{
-				Hostname:        hostname,
-				LogGuid:         schedulingInfo.LogGuid,
-				RouteServiceUrl: route.RouteServiceUrl,
-			})
+		if event != nil {
+			eventChan <- event
 		}
-		routeEntries[key] = append(routeEntries[key], routes...)
-	}
-	for key := range routeEntries {
-		messagesToEmit := watcher.table.SetRoutes(key, routeEntries[key], nil)
-		watcher.emitMessages(logger, messagesToEmit)
-	}
-
-	return routingKeySet
-}
-
-func (watcher *Watcher) handleDesiredDelete(logger lager.Logger, schedulingInfo *models.DesiredLRPSchedulingInfo) {
-	logger = logger.Session("handling-desired-delete", desiredLRPData(schedulingInfo))
-	logger.Info("starting")
-	defer logger.Info("complete")
-
-	for _, key := range routing_table.RoutingKeysFromSchedulingInfo(schedulingInfo) {
-		messagesToEmit := watcher.table.RemoveRoutes(key, &schedulingInfo.ModificationTag)
-
-		watcher.emitMessages(logger, messagesToEmit)
 	}
 }
 
-func (watcher *Watcher) handleActualCreate(logger lager.Logger, actualLRPInfo *routing_table.ActualLRPRoutingInfo) {
-	logger = logger.Session("handling-actual-create", actualLRPData(actualLRPInfo))
-	logger.Info("starting")
-	defer logger.Info("complete")
-
-	if actualLRPInfo.ActualLRP.State == models.ActualLRPStateRunning {
-		watcher.addAndEmit(logger, actualLRPInfo)
-	}
-}
-
-func (watcher *Watcher) handleActualUpdate(logger lager.Logger, before, after *routing_table.ActualLRPRoutingInfo) {
-	logger = logger.Session("handling-actual-update", lager.Data{
-		"before": actualLRPData(before),
-		"after":  actualLRPData(after),
+func getSchedulingInfos(logger lager.Logger, bbsClient bbs.Client, guids []string) ([]*models.DesiredLRPSchedulingInfo, error) {
+	logger.Debug("getting-scheduling-infos", lager.Data{"guids-length": len(guids)})
+	schedulingInfos, err := bbsClient.DesiredLRPSchedulingInfos(logger, models.DesiredLRPFilter{
+		ProcessGuids: guids,
 	})
-	logger.Info("starting")
-	defer logger.Info("complete")
-
-	switch {
-	case after.ActualLRP.State == models.ActualLRPStateRunning:
-		watcher.addAndEmit(logger, after)
-	case after.ActualLRP.State != models.ActualLRPStateRunning && before.ActualLRP.State == models.ActualLRPStateRunning:
-		watcher.removeAndEmit(logger, before)
-	}
-}
-
-func (watcher *Watcher) handleActualDelete(logger lager.Logger, actualLRPInfo *routing_table.ActualLRPRoutingInfo) {
-	logger = logger.Session("handling-actual-delete", actualLRPData(actualLRPInfo))
-	logger.Info("starting")
-	defer logger.Info("complete")
-
-	if actualLRPInfo.ActualLRP.State == models.ActualLRPStateRunning {
-		watcher.removeAndEmit(logger, actualLRPInfo)
-	}
-}
-
-func (watcher *Watcher) addAndEmit(logger lager.Logger, actualLRPInfo *routing_table.ActualLRPRoutingInfo) {
-	logger.Info("watcher-add-and-emit", lager.Data{"net_info": actualLRPInfo.ActualLRP.ActualLRPNetInfo})
-	endpoints, err := routing_table.EndpointsFromActual(actualLRPInfo)
 	if err != nil {
-		logger.Error("failed-to-extract-endpoint-from-actual", err)
-		return
+		logger.Error("failed-getting-scheduling-infos", err)
+		return nil, err
 	}
 
-	for _, endpoint := range endpoints {
-		key := routing_table.RoutingKey{ProcessGuid: actualLRPInfo.ActualLRP.ProcessGuid, ContainerPort: uint32(endpoint.ContainerPort)}
-		routes := watcher.table.GetRoutes(key)
-
-		if len(routes) == 0 {
-			logger.Info("desired-lrp-missing-for-actual-lrp", lager.Data{"guid": key.ProcessGuid})
-			lrps, err := watcher.bbsClient.DesiredLRPSchedulingInfos(logger, models.DesiredLRPFilter{
-				ProcessGuids: []string{key.ProcessGuid},
-			})
-
-			if err != nil {
-				logger.Error("failed-getting-desired-lrps-for-missing-actual-lrp", err)
-			}
-
-			if len(lrps) > 0 {
-				watcher.setRoutesForDesired(logger, lrps[0])
-			}
-		}
-
-		messagesToEmit := watcher.table.AddEndpoint(key, endpoint)
-		watcher.emitMessages(logger, messagesToEmit)
-	}
-}
-
-func (watcher *Watcher) removeAndEmit(logger lager.Logger, actualLRPInfo *routing_table.ActualLRPRoutingInfo) {
-	logger.Info("watcher-remove-and-emit", lager.Data{"net_info": actualLRPInfo.ActualLRP.ActualLRPNetInfo})
-	endpoints, err := routing_table.EndpointsFromActual(actualLRPInfo)
-	if err != nil {
-		logger.Error("failed-to-extract-endpoint-from-actual", err)
-		return
-	}
-
-	for _, key := range routing_table.RoutingKeysFromActual(actualLRPInfo.ActualLRP) {
-		for _, endpoint := range endpoints {
-			if key.ContainerPort == endpoint.ContainerPort {
-				messagesToEmit := watcher.table.RemoveEndpoint(key, endpoint)
-				watcher.emitMessages(logger, messagesToEmit)
-			}
-		}
-	}
-}
-
-func (watcher *Watcher) emitMessages(logger lager.Logger, messagesToEmit routing_table.MessagesToEmit) {
-	if watcher.emitter != nil {
-		logger.Debug("emit-messages", lager.Data{"messages": messagesToEmit})
-		watcher.emitter.Emit(messagesToEmit)
-		routesRegistered.Add(messagesToEmit.RouteRegistrationCount())
-		routesUnregistered.Add(messagesToEmit.RouteUnregistrationCount())
-	}
-}
-
-func desiredLRPData(schedulingInfo *models.DesiredLRPSchedulingInfo) lager.Data {
-	logRoutes := make(models.Routes)
-	logRoutes[cfroutes.CF_ROUTER] = schedulingInfo.Routes[cfroutes.CF_ROUTER]
-
-	return lager.Data{
-		"process-guid": schedulingInfo.ProcessGuid,
-		"routes":       logRoutes,
-		"instances":    schedulingInfo.GetInstances(),
-	}
-}
-
-func logSkippedEvent(logger lager.Logger, event models.Event) {
-	data := lager.Data{"event-type": event.EventType()}
-	switch e := event.(type) {
-	case *models.ActualLRPCreatedEvent:
-		data["lrp"] = actualLRPData(routing_table.NewActualLRPRoutingInfo(e.ActualLrpGroup))
-	case *models.ActualLRPRemovedEvent:
-		data["lrp"] = actualLRPData(routing_table.NewActualLRPRoutingInfo(e.ActualLrpGroup))
-	case *models.ActualLRPChangedEvent:
-		data["before"] = actualLRPData(routing_table.NewActualLRPRoutingInfo(e.Before))
-		data["after"] = actualLRPData(routing_table.NewActualLRPRoutingInfo(e.After))
-	}
-	logger.Debug("skipping-event", data)
-}
-
-func actualLRPData(lrpRoutingInfo *routing_table.ActualLRPRoutingInfo) lager.Data {
-	lrp := lrpRoutingInfo.ActualLRP
-	return lager.Data{
-		"process-guid":  lrp.ProcessGuid,
-		"index":         lrp.Index,
-		"domain":        lrp.Domain,
-		"instance-guid": lrp.InstanceGuid,
-		"cell-id":       lrp.ActualLRPInstanceKey.CellId,
-		"address":       lrp.Address,
-		"evacuating":    lrpRoutingInfo.Evacuating,
-	}
+	logger.Debug("succeeded-getting-scheduling-infos", lager.Data{"num-desired-responses": len(schedulingInfos)})
+	return schedulingInfos, nil
 }
