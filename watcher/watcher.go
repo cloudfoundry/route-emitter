@@ -105,6 +105,12 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 
 			close(done)
 
+			// always pull the cachedEvents map off the channel
+			cachedEvents := <-cachedEventsChan
+			for _, e := range cachedEvents {
+				watcher.refreshDesired(logger, e)
+			}
+
 			if err != nil {
 				logger.Error("failed-to-sync-events", err)
 				continue
@@ -114,7 +120,7 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 				syncEvent.desired,
 				syncEvent.runningActual,
 				syncEvent.domains,
-				<-cachedEventsChan,
+				cachedEvents,
 			)
 
 			after := watcher.clock.Now()
@@ -170,7 +176,7 @@ func (w *Watcher) cacheIncomingEvents(
 	}
 }
 
-func (w *Watcher) handleEvent(logger lager.Logger, event models.Event) {
+func (w *Watcher) refreshDesired(logger lager.Logger, event models.Event) {
 	var routingInfo *endpoint.ActualLRPRoutingInfo
 	switch event := event.(type) {
 	case *models.ActualLRPCreatedEvent:
@@ -193,7 +199,10 @@ func (w *Watcher) handleEvent(logger lager.Logger, event models.Event) {
 			}
 		}
 	}
+}
 
+func (w *Watcher) handleEvent(logger lager.Logger, event models.Event) {
+	w.refreshDesired(logger, event)
 	w.routeHandler.HandleEvent(logger, event)
 }
 
@@ -254,6 +263,7 @@ func (w *Watcher) sync(logger lager.Logger) (*syncEventResult, error) {
 	go func() {
 		defer wg.Done()
 		var domainArray []string
+		logger.Debug("getting-domains")
 		domainArray, domainsErr = w.bbsClient.Domains(logger)
 		if domainsErr != nil {
 			logger.Error("failed-getting-domains", domainsErr)
