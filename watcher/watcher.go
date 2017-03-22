@@ -13,6 +13,7 @@ import (
 	"code.cloudfoundry.org/clock"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/route-emitter/routingtable/schema/endpoint"
+	"code.cloudfoundry.org/route-emitter/routingtable/util"
 	"code.cloudfoundry.org/route-emitter/syncer"
 	"code.cloudfoundry.org/runtimeschema/metric"
 )
@@ -202,8 +203,63 @@ func (w *Watcher) refreshDesired(logger lager.Logger, event models.Event) {
 }
 
 func (w *Watcher) handleEvent(logger lager.Logger, event models.Event) {
+	if !w.eventCellIDMatches(logger, event) {
+		logSkippedEvent(logger, event)
+		return
+	}
+
 	w.refreshDesired(logger, event)
 	w.routeHandler.HandleEvent(logger, event)
+}
+
+func logSkippedEvent(logger lager.Logger, event models.Event) {
+	data := lager.Data{"event-type": event.EventType()}
+	switch e := event.(type) {
+	case *models.ActualLRPCreatedEvent:
+		data["lrp"] = util.ActualLRPData(endpoint.NewActualLRPRoutingInfo(e.ActualLrpGroup))
+	case *models.ActualLRPRemovedEvent:
+		data["lrp"] = util.ActualLRPData(endpoint.NewActualLRPRoutingInfo(e.ActualLrpGroup))
+	case *models.ActualLRPChangedEvent:
+		data["before"] = util.ActualLRPData(endpoint.NewActualLRPRoutingInfo(e.Before))
+		data["after"] = util.ActualLRPData(endpoint.NewActualLRPRoutingInfo(e.After))
+	}
+	logger.Debug("skipping-event", data)
+}
+
+// returns true if the event is relevant to the local cell, e.g. an actual lrp
+// started or stopped on the local cell
+func (watcher *Watcher) eventCellIDMatches(logger lager.Logger, event models.Event) bool {
+	if watcher.cellID == "" {
+		return true
+	}
+
+	switch event := event.(type) {
+	case *models.DesiredLRPCreatedEvent:
+		return true
+	case *models.DesiredLRPChangedEvent:
+		return true
+	case *models.DesiredLRPRemovedEvent:
+		return true
+	case *models.ActualLRPCreatedEvent:
+		lrp, _ := event.ActualLrpGroup.Resolve()
+		return lrp.ActualLRPInstanceKey.CellId == watcher.cellID
+	case *models.ActualLRPChangedEvent:
+		beforeLRP, _ := event.Before.Resolve()
+		afterLRP, _ := event.After.Resolve()
+		if beforeLRP.State == models.ActualLRPStateRunning {
+			return beforeLRP.ActualLRPInstanceKey.CellId == watcher.cellID
+		} else if afterLRP.State == models.ActualLRPStateRunning {
+			return afterLRP.ActualLRPInstanceKey.CellId == watcher.cellID
+		}
+		// this shouldn't matter if we pass it through or not, since the event is
+		// a no-op from the route-emitter point of view
+		return false
+	case *models.ActualLRPRemovedEvent:
+		lrp, _ := event.ActualLrpGroup.Resolve()
+		return lrp.ActualLRPInstanceKey.CellId == watcher.cellID
+	default:
+		return false
+	}
 }
 
 func (w *Watcher) sync(logger lager.Logger) (*syncEventResult, error) {

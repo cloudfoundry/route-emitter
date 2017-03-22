@@ -111,10 +111,10 @@ var _ = Describe("Watcher", func() {
 			Emit: make(chan struct{}),
 		}
 		cellID = ""
-		testWatcher = watcher.NewWatcher(cellID, bbsClient, clock, routeHandler, syncEvents, logger)
 	})
 
 	JustBeforeEach(func() {
+		testWatcher = watcher.NewWatcher(cellID, bbsClient, clock, routeHandler, syncEvents, logger)
 		process = ifrit.Invoke(testWatcher)
 	})
 
@@ -178,6 +178,46 @@ var _ = Describe("Watcher", func() {
 		})
 	})
 
+	Context("handle ActualLRPRemovedEvent", func() {
+		var (
+			event models.Event
+		)
+
+		BeforeEach(func() {
+			actualLRP := getActualLRP("process-guid-1", "instance-guid-1", "some-ip", 61000, 5222, false)
+			event = models.NewActualLRPRemovedEvent(actualLRP)
+			eventSource.NextReturns(event, nil)
+		})
+
+		It("calls routeHandler HandleActualCreate", func() {
+			Eventually(routeHandler.HandleEventCallCount).Should(BeNumerically(">=", 1))
+			_, createEvent := routeHandler.HandleEventArgsForCall(0)
+			Expect(createEvent).Should(Equal(event))
+		})
+
+		Context("when the cell id is set", func() {
+			Context("and doesn't match the event cell id", func() {
+				BeforeEach(func() {
+					cellID = "random-cell-id"
+				})
+
+				It("ignores the event", func() {
+					Consistently(routeHandler.HandleEventCallCount).Should(BeZero())
+				})
+			})
+
+			Context("and matches the event cell id", func() {
+				BeforeEach(func() {
+					cellID = "cell-id-1"
+				})
+
+				It("handles the event", func() {
+					Eventually(routeHandler.HandleEventCallCount).Should(BeNumerically(">=", 1))
+				})
+			})
+		})
+	})
+
 	Context("handle ActualLRPCreatedEvent", func() {
 		var (
 			event models.Event
@@ -193,6 +233,28 @@ var _ = Describe("Watcher", func() {
 			Eventually(routeHandler.HandleEventCallCount).Should(BeNumerically(">=", 1))
 			_, createEvent := routeHandler.HandleEventArgsForCall(0)
 			Expect(createEvent).Should(Equal(event))
+		})
+
+		Context("when the cell id is set", func() {
+			Context("and doesn't match the event cell id", func() {
+				BeforeEach(func() {
+					cellID = "random-cell-id"
+				})
+
+				It("ignores the event", func() {
+					Consistently(routeHandler.HandleEventCallCount).Should(BeZero())
+				})
+			})
+
+			Context("and matches the event cell id", func() {
+				BeforeEach(func() {
+					cellID = "cell-id-1"
+				})
+
+				It("handles the event", func() {
+					Eventually(routeHandler.HandleEventCallCount).Should(BeNumerically(">=", 1))
+				})
+			})
 		})
 	})
 
@@ -212,6 +274,28 @@ var _ = Describe("Watcher", func() {
 			Eventually(routeHandler.HandleEventCallCount).Should(BeNumerically(">=", 1))
 			_, changeEvent := routeHandler.HandleEventArgsForCall(0)
 			Expect(changeEvent).Should(Equal(event))
+		})
+
+		Context("when the cell id is set", func() {
+			Context("and doesn't match the event cell id", func() {
+				BeforeEach(func() {
+					cellID = "random-cell-id"
+				})
+
+				It("ignores the event", func() {
+					Consistently(routeHandler.HandleEventCallCount).Should(BeZero())
+				})
+			})
+
+			Context("and matches the event cell id", func() {
+				BeforeEach(func() {
+					cellID = "cell-id-1"
+				})
+
+				It("handles the event", func() {
+					Eventually(routeHandler.HandleEventCallCount).Should(BeNumerically(">=", 1))
+				})
+			})
 		})
 	})
 
