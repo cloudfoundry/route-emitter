@@ -26,6 +26,9 @@ func (fb *fakeBenchmarker) Time(desc string, f func(), whatever ...interface{}) 
 func (fb *fakeBenchmarker) RecordValue(desc string, f float64, whatever ...interface{}) {
 }
 
+func (fb *fakeBenchmarker) RecordValueWithPrecision(name string, value float64, units string, precision int, info ...interface{}) {
+}
+
 var _ = Describe("Benchmarks", func() {
 	var (
 		rt                     routingtable.NATSRoutingTable
