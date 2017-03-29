@@ -311,212 +311,330 @@ var _ = Describe("Route Emitter", func() {
 			}
 		}
 
-		JustBeforeEach(func() {
-			runner = createEmitterRunner("emitter1", cellID, cfgs...)
-			runner.StartCheck = "emitter1.started"
-			emitter = ginkgomon.Invoke(runner)
-		})
+		Context("when UAA auth is enabled", func() {
+			JustBeforeEach(func() {
+				runner = createEmitterRunner("emitter1", cellID, cfgs...)
+				runner.StartCheck = "emitter1.started"
+				emitter = ifrit.Invoke(runner)
+			})
 
-		AfterEach(func() {
-			ginkgomon.Interrupt(emitter, emitterInterruptTimeout)
-		})
-
-		Context("and an lrp with routes is desired", func() {
-			var (
-				expectedTCPProcessGUID string
-				desiredLRP             models.DesiredLRP
-			)
+			AfterEach(func() {
+				ginkgomon.Interrupt(emitter, emitterInterruptTimeout)
+			})
 
 			BeforeEach(func() {
 				cfgs = append(cfgs, func(cfg *config.RouteEmitterConfig) {
-					cfg.BBSAddress = bbsURL.String()
-					cfg.SyncInterval = durationjson.Duration(1 * time.Second)
-					cfg.RoutingAPI.URI = "http://127.0.0.1"
-					cfg.RoutingAPI.Port = routingAPIRunner.Config.Port
+					cfg.RoutingAPI.AuthDisabled = false
+				})
+			})
+
+			Context("and no configuration is provided", func() {
+				BeforeEach(func() {
+					cfgs = append(cfgs, func(cfg *config.RouteEmitterConfig) {
+						cfg.OAuth = config.OAuthConfig{}
+					})
 				})
 
-				expectedTCPProcessGUID = "some-guid"
-				desiredLRP = getDesiredLRP(expectedTCPProcessGUID, routerGUID, 5222, 5222)
+				It("fails", func() {
+					Eventually(emitter.Wait()).Should(Receive())
+					Expect(runner.ExitCode()).NotTo(Equal(0))
+					Expect(runner).To(gbytes.Say("initialize-token-fetcher-error"))
+				})
+			})
+
+			Context("and an invalid configuration is provided", func() {
+				BeforeEach(func() {
+					cfgs = append(cfgs, func(cfg *config.RouteEmitterConfig) {
+						cfg.OAuth = config.OAuthConfig{
+							UaaURL: "http://localhost:0",
+						}
+					})
+				})
+
+				It("fails", func() {
+					Eventually(emitter.Wait()).Should(Receive())
+					Expect(runner.ExitCode()).NotTo(Equal(0))
+					Expect(runner).To(gbytes.Say("failed-fetching-uaa-key"))
+				})
+			})
+
+			Context("and a valid configuration is provided", func() {
+				verifyEmitterIsUP := func() {
+					It("starts up successfully", func() {
+						Expect(runner).To(gbytes.Say("emitter1.started"))
+					})
+
+					Context("when an lrp is desired", func() {
+						BeforeEach(func() {
+							desiredLRP := getDesiredLRP("some-guid", routerGUID, 5222, 5222)
+							Expect(bbsClient.DesireLRP(logger, &desiredLRP)).NotTo(HaveOccurred())
+							lrpKey := models.NewActualLRPKey("some-guid", 0, domain)
+							instanceKey := models.NewActualLRPInstanceKey("instance-guid", "cell-id")
+							netInfo := models.NewActualLRPNetInfo("some-ip", models.NewPortMapping(62003, 5222))
+							Expect(bbsClient.StartActualLRP(logger, &lrpKey, &instanceKey, &netInfo))
+
+						})
+
+						It("requests a token from the server", func() {
+							Eventually(func() []string {
+								reqs := oauthServer.ReceivedRequests()
+								paths := make([]string, len(reqs))
+								for i, r := range reqs {
+									paths[i] = r.URL.Path
+								}
+								return paths
+							}, 5*time.Second).Should(ContainElement("/oauth/token"))
+						})
+					})
+				}
+
+				BeforeEach(func() {
+					cfgs = append(cfgs, func(cfg *config.RouteEmitterConfig) {
+						cfg.OAuth = config.OAuthConfig{
+							UaaURL:       oauthServer.URL(),
+							ClientName:   "someclient",
+							ClientSecret: "somesecret",
+							CACerts:      "fixtures/ca.crt",
+						}
+					})
+				})
+
+				verifyEmitterIsUP()
+
+				Context("and skip cert verify is set", func() {
+					BeforeEach(func() {
+						cfgs = append(cfgs, func(cfg *config.RouteEmitterConfig) {
+							cfg.OAuth.CACerts = ""
+							cfg.OAuth.SkipCertVerify = true
+						})
+					})
+
+					verifyEmitterIsUP()
+				})
+
+			})
+		})
+
+		Context("when UAA auth is disabled", func() {
+			BeforeEach(func() {
+				cfgs = append(cfgs, func(cfg *config.RouteEmitterConfig) {
+					cfg.RoutingAPI.AuthDisabled = true
+				})
 			})
 
 			JustBeforeEach(func() {
-				Expect(bbsClient.DesireLRP(logger, &desiredLRP)).NotTo(HaveOccurred())
+				runner = createEmitterRunner("emitter1", cellID, cfgs...)
+				runner.StartCheck = "emitter1.started"
+				emitter = ginkgomon.Invoke(runner)
 			})
 
-			Context("and an instance is started", func() {
+			AfterEach(func() {
+				ginkgomon.Interrupt(emitter, emitterInterruptTimeout)
+			})
+
+			It("starts successfully without oauth config", func() {
+				Expect(runner).To(gbytes.Say("creating-noop-uaa-client"))
+			})
+
+			Context("and an lrp with routes is desired", func() {
+				var (
+					expectedTCPProcessGUID string
+					desiredLRP             models.DesiredLRP
+				)
+
 				BeforeEach(func() {
-					lrpKey = models.NewActualLRPKey(expectedTCPProcessGUID, 0, domain)
-					instanceKey = models.NewActualLRPInstanceKey("instance-guid", "cell-id")
-					netInfo = models.NewActualLRPNetInfo("some-ip", models.NewPortMapping(62003, 5222))
-					Expect(bbsClient.StartActualLRP(logger, &lrpKey, &instanceKey, &netInfo))
+					cfgs = append(cfgs, func(cfg *config.RouteEmitterConfig) {
+						cfg.BBSAddress = bbsURL.String()
+						cfg.SyncInterval = durationjson.Duration(1 * time.Second)
+						cfg.RoutingAPI.URI = "http://127.0.0.1"
+						cfg.RoutingAPI.Port = routingAPIRunner.Config.Port
+					})
+
+					expectedTCPProcessGUID = "some-guid"
+					desiredLRP = getDesiredLRP(expectedTCPProcessGUID, routerGUID, 5222, 5222)
 				})
 
-				Context("when backing store loses its data", func() {
-					JustBeforeEach(func() {
-						// ensure it's seen the route at least once
+				JustBeforeEach(func() {
+					Expect(bbsClient.DesireLRP(logger, &desiredLRP)).NotTo(HaveOccurred())
+				})
+
+				Context("and an instance is started", func() {
+					BeforeEach(func() {
+						lrpKey = models.NewActualLRPKey(expectedTCPProcessGUID, 0, domain)
+						instanceKey = models.NewActualLRPInstanceKey("instance-guid", "cell-id")
+						netInfo = models.NewActualLRPNetInfo("some-ip", models.NewPortMapping(62003, 5222))
+						Expect(bbsClient.StartActualLRP(logger, &lrpKey, &instanceKey, &netInfo))
+					})
+
+					Context("when backing store loses its data", func() {
+						JustBeforeEach(func() {
+							// ensure it's seen the route at least once
+							Eventually(func() bool {
+								mappings, _ := routingAPIRunner.GetClient().TcpRouteMappings()
+								return contains(mappings, expectedTcpRouteMapping)
+							}, 5*time.Second).Should(BeTrue())
+
+							sqlRunner.Reset()
+
+							// Only start actual LRP, do not repopulate Desired
+							err := bbsClient.StartActualLRP(logger, &lrpKey, &instanceKey, &netInfo)
+							Expect(err).NotTo(HaveOccurred())
+						})
+
+						It("continues to broadcast routes", func() {
+							Consistently(func() bool {
+								mappings, _ := routingAPIRunner.GetClient().TcpRouteMappings()
+								return contains(mappings, expectedTcpRouteMapping)
+							}, 5*time.Second).Should(BeTrue())
+						})
+					})
+
+					It("emits its routes immediately", func() {
 						Eventually(func() bool {
 							mappings, _ := routingAPIRunner.GetClient().TcpRouteMappings()
 							return contains(mappings, expectedTcpRouteMapping)
 						}, 5*time.Second).Should(BeTrue())
-
-						sqlRunner.Reset()
-
-						// Only start actual LRP, do not repopulate Desired
-						err := bbsClient.StartActualLRP(logger, &lrpKey, &instanceKey, &netInfo)
-						Expect(err).NotTo(HaveOccurred())
 					})
 
-					It("continues to broadcast routes", func() {
-						Consistently(func() bool {
-							mappings, _ := routingAPIRunner.GetClient().TcpRouteMappings()
-							return contains(mappings, expectedTcpRouteMapping)
-						}, 5*time.Second).Should(BeTrue())
-					})
-				})
+					Context("and the route-emitter cell id doesn't match the actual lrp cell", func() {
+						BeforeEach(func() {
+							cellID = "some-random-cell-id"
+						})
 
-				It("emits its routes immediately", func() {
-					Eventually(func() bool {
-						mappings, _ := routingAPIRunner.GetClient().TcpRouteMappings()
-						return contains(mappings, expectedTcpRouteMapping)
-					}, 5*time.Second).Should(BeTrue())
-				})
-
-				Context("and the route-emitter cell id doesn't match the actual lrp cell", func() {
-					BeforeEach(func() {
-						cellID = "some-random-cell-id"
+						It("does not emit the route", func() {
+							Consistently(func() bool {
+								mappings, _ := routingAPIRunner.GetClient().TcpRouteMappings()
+								return contains(mappings, expectedTcpRouteMapping)
+							}, 5*time.Second).Should(BeFalse())
+						})
 					})
 
-					It("does not emit the route", func() {
-						Consistently(func() bool {
-							mappings, _ := routingAPIRunner.GetClient().TcpRouteMappings()
-							return contains(mappings, expectedTcpRouteMapping)
-						}, 5*time.Second).Should(BeFalse())
-					})
-				})
+					Context("the instance has no routes", func() {
+						var (
+							routes *models.Routes
+						)
 
-				Context("the instance has no routes", func() {
-					var (
-						routes *models.Routes
-					)
+						BeforeEach(func() {
+							routes = desiredLRP.Routes
+							desiredLRP.Routes = &models.Routes{}
+						})
 
-					BeforeEach(func() {
-						routes = desiredLRP.Routes
-						desiredLRP.Routes = &models.Routes{}
-					})
-
-					JustBeforeEach(func() {
-						Consistently(func() bool {
-							mappings, _ := routingAPIRunner.GetClient().TcpRouteMappings()
-							return contains(mappings, expectedTcpRouteMapping)
-						}, 5*time.Second).Should(BeFalse())
-					})
-
-					Context("and routes are added", func() {
 						JustBeforeEach(func() {
+							Consistently(func() bool {
+								mappings, _ := routingAPIRunner.GetClient().TcpRouteMappings()
+								return contains(mappings, expectedTcpRouteMapping)
+							}, 5*time.Second).Should(BeFalse())
+						})
+
+						Context("and routes are added", func() {
+							JustBeforeEach(func() {
+								update := &models.DesiredLRPUpdate{
+									Routes: routes,
+								}
+								err := bbsClient.UpdateDesiredLRP(logger, desiredLRP.ProcessGuid, update)
+								Expect(err).NotTo(HaveOccurred())
+							})
+
+							It("immediately registers the route", func() {
+								Eventually(func() error {
+									mappings, err := routingAPIRunner.GetClient().TcpRouteMappings()
+									if err != nil {
+										return err
+									}
+
+									if !contains(mappings, expectedTcpRouteMapping) {
+										return fmt.Errorf("%v does not contain the route mappings", mappings)
+									}
+									return nil
+								}).Should(Succeed())
+							})
+						})
+					})
+
+					Context("and routes are removed", func() {
+						JustBeforeEach(func() {
+							Eventually(func() bool {
+								mappings, _ := routingAPIRunner.GetClient().TcpRouteMappings()
+								return contains(mappings, expectedTcpRouteMapping)
+							}, 5*time.Second).Should(BeTrue())
 							update := &models.DesiredLRPUpdate{
-								Routes: routes,
+								Routes: &models.Routes{},
 							}
 							err := bbsClient.UpdateDesiredLRP(logger, desiredLRP.ProcessGuid, update)
 							Expect(err).NotTo(HaveOccurred())
 						})
 
-						It("immediately registers the route", func() {
+						It("immediately unregisters the route", func() {
 							Eventually(func() error {
 								mappings, err := routingAPIRunner.GetClient().TcpRouteMappings()
 								if err != nil {
 									return err
 								}
 
-								if !contains(mappings, expectedTcpRouteMapping) {
-									return fmt.Errorf("%v does not contain the route mappings", mappings)
+								if len(mappings) != 0 {
+									return fmt.Errorf("%v is not empty", mappings)
 								}
+
 								return nil
 							}).Should(Succeed())
 						})
 					})
 				})
 
-				Context("and routes are removed", func() {
+				Context("and an instance is claimed", func() {
 					JustBeforeEach(func() {
-						Eventually(func() bool {
-							mappings, _ := routingAPIRunner.GetClient().TcpRouteMappings()
-							return contains(mappings, expectedTcpRouteMapping)
-						}, 5*time.Second).Should(BeTrue())
-						update := &models.DesiredLRPUpdate{
-							Routes: &models.Routes{},
-						}
-						err := bbsClient.UpdateDesiredLRP(logger, desiredLRP.ProcessGuid, update)
+						err := bbsClient.ClaimActualLRP(logger, expectedTCPProcessGUID, int(index), &instanceKey)
 						Expect(err).NotTo(HaveOccurred())
 					})
 
-					It("immediately unregisters the route", func() {
-						Eventually(func() error {
-							mappings, err := routingAPIRunner.GetClient().TcpRouteMappings()
-							if err != nil {
-								return err
-							}
-
-							if len(mappings) != 0 {
-								return fmt.Errorf("%v is not empty", mappings)
-							}
-
-							return nil
-						}).Should(Succeed())
+					It("does not emit routes", func() {
+						Consistently(func() []apimodels.TcpRouteMapping {
+							mappings, _ := routingAPIRunner.GetClient().TcpRouteMappings()
+							return mappings
+						}).Should(BeEmpty())
 					})
 				})
 			})
 
-			Context("and an instance is claimed", func() {
+			Context("when routing api server is down but bbs is running", func() {
 				JustBeforeEach(func() {
-					err := bbsClient.ClaimActualLRP(logger, expectedTCPProcessGUID, int(index), &instanceKey)
-					Expect(err).NotTo(HaveOccurred())
+					ginkgomon.Interrupt(routingApiProcess, routingAPIInterruptTimeout)
+					desiredLRP := getDesiredLRP("some-guid-1", "some-guid", 1883, 1883)
+					Expect(bbsClient.DesireLRP(logger, &desiredLRP)).NotTo(HaveOccurred())
+
+					key := models.NewActualLRPKey("some-guid-1", 0, domain)
+					instanceKey := models.NewActualLRPInstanceKey("instance-guid-1", "cell-id")
+					netInfo := models.NewActualLRPNetInfo("some-ip-1", models.NewPortMapping(62003, 1883))
+					Expect(bbsClient.StartActualLRP(logger, &key, &instanceKey, &netInfo))
 				})
 
-				It("does not emit routes", func() {
-					Consistently(func() []apimodels.TcpRouteMapping {
-						mappings, _ := routingAPIRunner.GetClient().TcpRouteMappings()
-						return mappings
-					}).Should(BeEmpty())
+				It("starts an SSE connection to the bbs and continues to try to emit to routing api", func() {
+					// Do not use Say matcher as ordering of 'subscribed-to-bbs-event' log message
+					// is not defined in relation to the 'tcp-emitter.started' message
+					Eventually(runner.Buffer().Contents).Should(ContainSubstring("subscribed-to-bbs-event"))
+					Eventually(runner.Buffer()).Should(gbytes.Say("syncer.syncing"))
+					Eventually(runner.Buffer()).Should(gbytes.Say("unable-to-upsert.*connection refused"))
+					Consistently(runner.Buffer()).ShouldNot(gbytes.Say("successfully-emitted-event"))
+					Consistently(emitter.Wait()).ShouldNot(Receive())
+
+					By("starting routing api server")
+					routingApiProcess = ginkgomon.Invoke(routingAPIRunner)
+					Eventually(func() error {
+						guid, err := routingAPIRunner.GetGUID()
+						if err != nil {
+							return err
+						}
+						expectedTcpRouteMapping.RouterGroupGuid = guid
+						notExpectedTcpRouteMapping.RouterGroupGuid = guid
+						return nil
+					}).Should(Succeed())
+					logger.Info("started-routing-api-server")
+					Eventually(runner.Buffer()).Should(gbytes.Say("unable-to-upsert.*some-guid not found"))
 				})
 			})
+
 		})
 
-		Context("when routing api server is down but bbs is running", func() {
-			JustBeforeEach(func() {
-				ginkgomon.Interrupt(routingApiProcess, routingAPIInterruptTimeout)
-				desiredLRP := getDesiredLRP("some-guid-1", "some-guid", 1883, 1883)
-				Expect(bbsClient.DesireLRP(logger, &desiredLRP)).NotTo(HaveOccurred())
-
-				key := models.NewActualLRPKey("some-guid-1", 0, domain)
-				instanceKey := models.NewActualLRPInstanceKey("instance-guid-1", "cell-id")
-				netInfo := models.NewActualLRPNetInfo("some-ip-1", models.NewPortMapping(62003, 1883))
-				Expect(bbsClient.StartActualLRP(logger, &key, &instanceKey, &netInfo))
-			})
-
-			It("starts an SSE connection to the bbs and continues to try to emit to routing api", func() {
-				// Do not use Say matcher as ordering of 'subscribed-to-bbs-event' log message
-				// is not defined in relation to the 'tcp-emitter.started' message
-				Eventually(runner.Buffer().Contents).Should(ContainSubstring("subscribed-to-bbs-event"))
-				Eventually(runner.Buffer()).Should(gbytes.Say("syncer.syncing"))
-				Eventually(runner.Buffer()).Should(gbytes.Say("unable-to-upsert.*connection refused"))
-				Consistently(runner.Buffer()).ShouldNot(gbytes.Say("successfully-emitted-event"))
-				Consistently(emitter.Wait()).ShouldNot(Receive())
-
-				By("starting routing api server")
-				routingApiProcess = ginkgomon.Invoke(routingAPIRunner)
-				Eventually(func() error {
-					guid, err := routingAPIRunner.GetGUID()
-					if err != nil {
-						return err
-					}
-					expectedTcpRouteMapping.RouterGroupGuid = guid
-					notExpectedTcpRouteMapping.RouterGroupGuid = guid
-					return nil
-				}).Should(Succeed())
-				logger.Info("started-routing-api-server")
-				Eventually(runner.Buffer()).Should(gbytes.Say("unable-to-upsert.*some-guid not found"))
-			})
-		})
 	})
 
 	Context("when NATS is unreachable", func() {

@@ -42,7 +42,14 @@ var _ = Describe("Config", func() {
 			"lock_ttl": "20s",
 			"log_level": "debug",
 			"debug_address": "127.0.0.1:9999",
-			"enable_tcp_emitter": true
+			"enable_tcp_emitter": true,
+			"oauth": {
+				"uaa_url": "https://uaa.cf.service.internal:8443",
+				"client_name": "someclient",
+				"client_secret": "somesecret",
+				"ca_certs": "some-cert",
+				"skip_cert_verify": true
+			}
 		}`
 	})
 
@@ -94,6 +101,13 @@ var _ = Describe("Config", func() {
 			},
 			LagerConfig: lagerflags.LagerConfig{
 				LogLevel: "debug",
+			},
+			OAuth: config.OAuthConfig{
+				UaaURL:         "https://uaa.cf.service.internal:8443",
+				ClientName:     "someclient",
+				ClientSecret:   "somesecret",
+				CACerts:        "some-cert",
+				SkipCertVerify: true,
 			},
 		}
 

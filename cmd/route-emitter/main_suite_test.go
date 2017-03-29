@@ -1,9 +1,11 @@
 package main_test
 
 import (
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"net"
+	"net/http"
 	"net/url"
 	"os"
 	"strconv"
@@ -11,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"code.cloudfoundry.org/cfhttp"
 	"code.cloudfoundry.org/lager/lagertest"
 	"code.cloudfoundry.org/route-emitter/diegonats"
 	"code.cloudfoundry.org/route-emitter/diegonats/gnatsdrunner"
@@ -19,6 +22,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gexec"
+	"github.com/onsi/gomega/ghttp"
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/ifrit/ginkgomon"
 
@@ -39,6 +43,8 @@ var (
 	dropsondePort      int
 	healthCheckPort    int
 	healthCheckAddress string
+
+	oauthServer *ghttp.Server
 
 	bbsPath    string
 	bbsURL     *url.URL
@@ -89,6 +95,8 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 
 	return payload
 }, func(payload []byte) {
+	oauthServer = startOAuthServer()
+
 	binaries := map[string]string{}
 
 	err := json.Unmarshal(payload, &binaries)
@@ -143,6 +151,42 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 	}
 })
 
+func startOAuthServer() *ghttp.Server {
+	server := ghttp.NewUnstartedServer()
+	tlsConfig, err := cfhttp.NewTLSConfig("fixtures/server.crt", "fixtures/server.key", "")
+	Expect(err).NotTo(HaveOccurred())
+	tlsConfig.ClientAuth = tls.NoClientCert
+
+	server.HTTPTestServer.TLS = tlsConfig
+	server.AllowUnhandledRequests = true
+	server.UnhandledRequestStatusCode = http.StatusOK
+
+	server.HTTPTestServer.StartTLS()
+
+	publicKey := "-----BEGIN PUBLIC KEY-----\\n" +
+		"MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDHFr+KICms+tuT1OXJwhCUmR2d\\n" +
+		"KVy7psa8xzElSyzqx7oJyfJ1JZyOzToj9T5SfTIq396agbHJWVfYphNahvZ/7uMX\\n" +
+		"qHxf+ZH9BL1gk9Y6kCnbM5R60gfwjyW1/dQPjOzn9N394zd2FJoFHwdq9Qs0wBug\\n" +
+		"spULZVNRxq7veq/fzwIDAQAB\\n" +
+		"-----END PUBLIC KEY-----"
+
+	data := fmt.Sprintf("{\"alg\":\"rsa\", \"value\":\"%s\"}", publicKey)
+	server.RouteToHandler("GET", "/token_key",
+		ghttp.CombineHandlers(
+			ghttp.VerifyRequest("GET", "/token_key"),
+			ghttp.RespondWith(http.StatusOK, data)),
+	)
+	server.RouteToHandler("POST", "/oauth/token",
+		ghttp.CombineHandlers(
+			ghttp.VerifyBasicAuth("someclient", "somesecret"),
+			func(w http.ResponseWriter, req *http.Request) {
+				jsonBytes := []byte(`{"access_token":"some-token", "expires_in":10}`)
+				w.Write(jsonBytes)
+			}))
+
+	return server
+}
+
 var _ = BeforeEach(func() {
 	consulRunner.Start()
 	consulRunner.WaitUntilReady()
@@ -192,6 +236,18 @@ var _ = AfterEach(func() {
 	ginkgomon.Kill(sqlProcess, 5*time.Second)
 })
 
+var _ = SynchronizedAfterSuite(func() {
+	oauthServer.Close()
+}, func() {
+	gexec.CleanupBuildArtifacts()
+})
+
+func getServerPort(url string) string {
+	endpoints := strings.Split(url, ":")
+	Expect(endpoints).To(HaveLen(3))
+	return endpoints[2]
+}
+
 func stopBBS() {
 	if !bbsRunning {
 		return
@@ -211,8 +267,3 @@ func startBBS() {
 	bbsProcess = ginkgomon.Invoke(bbsRunner)
 	bbsRunning = true
 }
-
-var _ = SynchronizedAfterSuite(func() {
-}, func() {
-	gexec.CleanupBuildArtifacts()
-})

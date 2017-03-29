@@ -35,37 +35,55 @@ func (t *routingAPIEmitter) Emit(tcpEvents event.RoutingEvents) error {
 	defer t.logger.Debug("complete-emit")
 
 	registrationMappingRequests, unregistrationMappingRequests := tcpEvents.ToMappingRequests(t.logger, t.ttl)
-	t.emit(registrationMappingRequests, unregistrationMappingRequests)
+	err := t.emit(registrationMappingRequests, unregistrationMappingRequests)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
 
 func (t *routingAPIEmitter) emit(registrationMappingRequests, unregistrationMappingRequests []models.TcpRouteMapping) error {
-	emitted := true
-	if len(registrationMappingRequests) > 0 {
-		if err := t.routingAPIClient.UpsertTcpRouteMappings(registrationMappingRequests); err != nil {
-			emitted = false
+	var forceUpdate bool
+
+	for count := 0; count < 2; count++ {
+		forceUpdate = count > 0
+		token, err := t.uaaClient.FetchToken(forceUpdate)
+		if err != nil {
+			return err
+		}
+
+		t.routingAPIClient.SetToken(token.AccessToken)
+
+		err = t.emitRoutingAPI(registrationMappingRequests, unregistrationMappingRequests)
+		if err != nil && count > 0 {
+			return err
+		} else if err == nil {
+			break
+		}
+	}
+
+	t.logger.Debug("successfully-emitted-events")
+	return nil
+}
+
+func (t *routingAPIEmitter) emitRoutingAPI(regMsgs, unregMsgs []models.TcpRouteMapping) error {
+	if len(regMsgs) > 0 {
+		if err := t.routingAPIClient.UpsertTcpRouteMappings(regMsgs); err != nil {
 			t.logger.Error("unable-to-upsert", err)
 			return err
 		}
 		t.logger.Debug("successfully-emitted-registration-events",
-			lager.Data{"number-of-registration-events": len(registrationMappingRequests)})
-
+			lager.Data{"number-of-registration-events": len(regMsgs)})
 	}
 
-	if len(unregistrationMappingRequests) > 0 {
-		if err := t.routingAPIClient.DeleteTcpRouteMappings(unregistrationMappingRequests); err != nil {
-			emitted = false
+	if len(unregMsgs) > 0 {
+		if err := t.routingAPIClient.DeleteTcpRouteMappings(unregMsgs); err != nil {
 			t.logger.Error("unable-to-delete", err)
 			return err
 		}
 		t.logger.Debug("successfully-emitted-unregistration-events",
-			lager.Data{"number-of-unregistration-events": len(unregistrationMappingRequests)})
-
-	}
-
-	if emitted {
-		t.logger.Debug("successfully-emitted-events")
+			lager.Data{"number-of-unregistration-events": len(unregMsgs)})
 	}
 	return nil
 }

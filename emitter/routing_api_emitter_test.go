@@ -11,7 +11,8 @@ import (
 	"code.cloudfoundry.org/route-emitter/routingtable/schema/event"
 	"code.cloudfoundry.org/routing-api/fake_routing_api"
 	apimodels "code.cloudfoundry.org/routing-api/models"
-	uaaclient "code.cloudfoundry.org/uaa-go-client"
+	fakeuaa "code.cloudfoundry.org/uaa-go-client/fakes"
+	"code.cloudfoundry.org/uaa-go-client/schema"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -22,6 +23,7 @@ var _ = Describe("RoutingAPIEmitter", func() {
 
 	var (
 		routingApiClient        *fake_routing_api.FakeClient
+		uaaClient               *fakeuaa.FakeClient
 		routingEvents           event.RoutingEvents
 		routingKey1             endpoint.RoutingKey
 		routableEndpoints1      endpoint.RoutableEndpoints
@@ -35,7 +37,7 @@ var _ = Describe("RoutingAPIEmitter", func() {
 		routingApiClient = new(fake_routing_api.FakeClient)
 		ttl = 60
 		logger = lagertest.NewTestLogger("test")
-		uaaClient := uaaclient.NewNoOpUaaClient()
+		uaaClient = &fakeuaa.FakeClient{}
 		routingAPIEmitter = emitter.NewRoutingAPIEmitter(logger, routingApiClient, uaaClient, ttl)
 
 		logGuid := "log-guid-1"
@@ -62,6 +64,42 @@ var _ = Describe("RoutingAPIEmitter", func() {
 		expectedMappingRequests = []apimodels.TcpRouteMapping{
 			apimodels.NewTcpRouteMapping("123", 61000, "some-ip-1", 62003, int(ttl)),
 		}
+
+		token := &schema.Token{
+			AccessToken: "accesstoken",
+		}
+		uaaClient.FetchTokenReturns(token, nil)
+	})
+
+	It("fetches a client token from UAA", func() {
+		err := routingAPIEmitter.Emit(routingEvents)
+		Expect(err).ShouldNot(HaveOccurred())
+		Expect(uaaClient.FetchTokenCallCount()).To(Equal(1))
+	})
+
+	It("uses a cached token if available", func() {
+		err := routingAPIEmitter.Emit(routingEvents)
+		Expect(err).ShouldNot(HaveOccurred())
+		Expect(uaaClient.FetchTokenCallCount()).To(Equal(1))
+		Expect(uaaClient.FetchTokenArgsForCall(0)).To(BeFalse())
+	})
+
+	It("authorizes the routing API call with its bearer token", func() {
+		err := routingAPIEmitter.Emit(routingEvents)
+		Expect(err).ShouldNot(HaveOccurred())
+		Expect(routingApiClient.SetTokenCallCount()).To(Equal(1))
+	})
+
+	Context("when UAA communication fails", func() {
+		BeforeEach(func() {
+			uaaClient.FetchTokenReturns(nil, errors.New("blam"))
+		})
+
+		It("returns an error and emits nothing", func() {
+			err := routingAPIEmitter.Emit(routingEvents)
+			Expect(err).Should(HaveOccurred())
+			Expect(routingApiClient.UpsertTcpRouteMappingsCallCount()).To(Equal(0))
+		})
 	})
 
 	Context("when valid routing events are provided", func() {
@@ -99,50 +137,52 @@ var _ = Describe("RoutingAPIEmitter", func() {
 				})
 			})
 		})
-		Context("when routing API Upsert returns an error other than unauthorized", func() {
-			BeforeEach(func() {
-				routingApiClient.UpsertTcpRouteMappingsReturns(errors.New("kabooom"))
-			})
 
-			It("logs the error", func() {
-				err := routingAPIEmitter.Emit(routingEvents)
-				Expect(err).ShouldNot(HaveOccurred())
-				Expect(logger).To(gbytes.Say("test.unable-to-upsert.*kabooom"))
-			})
-		})
-
-		Context("when routing API Upsert returns an unauthorized error", func() {
+		Context("when routing API Upsert returns an error", func() {
 			BeforeEach(func() {
 				routingApiClient.UpsertTcpRouteMappingsReturns(errors.New("unauthorized"))
 			})
 
 			It("retries once and logs the error", func() {
 				err := routingAPIEmitter.Emit(routingEvents)
-				Expect(err).ShouldNot(HaveOccurred())
+				Expect(err).To(HaveOccurred())
 				Expect(logger).To(gbytes.Say("test.unable-to-upsert.*unauthorized"))
 			})
-		})
 
-		Context("when routing API Delete returns an error other than unauthorized", func() {
-			BeforeEach(func() {
-				routingApiClient.DeleteTcpRouteMappingsReturns(errors.New("kabooom"))
-				routingEvents = event.RoutingEvents{
-					event.RoutingEvent{
-						EventType: event.RouteUnregistrationEvent,
-						Key:       routingKey1,
-						Entry:     routableEndpoints1,
-					},
-				}
-			})
-
-			It("logs error", func() {
+			It("refreshes the cached UAA token", func() {
 				err := routingAPIEmitter.Emit(routingEvents)
-				Expect(err).ShouldNot(HaveOccurred())
-				Expect(logger).To(gbytes.Say("test.unable-to-delete.*kabooom"))
+				Expect(err).To(HaveOccurred())
+
+				Expect(uaaClient.FetchTokenCallCount()).To(Equal(2))
+				Expect(uaaClient.FetchTokenArgsForCall(1)).To(BeTrue())
+			})
+
+			Context("when refreshing the cached token authorizes the emitter", func() {
+				BeforeEach(func() {
+					var count uint
+					routingApiClient.UpsertTcpRouteMappingsStub = func([]apimodels.TcpRouteMapping) error {
+						defer func() {
+							count += 1
+						}()
+						if count > 0 {
+							return nil
+						}
+
+						return errors.New("unauthorized")
+					}
+				})
+
+				It("succeeds in emitting routes", func() {
+					err := routingAPIEmitter.Emit(routingEvents)
+					Expect(err).ToNot(HaveOccurred())
+
+					Expect(uaaClient.FetchTokenCallCount()).To(Equal(2))
+					Expect(routingApiClient.UpsertTcpRouteMappingsCallCount()).To(Equal(2))
+				})
 			})
 		})
 
-		Context("when routing API Delete returns an error other than unauthorized", func() {
+		Context("when routing API Delete returns an error", func() {
 			BeforeEach(func() {
 				routingApiClient.DeleteTcpRouteMappingsReturns(errors.New("unauthorized"))
 				routingEvents = event.RoutingEvents{
@@ -156,8 +196,40 @@ var _ = Describe("RoutingAPIEmitter", func() {
 
 			It("logs error", func() {
 				err := routingAPIEmitter.Emit(routingEvents)
-				Expect(err).ShouldNot(HaveOccurred())
+				Expect(err).To(HaveOccurred())
 				Expect(logger).To(gbytes.Say("test.unable-to-delete.*unauthorized"))
+			})
+
+			It("refreshes the cached UAA token", func() {
+				err := routingAPIEmitter.Emit(routingEvents)
+				Expect(err).To(HaveOccurred())
+
+				Expect(uaaClient.FetchTokenCallCount()).To(Equal(2))
+				Expect(uaaClient.FetchTokenArgsForCall(1)).To(BeTrue())
+			})
+
+			Context("when refreshing the cached token authorizes the emitter", func() {
+				BeforeEach(func() {
+					var count uint
+					routingApiClient.DeleteTcpRouteMappingsStub = func([]apimodels.TcpRouteMapping) error {
+						defer func() {
+							count += 1
+						}()
+						if count > 0 {
+							return nil
+						}
+
+						return errors.New("unauthorized")
+					}
+				})
+
+				It("succeeds in emitting routes", func() {
+					err := routingAPIEmitter.Emit(routingEvents)
+					Expect(err).ToNot(HaveOccurred())
+
+					Expect(uaaClient.FetchTokenCallCount()).To(Equal(2))
+					Expect(routingApiClient.DeleteTcpRouteMappingsCallCount()).To(Equal(2))
+				})
 			})
 		})
 	})
@@ -190,7 +262,7 @@ var _ = Describe("RoutingAPIEmitter", func() {
 
 		It("returns \"Unable to build mapping request\" error", func() {
 			err := routingAPIEmitter.Emit(routingEvents)
-			Expect(err).ShouldNot(HaveOccurred())
+			Expect(err).NotTo(HaveOccurred())
 			Expect(logger).To(gbytes.Say("test.invalid-routing-event"))
 		})
 	})

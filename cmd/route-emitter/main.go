@@ -28,6 +28,7 @@ import (
 	"code.cloudfoundry.org/route-emitter/watcher"
 	"code.cloudfoundry.org/routing-api"
 	uaaclient "code.cloudfoundry.org/uaa-go-client"
+	uaaconfig "code.cloudfoundry.org/uaa-go-client/config"
 	"code.cloudfoundry.org/workpool"
 	"github.com/cloudfoundry/dropsonde"
 	"github.com/nu7hatch/gouuid"
@@ -82,13 +83,11 @@ func main() {
 	routeTTL := time.Duration(cfg.TCPRouteTTL)
 	if routeTTL.Seconds() > 65535 {
 		logger.Fatal("invalid-route-ttl", errors.New("route TTL value too large"), lager.Data{"ttl": routeTTL.Seconds()})
-		os.Exit(1)
 	}
 
 	if cfg.EnableTCPEmitter {
 		tcpLogger := logger.Session("tcp")
-		logger.Debug("creating-noop-uaa-client")
-		uaaClient := uaaclient.NewNoOpUaaClient()
+		uaaClient := newUaaClient(tcpLogger, &cfg, clock)
 		routingAPIAddress := fmt.Sprintf("%s:%d", cfg.RoutingAPI.URI, cfg.RoutingAPI.Port)
 		logger.Debug("creating-routing-api-client", lager.Data{"api-location": routingAPIAddress})
 		routingAPIClient := routing_api.NewClient(routingAPIAddress, false)
@@ -206,6 +205,34 @@ func main() {
 	}
 
 	logger.Info("exited")
+}
+
+func newUaaClient(logger lager.Logger, c *config.RouteEmitterConfig, klok clock.Clock) uaaclient.Client {
+	if c.RoutingAPI.AuthDisabled {
+		logger.Debug("creating-noop-uaa-client")
+		client := uaaclient.NewNoOpUaaClient()
+		return client
+	}
+
+	logger.Debug("creating-uaa-client")
+	cfg := uaaconfig.Config{
+		UaaEndpoint:      c.OAuth.UaaURL,
+		ClientName:       c.OAuth.ClientName,
+		ClientSecret:     c.OAuth.ClientSecret,
+		SkipVerification: c.OAuth.SkipCertVerify,
+		CACerts:          c.OAuth.CACerts,
+	}
+	uaaClient, err := uaaclient.NewClient(logger, &cfg, klok)
+	if err != nil {
+		logger.Fatal("initialize-token-fetcher-error", err)
+	}
+
+	_, err = uaaClient.FetchKey()
+	if err != nil {
+		logger.Fatal("failed-fetching-uaa-key", err)
+	}
+
+	return uaaClient
 }
 
 func initializeDropsonde(logger lager.Logger, dropsondePort int) {

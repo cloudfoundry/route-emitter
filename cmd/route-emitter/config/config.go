@@ -18,12 +18,11 @@ type RoutingAPIConfig struct {
 }
 
 type OAuthConfig struct {
-	TokenEndpoint     string `json:"token_endpoint"`
-	Port              int    `json:"port"`
-	SkipSSLValidation bool   `json:"skip_ssl_validation"`
-	ClientName        string `json:"client_name"`
-	ClientSecret      string `json:"client_secret"`
-	CACerts           string `json:"ca_certs"`
+	UaaURL         string `json:"uaa_url"`
+	ClientName     string `json:"client_name"`
+	ClientSecret   string `json:"client_secret"`
+	CACerts        string `json:"ca_certs"`
+	SkipCertVerify bool   `json:"skip_cert_verify"`
 }
 
 type RouteEmitterConfig struct {
