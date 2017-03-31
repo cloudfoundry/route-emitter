@@ -24,6 +24,7 @@ func RoutesByRoutingKeyFromSchedulingInfos(schedulingInfos []*models.DesiredLRPS
 						Hostname:        hostname,
 						LogGuid:         desired.LogGuid,
 						RouteServiceUrl: cfRoute.RouteServiceUrl,
+						RouterGroupGuid: cfRoute.RouterGroupGuid,
 					})
 				}
 				routesByRoutingKey[key] = append(routesByRoutingKey[key], routeEntries...)

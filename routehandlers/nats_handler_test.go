@@ -126,7 +126,6 @@ var _ = Describe("NATSHandler", func() {
 
 				fakeTable.SetRoutesReturns(dummyMessagesToEmit)
 			})
-
 			JustBeforeEach(func() {
 				routeHandler.HandleEvent(logger, models.NewDesiredLRPCreatedEvent(desiredLRP))
 			})
@@ -162,6 +161,50 @@ var _ = Describe("NATSHandler", func() {
 				Expect(natsEmitter.EmitCallCount()).To(Equal(1))
 				messagesToEmit := natsEmitter.EmitArgsForCall(0)
 				Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
+			})
+
+			Context("when router_group_guids are part of the desired_lrp", func() {
+				var expectedRouterGroupGuid = "default-http"
+
+				BeforeEach(func() {
+					expectedCFRoute = cfroutes.CFRoute{Hostnames: expectedRoutes, Port: expectedContainerPort, RouteServiceUrl: expectedRouteServiceUrl, RouterGroupGuid: expectedRouterGroupGuid}
+					routesNew := cfroutes.CFRoutes{expectedCFRoute}.RoutingInfo()
+					desiredLRP.Routes = &routesNew
+					dummyEndpoint := routingtable.Endpoint{InstanceGuid: expectedInstanceGuid, Index: expectedIndex, Host: expectedHost, Port: expectedContainerPort}
+					dummyMessageFoo := routingtable.RegistryMessageFor(dummyEndpoint, routingtable.Route{Hostname: "foo.com", LogGuid: logGuid, RouterGroupGuid: expectedRouterGroupGuid})
+					dummyMessageBar := routingtable.RegistryMessageFor(dummyEndpoint, routingtable.Route{Hostname: "bar.com", LogGuid: logGuid, RouterGroupGuid: expectedRouterGroupGuid})
+
+					dummyMessagesToEmit = routingtable.MessagesToEmit{
+						RegistrationMessages: []routingtable.RegistryMessage{dummyMessageFoo, dummyMessageBar},
+					}
+					fakeTable.SetRoutesReturns(dummyMessagesToEmit)
+				})
+
+				It("should set the routes on the table with the router group", func() {
+					Expect(fakeTable.SetRoutesCallCount()).To(Equal(1))
+					key, routes, _ := fakeTable.SetRoutesArgsForCall(0)
+					Expect(key).To(Equal(expectedRoutingKey))
+					Expect(routes).To(ConsistOf(
+						routingtable.Route{
+							Hostname:        expectedRoutes[0],
+							LogGuid:         logGuid,
+							RouteServiceUrl: expectedRouteServiceUrl,
+							RouterGroupGuid: expectedRouterGroupGuid,
+						},
+						routingtable.Route{
+							Hostname:        expectedRoutes[1],
+							LogGuid:         logGuid,
+							RouteServiceUrl: expectedRouteServiceUrl,
+							RouterGroupGuid: expectedRouterGroupGuid,
+						},
+					))
+				})
+
+				It("should emit whatever the table tells it to emit", func() {
+					Expect(natsEmitter.EmitCallCount()).To(Equal(1))
+					messagesToEmit := natsEmitter.EmitArgsForCall(0)
+					Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
+				})
 			})
 
 			Context("when there are diego ssh-keys on the route", func() {
@@ -375,6 +418,72 @@ var _ = Describe("NATSHandler", func() {
 				Expect(natsEmitter.EmitCallCount()).To(Equal(1))
 				messagesToEmit := natsEmitter.EmitArgsForCall(0)
 				Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
+			})
+
+			Context("when router_group_guids are part of the desired_lrp", func() {
+				var expectedRouterGroupGuid = "default-http"
+
+				BeforeEach(func() {
+					changedDesiredLRP.Instances = 1
+					fakeTable.EndpointsForIndexStub = func(key endpoint.RoutingKey, index int32) []routingtable.Endpoint {
+						endpoint := routingtable.Endpoint{
+							InstanceGuid:  fmt.Sprintf("instance-guid-%d", index),
+							Index:         index,
+							Host:          fmt.Sprintf("1.1.1.%d", index),
+							Domain:        "domain",
+							Port:          expectedExternalPort,
+							ContainerPort: expectedContainerPort,
+							Evacuating:    false,
+						}
+
+						return []routingtable.Endpoint{endpoint}
+					}
+					fakeTable.SetRoutesReturns(dummyMessagesToEmit)
+					routes := cfroutes.CFRoutes{{Hostnames: expectedRoutes, Port: expectedContainerPort, RouterGroupGuid: expectedRouterGroupGuid}}.RoutingInfo()
+
+					originalDesiredLRP = &models.DesiredLRP{
+						Action: models.WrapAction(&models.RunAction{
+							User: "me",
+							Path: "ls",
+						}),
+						Domain:      "tests",
+						ProcessGuid: expectedProcessGuid,
+						LogGuid:     logGuid,
+						Routes:      &routes,
+						Instances:   3,
+					}
+					routesNew := cfroutes.CFRoutes{{Hostnames: expectedRoutes, Port: expectedContainerPort, RouterGroupGuid: "other-group"}}.RoutingInfo()
+					changedDesiredLRP = &models.DesiredLRP{
+						Action: models.WrapAction(&models.RunAction{
+							User: "me",
+							Path: "ls",
+						}),
+						Domain:          "tests",
+						ProcessGuid:     expectedProcessGuid,
+						LogGuid:         logGuid,
+						Routes:          &routesNew,
+						ModificationTag: &models.ModificationTag{Epoch: "abcd", Index: 1},
+						Instances:       3,
+					}
+				})
+
+				It("should set the routes on the table with the router group", func() {
+					Expect(fakeTable.SetRoutesCallCount()).To(Equal(1))
+					key, routes, _ := fakeTable.SetRoutesArgsForCall(0)
+					Expect(key).To(Equal(expectedRoutingKey))
+					Expect(routes).To(ConsistOf(
+						routingtable.Route{
+							Hostname:        expectedRoutes[0],
+							LogGuid:         logGuid,
+							RouterGroupGuid: "other-group",
+						},
+						routingtable.Route{
+							Hostname:        expectedRoutes[1],
+							LogGuid:         logGuid,
+							RouterGroupGuid: "other-group",
+						},
+					))
+				})
 			})
 
 			Context("when there are diego ssh-keys on the route", func() {
