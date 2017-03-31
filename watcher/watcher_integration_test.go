@@ -24,6 +24,7 @@ import (
 	"github.com/nats-io/nats"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega/gbytes"
 	"github.com/tedsuo/ifrit"
 )
 
@@ -37,6 +38,7 @@ var _ = Describe("Watcher Integration", func() {
 		cellID           string
 		testWatcher      *watcher.Watcher
 		process          ifrit.Process
+		logger           *lagertest.TestLogger
 	)
 
 	BeforeEach(func() {
@@ -51,7 +53,7 @@ var _ = Describe("Watcher Integration", func() {
 			Emit: make(chan struct{}),
 		}
 
-		logger := lagertest.NewTestLogger("test")
+		logger = lagertest.NewTestLogger("test")
 		workPool, err := workpool.NewWorkPool(1)
 		Expect(err).NotTo(HaveOccurred())
 		natsEmitter := emitter.NewNATSEmitter(natsClient, workPool, logger)
@@ -97,6 +99,7 @@ var _ = Describe("Watcher Integration", func() {
 
 		sendEvent := func() {
 			Eventually(eventCh).Should(BeSent(EventHolder{models.NewActualLRPRemovedEvent(removedActualLRP)}))
+			Eventually(logger).Should(gbytes.Say("caching-event"))
 		}
 
 		BeforeEach(func() {
@@ -164,8 +167,7 @@ var _ = Describe("Watcher Integration", func() {
 			bbsClient.ActualLRPGroupsStub = func(logger lager.Logger, filter models.ActualLRPFilter) ([]*models.ActualLRPGroup, error) {
 				defer GinkgoRecover()
 
-				ready <- struct{}{}
-				Eventually(ready).Should(Receive())
+				sendEvent()
 
 				return []*models.ActualLRPGroup{
 					actualLRPGroup1,
@@ -180,17 +182,15 @@ var _ = Describe("Watcher Integration", func() {
 
 		JustBeforeEach(func() {
 			syncEvents.Sync <- struct{}{}
-			Eventually(ready).Should(Receive())
+			Eventually(bbsClient.ActualLRPGroupsCallCount).Should(Equal(1))
 		})
 
 		Context("when an old remove event is cached", func() {
-			JustBeforeEach(func() {
+			BeforeEach(func() {
 				removedActualLRP.Instance.ModificationTag.Index = 0
 			})
 
 			It("registers the new route", func() {
-				sendEvent()
-				ready <- struct{}{}
 				Eventually(func() []*nats.Msg {
 					return natsClient.PublishedMessages("router.register")
 				}).Should(HaveLen(1))
@@ -198,13 +198,11 @@ var _ = Describe("Watcher Integration", func() {
 		})
 
 		Context("when a newer remove event is cached", func() {
-			JustBeforeEach(func() {
+			BeforeEach(func() {
 				removedActualLRP.Instance.ModificationTag.Index = 2
 			})
 
 			It("does not register a new route", func() {
-				sendEvent()
-				ready <- struct{}{}
 				Consistently(func() []*nats.Msg {
 					return natsClient.PublishedMessages("router.register")
 				}).Should(HaveLen(0))
