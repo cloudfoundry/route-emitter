@@ -189,7 +189,7 @@ func (w *Watcher) refreshDesired(logger lager.Logger, event models.Event) {
 
 	if routingInfo != nil && routingInfo.ActualLRP.State == models.ActualLRPStateRunning {
 		if w.routeHandler.ShouldRefreshDesired(routingInfo) {
-			logger.Debug("refreshing-desired-lrp-info", lager.Data{"routing-info": routingInfo})
+			logger.Info("refreshing-desired-lrp-info", lager.Data{"process-guid": routingInfo.ActualLRP.ProcessGuid})
 			desiredLRPs, err := w.bbsClient.DesiredLRPSchedulingInfos(logger, models.DesiredLRPFilter{
 				ProcessGuids: []string{routingInfo.ActualLRP.ProcessGuid},
 			})

@@ -515,6 +515,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 					ActualLRPNetInfo: models.NewActualLRPNetInfo(
 						"some-ip",
 						models.NewPortMapping(61006, 5222),
+						models.NewPortMapping(61007, 5223),
 					),
 					State:           models.ActualLRPStateRunning,
 					ModificationTag: models.ModificationTag{Epoch: "abc", Index: 1},
@@ -528,6 +529,24 @@ var _ = Describe("RoutingAPIHandler", func() {
 				fakeRoutingTable.GetRoutesReturns(endpoint.ExternalEndpointInfos{
 					{RouterGroupGUID: "guid", Port: 61006},
 				})
+			})
+
+			It("returns false", func() {
+				Expect(routeHandler.ShouldRefreshDesired(actualInfo)).To(BeFalse())
+			})
+		})
+
+		Context("when some ports are not known to the routing table", func() {
+			BeforeEach(func() {
+				fakeRoutingTable.GetRoutesStub = func(key endpoint.RoutingKey) endpoint.ExternalEndpointInfos {
+					if key.ContainerPort != 5222 {
+						return nil
+					}
+
+					return endpoint.ExternalEndpointInfos{
+						{RouterGroupGUID: "guid", Port: 61006},
+					}
+				}
 			})
 
 			It("returns false", func() {

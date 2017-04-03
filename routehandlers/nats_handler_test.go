@@ -1384,9 +1384,12 @@ var _ = Describe("NATSHandler", func() {
 				ActualLRP: &models.ActualLRP{
 					ActualLRPKey:         models.NewActualLRPKey("pg-1", 0, "domain"),
 					ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint1.InstanceGuid, "cell-id"),
-					ActualLRPNetInfo:     models.NewActualLRPNetInfo(endpoint1.Host, models.NewPortMapping(endpoint1.Port, endpoint1.ContainerPort)),
-					State:                models.ActualLRPStateRunning,
-					ModificationTag:      currentTag,
+					ActualLRPNetInfo: models.NewActualLRPNetInfo(endpoint1.Host,
+						models.NewPortMapping(endpoint1.Port, endpoint1.ContainerPort),
+						models.NewPortMapping(12, endpoint1.ContainerPort+1),
+					),
+					State:           models.ActualLRPStateRunning,
+					ModificationTag: currentTag,
 				},
 				Evacuating: false,
 			}
@@ -1397,6 +1400,24 @@ var _ = Describe("NATSHandler", func() {
 				fakeTable.GetRoutesReturns([]routingtable.Route{
 					routingtable.Route{Hostname: hostname, LogGuid: "skldjfls", RouteServiceUrl: "https://rs.example.com"},
 				})
+			})
+
+			It("returns false", func() {
+				Expect(routeHandler.ShouldRefreshDesired(actualInfo)).To(BeFalse())
+			})
+		})
+
+		Context("when some ports are not known to the routing table", func() {
+			BeforeEach(func() {
+				fakeTable.GetRoutesStub = func(key endpoint.RoutingKey) []routingtable.Route {
+					if key.ContainerPort != 8080 {
+						return nil
+					}
+
+					return []routingtable.Route{
+						routingtable.Route{Hostname: hostname, LogGuid: "skldjfls", RouteServiceUrl: "https://rs.example.com"},
+					}
+				}
 			})
 
 			It("returns false", func() {

@@ -107,12 +107,12 @@ func (handler *RoutingAPIHandler) RefreshDesired(logger lager.Logger, desiredInf
 
 func (handler *RoutingAPIHandler) ShouldRefreshDesired(actual *endpoint.ActualLRPRoutingInfo) bool {
 	for _, key := range endpoint.NewRoutingKeysFromActual(actual) {
-		if len(handler.routingTable.GetRoutes(key)) == 0 {
-			return true
+		if len(handler.routingTable.GetRoutes(key)) > 0 {
+			return false
 		}
 	}
 
-	return false
+	return true
 }
 
 func (handler *RoutingAPIHandler) handleDesiredCreate(logger lager.Logger, desiredLRP *models.DesiredLRPSchedulingInfo) {

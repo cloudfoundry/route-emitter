@@ -137,12 +137,12 @@ func (handler *NATSHandler) RefreshDesired(logger lager.Logger, desiredInfo []*m
 
 func (handler *NATSHandler) ShouldRefreshDesired(actual *endpoint.ActualLRPRoutingInfo) bool {
 	for _, key := range endpoint.NewRoutingKeysFromActual(actual) {
-		if len(handler.routingTable.GetRoutes(key)) == 0 {
-			return true
+		if len(handler.routingTable.GetRoutes(key)) > 0 {
+			return false
 		}
 	}
 
-	return false
+	return true
 }
 
 func (handler *NATSHandler) handleDesiredCreate(logger lager.Logger, desiredLRP *models.DesiredLRPSchedulingInfo) {
