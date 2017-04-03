@@ -88,7 +88,7 @@ func main() {
 	if cfg.EnableTCPEmitter {
 		tcpLogger := logger.Session("tcp")
 		uaaClient := newUaaClient(tcpLogger, &cfg, clock)
-		routingAPIAddress := fmt.Sprintf("%s:%d", cfg.RoutingAPI.URI, cfg.RoutingAPI.Port)
+		routingAPIAddress := fmt.Sprintf("%s:%d", cfg.RoutingAPI.URL, cfg.RoutingAPI.Port)
 		logger.Debug("creating-routing-api-client", lager.Data{"api-location": routingAPIAddress})
 		routingAPIClient := routing_api.NewClient(routingAPIAddress, false)
 		routingAPIEmitter := emitter.NewRoutingAPIEmitter(tcpLogger, routingAPIClient, uaaClient, int(routeTTL.Seconds()))
@@ -208,7 +208,7 @@ func main() {
 }
 
 func newUaaClient(logger lager.Logger, c *config.RouteEmitterConfig, klok clock.Clock) uaaclient.Client {
-	if c.RoutingAPI.AuthDisabled {
+	if c.RoutingAPI.AuthEnabled {
 		logger.Debug("creating-noop-uaa-client")
 		client := uaaclient.NewNoOpUaaClient()
 		return client
