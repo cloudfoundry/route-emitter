@@ -183,9 +183,9 @@ func main() {
 	)
 
 	members = grouper.Members{
+		{"nats-client", natsClientRunner},
 		{"consul-down-checker", consulDownChecker},
 		{"consul-down-mode-notifier", consulDownModeNotifier},
-		{"nats-client", natsClientRunner},
 		{"watcher", watcher},
 		{"syncer", syncer},
 	}
