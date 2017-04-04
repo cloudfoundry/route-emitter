@@ -12,9 +12,9 @@ import (
 )
 
 type RoutingAPIConfig struct {
-	URI          string `json:"uri"`
-	Port         int    `json:"port"`
-	AuthDisabled bool   `json:"auth_disabled"`
+	URL         string `json:"url"`
+	Port        int    `json:"port"`
+	AuthEnabled bool   `json:"auth_enabled"`
 }
 
 type OAuthConfig struct {

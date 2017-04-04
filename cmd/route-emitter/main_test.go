@@ -199,7 +199,7 @@ var _ = Describe("Route Emitter", func() {
 		cfgs = nil
 		cfgs = append(cfgs, func(cfg *config.RouteEmitterConfig) {
 			cfg.BBSAddress = bbsURL.String()
-			cfg.RoutingAPI.URI = "http://127.0.0.1"
+			cfg.RoutingAPI.URL = "http://127.0.0.1"
 			cfg.RoutingAPI.Port = routingAPIRunner.Config.Port
 		})
 	})
@@ -324,7 +324,7 @@ var _ = Describe("Route Emitter", func() {
 
 			BeforeEach(func() {
 				cfgs = append(cfgs, func(cfg *config.RouteEmitterConfig) {
-					cfg.RoutingAPI.AuthDisabled = false
+					cfg.RoutingAPI.AuthEnabled = true
 				})
 			})
 
@@ -418,7 +418,7 @@ var _ = Describe("Route Emitter", func() {
 		Context("when UAA auth is disabled", func() {
 			BeforeEach(func() {
 				cfgs = append(cfgs, func(cfg *config.RouteEmitterConfig) {
-					cfg.RoutingAPI.AuthDisabled = true
+					cfg.RoutingAPI.AuthEnabled = false
 				})
 			})
 
@@ -446,7 +446,7 @@ var _ = Describe("Route Emitter", func() {
 					cfgs = append(cfgs, func(cfg *config.RouteEmitterConfig) {
 						cfg.BBSAddress = bbsURL.String()
 						cfg.SyncInterval = durationjson.Duration(1 * time.Second)
-						cfg.RoutingAPI.URI = "http://127.0.0.1"
+						cfg.RoutingAPI.URL = "http://127.0.0.1"
 						cfg.RoutingAPI.Port = routingAPIRunner.Config.Port
 					})
 
