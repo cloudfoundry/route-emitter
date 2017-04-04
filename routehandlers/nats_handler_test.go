@@ -126,7 +126,6 @@ var _ = Describe("NATSHandler", func() {
 
 				fakeTable.SetRoutesReturns(dummyMessagesToEmit)
 			})
-
 			JustBeforeEach(func() {
 				routeHandler.HandleEvent(logger, models.NewDesiredLRPCreatedEvent(desiredLRP))
 			})
@@ -181,7 +180,7 @@ var _ = Describe("NATSHandler", func() {
 					fakeTable.SetRoutesReturns(dummyMessagesToEmit)
 				})
 
-				It("should set the routes on the table", func() {
+				It("should set the routes on the table with the router group", func() {
 					Expect(fakeTable.SetRoutesCallCount()).To(Equal(1))
 					key, routes, _ := fakeTable.SetRoutesArgsForCall(0)
 					Expect(key).To(Equal(expectedRoutingKey))
@@ -468,7 +467,7 @@ var _ = Describe("NATSHandler", func() {
 					}
 				})
 
-				It("should set the routes on the table", func() {
+				It("should set the routes on the table with the router group", func() {
 					Expect(fakeTable.SetRoutesCallCount()).To(Equal(1))
 					key, routes, _ := fakeTable.SetRoutesArgsForCall(0)
 					Expect(key).To(Equal(expectedRoutingKey))
