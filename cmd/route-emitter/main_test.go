@@ -649,7 +649,7 @@ var _ = Describe("Route Emitter", func() {
 			runner = createEmitterRunner("emitter1", "", cfgs...)
 			runner.StartCheck = "emitter1.started"
 
-			emitter = ginkgomon.Invoke(runner)
+			emitter = ifrit.Invoke(runner)
 		})
 
 		AfterEach(func() {
@@ -887,6 +887,12 @@ var _ = Describe("Route Emitter", func() {
 						stopBBS()
 					})
 
+					AfterEach(func() {
+						// start the bbs so the route-emitter doesn't spend too long in the
+						// sync loop and exit in time
+						startBBS()
+					})
+
 					It("continues to broadcast routes", func() {
 						Eventually(registeredRoutes, 10).Should(Receive(&msg3))
 						Eventually(registeredRoutes, 10).Should(Receive(&msg4))
@@ -956,6 +962,12 @@ var _ = Describe("Route Emitter", func() {
 		Context("and backing store goes away", func() {
 			BeforeEach(func() {
 				stopBBS()
+			})
+
+			AfterEach(func() {
+				// start the bbs so the route-emitter doesn't spend too long in the
+				// sync loop and exit in time
+				startBBS()
 			})
 
 			It("does not explode", func() {
