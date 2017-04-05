@@ -20,7 +20,6 @@ type Endpoint struct {
 	Port            uint32
 	ContainerPort   uint32
 	Evacuating      bool
-	RouterGroupGuid string
 	ModificationTag *models.ModificationTag
 }
 
@@ -36,7 +35,6 @@ type Route struct {
 	Hostname        string
 	LogGuid         string
 	RouteServiceUrl string
-	RouterGroupGuid string
 }
 
 type RoutableEndpoints struct {
