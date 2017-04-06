@@ -1043,6 +1043,7 @@ var _ = Describe("Route Emitter", func() {
 				})
 				handlerWriteLock.Unlock()
 				consulRunner.Stop()
+				stopBBS()
 			})
 
 			It("enters consul down mode and exits when consul comes back up", func() {
@@ -1050,6 +1051,12 @@ var _ = Describe("Route Emitter", func() {
 				retryInterval := 1
 				Eventually(runner, lockTTL+3*retryInterval+1).Should(gbytes.Say("consul-down-mode.started"))
 				consulRunner.Start()
+				// without the bbs the route-emitter sync loops take a very long time
+				// (since the client repeats the request 3 times with 500ms sleep in
+				// between). with a 1.5 second for each sync, more sync events
+				// accumulate which causes the watcher to repeat the syncs and not get
+				// signaled.
+				startBBS()
 				handlerWriteLock.Lock()
 				fakeConsulHandler = nil
 				handlerWriteLock.Unlock()
