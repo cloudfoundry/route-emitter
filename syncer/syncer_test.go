@@ -105,17 +105,6 @@ var _ = Describe("NatsSyncer", func() {
 
 		shutdown = make(chan struct{})
 
-		go func(clock *fakeclock.FakeClock, clockStep time.Duration, shutdown chan struct{}) {
-			for {
-				select {
-				case <-time.After(100 * time.Millisecond):
-					clock.Increment(clockStep)
-				case <-shutdown:
-					return
-				}
-			}
-		}(clock, clockStep, shutdown)
-
 		process = ifrit.Invoke(syncerRunner)
 	})
 
@@ -148,13 +137,13 @@ var _ = Describe("NatsSyncer", func() {
 				})
 
 				It("should emit routes with the frequency of the passed-in-interval", func() {
-					Eventually(syncerRunner.Events().Emit, 2).Should(Receive())
-					t1 := clock.Now()
+					Eventually(syncerRunner.Events().Sync).Should(Receive())
 
-					Eventually(syncerRunner.Events().Emit, 2).Should(Receive())
-					t2 := clock.Now()
+					clock.WaitForWatcherAndIncrement(time.Second)
+					Eventually(syncerRunner.Events().Emit).Should(Receive())
 
-					Expect(t2.Sub(t1)).To(BeNumerically("~", 1*time.Second, 200*time.Millisecond))
+					clock.WaitForWatcherAndIncrement(time.Second)
+					Eventually(syncerRunner.Events().Emit).Should(Receive())
 				})
 
 				It("should only greet the router once", func() {
@@ -167,11 +156,12 @@ var _ = Describe("NatsSyncer", func() {
 		Context("when the router does not emit a router.start", func() {
 			It("should keep greeting the router until it gets an interval", func() {
 				//get the first greeting
-				Eventually(greetings, 2).Should(Receive())
+				Eventually(greetings).Should(Receive())
 
 				//get the second greeting, and respond
+				clock.WaitForWatcherAndIncrement(time.Second)
 				var msg *nats.Msg
-				Eventually(greetings, 2).Should(Receive(&msg))
+				Eventually(greetings).Should(Receive(&msg))
 				go natsClient.Publish(msg.Reply, []byte(`{"minimumRegisterIntervalInSeconds":1, "pruneThresholdInSeconds": 3}`))
 
 				//should no longer be greeting the router
@@ -193,13 +183,13 @@ var _ = Describe("NatsSyncer", func() {
 
 				//first emit should be pretty quick, it is in response to the incoming heartbeat interval
 				Eventually(syncerRunner.Events().Emit).Should(Receive())
-				t1 := clock.Now()
+
+				clock.WaitForWatcherAndIncrement(time.Second)
+				Consistently(syncerRunner.Events().Emit).ShouldNot(Receive())
 
 				//subsequent emit should follow the interval
+				clock.WaitForWatcherAndIncrement(time.Second)
 				Eventually(syncerRunner.Events().Emit).Should(Receive())
-				t2 := clock.Now()
-
-				Expect(t2.Sub(t1)).To(BeNumerically("~", 2*time.Second, 200*time.Millisecond))
 			})
 		})
 
@@ -240,24 +230,11 @@ var _ = Describe("NatsSyncer", func() {
 
 		Context("on a specified interval", func() {
 			It("should sync", func() {
-				var t1 time.Time
-				var t2 time.Time
+				clock.WaitForWatcherAndIncrement(syncInterval)
+				Eventually(syncerRunner.Events().Sync).Should(Receive())
 
-				select {
-				case <-syncerRunner.Events().Sync:
-					t1 = clock.Now()
-				case <-time.After(500 * time.Millisecond):
-					Fail("did not receive a sync event")
-				}
-
-				select {
-				case <-syncerRunner.Events().Sync:
-					t2 = clock.Now()
-				case <-time.After(500 * time.Millisecond):
-					Fail("did not receive a sync event")
-				}
-
-				Expect(t2.Sub(t1)).To(BeNumerically("~", syncInterval, 100*time.Millisecond))
+				clock.WaitForWatcherAndIncrement(syncInterval)
+				Eventually(syncerRunner.Events().Sync).Should(Receive())
 			})
 		})
 	})
