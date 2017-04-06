@@ -22,6 +22,7 @@ import (
 	fake_metrics_sender "github.com/cloudfoundry/dropsonde/metric_sender/fake"
 	"github.com/cloudfoundry/dropsonde/metrics"
 	"github.com/tedsuo/ifrit"
+	"github.com/tedsuo/ifrit/ginkgomon"
 	"github.com/vito/go-sse/sse"
 
 	. "github.com/onsi/ginkgo"
@@ -531,7 +532,12 @@ var _ = Describe("Watcher", func() {
 			})
 
 			It("ignores a sync event", func() {
-				Consistently(syncEvents.Sync).ShouldNot(BeSent(struct{}{}))
+				Eventually(syncEvents.Sync).Should(BeSent(struct{}{}))
+				Eventually(logger).Should(gbytes.Say("sync-already-in-progress"))
+			})
+
+			It("can be signaled", func() {
+				ginkgomon.Interrupt(process)
 			})
 		})
 

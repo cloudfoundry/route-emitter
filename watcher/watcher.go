@@ -69,6 +69,7 @@ type syncEventResult struct {
 	desired       []*models.DesiredLRPSchedulingInfo
 	runningActual []*endpoint.ActualLRPRoutingInfo
 	domains       models.DomainSet
+	err           error
 }
 
 func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
@@ -76,7 +77,6 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 	defer watcher.logger.Debug("finished")
 
 	eventChan := make(chan models.Event)
-	cachedEventsChan := make(chan map[string]models.Event)
 	resubscribeChannel := make(chan error)
 
 	eventSource := &atomic.Value{}
@@ -88,35 +88,40 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 	close(ready)
 	watcher.logger.Debug("started")
 
+	cachedEvents := make(map[string]models.Event)
+	syncEnd := make(chan *syncEventResult)
+	syncing := false
+
 	for {
 		select {
 		case event := <-eventChan:
+			if syncing {
+				watcher.logger.Info("caching-event", lager.Data{
+					"type": event.EventType(),
+				})
+				cachedEvents[event.Key()] = event
+				continue
+			}
 			logger := watcher.logger.Session("handling-event")
 			watcher.handleEvent(logger, event)
 		case <-watcher.syncEvents.Emit:
 			logger := watcher.logger.Session("emit")
 			watcher.routeHandler.Emit(logger)
-		case <-watcher.syncEvents.Sync:
+		case syncEvent := <-syncEnd:
+			syncing = false
 			logger := watcher.logger.Session("sync")
-			logger.Debug("starting")
-
-			done := make(chan struct{})
-			go watcher.cacheIncomingEvents(eventChan, cachedEventsChan, done)
-			syncEvent, err := watcher.sync(logger)
-
-			close(done)
 
 			// always pull the cachedEvents map off the channel
-			cachedEvents := <-cachedEventsChan
 			for _, e := range cachedEvents {
 				watcher.refreshDesired(logger, e)
 			}
 
-			if err != nil {
-				logger.Error("failed-to-sync-events", err)
+			if syncEvent.err != nil {
+				logger.Error("failed-to-sync-events", syncEvent.err)
 				continue
 			}
 
+			logger.Debug("calling-handler-sync")
 			watcher.routeHandler.Sync(logger,
 				syncEvent.desired,
 				syncEvent.runningActual,
@@ -125,13 +130,21 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 			)
 
 			after := watcher.clock.Now()
-			err = routeSyncDuration.Send(after.Sub(syncEvent.startTime))
-
-			if err != nil {
+			if err := routeSyncDuration.Send(after.Sub(syncEvent.startTime)); err != nil {
 				watcher.logger.Error("failed-to-send-route-sync-duration-metric", err)
 			}
 
+			cachedEvents = make(map[string]models.Event)
 			logger.Debug("complete")
+		case <-watcher.syncEvents.Sync:
+			if syncing {
+				watcher.logger.Debug("sync-already-in-progress")
+				continue
+			}
+			logger := watcher.logger.Session("sync")
+			logger.Debug("starting")
+			go watcher.sync(logger, syncEnd)
+			syncing = true
 		case err := <-resubscribeChannel:
 			watcher.logger.Error("event-source-error", err)
 			if es := eventSource.Load(); es != nil {
@@ -262,7 +275,7 @@ func (watcher *Watcher) eventCellIDMatches(logger lager.Logger, event models.Eve
 	}
 }
 
-func (w *Watcher) sync(logger lager.Logger) (*syncEventResult, error) {
+func (w *Watcher) sync(logger lager.Logger, ch chan<- *syncEventResult) {
 	var desiredSchedulingInfo []*models.DesiredLRPSchedulingInfo
 	var runningActualLRPs []*endpoint.ActualLRPRoutingInfo
 	var domains models.DomainSet
@@ -332,16 +345,18 @@ func (w *Watcher) sync(logger lager.Logger) (*syncEventResult, error) {
 
 	wg.Wait()
 
+	var err error
 	if actualErr != nil || desiredErr != nil || domainsErr != nil {
-		return nil, fmt.Errorf("failed to sync: %s, %s, %s", actualErr, desiredErr, domainsErr)
+		err = fmt.Errorf("failed to sync: %s, %s, %s", actualErr, desiredErr, domainsErr)
 	}
 
-	return &syncEventResult{
+	ch <- &syncEventResult{
 		startTime:     before,
 		desired:       desiredSchedulingInfo,
 		runningActual: runningActualLRPs,
 		domains:       domains,
-	}, nil
+		err:           err,
+	}
 }
 
 func checkForEvents(bbsClient bbs.Client, resubscribeChannel chan error,

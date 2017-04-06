@@ -128,11 +128,7 @@ func (s *NatsSyncer) emit() {
 }
 
 func (s *NatsSyncer) sync() {
-	select {
-	case s.events.Sync <- struct{}{}:
-	default:
-		s.logger.Debug("sync-already-in-progress")
-	}
+	s.events.Sync <- struct{}{}
 }
 
 func (s *NatsSyncer) listenForRouter(replyUUID string) error {
