@@ -91,6 +91,8 @@ var _ = Describe("Route Emitter", func() {
 		configFile, err := ioutil.TempFile("", "route-emitter-test")
 		Expect(err).NotTo(HaveOccurred())
 
+		defer configFile.Close()
+
 		configPath := configFile.Name()
 		encoder := json.NewEncoder(configFile)
 		err = encoder.Encode(&cfg)

@@ -37,6 +37,10 @@ var _ = Describe("Starting the NatsClientRunner process", func() {
 			natsClientProcess = ifrit.Invoke(natsClientRunner)
 		})
 
+		AfterEach(func() {
+			stopNATS()
+		})
+
 		It("connects to NATS", func() {
 			Expect(natsClient.Ping()).To(BeTrue())
 		})

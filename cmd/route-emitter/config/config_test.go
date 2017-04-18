@@ -57,6 +57,8 @@ var _ = Describe("Config", func() {
 		configFile, err := ioutil.TempFile("", "route-emitter-config")
 		Expect(err).NotTo(HaveOccurred())
 
+		defer configFile.Close()
+
 		configPath = configFile.Name()
 
 		n, err := configFile.WriteString(configData)

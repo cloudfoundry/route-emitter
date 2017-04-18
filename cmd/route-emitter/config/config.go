@@ -81,6 +81,8 @@ func NewRouteEmitterConfig(configPath string) (RouteEmitterConfig, error) {
 		return RouteEmitterConfig{}, err
 	}
 
+	defer configFile.Close()
+
 	decoder := json.NewDecoder(configFile)
 	err = decoder.Decode(&routeEmitterConfig)
 	if err != nil {
