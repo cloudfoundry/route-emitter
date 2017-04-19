@@ -1200,6 +1200,64 @@ var _ = Describe("Route Emitter", func() {
 			})
 		})
 	})
+	Context("when desired lrp is removed and sync starts and an actual lrp created event is received", func() {
+		var (
+			fakeBBS    *httptest.Server
+			blkChannel chan struct{}
+			runner     *ginkgomon.Runner
+			emitter    ifrit.Process
+		)
+
+		BeforeEach(func() {
+			blkChannel = make(chan struct{}, 1)
+
+			proxy := httputil.NewSingleHostReverseProxy(bbsURL)
+			proxy.FlushInterval = 100 * time.Millisecond
+			fakeBBS = httptest.NewUnstartedServer(
+				http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					if r.URL.Path == "/v1/domains/list" {
+						By("blocking the sync loop")
+						<-blkChannel
+					}
+					proxy.ServeHTTP(w, r)
+				}),
+			)
+
+			cfgs = append(cfgs, func(cfg *config.RouteEmitterConfig) {
+				cfg.BBSAddress = fakeBBS.URL
+				cfg.RoutingAPI.URI = "http://127.0.0.1"
+				cfg.RoutingAPI.Port = routingAPIRunner.Config.Port
+				cfg.CommunicationTimeout = durationjson.Duration(5 * time.Second)
+				cfg.SyncInterval = durationjson.Duration(1 * time.Hour)
+			})
+
+			fakeBBS.Start()
+			runner = createEmitterRunner("route-emitter", "cell-id", cfgs...)
+			Expect(bbsClient.UpsertDomain(logger, domain, time.Hour)).To(Succeed())
+			Expect(bbsClient.DesireLRP(logger, desiredLRP)).To(Succeed())
+		})
+
+		It("should emit a route registration", func() {
+			By("waiting for the sync loop to start")
+			runner.StartCheck = "succeeded-getting-actual-lrps"
+			emitter = ginkgomon.Invoke(runner)
+
+			Expect(bbsClient.StartActualLRP(logger, &lrpKey, &instanceKey, &netInfo)).To(Succeed())
+			Eventually(runner).Should(gbytes.Say("caching-event"))
+
+			By("unblocking the sync loop")
+			close(blkChannel)
+
+			var msg1 routingtable.RegistryMessage
+			Eventually(registeredRoutes).Should(Receive(&msg1))
+			// TODO: may be add more assertions on the content of msg1
+		})
+
+		AfterEach(func() {
+			ginkgomon.Interrupt(emitter, emitterInterruptTimeout)
+			fakeBBS.Close()
+		})
+	})
 })
 
 func newRoutes(hosts []string, port uint32, routeServiceUrl string) *models.Routes {
