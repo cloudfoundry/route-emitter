@@ -110,15 +110,21 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 		case syncEvent := <-syncEnd:
 			syncing = false
 			logger := watcher.logger.Session("sync")
-
-			// always pull the cachedEvents map off the channel
+			var cachedDesired []*models.DesiredLRPSchedulingInfo
 			for _, e := range cachedEvents {
-				watcher.refreshDesired(logger, e)
+				desired := watcher.refreshDesired(logger, e)
+				if len(desired) > 0 {
+					cachedDesired = append(cachedDesired, desired...)
+				}
 			}
 
 			if syncEvent.err != nil {
 				logger.Error("failed-to-sync-events", syncEvent.err)
 				continue
+			}
+
+			if len(cachedDesired) > 0 {
+				syncEvent.desired = append(syncEvent.desired, cachedDesired...)
 			}
 
 			logger.Debug("calling-handler-sync")
@@ -190,7 +196,7 @@ func (w *Watcher) cacheIncomingEvents(
 	}
 }
 
-func (w *Watcher) refreshDesired(logger lager.Logger, event models.Event) {
+func (w *Watcher) refreshDesired(logger lager.Logger, event models.Event) []*models.DesiredLRPSchedulingInfo {
 	var routingInfo *endpoint.ActualLRPRoutingInfo
 	switch event := event.(type) {
 	case *models.ActualLRPCreatedEvent:
@@ -199,20 +205,21 @@ func (w *Watcher) refreshDesired(logger lager.Logger, event models.Event) {
 		routingInfo = endpoint.NewActualLRPRoutingInfo(event.After)
 	default:
 	}
-
+	var desiredLRPs []*models.DesiredLRPSchedulingInfo
+	var err error
 	if routingInfo != nil && routingInfo.ActualLRP.State == models.ActualLRPStateRunning {
 		if w.routeHandler.ShouldRefreshDesired(routingInfo) {
 			logger.Info("refreshing-desired-lrp-info", lager.Data{"process-guid": routingInfo.ActualLRP.ProcessGuid})
-			desiredLRPs, err := w.bbsClient.DesiredLRPSchedulingInfos(logger, models.DesiredLRPFilter{
+			desiredLRPs, err = w.bbsClient.DesiredLRPSchedulingInfos(logger, models.DesiredLRPFilter{
 				ProcessGuids: []string{routingInfo.ActualLRP.ProcessGuid},
 			})
 			if err != nil {
 				logger.Error("failed-getting-desired-lrps-for-missing-actual-lrp", err)
-			} else {
-				w.routeHandler.RefreshDesired(logger, desiredLRPs)
 			}
 		}
 	}
+
+	return desiredLRPs
 }
 
 func (w *Watcher) handleEvent(logger lager.Logger, event models.Event) {
@@ -221,7 +228,8 @@ func (w *Watcher) handleEvent(logger lager.Logger, event models.Event) {
 		return
 	}
 
-	w.refreshDesired(logger, event)
+	desiredLRPs := w.refreshDesired(logger, event)
+	w.routeHandler.RefreshDesired(logger, desiredLRPs)
 	w.routeHandler.HandleEvent(logger, event)
 }
 

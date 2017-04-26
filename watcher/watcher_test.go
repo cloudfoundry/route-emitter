@@ -816,8 +816,8 @@ var _ = Describe("Watcher", func() {
 						Expect(filter.ProcessGuids).To(ConsistOf(lrp.ProcessGuid))
 
 						Eventually(routeHandler.ShouldRefreshDesiredCallCount).Should(Equal(1))
-						Eventually(routeHandler.RefreshDesiredCallCount).Should(Equal(1))
-						_, desiredInfo := routeHandler.RefreshDesiredArgsForCall(0)
+						Eventually(routeHandler.SyncCallCount).Should(Equal(1))
+						_, desiredInfo, _, _, _ := routeHandler.SyncArgsForCall(0)
 						Expect(desiredInfo).To(ContainElement(schedulingInfo3))
 					})
 

@@ -1202,6 +1202,7 @@ var _ = Describe("Route Emitter", func() {
 			})
 		})
 	})
+
 	Context("when desired lrp is removed and sync starts and an actual lrp created event is received", func() {
 		var (
 			fakeBBS    *httptest.Server
@@ -1227,7 +1228,7 @@ var _ = Describe("Route Emitter", func() {
 
 			cfgs = append(cfgs, func(cfg *config.RouteEmitterConfig) {
 				cfg.BBSAddress = fakeBBS.URL
-				cfg.RoutingAPI.URI = "http://127.0.0.1"
+				cfg.RoutingAPI.URL = "http://127.0.0.1"
 				cfg.RoutingAPI.Port = routingAPIRunner.Config.Port
 				cfg.CommunicationTimeout = durationjson.Duration(5 * time.Second)
 				cfg.SyncInterval = durationjson.Duration(1 * time.Hour)
