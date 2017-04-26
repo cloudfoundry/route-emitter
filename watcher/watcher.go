@@ -73,7 +73,7 @@ type syncEventResult struct {
 }
 
 func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
-	watcher.logger.Debug("starting")
+	watcher.logger.Debug("starting", lager.Data{"cell-id": watcher.cellID})
 	defer watcher.logger.Debug("finished")
 
 	eventChan := make(chan models.Event)
@@ -96,10 +96,14 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 		select {
 		case event := <-eventChan:
 			if syncing {
-				watcher.logger.Info("caching-event", lager.Data{
-					"type": event.EventType(),
-				})
-				cachedEvents[event.Key()] = event
+				if watcher.eventCellIDMatches(watcher.logger, event) {
+					watcher.logger.Info("caching-event", lager.Data{
+						"type": event.EventType(),
+					})
+					cachedEvents[event.Key()] = event
+				} else {
+					logSkippedEvent(watcher.logger, event)
+				}
 				continue
 			}
 			logger := watcher.logger.Session("handling-event")
@@ -112,7 +116,7 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 			logger := watcher.logger.Session("sync")
 			var cachedDesired []*models.DesiredLRPSchedulingInfo
 			for _, e := range cachedEvents {
-				desired := watcher.refreshDesired(logger, e)
+				desired := watcher.retrieveDesired(logger, e)
 				if len(desired) > 0 {
 					cachedDesired = append(cachedDesired, desired...)
 				}
@@ -196,7 +200,7 @@ func (w *Watcher) cacheIncomingEvents(
 	}
 }
 
-func (w *Watcher) refreshDesired(logger lager.Logger, event models.Event) []*models.DesiredLRPSchedulingInfo {
+func (w *Watcher) retrieveDesired(logger lager.Logger, event models.Event) []*models.DesiredLRPSchedulingInfo {
 	var routingInfo *endpoint.ActualLRPRoutingInfo
 	switch event := event.(type) {
 	case *models.ActualLRPCreatedEvent:
@@ -228,8 +232,10 @@ func (w *Watcher) handleEvent(logger lager.Logger, event models.Event) {
 		return
 	}
 
-	desiredLRPs := w.refreshDesired(logger, event)
-	w.routeHandler.RefreshDesired(logger, desiredLRPs)
+	desiredLRPs := w.retrieveDesired(logger, event)
+	if len(desiredLRPs) > 0 {
+		w.routeHandler.RefreshDesired(logger, desiredLRPs)
+	}
 	w.routeHandler.HandleEvent(logger, event)
 }
 

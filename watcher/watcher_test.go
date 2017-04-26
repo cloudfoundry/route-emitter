@@ -500,6 +500,36 @@ var _ = Describe("Watcher", func() {
 					return nil, nil
 				}
 			})
+			Context("when cell id is set", func() {
+				BeforeEach(func() {
+					cellID = "cell-id"
+					endpoint4 := routingtable.Endpoint{InstanceGuid: "ig-4", Host: "2.2.2.3", Index: 1, Port: 23, ContainerPort: 8080, Evacuating: false, ModificationTag: currentTag}
+					actualLRPGroup4 := &models.ActualLRPGroup{
+						Instance: &models.ActualLRP{
+							ActualLRPKey:         models.NewActualLRPKey("pg-2", 1, "domain"),
+							ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint4.InstanceGuid, "cell-id4"),
+							ActualLRPNetInfo:     models.NewActualLRPNetInfo(endpoint4.Host, models.NewPortMapping(endpoint4.Port, endpoint4.ContainerPort)),
+							State:                models.ActualLRPStateRunning,
+						},
+					}
+					bbsClient.ActualLRPGroupsStub = func(lager.Logger, models.ActualLRPFilter) ([]*models.ActualLRPGroup, error) {
+						defer GinkgoRecover()
+						Eventually(eventCh).Should(BeSent(EventHolder{models.NewActualLRPRemovedEvent(actualLRPGroup1)}))
+						Eventually(eventCh).Should(BeSent(EventHolder{models.NewActualLRPRemovedEvent(actualLRPGroup4)}))
+						Eventually(logger).Should(gbytes.Say("caching-event"))
+						return nil, nil
+					}
+				})
+
+				It("applies cached events associated only with the cell after syncing is complete", func() {
+					Eventually(routeHandler.SyncCallCount).Should(Equal(1))
+					_, _, _, _, event := routeHandler.SyncArgsForCall(0)
+
+					Expect(event).To(HaveLen(1))
+					expectedEvent := models.NewActualLRPRemovedEvent(actualLRPGroup1)
+					Expect(event[actualLRPGroup1.Instance.InstanceGuid]).To(Equal(expectedEvent))
+				})
+			})
 
 			It("caches events", func() {
 				Consistently(routeHandler.HandleEventCallCount).Should(Equal(0))
@@ -686,7 +716,7 @@ var _ = Describe("Watcher", func() {
 
 		Context("when the cell id is set", func() {
 			BeforeEach(func() {
-				cellID = "another-cell-id"
+				cellID = "cell-id"
 				actualLRPGroup2.Instance.ActualLRPInstanceKey.CellId = cellID
 
 				testWatcher = watcher.NewWatcher(cellID, bbsClient, clock, routeHandler, syncEvents, logger)
@@ -839,6 +869,7 @@ var _ = Describe("Watcher", func() {
 				Context("when fetching desired scheduling info fails", func() {
 					BeforeEach(func() {
 						bbsClient.ActualLRPGroupsStub = func(lager.Logger, models.ActualLRPFilter) ([]*models.ActualLRPGroup, error) {
+							defer GinkgoRecover()
 							sendEvent()
 							Eventually(logger).Should(gbytes.Say("caching-event"))
 							return []*models.ActualLRPGroup{actualLRPGroup1}, nil

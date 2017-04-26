@@ -1253,7 +1253,7 @@ var _ = Describe("Route Emitter", func() {
 
 			var msg1 routingtable.RegistryMessage
 			Eventually(registeredRoutes).Should(Receive(&msg1))
-			// TODO: may be add more assertions on the content of msg1
+			Expect(msg1.PrivateInstanceId).To(Equal(instanceKey.GetInstanceGuid()))
 		})
 
 		AfterEach(func() {
