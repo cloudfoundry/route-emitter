@@ -76,11 +76,9 @@ func (handler *NATSHandler) Emit(logger lager.Logger) {
 	}
 
 	routesSynced.Add(messagesToEmit.RouteRegistrationCount())
-	if !handler.localMode {
-		err = routesTotal.Send(handler.routingTable.RouteCount())
-		if err != nil {
-			logger.Error("failed-to-send-http-route-count-metric", err)
-		}
+	err = routesTotal.Send(handler.routingTable.RouteCount())
+	if err != nil {
+		logger.Error("failed-to-send-http-route-count-metric", err)
 	}
 }
 

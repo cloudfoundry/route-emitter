@@ -1454,20 +1454,6 @@ var _ = Describe("NATSHandler", func() {
 			routeHandler.Emit(logger)
 			Expect(fakeMetricSender.GetCounter("RoutesSynced")).To(BeEquivalentTo(3))
 		})
-
-		Context("when in local mode", func() {
-			BeforeEach(func() {
-				routeHandler = routehandlers.NewNATSHandler(fakeTable, natsEmitter, true)
-				fakeTable.RouteCountReturns(5)
-			})
-
-			It("does not send a 'routes total' metric", func() {
-				routeHandler.Emit(logger)
-				Consistently(func() fake_metrics_sender.Metric {
-					return fakeMetricSender.GetValue("RoutesTotal")
-				}).Should(Equal(fake_metrics_sender.Metric{}))
-			})
-		})
 	})
 
 	Describe("RefreshDesired", func() {
