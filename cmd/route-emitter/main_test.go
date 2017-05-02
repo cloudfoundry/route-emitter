@@ -498,6 +498,19 @@ var _ = Describe("Route Emitter", func() {
 						}, 5*time.Second).Should(BeTrue())
 					})
 
+					Context("when running in local mode", func() {
+						BeforeEach(func() {
+							cellID = "cell-id"
+						})
+
+						It("emits the tcp route count", func() {
+							Eventually(func() *events.Envelope {
+								metric := <-testMetricsChan
+								return metric
+							}).Should(matchMetricAndValue(metricAndValue{Name: "TCPRouteCount", Value: int32(1)}))
+						})
+					})
+
 					Context("and the route-emitter cell id doesn't match the actual lrp cell", func() {
 						BeforeEach(func() {
 							cellID = "some-random-cell-id"
@@ -725,6 +738,27 @@ var _ = Describe("Route Emitter", func() {
 				BeforeEach(func() {
 					err := bbsClient.StartActualLRP(logger, &lrpKey, &instanceKey, &netInfo)
 					Expect(err).NotTo(HaveOccurred())
+				})
+
+				Context("when running in local mode", func() {
+					BeforeEach(func() {
+						cellID = "cell-id"
+						routes := newRoutes([]string{"hostname-1"}, 8900, "")
+						desiredLRPUpdate := models.DesiredLRPUpdate{
+							Routes: routes,
+						}
+						err := bbsClient.UpdateDesiredLRP(logger, desiredLRP.ProcessGuid, &desiredLRPUpdate)
+						Expect(err).NotTo(HaveOccurred())
+						err = bbsClient.StartActualLRP(logger, &lrpKey, &instanceKey, &netInfo)
+						Expect(err).NotTo(HaveOccurred())
+					})
+
+					It("emits the http route count", func() {
+						Eventually(func() *events.Envelope {
+							metric := <-testMetricsChan
+							return metric
+						}).Should(matchMetricAndValue(metricAndValue{Name: "HTTPRouteCount", Value: int32(1)}))
+					})
 				})
 
 				Context("when backing store loses its data", func() {

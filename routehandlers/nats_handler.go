@@ -20,19 +20,22 @@ var (
 
 	routesRegistered   = metric.Counter("RoutesRegistered")
 	routesUnregistered = metric.Counter("RoutesUnregistered")
+	httpRouteCount     = metric.Metric("HTTPRouteCount")
 )
 
 type NATSHandler struct {
 	routingTable routingtable.NATSRoutingTable
 	emitter      emitter.NATSEmitter
+	localMode    bool
 }
 
 var _ watcher.RouteHandler = new(NATSHandler)
 
-func NewNATSHandler(routingTable routingtable.NATSRoutingTable, natsEmitter emitter.NATSEmitter) *NATSHandler {
+func NewNATSHandler(routingTable routingtable.NATSRoutingTable, natsEmitter emitter.NATSEmitter, localMode bool) *NATSHandler {
 	return &NATSHandler{
 		routingTable: routingTable,
 		emitter:      natsEmitter,
+		localMode:    localMode,
 	}
 }
 
@@ -73,9 +76,11 @@ func (handler *NATSHandler) Emit(logger lager.Logger) {
 	}
 
 	routesSynced.Add(messagesToEmit.RouteRegistrationCount())
-	err = routesTotal.Send(handler.routingTable.RouteCount())
-	if err != nil {
-		logger.Error("failed-to-send-routes-total-metric", err)
+	if !handler.localMode {
+		err = routesTotal.Send(handler.routingTable.RouteCount())
+		if err != nil {
+			logger.Error("failed-to-send-http-route-count-metric", err)
+		}
 	}
 }
 
@@ -127,6 +132,13 @@ func (handler *NATSHandler) Sync(
 		"num-registration-messages":   len(messages.RegistrationMessages),
 		"num-unregistration-messages": len(messages.UnregistrationMessages),
 	})
+
+	if handler.localMode {
+		err := httpRouteCount.Send(handler.routingTable.RouteCount())
+		if err != nil {
+			logger.Error("failed-to-send-routes-total-metric", err)
+		}
+	}
 }
 
 func (handler *NATSHandler) RefreshDesired(logger lager.Logger, desiredInfo []*models.DesiredLRPSchedulingInfo) {

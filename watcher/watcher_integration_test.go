@@ -58,12 +58,12 @@ var _ = Describe("Watcher Integration", func() {
 		Expect(err).NotTo(HaveOccurred())
 		natsEmitter := emitter.NewNATSEmitter(natsClient, workPool, logger)
 		natsTable := routingtable.NewNATSTable(logger)
-		natsHandler := routehandlers.NewNATSHandler(natsTable, natsEmitter)
+		natsHandler := routehandlers.NewNATSHandler(natsTable, natsEmitter, false)
 
 		uaaClient := uaaclient.NewNoOpUaaClient()
 		routingAPIEmitter := emitter.NewRoutingAPIEmitter(logger, routingApiClient, uaaClient, 100)
 		tcpTable := routingtable.NewTCPTable(logger, nil)
-		routingAPIHandler := routehandlers.NewRoutingAPIHandler(tcpTable, routingAPIEmitter)
+		routingAPIHandler := routehandlers.NewRoutingAPIHandler(tcpTable, routingAPIEmitter, false)
 
 		handler := routehandlers.NewMultiHandler(natsHandler, routingAPIHandler)
 		clock := fakeclock.NewFakeClock(time.Now())

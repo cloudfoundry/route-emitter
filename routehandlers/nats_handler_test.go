@@ -96,7 +96,7 @@ var _ = Describe("NATSHandler", func() {
 		fakeMetricSender = fake_metrics_sender.NewFakeMetricSender()
 		metrics.Initialize(fakeMetricSender, nil)
 
-		routeHandler = routehandlers.NewNATSHandler(fakeTable, natsEmitter)
+		routeHandler = routehandlers.NewNATSHandler(fakeTable, natsEmitter, false)
 	})
 
 	Context("when an unrecoginzed event is received", func() {
@@ -1362,6 +1362,18 @@ var _ = Describe("NATSHandler", func() {
 				Expect(natsEmitter.EmitCallCount()).Should(Equal(1))
 			})
 
+			Context("when emitting metrics in localMode", func() {
+				BeforeEach(func() {
+					routeHandler = routehandlers.NewNATSHandler(fakeTable, natsEmitter, true)
+					fakeTable.RouteCountReturns(5)
+				})
+
+				It("emits the HTTPRouteCount", func() {
+					routeHandler.Sync(logger, desiredInfo, actualInfo, domains, nil)
+					Expect(fakeMetricSender.GetValue("HTTPRouteCount").Value).To(BeEquivalentTo(5))
+				})
+			})
+
 			Context("when NATS events are cached", func() {
 				BeforeEach(func() {
 					routes := cfroutes.CFRoutes{
@@ -1441,6 +1453,20 @@ var _ = Describe("NATSHandler", func() {
 		It("sends a 'synced routes' metric", func() {
 			routeHandler.Emit(logger)
 			Expect(fakeMetricSender.GetCounter("RoutesSynced")).To(BeEquivalentTo(3))
+		})
+
+		Context("when in local mode", func() {
+			BeforeEach(func() {
+				routeHandler = routehandlers.NewNATSHandler(fakeTable, natsEmitter, true)
+				fakeTable.RouteCountReturns(5)
+			})
+
+			It("does not send a 'routes total' metric", func() {
+				routeHandler.Emit(logger)
+				Consistently(func() fake_metrics_sender.Metric {
+					return fakeMetricSender.GetValue("RoutesTotal")
+				}).Should(Equal(fake_metrics_sender.Metric{}))
+			})
 		})
 	})
 
