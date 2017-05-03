@@ -21,10 +21,10 @@ func RoutesByRoutingKeyFromSchedulingInfos(schedulingInfos []*models.DesiredLRPS
 				var routeEntries []Route
 				for _, hostname := range cfRoute.Hostnames {
 					routeEntries = append(routeEntries, Route{
-						Hostname:        hostname,
-						LogGuid:         desired.LogGuid,
-						RouteServiceUrl: cfRoute.RouteServiceUrl,
-						RouterGroupGuid: cfRoute.RouterGroupGuid,
+						Hostname:         hostname,
+						LogGuid:          desired.LogGuid,
+						RouteServiceUrl:  cfRoute.RouteServiceUrl,
+						IsolationSegment: cfRoute.IsolationSegment,
 					})
 				}
 				routesByRoutingKey[key] = append(routesByRoutingKey[key], routeEntries...)

@@ -163,16 +163,16 @@ var _ = Describe("NATSHandler", func() {
 				Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
 			})
 
-			Context("when router_group_guids are part of the desired_lrp", func() {
-				var expectedRouterGroupGuid = "default-http"
+			Context("when isolation segments are part of the desired_lrp", func() {
+				var expectedIsolationSegment = "default-http"
 
 				BeforeEach(func() {
-					expectedCFRoute = cfroutes.CFRoute{Hostnames: expectedRoutes, Port: expectedContainerPort, RouteServiceUrl: expectedRouteServiceUrl, RouterGroupGuid: expectedRouterGroupGuid}
+					expectedCFRoute = cfroutes.CFRoute{Hostnames: expectedRoutes, Port: expectedContainerPort, RouteServiceUrl: expectedRouteServiceUrl, IsolationSegment: expectedIsolationSegment}
 					routesNew := cfroutes.CFRoutes{expectedCFRoute}.RoutingInfo()
 					desiredLRP.Routes = &routesNew
 					dummyEndpoint := routingtable.Endpoint{InstanceGuid: expectedInstanceGuid, Index: expectedIndex, Host: expectedHost, Port: expectedContainerPort}
-					dummyMessageFoo := routingtable.RegistryMessageFor(dummyEndpoint, routingtable.Route{Hostname: "foo.com", LogGuid: logGuid, RouterGroupGuid: expectedRouterGroupGuid})
-					dummyMessageBar := routingtable.RegistryMessageFor(dummyEndpoint, routingtable.Route{Hostname: "bar.com", LogGuid: logGuid, RouterGroupGuid: expectedRouterGroupGuid})
+					dummyMessageFoo := routingtable.RegistryMessageFor(dummyEndpoint, routingtable.Route{Hostname: "foo.com", LogGuid: logGuid, IsolationSegment: expectedIsolationSegment})
+					dummyMessageBar := routingtable.RegistryMessageFor(dummyEndpoint, routingtable.Route{Hostname: "bar.com", LogGuid: logGuid, IsolationSegment: expectedIsolationSegment})
 
 					dummyMessagesToEmit = routingtable.MessagesToEmit{
 						RegistrationMessages: []routingtable.RegistryMessage{dummyMessageFoo, dummyMessageBar},
@@ -180,22 +180,22 @@ var _ = Describe("NATSHandler", func() {
 					fakeTable.SetRoutesReturns(dummyMessagesToEmit)
 				})
 
-				It("should set the routes on the table with the router group", func() {
+				It("should set the routes on the table with the isolation segment", func() {
 					Expect(fakeTable.SetRoutesCallCount()).To(Equal(1))
 					key, routes, _ := fakeTable.SetRoutesArgsForCall(0)
 					Expect(key).To(Equal(expectedRoutingKey))
 					Expect(routes).To(ConsistOf(
 						routingtable.Route{
-							Hostname:        expectedRoutes[0],
-							LogGuid:         logGuid,
-							RouteServiceUrl: expectedRouteServiceUrl,
-							RouterGroupGuid: expectedRouterGroupGuid,
+							Hostname:         expectedRoutes[0],
+							LogGuid:          logGuid,
+							RouteServiceUrl:  expectedRouteServiceUrl,
+							IsolationSegment: expectedIsolationSegment,
 						},
 						routingtable.Route{
-							Hostname:        expectedRoutes[1],
-							LogGuid:         logGuid,
-							RouteServiceUrl: expectedRouteServiceUrl,
-							RouterGroupGuid: expectedRouterGroupGuid,
+							Hostname:         expectedRoutes[1],
+							LogGuid:          logGuid,
+							RouteServiceUrl:  expectedRouteServiceUrl,
+							IsolationSegment: expectedIsolationSegment,
 						},
 					))
 				})
@@ -421,7 +421,7 @@ var _ = Describe("NATSHandler", func() {
 			})
 
 			Context("when router_group_guids are part of the desired_lrp", func() {
-				var expectedRouterGroupGuid = "default-http"
+				var expectedIsolationSegment = "default-http"
 
 				BeforeEach(func() {
 					changedDesiredLRP.Instances = 1
@@ -439,7 +439,7 @@ var _ = Describe("NATSHandler", func() {
 						return []routingtable.Endpoint{endpoint}
 					}
 					fakeTable.SetRoutesReturns(dummyMessagesToEmit)
-					routes := cfroutes.CFRoutes{{Hostnames: expectedRoutes, Port: expectedContainerPort, RouterGroupGuid: expectedRouterGroupGuid}}.RoutingInfo()
+					routes := cfroutes.CFRoutes{{Hostnames: expectedRoutes, Port: expectedContainerPort, IsolationSegment: expectedIsolationSegment}}.RoutingInfo()
 
 					originalDesiredLRP = &models.DesiredLRP{
 						Action: models.WrapAction(&models.RunAction{
@@ -452,7 +452,7 @@ var _ = Describe("NATSHandler", func() {
 						Routes:      &routes,
 						Instances:   3,
 					}
-					routesNew := cfroutes.CFRoutes{{Hostnames: expectedRoutes, Port: expectedContainerPort, RouterGroupGuid: "other-group"}}.RoutingInfo()
+					routesNew := cfroutes.CFRoutes{{Hostnames: expectedRoutes, Port: expectedContainerPort, IsolationSegment: "other-group"}}.RoutingInfo()
 					changedDesiredLRP = &models.DesiredLRP{
 						Action: models.WrapAction(&models.RunAction{
 							User: "me",
@@ -467,20 +467,20 @@ var _ = Describe("NATSHandler", func() {
 					}
 				})
 
-				It("should set the routes on the table with the router group", func() {
+				It("should set the routes on the table with the isolation segment", func() {
 					Expect(fakeTable.SetRoutesCallCount()).To(Equal(1))
 					key, routes, _ := fakeTable.SetRoutesArgsForCall(0)
 					Expect(key).To(Equal(expectedRoutingKey))
 					Expect(routes).To(ConsistOf(
 						routingtable.Route{
-							Hostname:        expectedRoutes[0],
-							LogGuid:         logGuid,
-							RouterGroupGuid: "other-group",
+							Hostname:         expectedRoutes[0],
+							LogGuid:          logGuid,
+							IsolationSegment: "other-group",
 						},
 						routingtable.Route{
-							Hostname:        expectedRoutes[1],
-							LogGuid:         logGuid,
-							RouterGroupGuid: "other-group",
+							Hostname:         expectedRoutes[1],
+							LogGuid:          logGuid,
+							IsolationSegment: "other-group",
 						},
 					))
 				})

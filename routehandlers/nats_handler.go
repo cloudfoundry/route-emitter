@@ -271,10 +271,10 @@ func (handler *NATSHandler) setRoutesForDesired(logger lager.Logger, schedulingI
 		routes := []routingtable.Route{}
 		for _, hostname := range route.Hostnames {
 			routes = append(routes, routingtable.Route{
-				Hostname:        hostname,
-				LogGuid:         schedulingInfo.LogGuid,
-				RouteServiceUrl: route.RouteServiceUrl,
-				RouterGroupGuid: route.RouterGroupGuid,
+				Hostname:         hostname,
+				LogGuid:          schedulingInfo.LogGuid,
+				RouteServiceUrl:  route.RouteServiceUrl,
+				IsolationSegment: route.IsolationSegment,
 			})
 		}
 		routeEntries[key] = append(routeEntries[key], routes...)

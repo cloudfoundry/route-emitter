@@ -13,15 +13,15 @@ type Address struct {
 }
 
 type Endpoint struct {
-	InstanceGuid    string
-	Index           int32
-	Host            string
-	Domain          string
-	Port            uint32
-	ContainerPort   uint32
-	Evacuating      bool
-	RouterGroupGuid string
-	ModificationTag *models.ModificationTag
+	InstanceGuid     string
+	Index            int32
+	Host             string
+	Domain           string
+	Port             uint32
+	ContainerPort    uint32
+	Evacuating       bool
+	IsolationSegment string
+	ModificationTag  *models.ModificationTag
 }
 
 func (e Endpoint) key() EndpointKey {
@@ -33,10 +33,10 @@ func (e Endpoint) address() Address {
 }
 
 type Route struct {
-	Hostname        string
-	LogGuid         string
-	RouteServiceUrl string
-	RouterGroupGuid string
+	Hostname         string
+	LogGuid          string
+	RouteServiceUrl  string
+	IsolationSegment string
 }
 
 type RoutableEndpoints struct {
