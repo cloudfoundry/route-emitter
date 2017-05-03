@@ -11,6 +11,8 @@ import (
 	"code.cloudfoundry.org/route-emitter/routingtable/schema/endpoint"
 	"code.cloudfoundry.org/route-emitter/routingtable/schema/event"
 	"code.cloudfoundry.org/routing-info/tcp_routes"
+	fake_metrics_sender "github.com/cloudfoundry/dropsonde/metric_sender/fake"
+	"github.com/cloudfoundry/dropsonde/metrics"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -21,13 +23,17 @@ var _ = Describe("RoutingAPIHandler", func() {
 		fakeRoutingTable *fakeroutingtable.FakeTCPRoutingTable
 		fakeEmitter      *emitterfakes.FakeRoutingAPIEmitter
 		routeHandler     *routehandlers.RoutingAPIHandler
+		fakeMetricSender *fake_metrics_sender.FakeMetricSender
 	)
 
 	BeforeEach(func() {
 		logger = lagertest.NewTestLogger("test")
 		fakeRoutingTable = new(fakeroutingtable.FakeTCPRoutingTable)
 		fakeEmitter = new(emitterfakes.FakeRoutingAPIEmitter)
-		routeHandler = routehandlers.NewRoutingAPIHandler(fakeRoutingTable, fakeEmitter)
+		routeHandler = routehandlers.NewRoutingAPIHandler(fakeRoutingTable, fakeEmitter, false)
+
+		fakeMetricSender = fake_metrics_sender.NewFakeMetricSender()
+		metrics.Initialize(fakeMetricSender, nil)
 	})
 
 	Describe("DesiredLRP Event", func() {
@@ -670,6 +676,19 @@ var _ = Describe("RoutingAPIHandler", func() {
 					}
 					return routingEvents
 				}
+			})
+
+			Context("when emitting metrics in localMode", func() {
+				BeforeEach(func() {
+					routeHandler = routehandlers.NewRoutingAPIHandler(fakeRoutingTable, fakeEmitter, true)
+
+					fakeEmitter.EmitReturns(1, 0, nil)
+				})
+
+				It("emits the TCPRouteCount", func() {
+					routeHandler.Sync(logger, desiredInfo, actualInfo, nil, nil)
+					Expect(fakeMetricSender.GetValue("TCPRouteCount").Value).To(BeEquivalentTo(1))
+				})
 			})
 
 			It("updates the routing table", func() {

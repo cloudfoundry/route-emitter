@@ -11,7 +11,7 @@ import (
 
 //go:generate counterfeiter -o fakes/fake_routing_api_emitter.go . RoutingAPIEmitter
 type RoutingAPIEmitter interface {
-	Emit(routingEvents event.RoutingEvents) error
+	Emit(routingEvents event.RoutingEvents) (int, int, error)
 }
 
 type routingAPIEmitter struct {
@@ -30,17 +30,17 @@ func NewRoutingAPIEmitter(logger lager.Logger, routingAPIClient routing_api.Clie
 	}
 }
 
-func (t *routingAPIEmitter) Emit(tcpEvents event.RoutingEvents) error {
+func (t *routingAPIEmitter) Emit(tcpEvents event.RoutingEvents) (int, int, error) {
 	t.logRoutingEvents(tcpEvents)
 	defer t.logger.Debug("complete-emit")
 
 	registrationMappingRequests, unregistrationMappingRequests := tcpEvents.ToMappingRequests(t.logger, t.ttl)
 	err := t.emit(registrationMappingRequests, unregistrationMappingRequests)
 	if err != nil {
-		return err
+		return 0, 0, err
 	}
 
-	return nil
+	return len(registrationMappingRequests), len(unregistrationMappingRequests), nil
 }
 
 func (t *routingAPIEmitter) emit(registrationMappingRequests, unregistrationMappingRequests []models.TcpRouteMapping) error {

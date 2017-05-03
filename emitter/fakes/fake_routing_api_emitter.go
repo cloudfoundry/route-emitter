@@ -9,19 +9,21 @@ import (
 )
 
 type FakeRoutingAPIEmitter struct {
-	EmitStub        func(routingEvents event.RoutingEvents) error
+	EmitStub        func(routingEvents event.RoutingEvents) (int, int, error)
 	emitMutex       sync.RWMutex
 	emitArgsForCall []struct {
 		routingEvents event.RoutingEvents
 	}
 	emitReturns struct {
-		result1 error
+		result1 int
+		result2 int
+		result3 error
 	}
 	invocations      map[string][][]interface{}
 	invocationsMutex sync.RWMutex
 }
 
-func (fake *FakeRoutingAPIEmitter) Emit(routingEvents event.RoutingEvents) error {
+func (fake *FakeRoutingAPIEmitter) Emit(routingEvents event.RoutingEvents) (int, int, error) {
 	fake.emitMutex.Lock()
 	fake.emitArgsForCall = append(fake.emitArgsForCall, struct {
 		routingEvents event.RoutingEvents
@@ -31,7 +33,7 @@ func (fake *FakeRoutingAPIEmitter) Emit(routingEvents event.RoutingEvents) error
 	if fake.EmitStub != nil {
 		return fake.EmitStub(routingEvents)
 	} else {
-		return fake.emitReturns.result1
+		return fake.emitReturns.result1, fake.emitReturns.result2, fake.emitReturns.result3
 	}
 }
 
@@ -47,11 +49,13 @@ func (fake *FakeRoutingAPIEmitter) EmitArgsForCall(i int) event.RoutingEvents {
 	return fake.emitArgsForCall[i].routingEvents
 }
 
-func (fake *FakeRoutingAPIEmitter) EmitReturns(result1 error) {
+func (fake *FakeRoutingAPIEmitter) EmitReturns(result1 int, result2 int, result3 error) {
 	fake.EmitStub = nil
 	fake.emitReturns = struct {
-		result1 error
-	}{result1}
+		result1 int
+		result2 int
+		result3 error
+	}{result1, result2, result3}
 }
 
 func (fake *FakeRoutingAPIEmitter) Invocations() map[string][][]interface{} {

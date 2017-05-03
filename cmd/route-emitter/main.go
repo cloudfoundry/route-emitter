@@ -75,9 +75,10 @@ func main() {
 
 	bbsClient := initializeBBSClient(logger, cfg)
 
+	localMode := cfg.CellID != ""
 	table := initializeRoutingTable(logger)
 	natsEmitter := initializeNatsEmitter(logger, natsClient, cfg.RouteEmittingWorkers)
-	natsHandler := routehandlers.NewNATSHandler(table, natsEmitter)
+	natsHandler := routehandlers.NewNATSHandler(table, natsEmitter, localMode)
 	handlers := []watcher.RouteHandler{natsHandler}
 
 	routeTTL := time.Duration(cfg.TCPRouteTTL)
@@ -93,7 +94,7 @@ func main() {
 		routingAPIClient := routing_api.NewClient(routingAPIAddress, false)
 		routingAPIEmitter := emitter.NewRoutingAPIEmitter(tcpLogger, routingAPIClient, uaaClient, int(routeTTL.Seconds()))
 		tcpTable := routingtable.NewTCPTable(tcpLogger, nil)
-		routingAPIHandler := routehandlers.NewRoutingAPIHandler(tcpTable, routingAPIEmitter)
+		routingAPIHandler := routehandlers.NewRoutingAPIHandler(tcpTable, routingAPIEmitter, localMode)
 		handlers = append(handlers, routingAPIHandler)
 	}
 

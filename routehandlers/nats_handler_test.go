@@ -96,7 +96,7 @@ var _ = Describe("NATSHandler", func() {
 		fakeMetricSender = fake_metrics_sender.NewFakeMetricSender()
 		metrics.Initialize(fakeMetricSender, nil)
 
-		routeHandler = routehandlers.NewNATSHandler(fakeTable, natsEmitter)
+		routeHandler = routehandlers.NewNATSHandler(fakeTable, natsEmitter, false)
 	})
 
 	Context("when an unrecoginzed event is received", func() {
@@ -1360,6 +1360,18 @@ var _ = Describe("NATSHandler", func() {
 				Expect(swapDomains).To(Equal(domains))
 
 				Expect(natsEmitter.EmitCallCount()).Should(Equal(1))
+			})
+
+			Context("when emitting metrics in localMode", func() {
+				BeforeEach(func() {
+					routeHandler = routehandlers.NewNATSHandler(fakeTable, natsEmitter, true)
+					fakeTable.RouteCountReturns(5)
+				})
+
+				It("emits the HTTPRouteCount", func() {
+					routeHandler.Sync(logger, desiredInfo, actualInfo, domains, nil)
+					Expect(fakeMetricSender.GetValue("HTTPRouteCount").Value).To(BeEquivalentTo(5))
+				})
 			})
 
 			Context("when NATS events are cached", func() {

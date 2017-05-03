@@ -11,19 +11,26 @@ import (
 	"code.cloudfoundry.org/route-emitter/routingtable/schema/event"
 	"code.cloudfoundry.org/route-emitter/routingtable/util"
 	"code.cloudfoundry.org/route-emitter/watcher"
+	"code.cloudfoundry.org/runtimeschema/metric"
+)
+
+var (
+	tcpRouteCount = metric.Metric("TCPRouteCount")
 )
 
 type RoutingAPIHandler struct {
 	routingTable routingtable.TCPRoutingTable
 	emitter      emitter.RoutingAPIEmitter
+	localMode    bool
 }
 
 var _ watcher.RouteHandler = new(RoutingAPIHandler)
 
-func NewRoutingAPIHandler(routingTable routingtable.TCPRoutingTable, emitter emitter.RoutingAPIEmitter) *RoutingAPIHandler {
+func NewRoutingAPIHandler(routingTable routingtable.TCPRoutingTable, emitter emitter.RoutingAPIEmitter, localMode bool) *RoutingAPIHandler {
 	return &RoutingAPIHandler{
 		routingTable: routingTable,
 		emitter:      emitter,
+		localMode:    localMode,
 	}
 }
 
@@ -78,20 +85,26 @@ func (handler *RoutingAPIHandler) Sync(
 		tempRoutingTable.AddEndpoint(actualLrp)
 	}
 
-	if tempRoutingTable.RouteCount() == 0 {
-		return
+	numRoutes := 0
+	if tempRoutingTable.RouteCount() != 0 {
+		routingEvents := handler.routingTable.Swap(tempRoutingTable)
+		logger.Debug("swap-complete", lager.Data{"events": len(routingEvents)})
+		numRoutes = handler.emit(routingEvents)
 	}
 
-	routingEvents := handler.routingTable.Swap(tempRoutingTable)
-	logger.Debug("swap-complete", lager.Data{"events": len(routingEvents)})
-	handler.emit(routingEvents)
+	if handler.localMode {
+		err := tcpRouteCount.Send(numRoutes)
+		if err != nil {
+			logger.Error("failed-to-send-tcp-route-count-metric", err)
+		}
+	}
 }
 
 func (handler *RoutingAPIHandler) Emit(logger lager.Logger) {
 	logger = logger.Session("routing-api-emit")
 	events := handler.routingTable.GetRoutingEvents()
 	logger.Debug("emitting-messages", lager.Data{"messages": events})
-	err := handler.emitter.Emit(events)
+	_, _, err := handler.emitter.Emit(events)
 	if err != nil {
 		logger.Error("failed-emitting-messages", err, lager.Data{"messages": events})
 	}
@@ -162,10 +175,12 @@ func (handler *RoutingAPIHandler) removeAndEmit(actualInfo *endpoint.ActualLRPRo
 	handler.emit(routingEvents)
 }
 
-func (handler *RoutingAPIHandler) emit(routingEvents event.RoutingEvents) {
+func (handler *RoutingAPIHandler) emit(routingEvents event.RoutingEvents) int {
+	numRegistrations := 0
 	if handler.emitter != nil && len(routingEvents) > 0 {
-		handler.emitter.Emit(routingEvents)
+		numRegistrations, _, _ = handler.emitter.Emit(routingEvents)
 	}
+	return numRegistrations
 }
 
 func (handler *RoutingAPIHandler) handleActualUpdate(logger lager.Logger, before, after *endpoint.ActualLRPRoutingInfo) {
