@@ -1294,7 +1294,7 @@ var _ = Describe("NATSHandler", func() {
 							Port:      8080,
 						},
 					}.RoutingInfo(),
-					Instances: 1,
+					Instances: 2,
 				}
 
 				actualLRPGroup1 := &models.ActualLRPGroup{
@@ -1387,6 +1387,16 @@ var _ = Describe("NATSHandler", func() {
 						Routes:      &routes,
 						Instances:   1,
 					})
+
+					endpoint4 = routingtable.Endpoint{InstanceGuid: "ig-4",
+						Host:            "3.3.3.3",
+						Index:           1,
+						Port:            23,
+						ContainerPort:   8080,
+						Evacuating:      false,
+						ModificationTag: &models.ModificationTag{Epoch: "abc", Index: 1},
+					}
+
 					actualLRPEvent := models.NewActualLRPCreatedEvent(&models.ActualLRPGroup{
 						Instance: &models.ActualLRP{
 							ActualLRPKey:         models.NewActualLRPKey("pg-4", 1, "domain"),

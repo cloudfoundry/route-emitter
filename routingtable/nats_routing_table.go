@@ -102,7 +102,7 @@ func (table *natsRoutingTable) RouteCount() int {
 
 	count := 0
 	for _, entry := range table.entries {
-		count += len(entry.Routes)
+		count += len(entry.Routes) * len(entry.Endpoints)
 	}
 
 	table.Unlock()

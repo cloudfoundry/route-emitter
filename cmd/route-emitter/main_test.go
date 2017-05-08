@@ -743,21 +743,13 @@ var _ = Describe("Route Emitter", func() {
 				Context("when running in local mode", func() {
 					BeforeEach(func() {
 						cellID = "cell-id"
-						routes := newRoutes([]string{"hostname-1"}, 8900, "")
-						desiredLRPUpdate := models.DesiredLRPUpdate{
-							Routes: routes,
-						}
-						err := bbsClient.UpdateDesiredLRP(logger, desiredLRP.ProcessGuid, &desiredLRPUpdate)
-						Expect(err).NotTo(HaveOccurred())
-						err = bbsClient.StartActualLRP(logger, &lrpKey, &instanceKey, &netInfo)
-						Expect(err).NotTo(HaveOccurred())
 					})
 
 					It("emits the http route count", func() {
 						Eventually(func() *events.Envelope {
 							metric := <-testMetricsChan
 							return metric
-						}).Should(matchMetricAndValue(metricAndValue{Name: "HTTPRouteCount", Value: int32(1)}))
+						}, "2s").Should(matchMetricAndValue(metricAndValue{Name: "HTTPRouteCount", Value: int32(2)}))
 					})
 				})
 

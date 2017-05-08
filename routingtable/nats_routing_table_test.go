@@ -1391,6 +1391,7 @@ var _ = Describe("RoutingTable", func() {
 			table.SetRoutes(endpoint.RoutingKey{ProcessGUID: "fake-process-guid"}, []routingtable.Route{
 				routingtable.Route{Hostname: "fake-route-url", LogGuid: logGuid},
 			}, nil)
+			table.AddEndpoint(endpoint.RoutingKey{ProcessGUID: "fake-process-guid"}, routingtable.Endpoint{InstanceGuid: "fake-instance-guid"})
 
 			Expect(table.RouteCount()).To(Equal(1))
 		})
@@ -1400,21 +1401,27 @@ var _ = Describe("RoutingTable", func() {
 				routingtable.Route{Hostname: "fake-route-url-1", LogGuid: logGuid},
 				routingtable.Route{Hostname: "fake-route-url-2", LogGuid: logGuid},
 			}, nil)
+			table.AddEndpoint(endpoint.RoutingKey{ProcessGUID: "fake-process-guid"}, routingtable.Endpoint{InstanceGuid: "fake-instance-guid-1"})
 
 			Expect(table.RouteCount()).To(Equal(2))
 		})
 
-		It("returns 4 after associating 2 urls with two processes", func() {
+		It("returns 8 after associating 2 urls with 2 processes with 2 instances each", func() {
 			table.SetRoutes(endpoint.RoutingKey{ProcessGUID: "fake-process-guid-a"}, []routingtable.Route{
 				routingtable.Route{Hostname: "fake-route-url-a-1", LogGuid: logGuid},
 				routingtable.Route{Hostname: "fake-route-url-a-2", LogGuid: logGuid},
 			}, nil)
+			table.AddEndpoint(endpoint.RoutingKey{ProcessGUID: "fake-process-guid-a"}, routingtable.Endpoint{InstanceGuid: "fake-instance-guid-a-1"})
+			table.AddEndpoint(endpoint.RoutingKey{ProcessGUID: "fake-process-guid-a"}, routingtable.Endpoint{InstanceGuid: "fake-instance-guid-a-2"})
+
 			table.SetRoutes(endpoint.RoutingKey{ProcessGUID: "fake-process-guid-b"}, []routingtable.Route{
 				routingtable.Route{Hostname: "fake-route-url-b-1", LogGuid: logGuid},
 				routingtable.Route{Hostname: "fake-route-url-b-2", LogGuid: logGuid},
 			}, nil)
+			table.AddEndpoint(endpoint.RoutingKey{ProcessGUID: "fake-process-guid-b"}, routingtable.Endpoint{InstanceGuid: "fake-instance-guid-b-1"})
+			table.AddEndpoint(endpoint.RoutingKey{ProcessGUID: "fake-process-guid-b"}, routingtable.Endpoint{InstanceGuid: "fake-instance-guid-b-2"})
 
-			Expect(table.RouteCount()).To(Equal(4))
+			Expect(table.RouteCount()).To(Equal(8))
 		})
 	})
 })
