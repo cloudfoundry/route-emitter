@@ -54,7 +54,7 @@ var _ = Describe("Watcher", func() {
 		return &desiredLRP
 	}
 
-	getActualLRP := func(processGuid, instanceGuid, hostAddress string,
+	getActualLRP := func(processGuid, instanceGuid, hostAddress, instanceAddress string,
 		hostPort, containerPort uint32, evacuating bool) *models.ActualLRPGroup {
 		if evacuating {
 			return &models.ActualLRPGroup{
@@ -64,6 +64,7 @@ var _ = Describe("Watcher", func() {
 					ActualLRPInstanceKey: models.NewActualLRPInstanceKey(instanceGuid, "cell-id-1"),
 					ActualLRPNetInfo: models.NewActualLRPNetInfo(
 						hostAddress,
+						instanceAddress,
 						models.NewPortMapping(hostPort, containerPort),
 					),
 					State: models.ActualLRPStateRunning,
@@ -76,6 +77,7 @@ var _ = Describe("Watcher", func() {
 					ActualLRPInstanceKey: models.NewActualLRPInstanceKey(instanceGuid, "cell-id-1"),
 					ActualLRPNetInfo: models.NewActualLRPNetInfo(
 						hostAddress,
+						instanceAddress,
 						models.NewPortMapping(hostPort, containerPort),
 					),
 					State: models.ActualLRPStateRunning,
@@ -184,7 +186,7 @@ var _ = Describe("Watcher", func() {
 		)
 
 		BeforeEach(func() {
-			actualLRP := getActualLRP("process-guid-1", "instance-guid-1", "some-ip", 61000, 5222, false)
+			actualLRP := getActualLRP("process-guid-1", "instance-guid-1", "some-ip", "container-ip", 61000, 5222, false)
 			event = models.NewActualLRPRemovedEvent(actualLRP)
 			eventSource.NextReturns(event, nil)
 		})
@@ -224,7 +226,7 @@ var _ = Describe("Watcher", func() {
 		)
 
 		BeforeEach(func() {
-			actualLRP := getActualLRP("process-guid-1", "instance-guid-1", "some-ip", 61000, 5222, false)
+			actualLRP := getActualLRP("process-guid-1", "instance-guid-1", "some-ip", "container-ip", 61000, 5222, false)
 			event = models.NewActualLRPCreatedEvent(actualLRP)
 			eventSource.NextReturns(event, nil)
 		})
@@ -264,8 +266,8 @@ var _ = Describe("Watcher", func() {
 		)
 
 		BeforeEach(func() {
-			beforeLRP := getActualLRP("process-guid-1", "instance-guid-1", "some-ip", 61000, 5222, false)
-			afterLRP := getActualLRP("process-guid-1", "instance-guid-1", "some-ip", 61001, 5222, false)
+			beforeLRP := getActualLRP("process-guid-1", "instance-guid-1", "some-ip", "container-ip", 61000, 5222, false)
+			afterLRP := getActualLRP("process-guid-1", "instance-guid-1", "some-ip", "container-ip", 61001, 5222, false)
 			event = models.NewActualLRPChangedEvent(beforeLRP, afterLRP)
 			eventSource.NextReturns(event, nil)
 		})
@@ -460,7 +462,7 @@ var _ = Describe("Watcher", func() {
 			Instance: &models.ActualLRP{
 				ActualLRPKey:         models.NewActualLRPKey("pg-1", 0, "domain"),
 				ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint1.InstanceGuid, "cell-id"),
-				ActualLRPNetInfo:     models.NewActualLRPNetInfo(endpoint1.Host, models.NewPortMapping(endpoint1.Port, endpoint1.ContainerPort)),
+				ActualLRPNetInfo:     models.NewActualLRPNetInfo(endpoint1.Host, "container-ip", models.NewPortMapping(endpoint1.Port, endpoint1.ContainerPort)),
 				State:                models.ActualLRPStateRunning,
 			},
 		}
@@ -469,7 +471,7 @@ var _ = Describe("Watcher", func() {
 			Instance: &models.ActualLRP{
 				ActualLRPKey:         models.NewActualLRPKey("pg-2", 0, "domain"),
 				ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint2.InstanceGuid, "cell-id"),
-				ActualLRPNetInfo:     models.NewActualLRPNetInfo(endpoint2.Host, models.NewPortMapping(endpoint2.Port, endpoint2.ContainerPort)),
+				ActualLRPNetInfo:     models.NewActualLRPNetInfo(endpoint2.Host, "container-ip", models.NewPortMapping(endpoint2.Port, endpoint2.ContainerPort)),
 				State:                models.ActualLRPStateRunning,
 			},
 		}
@@ -478,7 +480,7 @@ var _ = Describe("Watcher", func() {
 			Instance: &models.ActualLRP{
 				ActualLRPKey:         models.NewActualLRPKey("pg-3", 1, "domain"),
 				ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint3.InstanceGuid, "cell-id"),
-				ActualLRPNetInfo:     models.NewActualLRPNetInfo(endpoint3.Host, models.NewPortMapping(endpoint3.Port, endpoint3.ContainerPort)),
+				ActualLRPNetInfo:     models.NewActualLRPNetInfo(endpoint3.Host, "container-ip", models.NewPortMapping(endpoint3.Port, endpoint3.ContainerPort)),
 				State:                models.ActualLRPStateRunning,
 			},
 		}
@@ -508,7 +510,7 @@ var _ = Describe("Watcher", func() {
 						Instance: &models.ActualLRP{
 							ActualLRPKey:         models.NewActualLRPKey("pg-2", 1, "domain"),
 							ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint4.InstanceGuid, "cell-id4"),
-							ActualLRPNetInfo:     models.NewActualLRPNetInfo(endpoint4.Host, models.NewPortMapping(endpoint4.Port, endpoint4.ContainerPort)),
+							ActualLRPNetInfo:     models.NewActualLRPNetInfo(endpoint4.Host, "container-ip", models.NewPortMapping(endpoint4.Port, endpoint4.ContainerPort)),
 							State:                models.ActualLRPStateRunning,
 						},
 					}

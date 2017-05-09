@@ -208,6 +208,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 							ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
 							ActualLRPNetInfo: models.NewActualLRPNetInfo(
 								"some-ip",
+								"container-ip",
 								models.NewPortMapping(611006, 5222),
 							),
 							State: models.ActualLRPStateRunning,
@@ -253,6 +254,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 							ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
 							ActualLRPNetInfo: models.NewActualLRPNetInfo(
 								"some-ip",
+								"container-ip",
 								models.NewPortMapping(611006, 5222),
 							),
 							State: models.ActualLRPStateClaimed,
@@ -288,6 +290,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 							ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
 							ActualLRPNetInfo: models.NewActualLRPNetInfo(
 								"",
+								"",
 							),
 							State: models.ActualLRPStateClaimed,
 						},
@@ -300,6 +303,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 							ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
 							ActualLRPNetInfo: models.NewActualLRPNetInfo(
 								"some-ip",
+								"container-ip",
 								models.NewPortMapping(611006, 5222),
 							),
 							State: models.ActualLRPStateRunning,
@@ -345,6 +349,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 							ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
 							ActualLRPNetInfo: models.NewActualLRPNetInfo(
 								"some-ip",
+								"container-ip",
 								models.NewPortMapping(611006, 5222),
 							),
 							State: models.ActualLRPStateRunning,
@@ -357,6 +362,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 							ActualLRPKey:         models.NewActualLRPKey("process-guid", 0, "domain"),
 							ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
 							ActualLRPNetInfo: models.NewActualLRPNetInfo(
+								"",
 								"",
 							),
 							State: models.ActualLRPStateCrashed,
@@ -402,6 +408,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 							ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", ""),
 							ActualLRPNetInfo: models.NewActualLRPNetInfo(
 								"",
+								"",
 							),
 							State: models.ActualLRPStateUnclaimed,
 						},
@@ -413,6 +420,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 							ActualLRPKey:         models.NewActualLRPKey("process-guid", 0, "domain"),
 							ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
 							ActualLRPNetInfo: models.NewActualLRPNetInfo(
+								"",
 								"",
 							),
 							State: models.ActualLRPStateClaimed,
@@ -448,6 +456,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 							ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
 							ActualLRPNetInfo: models.NewActualLRPNetInfo(
 								"some-ip",
+								"container-ip",
 								models.NewPortMapping(611006, 5222),
 							),
 							State: models.ActualLRPStateRunning,
@@ -493,6 +502,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 							ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
 							ActualLRPNetInfo: models.NewActualLRPNetInfo(
 								"",
+								"",
 							),
 							State: models.ActualLRPStateClaimed,
 						},
@@ -520,6 +530,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 					ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
 					ActualLRPNetInfo: models.NewActualLRPNetInfo(
 						"some-ip",
+						"container-ip",
 						models.NewPortMapping(61006, 5222),
 						models.NewPortMapping(61007, 5223),
 					),
@@ -657,6 +668,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 							ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
 							ActualLRPNetInfo: models.NewActualLRPNetInfo(
 								"some-ip",
+								"container-ip",
 								models.NewPortMapping(61006, 5222),
 							),
 							State:           models.ActualLRPStateRunning,

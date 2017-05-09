@@ -131,7 +131,7 @@ var _ = Describe("Watcher Integration", func() {
 				Instance: &models.ActualLRP{
 					ActualLRPKey:         models.NewActualLRPKey("pg-1", 0, "domain"),
 					ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint1.InstanceGuid, "cell-id"),
-					ActualLRPNetInfo:     models.NewActualLRPNetInfo(endpoint1.Host, models.NewPortMapping(endpoint1.Port, endpoint1.ContainerPort)),
+					ActualLRPNetInfo:     models.NewActualLRPNetInfo(endpoint1.Host, "container-ip", models.NewPortMapping(endpoint1.Port, endpoint1.ContainerPort)),
 					State:                models.ActualLRPStateRunning,
 					ModificationTag:      *modTag,
 				},
@@ -141,7 +141,7 @@ var _ = Describe("Watcher Integration", func() {
 				Instance: &models.ActualLRP{
 					ActualLRPKey:         models.NewActualLRPKey("pg-1", 0, "domain"),
 					ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint1.InstanceGuid, "cell-id"),
-					ActualLRPNetInfo:     models.NewActualLRPNetInfo(endpoint1.Host, models.NewPortMapping(endpoint1.Port, endpoint1.ContainerPort)),
+					ActualLRPNetInfo:     models.NewActualLRPNetInfo(endpoint1.Host, "container-ip", models.NewPortMapping(endpoint1.Port, endpoint1.ContainerPort)),
 					State:                models.ActualLRPStateRunning,
 					ModificationTag:      *modTag,
 				},

@@ -29,6 +29,7 @@ var _ = Describe("NatsSyncer", func() {
 		containerPort = 8080
 		instanceGuid  = "instance-guid-1"
 		lrpHost       = "1.2.3.4"
+		containerIp   = "2.2.2.2"
 	)
 
 	var (
@@ -80,7 +81,7 @@ var _ = Describe("NatsSyncer", func() {
 				Instance: &models.ActualLRP{
 					ActualLRPKey:         models.NewActualLRPKey(processGuid, 1, "domain"),
 					ActualLRPInstanceKey: models.NewActualLRPInstanceKey(instanceGuid, "cell-id"),
-					ActualLRPNetInfo:     models.NewActualLRPNetInfo(lrpHost, models.NewPortMapping(1234, containerPort)),
+					ActualLRPNetInfo:     models.NewActualLRPNetInfo(lrpHost, containerIp, models.NewPortMapping(1234, containerPort)),
 					State:                models.ActualLRPStateRunning,
 				},
 			},

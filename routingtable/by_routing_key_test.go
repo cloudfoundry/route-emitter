@@ -96,25 +96,25 @@ var _ = Describe("ByRoutingKey", func() {
 					{
 						ActualLRP: &models.ActualLRP{
 							ActualLRPKey:     models.NewActualLRPKey(schedInfo1.ProcessGuid, 0, "domain"),
-							ActualLRPNetInfo: models.NewActualLRPNetInfo("1.1.1.1", models.NewPortMapping(11, 44), models.NewPortMapping(66, 99)),
+							ActualLRPNetInfo: models.NewActualLRPNetInfo("1.1.1.1", "1.2.3.4", models.NewPortMapping(11, 44), models.NewPortMapping(66, 99)),
 						},
 					},
 					{
 						ActualLRP: &models.ActualLRP{
 							ActualLRPKey:     models.NewActualLRPKey(schedInfo1.ProcessGuid, 1, "domain"),
-							ActualLRPNetInfo: models.NewActualLRPNetInfo("2.2.2.2", models.NewPortMapping(22, 44), models.NewPortMapping(88, 99)),
+							ActualLRPNetInfo: models.NewActualLRPNetInfo("2.2.2.2", "2.3.4.5", models.NewPortMapping(22, 44), models.NewPortMapping(88, 99)),
 						},
 					},
 					{
 						ActualLRP: &models.ActualLRP{
 							ActualLRPKey:     models.NewActualLRPKey(schedInfo2.ProcessGuid, 0, "domain"),
-							ActualLRPNetInfo: models.NewActualLRPNetInfo("3.3.3.3", models.NewPortMapping(33, 55)),
+							ActualLRPNetInfo: models.NewActualLRPNetInfo("3.3.3.3", "3.4.5.6", models.NewPortMapping(33, 55)),
 						},
 					},
 					{
 						ActualLRP: &models.ActualLRP{
 							ActualLRPKey:     models.NewActualLRPKey(schedInfo2.ProcessGuid, 1, "domain"),
-							ActualLRPNetInfo: models.NewActualLRPNetInfo("4.4.4.4", nil),
+							ActualLRPNetInfo: models.NewActualLRPNetInfo("4.4.4.4", "4.5.6.7", nil),
 						},
 					},
 				}, map[string]*models.DesiredLRPSchedulingInfo{
@@ -184,19 +184,19 @@ var _ = Describe("ByRoutingKey", func() {
 					{
 						ActualLRP: &models.ActualLRP{
 							ActualLRPKey:     models.NewActualLRPKey("abc", 0, "domain"),
-							ActualLRPNetInfo: models.NewActualLRPNetInfo("1.1.1.1", models.NewPortMapping(11, 44), models.NewPortMapping(66, 99)),
+							ActualLRPNetInfo: models.NewActualLRPNetInfo("1.1.1.1", "1.2.3.4", models.NewPortMapping(11, 44), models.NewPortMapping(66, 99)),
 						},
 					},
 					{
 						ActualLRP: &models.ActualLRP{
 							ActualLRPKey:     models.NewActualLRPKey("abc", 1, "domain"),
-							ActualLRPNetInfo: models.NewActualLRPNetInfo("2.2.2.2", models.NewPortMapping(22, 55), models.NewPortMapping(88, 99)),
+							ActualLRPNetInfo: models.NewActualLRPNetInfo("2.2.2.2", "2.3.4.5", models.NewPortMapping(22, 55), models.NewPortMapping(88, 99)),
 						},
 					},
 					{
 						ActualLRP: &models.ActualLRP{
 							ActualLRPKey:     models.NewActualLRPKey("def", 0, "domain"),
-							ActualLRPNetInfo: models.NewActualLRPNetInfo("3.3.3.3", models.NewPortMapping(33, 55)),
+							ActualLRPNetInfo: models.NewActualLRPNetInfo("3.3.3.3", "3.4.5.6", models.NewPortMapping(33, 55)),
 						},
 					},
 				}, map[string]*models.DesiredLRPSchedulingInfo{
@@ -241,7 +241,7 @@ var _ = Describe("ByRoutingKey", func() {
 				ActualLRP: &models.ActualLRP{
 					ActualLRPKey:         models.NewActualLRPKey("process-guid", 0, "domain"),
 					ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
-					ActualLRPNetInfo:     models.NewActualLRPNetInfo("1.1.1.1", models.NewPortMapping(11, 44), models.NewPortMapping(66, 99)),
+					ActualLRPNetInfo:     models.NewActualLRPNetInfo("1.1.1.1", "1.2.3.4", models.NewPortMapping(11, 44), models.NewPortMapping(66, 99)),
 				},
 				Evacuating: true,
 			})
@@ -275,7 +275,7 @@ var _ = Describe("ByRoutingKey", func() {
 			keys := routingtable.RoutingKeysFromActual(&models.ActualLRP{
 				ActualLRPKey:         models.NewActualLRPKey("process-guid", 0, "domain"),
 				ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
-				ActualLRPNetInfo:     models.NewActualLRPNetInfo("1.1.1.1", models.NewPortMapping(11, 44), models.NewPortMapping(66, 99)),
+				ActualLRPNetInfo:     models.NewActualLRPNetInfo("1.1.1.1", "1.2.3.4", models.NewPortMapping(11, 44), models.NewPortMapping(66, 99)),
 			})
 			Expect(keys).To(HaveLen(2))
 			Expect(keys).To(ContainElement(endpoint.RoutingKey{ProcessGUID: "process-guid", ContainerPort: 44}))
@@ -287,7 +287,7 @@ var _ = Describe("ByRoutingKey", func() {
 				keys := routingtable.RoutingKeysFromActual(&models.ActualLRP{
 					ActualLRPKey:         models.NewActualLRPKey("process-guid", 0, "domain"),
 					ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
-					ActualLRPNetInfo:     models.NewActualLRPNetInfo("1.1.1.1", nil),
+					ActualLRPNetInfo:     models.NewActualLRPNetInfo("1.1.1.1", "1.2.3.4", nil),
 				})
 
 				Expect(keys).To(HaveLen(0))

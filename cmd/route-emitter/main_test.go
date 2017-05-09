@@ -159,7 +159,7 @@ var _ = Describe("Route Emitter", func() {
 		lrpKey = models.NewActualLRPKey(processGuid, index, domain)
 		instanceKey = models.NewActualLRPInstanceKey("iguid1", "cell-id")
 
-		netInfo = models.NewActualLRPNetInfo("1.2.3.4", models.NewPortMapping(65100, 8080))
+		netInfo = models.NewActualLRPNetInfo("1.2.3.4", "2.2.2.2", models.NewPortMapping(65100, 8080))
 		registeredRoutes = listenForRoutes("router.register")
 		unregisteredRoutes = listenForRoutes("router.unregister")
 
@@ -372,7 +372,7 @@ var _ = Describe("Route Emitter", func() {
 							Expect(bbsClient.DesireLRP(logger, &desiredLRP)).NotTo(HaveOccurred())
 							lrpKey := models.NewActualLRPKey("some-guid", 0, domain)
 							instanceKey := models.NewActualLRPInstanceKey("instance-guid", "cell-id")
-							netInfo := models.NewActualLRPNetInfo("some-ip", models.NewPortMapping(62003, 5222))
+							netInfo := models.NewActualLRPNetInfo("some-ip", "container-ip", models.NewPortMapping(62003, 5222))
 							Expect(bbsClient.StartActualLRP(logger, &lrpKey, &instanceKey, &netInfo))
 
 						})
@@ -464,7 +464,7 @@ var _ = Describe("Route Emitter", func() {
 					BeforeEach(func() {
 						lrpKey = models.NewActualLRPKey(expectedTCPProcessGUID, 0, domain)
 						instanceKey = models.NewActualLRPInstanceKey("instance-guid", "cell-id")
-						netInfo = models.NewActualLRPNetInfo("some-ip", models.NewPortMapping(62003, 5222))
+						netInfo = models.NewActualLRPNetInfo("some-ip", "container-ip", models.NewPortMapping(62003, 5222))
 						Expect(bbsClient.StartActualLRP(logger, &lrpKey, &instanceKey, &netInfo))
 					})
 
@@ -619,7 +619,7 @@ var _ = Describe("Route Emitter", func() {
 
 					key := models.NewActualLRPKey("some-guid-1", 0, domain)
 					instanceKey := models.NewActualLRPInstanceKey("instance-guid-1", "cell-id")
-					netInfo := models.NewActualLRPNetInfo("some-ip-1", models.NewPortMapping(62003, 1883))
+					netInfo := models.NewActualLRPNetInfo("some-ip-1", "container-ip-1", models.NewPortMapping(62003, 1883))
 					Expect(bbsClient.StartActualLRP(logger, &key, &instanceKey, &netInfo))
 				})
 

@@ -41,6 +41,7 @@ var _ = Describe("NATSHandler", func() {
 		expectedInstanceGuid            = "instance-guid"
 		expectedIndex                   = 0
 		expectedHost                    = "1.1.1.1"
+		expectedInstanceAddress         = "2.2.2.2"
 		expectedExternalPort            = 11000
 		expectedAdditionalExternalPort  = 22000
 		expectedContainerPort           = 11
@@ -763,6 +764,7 @@ var _ = Describe("NATSHandler", func() {
 						ActualLRPInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGuid, "cell-id"),
 						ActualLRPNetInfo: models.NewActualLRPNetInfo(
 							expectedHost,
+							expectedInstanceAddress,
 							models.NewPortMapping(expectedExternalPort, expectedContainerPort),
 							models.NewPortMapping(expectedExternalPort, expectedAdditionalContainerPort),
 						),
@@ -787,12 +789,13 @@ var _ = Describe("NATSHandler", func() {
 				It("should log the net info", func() {
 					Expect(logger).To(gbytes.Say(
 						fmt.Sprintf(
-							`"net_info":\{"address":"%s","ports":\[\{"container_port":%d,"host_port":%d\},\{"container_port":%d,"host_port":%d\}\]\}`,
+							`"net_info":\{"address":"%s","ports":\[\{"container_port":%d,"host_port":%d\},\{"container_port":%d,"host_port":%d\}\],"instance_address":"%s"\}`,
 							expectedHost,
 							expectedContainerPort,
 							expectedExternalPort,
 							expectedAdditionalContainerPort,
 							expectedExternalPort,
+							expectedInstanceAddress,
 						),
 					))
 				})
@@ -836,6 +839,7 @@ var _ = Describe("NATSHandler", func() {
 						ActualLRPInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGuid, "cell-id"),
 						ActualLRPNetInfo: models.NewActualLRPNetInfo(
 							expectedHost,
+							expectedInstanceAddress,
 							models.NewPortMapping(expectedExternalPort, expectedContainerPort),
 							models.NewPortMapping(expectedExternalPort, expectedAdditionalContainerPort),
 						),
@@ -892,6 +896,7 @@ var _ = Describe("NATSHandler", func() {
 							ActualLRPInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGuid, "cell-id"),
 							ActualLRPNetInfo: models.NewActualLRPNetInfo(
 								expectedHost,
+								expectedInstanceAddress,
 								models.NewPortMapping(expectedExternalPort, expectedContainerPort),
 								models.NewPortMapping(expectedAdditionalExternalPort, expectedAdditionalContainerPort),
 							),
@@ -907,12 +912,13 @@ var _ = Describe("NATSHandler", func() {
 				It("should log the new net info", func() {
 					Expect(logger).To(gbytes.Say(
 						fmt.Sprintf(
-							`"net_info":\{"address":"%s","ports":\[\{"container_port":%d,"host_port":%d\},\{"container_port":%d,"host_port":%d\}\]\}`,
+							`"net_info":\{"address":"%s","ports":\[\{"container_port":%d,"host_port":%d\},\{"container_port":%d,"host_port":%d\}\],"instance_address":"%s"\}`,
 							expectedHost,
 							expectedContainerPort,
 							expectedExternalPort,
 							expectedAdditionalContainerPort,
 							expectedAdditionalExternalPort,
+							expectedInstanceAddress,
 						),
 					))
 				})
@@ -981,6 +987,7 @@ var _ = Describe("NATSHandler", func() {
 							ActualLRPInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGuid, "cell-id"),
 							ActualLRPNetInfo: models.NewActualLRPNetInfo(
 								expectedHost,
+								expectedInstanceAddress,
 								models.NewPortMapping(expectedExternalPort, expectedContainerPort),
 								models.NewPortMapping(expectedAdditionalExternalPort, expectedAdditionalContainerPort),
 							),
@@ -1003,12 +1010,13 @@ var _ = Describe("NATSHandler", func() {
 				It("should log the previous net info", func() {
 					Expect(logger).To(gbytes.Say(
 						fmt.Sprintf(
-							`"net_info":\{"address":"%s","ports":\[\{"container_port":%d,"host_port":%d\},\{"container_port":%d,"host_port":%d\}\]\}`,
+							`"net_info":\{"address":"%s","ports":\[\{"container_port":%d,"host_port":%d\},\{"container_port":%d,"host_port":%d\}\],"instance_address":"%s"\}`,
 							expectedHost,
 							expectedContainerPort,
 							expectedExternalPort,
 							expectedAdditionalContainerPort,
 							expectedAdditionalExternalPort,
+							expectedInstanceAddress,
 						),
 					))
 				})
@@ -1064,6 +1072,7 @@ var _ = Describe("NATSHandler", func() {
 							ActualLRPInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGuid, "cell-id"),
 							ActualLRPNetInfo: models.NewActualLRPNetInfo(
 								expectedHost,
+								expectedInstanceAddress,
 								models.NewPortMapping(expectedExternalPort, expectedContainerPort),
 								models.NewPortMapping(expectedAdditionalExternalPort, expectedAdditionalContainerPort),
 							),
@@ -1076,12 +1085,13 @@ var _ = Describe("NATSHandler", func() {
 				It("should NOT log the net info", func() {
 					Expect(logger).ToNot(gbytes.Say(
 						fmt.Sprintf(
-							`"net_info":\{"address":"%s","ports":\[\{"container_port":%d,"host_port":%d\},\{"container_port":%d,"host_port":%d\}\]\}`,
+							`"net_info":\{"address":"%s","ports":\[\{"container_port":%d,"host_port":%d\},\{"container_port":%d,"host_port":%d\}\],"instance_address":"%s"\}`,
 							expectedHost,
 							expectedContainerPort,
 							expectedExternalPort,
 							expectedAdditionalContainerPort,
 							expectedExternalPort,
+							expectedInstanceAddress,
 						),
 					))
 				})
@@ -1116,6 +1126,7 @@ var _ = Describe("NATSHandler", func() {
 							ActualLRPInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGuid, "cell-id"),
 							ActualLRPNetInfo: models.NewActualLRPNetInfo(
 								expectedHost,
+								expectedInstanceAddress,
 								models.NewPortMapping(expectedExternalPort, expectedContainerPort),
 								models.NewPortMapping(expectedAdditionalExternalPort, expectedAdditionalContainerPort),
 							),
@@ -1131,12 +1142,13 @@ var _ = Describe("NATSHandler", func() {
 				It("should log the previous net info", func() {
 					Expect(logger).To(gbytes.Say(
 						fmt.Sprintf(
-							`"net_info":\{"address":"%s","ports":\[\{"container_port":%d,"host_port":%d\},\{"container_port":%d,"host_port":%d\}\]\}`,
+							`"net_info":\{"address":"%s","ports":\[\{"container_port":%d,"host_port":%d\},\{"container_port":%d,"host_port":%d\}\],"instance_address":"%s"\}`,
 							expectedHost,
 							expectedContainerPort,
 							expectedExternalPort,
 							expectedAdditionalContainerPort,
 							expectedAdditionalExternalPort,
+							expectedInstanceAddress,
 						),
 					))
 				})
@@ -1188,6 +1200,7 @@ var _ = Describe("NATSHandler", func() {
 							ActualLRPKey: models.NewActualLRPKey(expectedProcessGuid, expectedIndex, "domain"),
 							ActualLRPNetInfo: models.NewActualLRPNetInfo(
 								expectedHost,
+								expectedInstanceAddress,
 								models.NewPortMapping(expectedExternalPort, expectedContainerPort),
 								models.NewPortMapping(expectedAdditionalExternalPort, expectedAdditionalContainerPort),
 							),
@@ -1201,12 +1214,13 @@ var _ = Describe("NATSHandler", func() {
 				It("should NOT log the net info", func() {
 					Expect(logger).ToNot(gbytes.Say(
 						fmt.Sprintf(
-							`"net_info":\{"address":"%s","ports":\[\{"container_port":%d,"host_port":%d\},\{"container_port":%d,"host_port":%d\}\]\}`,
+							`"net_info":\{"address":"%s","ports":\[\{"container_port":%d,"host_port":%d\},\{"container_port":%d,"host_port":%d\}\],"instance_address":"%s"\}`,
 							expectedHost,
 							expectedContainerPort,
 							expectedExternalPort,
 							expectedAdditionalContainerPort,
 							expectedExternalPort,
+							expectedInstanceAddress,
 						),
 					))
 				})
@@ -1301,7 +1315,7 @@ var _ = Describe("NATSHandler", func() {
 					Instance: &models.ActualLRP{
 						ActualLRPKey:         models.NewActualLRPKey("pg-1", 0, "domain"),
 						ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint1.InstanceGuid, "cell-id"),
-						ActualLRPNetInfo:     models.NewActualLRPNetInfo(endpoint1.Host, models.NewPortMapping(endpoint1.Port, endpoint1.ContainerPort)),
+						ActualLRPNetInfo:     models.NewActualLRPNetInfo(endpoint1.Host, "container-ip-1", models.NewPortMapping(endpoint1.Port, endpoint1.ContainerPort)),
 						State:                models.ActualLRPStateRunning,
 					},
 				}
@@ -1310,7 +1324,7 @@ var _ = Describe("NATSHandler", func() {
 					Instance: &models.ActualLRP{
 						ActualLRPKey:         models.NewActualLRPKey("pg-2", 0, "domain"),
 						ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint2.InstanceGuid, "cell-id"),
-						ActualLRPNetInfo:     models.NewActualLRPNetInfo(endpoint2.Host, models.NewPortMapping(endpoint2.Port, endpoint2.ContainerPort)),
+						ActualLRPNetInfo:     models.NewActualLRPNetInfo(endpoint2.Host, "container-ip-2", models.NewPortMapping(endpoint2.Port, endpoint2.ContainerPort)),
 						State:                models.ActualLRPStateRunning,
 					},
 				}
@@ -1319,7 +1333,7 @@ var _ = Describe("NATSHandler", func() {
 					Instance: &models.ActualLRP{
 						ActualLRPKey:         models.NewActualLRPKey("pg-3", 1, "domain"),
 						ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint3.InstanceGuid, "cell-id"),
-						ActualLRPNetInfo:     models.NewActualLRPNetInfo(endpoint3.Host, models.NewPortMapping(endpoint3.Port, endpoint3.ContainerPort)),
+						ActualLRPNetInfo:     models.NewActualLRPNetInfo(endpoint3.Host, "container-ip-3", models.NewPortMapping(endpoint3.Port, endpoint3.ContainerPort)),
 						State:                models.ActualLRPStateRunning,
 					},
 				}
@@ -1401,7 +1415,7 @@ var _ = Describe("NATSHandler", func() {
 						Instance: &models.ActualLRP{
 							ActualLRPKey:         models.NewActualLRPKey("pg-4", 1, "domain"),
 							ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint4.InstanceGuid, "cell-id"),
-							ActualLRPNetInfo:     models.NewActualLRPNetInfo(endpoint4.Host, models.NewPortMapping(endpoint4.Port, endpoint4.ContainerPort)),
+							ActualLRPNetInfo:     models.NewActualLRPNetInfo(endpoint4.Host, "container-ip-4", models.NewPortMapping(endpoint4.Port, endpoint4.ContainerPort)),
 							State:                models.ActualLRPStateRunning,
 						},
 					})
@@ -1516,6 +1530,7 @@ var _ = Describe("NATSHandler", func() {
 					ActualLRPKey:         models.NewActualLRPKey("pg-1", 0, "domain"),
 					ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint1.InstanceGuid, "cell-id"),
 					ActualLRPNetInfo: models.NewActualLRPNetInfo(endpoint1.Host,
+						"container-ip-1",
 						models.NewPortMapping(endpoint1.Port, endpoint1.ContainerPort),
 						models.NewPortMapping(12, endpoint1.ContainerPort+1),
 					),

@@ -20,6 +20,7 @@ var _ = Describe("LRP Utils", func() {
 						ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
 						ActualLRPNetInfo: models.NewActualLRPNetInfo(
 							"1.1.1.1",
+							"2.2.2.2",
 							models.NewPortMapping(11, 44),
 							models.NewPortMapping(66, 99),
 						),
@@ -48,6 +49,7 @@ var _ = Describe("LRP Utils", func() {
 						ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
 						ActualLRPNetInfo: models.NewActualLRPNetInfo(
 							"1.1.1.1",
+							"2.2.2.2",
 							models.NewPortMapping(11, 44),
 							models.NewPortMapping(66, 99),
 						),
@@ -75,6 +77,7 @@ var _ = Describe("LRP Utils", func() {
 					ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
 					ActualLRPNetInfo: models.NewActualLRPNetInfo(
 						"1.1.1.1",
+						"2.2.2.2",
 						models.NewPortMapping(11, 44),
 						models.NewPortMapping(66, 99),
 					),
@@ -95,6 +98,7 @@ var _ = Describe("LRP Utils", func() {
 						ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
 						ActualLRPNetInfo: models.NewActualLRPNetInfo(
 							"1.1.1.1",
+							"2.2.2.2",
 						),
 						State: models.ActualLRPStateRunning,
 					},

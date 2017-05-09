@@ -63,7 +63,7 @@ var _ = Describe("TCPRoutingTable", func() {
 	}
 
 	getActualLRP := func(
-		processGuid, instanceGuid, hostAddress string,
+		processGuid, instanceGuid, hostAddress, instanceAddress string,
 		hostPort, containerPort uint32,
 		evacuating bool,
 		modificationTag *models.ModificationTag,
@@ -74,6 +74,7 @@ var _ = Describe("TCPRoutingTable", func() {
 				ActualLRPInstanceKey: models.NewActualLRPInstanceKey(instanceGuid, "cell-id-1"),
 				ActualLRPNetInfo: models.NewActualLRPNetInfo(
 					hostAddress,
+					instanceAddress,
 					models.NewPortMapping(hostPort, containerPort),
 				),
 				State:           models.ActualLRPStateRunning,
@@ -180,20 +181,20 @@ var _ = Describe("TCPRoutingTable", func() {
 
 		Describe("AddEndpoint", func() {
 			It("emits nothing", func() {
-				actualLRP := getActualLRP("process-guid-1", "instance-guid-1", "some-ip-1", 61104, 5222, false, modificationTag)
+				actualLRP := getActualLRP("process-guid-1", "instance-guid-1", "some-ip-1", "container-ip-1", 61104, 5222, false, modificationTag)
 				routingEvents := routingTable.AddEndpoint(actualLRP)
 				Expect(routingEvents).To(HaveLen(0))
 			})
 
 			It("does not log sensitive info", func() {
-				actualLRP := getActualLRP("process-guid-1", "instance-guid-1", "some-ip-1", 61104, 5222, false, modificationTag)
+				actualLRP := getActualLRP("process-guid-1", "instance-guid-1", "some-ip-1", "container-ip-1", 61104, 5222, false, modificationTag)
 				routingEvents := routingTable.AddEndpoint(actualLRP)
 				Expect(routingEvents).To(HaveLen(0))
 				Consistently(logger).ShouldNot(gbytes.Say("private_key"))
 			})
 
 			It("logs required routing info", func() {
-				actualLRP := getActualLRP("process-guid-1", "instance-guid-1", "some-ip-1", 61104, 5222, false, modificationTag)
+				actualLRP := getActualLRP("process-guid-1", "instance-guid-1", "some-ip-1", "container-ip-1", 61104, 5222, false, modificationTag)
 				routingEvents := routingTable.AddEndpoint(actualLRP)
 				Expect(routingEvents).To(HaveLen(0))
 				Eventually(logger, DEFAULT_TIMEOUT, DEFAULT_POLLING_INTERVAL).Should(gbytes.Say("process_guid.*process-guid-1"))
@@ -203,20 +204,20 @@ var _ = Describe("TCPRoutingTable", func() {
 
 		Describe("RemoveEndpoint", func() {
 			It("emits nothing", func() {
-				actualLRP := getActualLRP("process-guid-1", "instance-guid-1", "some-ip-1", 61104, 5222, false, modificationTag)
+				actualLRP := getActualLRP("process-guid-1", "instance-guid-1", "some-ip-1", "container-ip-1", 61104, 5222, false, modificationTag)
 				routingEvents := routingTable.RemoveEndpoint(actualLRP)
 				Expect(routingEvents).To(HaveLen(0))
 			})
 
 			It("does not log sensitive info", func() {
-				actualLRP := getActualLRP("process-guid-1", "instance-guid-1", "some-ip-1", 61104, 5222, false, modificationTag)
+				actualLRP := getActualLRP("process-guid-1", "instance-guid-1", "some-ip-1", "container-ip-1", 61104, 5222, false, modificationTag)
 				routingEvents := routingTable.RemoveEndpoint(actualLRP)
 				Expect(routingEvents).To(HaveLen(0))
 				Consistently(logger).ShouldNot(gbytes.Say("private_key"))
 			})
 
 			It("logs required routing info", func() {
-				actualLRP := getActualLRP("process-guid-1", "instance-guid-1", "some-ip-1", 61104, 5222, false, modificationTag)
+				actualLRP := getActualLRP("process-guid-1", "instance-guid-1", "some-ip-1", "container-ip-1", 61104, 5222, false, modificationTag)
 				routingEvents := routingTable.RemoveEndpoint(actualLRP)
 				Expect(routingEvents).To(HaveLen(0))
 				Eventually(logger, DEFAULT_TIMEOUT, DEFAULT_POLLING_INTERVAL).Should(gbytes.Say("starting.*process-guid-1.*ports.*5222.*61104"))
@@ -1066,7 +1067,7 @@ var _ = Describe("TCPRoutingTable", func() {
 
 				It("emits routing events", func() {
 					newTag := &models.ModificationTag{Epoch: "abc", Index: 1}
-					actualLRP := getActualLRP("process-guid-1", "instance-guid-1", "some-ip-1", 61104, 5222, false, newTag)
+					actualLRP := getActualLRP("process-guid-1", "instance-guid-1", "some-ip-1", "container-ip-1", 61104, 5222, false, newTag)
 					routingEvents := routingTable.AddEndpoint(actualLRP)
 					Expect(routingEvents).To(HaveLen(1))
 					routingEvent := routingEvents[0]
@@ -1096,7 +1097,7 @@ var _ = Describe("TCPRoutingTable", func() {
 				Context("with different instance guid", func() {
 					It("emits routing events", func() {
 						newTag := &models.ModificationTag{Epoch: "abc", Index: 2}
-						actualLRP := getActualLRP("process-guid-1", "instance-guid-3", "some-ip-3", 61104, 5222, false, newTag)
+						actualLRP := getActualLRP("process-guid-1", "instance-guid-3", "some-ip-3", "container-ip-3", 61104, 5222, false, newTag)
 						routingEvents := routingTable.AddEndpoint(actualLRP)
 						Expect(routingEvents).To(HaveLen(1))
 						routingEvent := routingEvents[0]
@@ -1122,7 +1123,7 @@ var _ = Describe("TCPRoutingTable", func() {
 					Context("newer modification tag", func() {
 						It("emits routing events", func() {
 							newTag := &models.ModificationTag{Epoch: "abc", Index: 2}
-							actualLRP := getActualLRP("process-guid-1", "instance-guid-1", "some-ip-1", 61105, 5222, false, newTag)
+							actualLRP := getActualLRP("process-guid-1", "instance-guid-1", "some-ip-1", "container-ip-1", 61105, 5222, false, newTag)
 							routingEvents := routingTable.AddEndpoint(actualLRP)
 							Expect(routingEvents).To(HaveLen(1))
 							routingEvent := routingEvents[0]
@@ -1146,7 +1147,7 @@ var _ = Describe("TCPRoutingTable", func() {
 					Context("older modification tag", func() {
 						It("emits nothing", func() {
 							olderTag := &models.ModificationTag{Epoch: "abc", Index: 0}
-							actualLRP := getActualLRP("process-guid-1", "instance-guid-1", "some-ip-1", 61105, 5222, false, olderTag)
+							actualLRP := getActualLRP("process-guid-1", "instance-guid-1", "some-ip-1", "container-ip-1", 61105, 5222, false, olderTag)
 							routingEvents := routingTable.AddEndpoint(actualLRP)
 							Expect(routingEvents).To(HaveLen(0))
 						})
@@ -1166,7 +1167,7 @@ var _ = Describe("TCPRoutingTable", func() {
 
 				It("emits nothing", func() {
 					newTag := &models.ModificationTag{Epoch: "abc", Index: 1}
-					actualLRP := getActualLRP("process-guid-1", "instance-guid-1", "some-ip-1", 61104, 5222, false, newTag)
+					actualLRP := getActualLRP("process-guid-1", "instance-guid-1", "some-ip-1", "container-ip-1", 61104, 5222, false, newTag)
 					routingEvents := routingTable.RemoveEndpoint(actualLRP)
 					Expect(routingEvents).To(HaveLen(0))
 				})
@@ -1183,7 +1184,7 @@ var _ = Describe("TCPRoutingTable", func() {
 				Context("with instance guid not present in existing endpoints", func() {
 					It("emits nothing", func() {
 						newTag := &models.ModificationTag{Epoch: "abc", Index: 2}
-						actualLRP := getActualLRP("process-guid-1", "instance-guid-3", "some-ip-3", 62004, 5222, false, newTag)
+						actualLRP := getActualLRP("process-guid-1", "instance-guid-3", "some-ip-3", "container-ip-3", 62004, 5222, false, newTag)
 						routingEvents := routingTable.RemoveEndpoint(actualLRP)
 						Expect(routingEvents).To(HaveLen(0))
 					})
@@ -1193,7 +1194,7 @@ var _ = Describe("TCPRoutingTable", func() {
 					Context("newer modification tag", func() {
 						It("emits routing events", func() {
 							newTag := &models.ModificationTag{Epoch: "abc", Index: 2}
-							actualLRP := getActualLRP("process-guid-1", "instance-guid-1", "some-ip-1", 62004, 5222, false, newTag)
+							actualLRP := getActualLRP("process-guid-1", "instance-guid-1", "some-ip-1", "container-ip-1", 62004, 5222, false, newTag)
 							routingEvents := routingTable.RemoveEndpoint(actualLRP)
 							Expect(routingEvents).To(HaveLen(1))
 							routingEvent := routingEvents[0]
@@ -1214,7 +1215,7 @@ var _ = Describe("TCPRoutingTable", func() {
 
 					Context("same modification tag", func() {
 						It("emits routing events", func() {
-							actualLRP := getActualLRP("process-guid-1", "instance-guid-1", "some-ip-1", 62004, 5222, false, modificationTag)
+							actualLRP := getActualLRP("process-guid-1", "instance-guid-1", "some-ip-1", "container-ip-1", 62004, 5222, false, modificationTag)
 							routingEvents := routingTable.RemoveEndpoint(actualLRP)
 							Expect(routingEvents).To(HaveLen(1))
 							routingEvent := routingEvents[0]
@@ -1236,7 +1237,7 @@ var _ = Describe("TCPRoutingTable", func() {
 					Context("older modification tag", func() {
 						It("emits nothing", func() {
 							olderTag := &models.ModificationTag{Epoch: "abc", Index: 0}
-							actualLRP := getActualLRP("process-guid-1", "instance-guid-1", "some-ip-1", 62004, 5222, false, olderTag)
+							actualLRP := getActualLRP("process-guid-1", "instance-guid-1", "some-ip-1", "container-ip-1", 62004, 5222, false, olderTag)
 							routingEvents := routingTable.RemoveEndpoint(actualLRP)
 							Expect(routingEvents).To(HaveLen(0))
 						})
