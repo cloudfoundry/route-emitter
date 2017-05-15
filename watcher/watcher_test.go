@@ -888,6 +888,18 @@ var _ = Describe("Watcher", func() {
 					})
 				})
 			})
+
+			Context("when there are no running actual lrps on the cell", func() {
+				BeforeEach(func() {
+					bbsClient.ActualLRPGroupsStub = func(logger lager.Logger, f models.ActualLRPFilter) ([]*models.ActualLRPGroup, error) {
+						return []*models.ActualLRPGroup{}, nil
+					}
+				})
+
+				It("does not fetch any desired lrp scheduling info", func() {
+					Consistently(bbsClient.DesiredLRPSchedulingInfosCallCount).Should(Equal(0))
+				})
+			})
 		})
 
 		Context("when actual lrp state is not running", func() {
@@ -908,18 +920,6 @@ var _ = Describe("Watcher", func() {
 			It("should not refresh desired lrps", func() {
 				Consistently(routeHandler.ShouldRefreshDesiredCallCount).Should(Equal(0))
 				Consistently(routeHandler.RefreshDesiredCallCount).Should(Equal(0))
-			})
-		})
-
-		Context("when there are no running actual lrps on the cell", func() {
-			BeforeEach(func() {
-				bbsClient.ActualLRPGroupsStub = func(logger lager.Logger, f models.ActualLRPFilter) ([]*models.ActualLRPGroup, error) {
-					return []*models.ActualLRPGroup{}, nil
-				}
-			})
-
-			It("does not fetch any desired lrp scheduling info", func() {
-				Consistently(bbsClient.DesiredLRPSchedulingInfosCallCount()).Should(Equal(0))
 			})
 		})
 	})
