@@ -939,7 +939,7 @@ var _ = Describe("Route Emitter", func() {
 					cfg.HealthCheckAddress = fmt.Sprintf("127.0.0.1:%d", 4600+GinkgoParallelNode())
 				})
 				secondRunner = createEmitterRunner("emitter2", "", secondEmitterConfig...)
-				secondRunner.StartCheck = "lock.acquiring-lock"
+				secondRunner.StartCheck = "consul-lock.acquiring-lock"
 			})
 
 			JustBeforeEach(func() {
