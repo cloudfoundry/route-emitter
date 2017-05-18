@@ -500,6 +500,7 @@ var _ = Describe("Route Emitter", func() {
 
 					Context("when running in local mode", func() {
 						BeforeEach(func() {
+							consulClusterAddress = ""
 							cellID = "cell-id"
 						})
 
@@ -743,6 +744,7 @@ var _ = Describe("Route Emitter", func() {
 				Context("when running in local mode", func() {
 					BeforeEach(func() {
 						cellID = "cell-id"
+						consulClusterAddress = ""
 					})
 
 					It("emits the http route count", func() {
@@ -958,11 +960,15 @@ var _ = Describe("Route Emitter", func() {
 
 				Context("runs in local mode", func() {
 					BeforeEach(func() {
+						secondEmitterConfig = append(cfgs, func(cfg *config.RouteEmitterConfig) {
+							cfg.ConsulCluster = ""
+							cfg.HealthCheckAddress = fmt.Sprintf("127.0.0.1:%d", 4600+GinkgoParallelNode())
+						})
 						secondRunner = createEmitterRunner("emitter2", "some-cell-id", secondEmitterConfig...)
 						secondRunner.StartCheck = "emitter2.watcher.sync.complete"
 					})
 
-					It("becomes active and does not acquire the lock", func() {
+					It("becomes active and does not connect to consul to acquire the lock", func() {
 						Eventually(secondRunner.Buffer).Should(gbytes.Say("emitter2.started"))
 					})
 				})
@@ -1003,6 +1009,7 @@ var _ = Describe("Route Emitter", func() {
 			fakeConsul        *httptest.Server
 			fakeConsulHandler http.HandlerFunc
 			handlerWriteLock  *sync.Mutex
+			cellID            string = ""
 		)
 
 		BeforeEach(func() {
@@ -1026,7 +1033,10 @@ var _ = Describe("Route Emitter", func() {
 			fakeConsul.Start()
 
 			consulClusterAddress = fakeConsul.URL
-			runner = createEmitterRunner("emitter1", "", cfgs...)
+		})
+
+		JustBeforeEach(func() {
+			runner = createEmitterRunner("emitter1", cellID, cfgs...)
 			runner.StartCheck = "emitter1.started"
 			emitter = ginkgomon.Invoke(runner)
 		})
@@ -1042,7 +1052,7 @@ var _ = Describe("Route Emitter", func() {
 				msg2 routingtable.RegistryMessage
 			)
 
-			BeforeEach(func() {
+			JustBeforeEach(func() {
 				err := bbsClient.DesireLRP(logger, desiredLRP)
 				Expect(err).NotTo(HaveOccurred())
 
@@ -1059,6 +1069,29 @@ var _ = Describe("Route Emitter", func() {
 				})
 				handlerWriteLock.Unlock()
 				consulRunner.Stop()
+			})
+
+			Context("when in local mode", func() {
+				var receiveCh chan struct{}
+
+				BeforeEach(func() {
+					cellID = "cell-local"
+					instanceKey.CellId = cellID
+				})
+
+				JustBeforeEach(func() {
+
+					receiveCh = make(chan struct{}, 1)
+					handlerWriteLock.Lock()
+					fakeConsulHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+						receiveCh <- struct{}{}
+					})
+					handlerWriteLock.Unlock()
+				})
+
+				It("does not connect to consul", func() {
+					Consistently(receiveCh, 5*time.Second).ShouldNot(Receive())
+				})
 			})
 
 			It("enters consul down mode and exits when consul comes back up", func() {

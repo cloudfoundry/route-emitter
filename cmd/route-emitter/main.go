@@ -108,24 +108,6 @@ func main() {
 		logger,
 	)
 
-	consulClient := initializeConsulClient(logger, cfg.ConsulCluster)
-
-	lockMaintainer := initializeLockMaintainer(
-		logger,
-		consulClient,
-		cfg.ConsulSessionName,
-		time.Duration(cfg.LockTTL),
-		time.Duration(cfg.LockRetryInterval),
-		clock,
-	)
-
-	consulDownModeNotifier := consuldownmodenotifier.NewConsulDownModeNotifier(
-		logger,
-		0,
-		clock,
-		time.Duration(cfg.ConsulDownModeNotificationInterval),
-	)
-
 	healthHandler := func(resp http.ResponseWriter, req *http.Request) {
 		resp.WriteHeader(http.StatusOK)
 	}
@@ -135,13 +117,33 @@ func main() {
 		{"healthcheck", healthCheckServer},
 	}
 
+	var consulClient consuladapter.Client
+	var consulDownModeNotifier *consuldownmodenotifier.ConsulDownModeNotifier
 	if cfg.CellID == "" {
+		consulClient = initializeConsulClient(logger, cfg.ConsulCluster)
+
+		lockMaintainer := initializeLockMaintainer(
+			logger,
+			consulClient,
+			cfg.ConsulSessionName,
+			time.Duration(cfg.LockTTL),
+			time.Duration(cfg.LockRetryInterval),
+			clock,
+		)
+
+		consulDownModeNotifier = consuldownmodenotifier.NewConsulDownModeNotifier(
+			logger,
+			0,
+			clock,
+			time.Duration(cfg.ConsulDownModeNotificationInterval),
+		)
+
 		// we are running in global mode
 		members = append(members, grouper.Member{"lock-maintainer", lockMaintainer})
+		members = append(members, grouper.Member{"consul-down-mode-notifier", consulDownModeNotifier})
 	}
 
 	members = append(members,
-		grouper.Member{"consul-down-mode-notifier", consulDownModeNotifier},
 		grouper.Member{"watcher", watcher},
 		grouper.Member{"syncer", syncer},
 	)
@@ -165,44 +167,44 @@ func main() {
 		logger.Info("finished")
 	}
 
-	// ConsulDown mode
+	if cfg.CellID == "" {
+		// ConsulDown mode
+		logger = logger.Session("consul-down-mode")
 
-	logger = logger.Session("consul-down-mode")
+		consulDownChecker := consuldownchecker.NewConsulDownChecker(
+			logger,
+			clock,
+			consulClient,
+			time.Duration(cfg.LockRetryInterval),
+		)
 
-	consulDownChecker := consuldownchecker.NewConsulDownChecker(
-		logger,
-		clock,
-		consulClient,
-		time.Duration(cfg.LockRetryInterval),
-	)
+		consulDownModeNotifier = consuldownmodenotifier.NewConsulDownModeNotifier(
+			logger,
+			1,
+			clock,
+			time.Duration(cfg.ConsulDownModeNotificationInterval),
+		)
+		// we are running in global mode
+		members = grouper.Members{
+			{"nats-client", natsClientRunner},
+			{"consul-down-checker", consulDownChecker},
+			{"consul-down-mode-notifier", consulDownModeNotifier},
+			{"watcher", watcher},
+			{"syncer", syncer},
+		}
 
-	consulDownModeNotifier = consuldownmodenotifier.NewConsulDownModeNotifier(
-		logger,
-		1,
-		clock,
-		time.Duration(cfg.ConsulDownModeNotificationInterval),
-	)
+		group = grouper.NewOrdered(os.Interrupt, members)
 
-	members = grouper.Members{
-		{"nats-client", natsClientRunner},
-		{"consul-down-checker", consulDownChecker},
-		{"consul-down-mode-notifier", consulDownModeNotifier},
-		{"watcher", watcher},
-		{"syncer", syncer},
-	}
+		logger.Info("starting")
 
-	group = grouper.NewOrdered(os.Interrupt, members)
+		monitor = ifrit.Invoke(sigmon.New(group))
 
-	logger.Info("starting")
-
-	monitor = ifrit.Invoke(sigmon.New(group))
-
-	logger.Info("started")
-
-	err = <-monitor.Wait()
-	if err != nil {
-		logger.Error("exited-with-failure", err)
-		os.Exit(1)
+		logger.Info("started")
+		err = <-monitor.Wait()
+		if err != nil {
+			logger.Error("exited-with-failure", err)
+			os.Exit(1)
+		}
 	}
 
 	logger.Info("exited")

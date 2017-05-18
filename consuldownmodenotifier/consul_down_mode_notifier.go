@@ -9,7 +9,7 @@ import (
 	"code.cloudfoundry.org/runtimeschema/metric"
 )
 
-type ConsulDownModeNofitier struct {
+type ConsulDownModeNotifier struct {
 	logger   lager.Logger
 	value    int
 	clock    clock.Clock
@@ -21,13 +21,13 @@ func NewConsulDownModeNotifier(
 	value int,
 	clock clock.Clock,
 	interval time.Duration,
-) *ConsulDownModeNofitier {
-	return &ConsulDownModeNofitier{
+) *ConsulDownModeNotifier {
+	return &ConsulDownModeNotifier{
 		logger: logger, value: value, clock: clock, interval: interval,
 	}
 }
 
-func (p *ConsulDownModeNofitier) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
+func (p *ConsulDownModeNotifier) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
 	logger := p.logger.Session("consul-down-mode-notifier")
 	logger.Info("starting")
 	defer logger.Info("finished")
