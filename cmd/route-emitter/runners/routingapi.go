@@ -115,7 +115,7 @@ func (runner *RoutingAPIRunner) Run(signals <-chan os.Signal, ready chan<- struc
 		Name:              "routing-api",
 		Command:           exec.Command(runner.binPath, args...),
 		StartCheck:        "routing-api.started",
-		StartCheckTimeout: 10 * time.Second,
+		StartCheckTimeout: 20 * time.Second,
 	})
 	return r.Run(signals, ready)
 }

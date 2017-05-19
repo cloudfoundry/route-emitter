@@ -15,10 +15,9 @@ import (
 	"time"
 
 	"code.cloudfoundry.org/bbs/models"
-	"code.cloudfoundry.org/bbs/test_helpers"
-	"code.cloudfoundry.org/bbs/test_helpers/sqlrunner"
 	"code.cloudfoundry.org/durationjson"
 	"code.cloudfoundry.org/lager/lagerflags"
+	"code.cloudfoundry.org/locket"
 	"code.cloudfoundry.org/route-emitter/cmd/route-emitter/config"
 	"code.cloudfoundry.org/route-emitter/cmd/route-emitter/runners"
 	"code.cloudfoundry.org/route-emitter/routingtable"
@@ -67,7 +66,6 @@ var _ = Describe("Route Emitter", func() {
 	)
 
 	createEmitterRunner := func(sessionName string, cellID string, modifyConfig ...func(*config.RouteEmitterConfig)) *ginkgomon.Runner {
-
 		cfg := config.RouteEmitterConfig{
 			CellID:               cellID,
 			ConsulSessionName:    sessionName,
@@ -185,7 +183,10 @@ var _ = Describe("Route Emitter", func() {
 			Username:   sqlRunner.Username(),
 			Password:   sqlRunner.Password(),
 		}
-		routingAPIRunner, err = runners.NewRoutingAPIRunner(routingAPIPath, consulRunner.URL(), sqlConfig)
+		routingAPIRunner, err = runners.NewRoutingAPIRunner(routingAPIPath, consulRunner.URL(), sqlConfig, func(cfg *runners.Config) {
+			cfg.ConsulCluster.LockTTL = 5 * time.Second
+		})
+
 		Expect(err).NotTo(HaveOccurred())
 		routingApiProcess = ginkgomon.Invoke(routingAPIRunner)
 
@@ -208,7 +209,7 @@ var _ = Describe("Route Emitter", func() {
 
 	AfterEach(func() {
 		logger.Info("shutting-down")
-		ginkgomon.Interrupt(routingApiProcess, routingAPIInterruptTimeout)
+		ginkgomon.Kill(routingApiProcess, routingAPIInterruptTimeout)
 	})
 
 	Context("Ping interval for nats client", func() {
@@ -222,7 +223,7 @@ var _ = Describe("Route Emitter", func() {
 		})
 
 		AfterEach(func() {
-			ginkgomon.Interrupt(emitter, emitterInterruptTimeout)
+			ginkgomon.Kill(emitter, emitterInterruptTimeout)
 		})
 
 		It("returns 20 second", func() {
@@ -268,8 +269,6 @@ var _ = Describe("Route Emitter", func() {
 			notExpectedTcpRouteMapping apimodels.TcpRouteMapping
 			emitter                    ifrit.Process
 			runner                     *ginkgomon.Runner
-			sqlRunner                  sqlrunner.SQLRunner
-			sqlProcess                 ifrit.Process
 			cellID                     string
 		)
 
@@ -281,14 +280,7 @@ var _ = Describe("Route Emitter", func() {
 			notExpectedTcpRouteMapping = apimodels.NewTcpRouteMapping("", 1883, "some-ip-1", 62003, 120)
 			expectedTcpRouteMapping.RouterGroupGuid = routerGUID
 			notExpectedTcpRouteMapping.RouterGroupGuid = routerGUID
-			dbName := fmt.Sprintf("routingapi_%d", GinkgoParallelNode())
-			sqlRunner = test_helpers.NewSQLRunner(dbName)
-			sqlProcess = ginkgomon.Invoke(sqlRunner)
 			cellID = ""
-		})
-
-		AfterEach(func() {
-			ginkgomon.Interrupt(sqlProcess)
 		})
 
 		getDesiredLRP := func(processGuid, routerGroupGuid string, externalPort, containerPort uint32) models.DesiredLRP {
@@ -325,7 +317,7 @@ var _ = Describe("Route Emitter", func() {
 			})
 
 			AfterEach(func() {
-				ginkgomon.Interrupt(emitter, emitterInterruptTimeout)
+				ginkgomon.Kill(emitter, emitterInterruptTimeout)
 			})
 
 			BeforeEach(func() {
@@ -435,7 +427,7 @@ var _ = Describe("Route Emitter", func() {
 			})
 
 			AfterEach(func() {
-				ginkgomon.Interrupt(emitter, emitterInterruptTimeout)
+				ginkgomon.Kill(emitter, emitterInterruptTimeout)
 			})
 
 			It("starts successfully without oauth config", func() {
@@ -470,29 +462,6 @@ var _ = Describe("Route Emitter", func() {
 						instanceKey = models.NewActualLRPInstanceKey("instance-guid", "cell-id")
 						netInfo = models.NewActualLRPNetInfo("some-ip", "container-ip", models.NewPortMapping(62003, 5222))
 						Expect(bbsClient.StartActualLRP(logger, &lrpKey, &instanceKey, &netInfo))
-					})
-
-					Context("when backing store loses its data", func() {
-						JustBeforeEach(func() {
-							// ensure it's seen the route at least once
-							Eventually(func() bool {
-								mappings, _ := routingAPIRunner.GetClient().TcpRouteMappings()
-								return contains(mappings, expectedTcpRouteMapping)
-							}, 5*time.Second).Should(BeTrue())
-
-							sqlRunner.Reset()
-
-							// Only start actual LRP, do not repopulate Desired
-							err := bbsClient.StartActualLRP(logger, &lrpKey, &instanceKey, &netInfo)
-							Expect(err).NotTo(HaveOccurred())
-						})
-
-						It("continues to broadcast routes", func() {
-							Consistently(func() bool {
-								mappings, _ := routingAPIRunner.GetClient().TcpRouteMappings()
-								return contains(mappings, expectedTcpRouteMapping)
-							}, 5*time.Second).Should(BeTrue())
-						})
 					})
 
 					It("emits its routes immediately", func() {
@@ -618,7 +587,7 @@ var _ = Describe("Route Emitter", func() {
 
 			Context("when routing api server is down but bbs is running", func() {
 				JustBeforeEach(func() {
-					ginkgomon.Interrupt(routingApiProcess, routingAPIInterruptTimeout)
+					ginkgomon.Kill(routingApiProcess, routingAPIInterruptTimeout)
 					desiredLRP := getDesiredLRP("some-guid-1", "some-guid", 1883, 1883)
 					Expect(bbsClient.DesireLRP(logger, &desiredLRP)).NotTo(HaveOccurred())
 
@@ -633,7 +602,7 @@ var _ = Describe("Route Emitter", func() {
 					// is not defined in relation to the 'tcp-emitter.started' message
 					Eventually(runner.Buffer().Contents).Should(ContainSubstring("subscribed-to-bbs-event"))
 					Eventually(runner.Buffer()).Should(gbytes.Say("syncer.syncing"))
-					Eventually(runner.Buffer()).Should(gbytes.Say("unable-to-upsert.*connection refused"))
+					Eventually(runner.Buffer()).Should(gbytes.Say("unable-to-upsert"))
 					Consistently(runner.Buffer()).ShouldNot(gbytes.Say("successfully-emitted-event"))
 					Consistently(emitter.Wait()).ShouldNot(Receive())
 
@@ -652,9 +621,7 @@ var _ = Describe("Route Emitter", func() {
 					Eventually(runner.Buffer()).Should(gbytes.Say("unable-to-upsert.*some-guid not found"))
 				})
 			})
-
 		})
-
 	})
 
 	Context("when NATS is unreachable", func() {
@@ -673,7 +640,7 @@ var _ = Describe("Route Emitter", func() {
 		})
 
 		AfterEach(func() {
-			ginkgomon.Interrupt(emitter, emitterInterruptTimeout)
+			ginkgomon.Kill(emitter, emitterInterruptTimeout)
 		})
 
 		It("exits with non zero exit code", func() {
@@ -714,7 +681,7 @@ var _ = Describe("Route Emitter", func() {
 
 		AfterEach(func() {
 			By("killing the route-emitter")
-			ginkgomon.Interrupt(emitter, emitterInterruptTimeout)
+			ginkgomon.Kill(emitter, emitterInterruptTimeout)
 		})
 
 		It("enables the healthcheck server", func() {
@@ -954,7 +921,7 @@ var _ = Describe("Route Emitter", func() {
 
 			AfterEach(func() {
 				Expect(secondEmitter.Wait()).NotTo(Receive(), "Runner should not have exploded!")
-				ginkgomon.Interrupt(secondEmitter, emitterInterruptTimeout)
+				ginkgomon.Kill(secondEmitter, emitterInterruptTimeout)
 			})
 
 			Describe("the second emitter", func() {
@@ -980,12 +947,12 @@ var _ = Describe("Route Emitter", func() {
 
 			Context("and the first emitter goes away", func() {
 				JustBeforeEach(func() {
-					ginkgomon.Interrupt(emitter, emitterInterruptTimeout)
+					ginkgomon.Kill(emitter, emitterInterruptTimeout)
 				})
 
 				Describe("the second emitter", func() {
 					It("becomes active", func() {
-						Eventually(secondRunner.Buffer, 10).Should(gbytes.Say("emitter2.started"))
+						Eventually(secondRunner.Buffer, locket.DefaultSessionTTL*2).Should(gbytes.Say("emitter2.started"))
 					})
 				})
 			})
@@ -1048,7 +1015,7 @@ var _ = Describe("Route Emitter", func() {
 
 		AfterEach(func() {
 			fakeConsul.Close()
-			ginkgomon.Interrupt(emitter, emitterInterruptTimeout)
+			ginkgomon.Kill(emitter, emitterInterruptTimeout)
 		})
 
 		Context("when consul goes down", func() {
@@ -1152,7 +1119,7 @@ var _ = Describe("Route Emitter", func() {
 			})
 
 			AfterEach(func() {
-				ginkgomon.Interrupt(emitter, emitterInterruptTimeout)
+				ginkgomon.Kill(emitter, emitterInterruptTimeout)
 			})
 
 			It("immediately emits all routes", func() {
@@ -1321,7 +1288,7 @@ var _ = Describe("Route Emitter", func() {
 		})
 
 		AfterEach(func() {
-			ginkgomon.Interrupt(emitter, emitterInterruptTimeout)
+			ginkgomon.Kill(emitter, emitterInterruptTimeout)
 			fakeBBS.Close()
 		})
 	})

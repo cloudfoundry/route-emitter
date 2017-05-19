@@ -71,7 +71,7 @@ var (
 
 func TestRouteEmitter(t *testing.T) {
 	RegisterFailHandler(Fail)
-	SetDefaultEventuallyTimeout(2 * time.Second)
+	SetDefaultEventuallyTimeout(15 * time.Second)
 	RunSpecs(t, "Route Emitter Suite")
 }
 
@@ -227,7 +227,7 @@ var _ = BeforeEach(func() {
 var _ = AfterEach(func() {
 	stopBBS()
 	consulRunner.Stop()
-	gnatsdRunner.Signal(os.Interrupt)
+	gnatsdRunner.Signal(os.Kill)
 	Eventually(gnatsdRunner.Wait(), 5).Should(Receive())
 
 	testMetricsListener.Close()
@@ -254,7 +254,7 @@ func stopBBS() {
 	}
 
 	bbsRunning = false
-	ginkgomon.Interrupt(bbsProcess)
+	ginkgomon.Kill(bbsProcess)
 	Eventually(bbsProcess.Wait()).Should(Receive())
 }
 

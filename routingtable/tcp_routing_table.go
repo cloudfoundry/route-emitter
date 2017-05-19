@@ -75,7 +75,6 @@ func (table *tcpRoutingTable) GetRoutingEvents() event.RoutingEvents {
 }
 
 func (table *tcpRoutingTable) Swap(t TCPRoutingTable) event.RoutingEvents {
-
 	routingEvents := event.RoutingEvents{}
 
 	newTable, ok := t.(*tcpRoutingTable)
