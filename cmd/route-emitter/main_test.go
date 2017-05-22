@@ -242,6 +242,10 @@ var _ = Describe("Route Emitter", func() {
 			emitter = ifrit.Invoke(runner)
 		})
 
+		AfterEach(func() {
+			ginkgomon.Interrupt(emitter, emitterInterruptTimeout)
+		})
+
 		Context("ttl is too high", func() {
 			BeforeEach(func() {
 				cfgs = append(cfgs, func(cfg *config.RouteEmitterConfig) {
@@ -1009,10 +1013,11 @@ var _ = Describe("Route Emitter", func() {
 			fakeConsul        *httptest.Server
 			fakeConsulHandler http.HandlerFunc
 			handlerWriteLock  *sync.Mutex
-			cellID            string = ""
+			cellID            string
 		)
 
 		BeforeEach(func() {
+			cellID = ""
 			consulClusterURL, err := url.Parse(consulRunner.ConsulCluster())
 			Expect(err).NotTo(HaveOccurred())
 			fakeConsulHandler = nil

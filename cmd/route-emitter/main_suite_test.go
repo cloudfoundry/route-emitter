@@ -138,7 +138,7 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 	bbsConfig = bbsconfig.BBSConfig{
 		ListenAddress:            bbsAddress,
 		AdvertiseURL:             bbsURL.String(),
-		AuctioneerAddress:        "some-address",
+		AuctioneerAddress:        "http://some-address",
 		DatabaseDriver:           sqlRunner.DriverName(),
 		DatabaseConnectionString: sqlRunner.ConnectionString(),
 		ConsulCluster:            consulRunner.ConsulCluster(),
