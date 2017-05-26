@@ -82,8 +82,7 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 	eventSource := &atomic.Value{}
 	var stopEventSource int32
 
-	go checkForEvents(watcher.bbsClient, resubscribeChannel,
-		eventChan, eventSource, watcher.logger)
+	go watcher.checkForEvents(resubscribeChannel, eventChan, eventSource, watcher.logger)
 	watcher.logger.Debug("listening-on-channels")
 	close(ready)
 	watcher.logger.Debug("started")
@@ -163,8 +162,7 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 					watcher.logger.Error("failed-closing-event-source", err)
 				}
 			}
-			go checkForEvents(watcher.bbsClient, resubscribeChannel,
-				eventChan, eventSource, watcher.logger)
+			go watcher.checkForEvents(resubscribeChannel, eventChan, eventSource, watcher.logger)
 
 		case <-signals:
 			watcher.logger.Info("stopping")
@@ -373,13 +371,12 @@ func (w *Watcher) sync(logger lager.Logger, ch chan<- *syncEventResult) {
 	}
 }
 
-func checkForEvents(bbsClient bbs.Client, resubscribeChannel chan error,
-	eventChan chan models.Event, eventSource *atomic.Value, logger lager.Logger) {
+func (w *Watcher) checkForEvents(resubscribeChannel chan error, eventChan chan models.Event, eventSource *atomic.Value, logger lager.Logger) {
 	var err error
 	var es events.EventSource
 
 	logger.Info("subscribing-to-bbs-events")
-	es, err = bbsClient.SubscribeToEvents(logger)
+	es, err = w.bbsClient.SubscribeToEventsByCellID(logger, w.cellID)
 	if err != nil {
 		resubscribeChannel <- err
 		return

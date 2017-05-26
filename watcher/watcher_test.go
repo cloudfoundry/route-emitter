@@ -106,7 +106,7 @@ var _ = Describe("Watcher", func() {
 		routeHandler = new(fakes.FakeRouteHandler)
 
 		clock = fakeclock.NewFakeClock(time.Now())
-		bbsClient.SubscribeToEventsReturns(eventSource, nil)
+		bbsClient.SubscribeToEventsByCellIDReturns(eventSource, nil)
 
 		syncEvents = syncer.Events{
 			Sync: make(chan struct{}),
@@ -123,6 +123,32 @@ var _ = Describe("Watcher", func() {
 	AfterEach(func() {
 		process.Signal(os.Interrupt)
 		Eventually(process.Wait()).Should(Receive())
+	})
+
+	Context("event subscriptions", func() {
+		Context("when cell id is set", func() {
+			BeforeEach(func() {
+				cellID = "some-cell-id"
+			})
+
+			It("subscribes to events for the current cell", func() {
+				Eventually(bbsClient.SubscribeToEventsByCellIDCallCount).Should(Equal(1))
+				_, cellid := bbsClient.SubscribeToEventsByCellIDArgsForCall(0)
+				Expect(cellid).To(Equal("some-cell-id"))
+			})
+		})
+
+		Context("when the cell id is not set", func() {
+			BeforeEach(func() {
+				cellID = ""
+			})
+
+			It("subscribes to all events", func() {
+				Eventually(bbsClient.SubscribeToEventsByCellIDCallCount).Should(Equal(1))
+				_, actualCellID := bbsClient.SubscribeToEventsByCellIDArgsForCall(0)
+				Expect(actualCellID).To(Equal(""))
+			})
+		})
 	})
 
 	Context("handle DesiredLRPCreatedEvent", func() {
@@ -318,7 +344,7 @@ var _ = Describe("Watcher", func() {
 				nil,
 			)
 
-			bbsClient.SubscribeToEventsReturns(fakeEventSource, nil)
+			bbsClient.SubscribeToEventsByCellIDReturns(fakeEventSource, nil)
 			testWatcher = watcher.NewWatcher(cellID, bbsClient, clock, routeHandler, syncEvents, logger)
 		})
 
@@ -337,7 +363,7 @@ var _ = Describe("Watcher", func() {
 		})
 
 		It("resubscribes to SSE from bbs", func() {
-			Eventually(bbsClient.SubscribeToEventsCallCount, 5*time.Second, 300*time.Millisecond).Should(BeNumerically(">=", 2))
+			Eventually(bbsClient.SubscribeToEventsByCellIDCallCount, 5*time.Second, 300*time.Millisecond).Should(BeNumerically(">=", 2))
 			Eventually(logger).Should(gbytes.Say("event-source-error"))
 		})
 	})
@@ -349,7 +375,7 @@ var _ = Describe("Watcher", func() {
 		BeforeEach(func() {
 			bbsErrorChannel = make(chan error)
 
-			bbsClient.SubscribeToEventsStub = func(logger lager.Logger) (events.EventSource, error) {
+			bbsClient.SubscribeToEventsByCellIDStub = func(logger lager.Logger, cellID string) (events.EventSource, error) {
 				select {
 				case err := <-bbsErrorChannel:
 					if err != nil {
@@ -368,7 +394,7 @@ var _ = Describe("Watcher", func() {
 
 		It("retries to subscribe", func() {
 			close(bbsErrorChannel)
-			Eventually(bbsClient.SubscribeToEventsCallCount, 5*time.Second, 300*time.Millisecond).Should(Equal(2))
+			Eventually(bbsClient.SubscribeToEventsByCellIDCallCount, 5*time.Second, 300*time.Millisecond).Should(Equal(2))
 			Eventually(logger).Should(gbytes.Say("kaboom"))
 		})
 	})
