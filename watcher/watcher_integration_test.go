@@ -88,7 +88,6 @@ var _ = Describe("Watcher Integration", func() {
 
 	Describe("caching events", func() {
 		var (
-			ready            chan struct{}
 			errCh            chan error
 			eventCh          chan EventHolder
 			modTag           *models.ModificationTag
@@ -103,7 +102,6 @@ var _ = Describe("Watcher Integration", func() {
 		}
 
 		BeforeEach(func() {
-			ready = make(chan struct{})
 			errCh = make(chan error, 10)
 			eventCh = make(chan EventHolder, 1)
 			// make the variables local to avoid race detection

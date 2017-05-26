@@ -408,14 +408,12 @@ var _ = Describe("Watcher", func() {
 
 	Describe("Sync Events", func() {
 		var (
-			ready            chan struct{}
 			errCh            chan error
 			eventCh          chan EventHolder
 			fakeMetricSender *fake_metrics_sender.FakeMetricSender
 		)
 
 		BeforeEach(func() {
-			ready = make(chan struct{})
 			errCh = make(chan error, 10)
 			eventCh = make(chan EventHolder, 1)
 			// make the variables local to avoid race detection
