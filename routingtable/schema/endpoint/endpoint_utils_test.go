@@ -33,8 +33,8 @@ var _ = Describe("LRP Utils", func() {
 				endpoints := endpoint.NewEndpointsFromActual(actualInfo)
 
 				Expect(endpoints).To(ConsistOf([]endpoint.Endpoint{
-					endpoint.NewEndpoint("instance-guid", false, "1.1.1.1", 11, 44, &tag),
-					endpoint.NewEndpoint("instance-guid", false, "1.1.1.1", 66, 99, &tag),
+					endpoint.NewEndpoint("instance-guid", false, "1.1.1.1", "2.2.2.2", 11, 44, &tag),
+					endpoint.NewEndpoint("instance-guid", false, "1.1.1.1", "2.2.2.2", 66, 99, &tag),
 				}))
 			})
 		})
@@ -62,8 +62,8 @@ var _ = Describe("LRP Utils", func() {
 				endpoints := endpoint.NewEndpointsFromActual(actualInfo)
 
 				Expect(endpoints).To(ConsistOf([]endpoint.Endpoint{
-					endpoint.NewEndpoint("instance-guid", true, "1.1.1.1", 11, 44, &tag),
-					endpoint.NewEndpoint("instance-guid", true, "1.1.1.1", 66, 99, &tag),
+					endpoint.NewEndpoint("instance-guid", true, "1.1.1.1", "2.2.2.2", 11, 44, &tag),
+					endpoint.NewEndpoint("instance-guid", true, "1.1.1.1", "2.2.2.2", 66, 99, &tag),
 				}))
 			})
 		})

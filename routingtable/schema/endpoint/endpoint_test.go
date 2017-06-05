@@ -24,7 +24,7 @@ var _ = Describe("RoutingTableEntry", func() {
 	Describe("RoutableEndpoints", func() {
 		It("marshals to json", func() {
 			key := endpoint.NewEndpointKey("instance-guid", true)
-			value := endpoint.NewEndpoint("instance-guid", true, "host", 1111, 2222, nil)
+			value := endpoint.NewEndpoint("instance-guid", true, "host", "container-ip", 1111, 2222, nil)
 			endpoints := map[endpoint.EndpointKey]endpoint.Endpoint{key: value}
 			e := endpoint.RoutableEndpoints{
 				ExternalEndpoints: source,
@@ -108,9 +108,9 @@ var _ = Describe("RoutingTableEntry", func() {
 		BeforeEach(func() {
 			endpoints = map[endpoint.EndpointKey]endpoint.Endpoint{
 				endpoint.NewEndpointKey("instance-guid-1", false): endpoint.NewEndpoint(
-					"instance-guid-1", false, "some-ip-1", 62004, 5222, modificationTag),
+					"instance-guid-1", false, "some-ip-1", "container-ip-1", 62004, 5222, modificationTag),
 				endpoint.NewEndpointKey("instance-guid-2", false): endpoint.NewEndpoint(
-					"instance-guid-2", false, "some-ip-2", 62004, 5222, modificationTag),
+					"instance-guid-2", false, "some-ip-2", "container-ip-2", 62004, 5222, modificationTag),
 			}
 			modificationTag = &models.ModificationTag{Epoch: "abc", Index: 1}
 			sourceEntry = endpoint.NewRoutableEndpoints(source, endpoints, "log-guid-1", modificationTag)

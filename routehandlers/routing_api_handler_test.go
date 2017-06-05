@@ -718,7 +718,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 				}
 				endpoints := map[endpoint.EndpointKey]endpoint.Endpoint{
 					endpoint.NewEndpointKey("instance-guid", false): endpoint.NewEndpoint(
-						"instance-guid", false, "some-ip", 61006, 5222, &modificationTag),
+						"instance-guid", false, "some-ip", "container-ip", 61006, 5222, &modificationTag),
 				}
 
 				Expect(routingEvent.Key).Should(Equal(key))

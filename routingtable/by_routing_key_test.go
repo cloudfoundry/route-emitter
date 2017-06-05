@@ -128,14 +128,18 @@ var _ = Describe("ByRoutingKey", func() {
 				Expect(endpoints).To(HaveLen(3))
 
 				Expect(endpoints[endpoint.RoutingKey{ProcessGUID: "abc", ContainerPort: 44}]).To(ConsistOf([]routingtable.Endpoint{
-					routingtable.Endpoint{Host: "1.1.1.1",
+					routingtable.Endpoint{
+						Host:            "1.1.1.1",
+						ContainerIP:     "1.2.3.4",
 						Index:           0,
 						Domain:          "domain",
 						Port:            11,
 						ContainerPort:   44,
 						ModificationTag: &models.ModificationTag{},
 					},
-					routingtable.Endpoint{Host: "2.2.2.2",
+					routingtable.Endpoint{
+						Host:            "2.2.2.2",
+						ContainerIP:     "2.3.4.5",
 						Index:           1,
 						Domain:          "domain",
 						Port:            22,
@@ -144,7 +148,9 @@ var _ = Describe("ByRoutingKey", func() {
 					}}))
 
 				Expect(endpoints[endpoint.RoutingKey{ProcessGUID: "abc", ContainerPort: 99}]).To(ConsistOf([]routingtable.Endpoint{
-					routingtable.Endpoint{Host: "1.1.1.1",
+					routingtable.Endpoint{
+						Host:            "1.1.1.1",
+						ContainerIP:     "1.2.3.4",
 						Index:           0,
 						Domain:          "domain",
 						Port:            66,
@@ -152,7 +158,9 @@ var _ = Describe("ByRoutingKey", func() {
 						ModificationTag: &models.ModificationTag{},
 					},
 
-					routingtable.Endpoint{Host: "2.2.2.2",
+					routingtable.Endpoint{
+						Host:            "2.2.2.2",
+						ContainerIP:     "2.3.4.5",
 						Index:           1,
 						Domain:          "domain",
 						Port:            88,
@@ -161,7 +169,9 @@ var _ = Describe("ByRoutingKey", func() {
 					}}))
 
 				Expect(endpoints[endpoint.RoutingKey{ProcessGUID: "def", ContainerPort: 55}]).To(ConsistOf([]routingtable.Endpoint{
-					routingtable.Endpoint{Host: "3.3.3.3",
+					routingtable.Endpoint{
+						Host:            "3.3.3.3",
+						ContainerIP:     "3.4.5.6",
 						Index:           0,
 						Domain:          "domain",
 						Port:            33,
@@ -210,21 +220,27 @@ var _ = Describe("ByRoutingKey", func() {
 				Expect(endpoints).To(HaveLen(3))
 
 				Expect(endpoints[endpoint.RoutingKey{ProcessGUID: "abc", ContainerPort: 44}]).To(ConsistOf([]routingtable.Endpoint{
-					routingtable.Endpoint{Host: "1.1.1.1",
+					routingtable.Endpoint{
+						Host:            "1.1.1.1",
+						ContainerIP:     "1.2.3.4",
 						Domain:          "domain",
 						Port:            11,
 						ContainerPort:   44,
 						ModificationTag: &models.ModificationTag{},
 					}}))
 				Expect(endpoints[endpoint.RoutingKey{ProcessGUID: "abc", ContainerPort: 99}]).To(ConsistOf([]routingtable.Endpoint{
-					routingtable.Endpoint{Host: "1.1.1.1",
+					routingtable.Endpoint{
+						Host:            "1.1.1.1",
+						ContainerIP:     "1.2.3.4",
 						Domain:          "domain",
 						Port:            66,
 						ContainerPort:   99,
 						ModificationTag: &models.ModificationTag{},
 					}}))
 				Expect(endpoints[endpoint.RoutingKey{ProcessGUID: "def", ContainerPort: 55}]).To(ConsistOf([]routingtable.Endpoint{
-					routingtable.Endpoint{Host: "3.3.3.3",
+					routingtable.Endpoint{
+						Host:            "3.3.3.3",
+						ContainerIP:     "3.4.5.6",
 						Domain:          "domain",
 						Port:            33,
 						ContainerPort:   55,
@@ -248,7 +264,9 @@ var _ = Describe("ByRoutingKey", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(endpoints).To(ConsistOf([]routingtable.Endpoint{
-				routingtable.Endpoint{Host: "1.1.1.1",
+				routingtable.Endpoint{
+					Host:            "1.1.1.1",
+					ContainerIP:     "1.2.3.4",
 					Domain:          "domain",
 					Port:            11,
 					InstanceGuid:    "instance-guid",
@@ -257,7 +275,9 @@ var _ = Describe("ByRoutingKey", func() {
 					Index:           0,
 					ModificationTag: &models.ModificationTag{},
 				},
-				routingtable.Endpoint{Host: "1.1.1.1",
+				routingtable.Endpoint{
+					Host:            "1.1.1.1",
+					ContainerIP:     "1.2.3.4",
 					Domain:          "domain",
 					Port:            66,
 					InstanceGuid:    "instance-guid",

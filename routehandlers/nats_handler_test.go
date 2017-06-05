@@ -74,7 +74,12 @@ var _ = Describe("NATSHandler", func() {
 		natsEmitter = &fakes.FakeNATSEmitter{}
 		logger = lagertest.NewTestLogger("test")
 
-		dummyEndpoint := routingtable.Endpoint{InstanceGuid: expectedInstanceGuid, Index: expectedIndex, Host: expectedHost, Port: expectedContainerPort}
+		dummyEndpoint := routingtable.Endpoint{
+			InstanceGuid: expectedInstanceGuid,
+			Index:        expectedIndex,
+			Host:         expectedHost,
+			Port:         expectedContainerPort,
+		}
 		dummyMessageFoo := routingtable.RegistryMessageFor(dummyEndpoint, routingtable.Route{Hostname: "foo.com", LogGuid: logGuid})
 		dummyMessageBar := routingtable.RegistryMessageFor(dummyEndpoint, routingtable.Route{Hostname: "bar.com", LogGuid: logGuid})
 		dummyMessagesToEmit = routingtable.MessagesToEmit{
@@ -171,7 +176,12 @@ var _ = Describe("NATSHandler", func() {
 					expectedCFRoute = cfroutes.CFRoute{Hostnames: expectedRoutes, Port: expectedContainerPort, RouteServiceUrl: expectedRouteServiceUrl, IsolationSegment: expectedIsolationSegment}
 					routesNew := cfroutes.CFRoutes{expectedCFRoute}.RoutingInfo()
 					desiredLRP.Routes = &routesNew
-					dummyEndpoint := routingtable.Endpoint{InstanceGuid: expectedInstanceGuid, Index: expectedIndex, Host: expectedHost, Port: expectedContainerPort}
+					dummyEndpoint := routingtable.Endpoint{
+						InstanceGuid: expectedInstanceGuid,
+						Index:        expectedIndex,
+						Host:         expectedHost,
+						Port:         expectedContainerPort,
+					}
 					dummyMessageFoo := routingtable.RegistryMessageFor(dummyEndpoint, routingtable.Route{Hostname: "foo.com", LogGuid: logGuid, IsolationSegment: expectedIsolationSegment})
 					dummyMessageBar := routingtable.RegistryMessageFor(dummyEndpoint, routingtable.Route{Hostname: "bar.com", LogGuid: logGuid, IsolationSegment: expectedIsolationSegment})
 
@@ -942,6 +952,7 @@ var _ = Describe("NATSHandler", func() {
 							InstanceGuid:    expectedInstanceGuid,
 							Index:           expectedIndex,
 							Host:            expectedHost,
+							ContainerIP:     expectedInstanceAddress,
 							Domain:          expectedDomain,
 							Port:            expectedExternalPort,
 							ContainerPort:   expectedContainerPort,
@@ -951,6 +962,7 @@ var _ = Describe("NATSHandler", func() {
 							InstanceGuid:    expectedInstanceGuid,
 							Index:           expectedIndex,
 							Host:            expectedHost,
+							ContainerIP:     expectedInstanceAddress,
 							Domain:          expectedDomain,
 							Port:            expectedAdditionalExternalPort,
 							ContainerPort:   expectedAdditionalContainerPort,
@@ -1030,6 +1042,7 @@ var _ = Describe("NATSHandler", func() {
 						InstanceGuid:    expectedInstanceGuid,
 						Index:           expectedIndex,
 						Host:            expectedHost,
+						ContainerIP:     expectedInstanceAddress,
 						Domain:          expectedDomain,
 						Port:            expectedExternalPort,
 						ContainerPort:   expectedContainerPort,
@@ -1042,6 +1055,7 @@ var _ = Describe("NATSHandler", func() {
 						InstanceGuid:    expectedInstanceGuid,
 						Index:           expectedIndex,
 						Host:            expectedHost,
+						ContainerIP:     expectedInstanceAddress,
 						Domain:          expectedDomain,
 						Port:            expectedAdditionalExternalPort,
 						ContainerPort:   expectedAdditionalContainerPort,
@@ -1162,6 +1176,7 @@ var _ = Describe("NATSHandler", func() {
 						InstanceGuid:    expectedInstanceGuid,
 						Index:           expectedIndex,
 						Host:            expectedHost,
+						ContainerIP:     expectedInstanceAddress,
 						Domain:          expectedDomain,
 						Port:            expectedExternalPort,
 						ContainerPort:   expectedContainerPort,
@@ -1174,6 +1189,7 @@ var _ = Describe("NATSHandler", func() {
 						InstanceGuid:    expectedInstanceGuid,
 						Index:           expectedIndex,
 						Host:            expectedHost,
+						ContainerIP:     expectedInstanceAddress,
 						Domain:          expectedDomain,
 						Port:            expectedAdditionalExternalPort,
 						ContainerPort:   expectedAdditionalContainerPort,
@@ -1252,7 +1268,8 @@ var _ = Describe("NATSHandler", func() {
 				hostname2 := "bar.example.com"
 				hostname3 := "baz.example.com"
 
-				endpoint1 = routingtable.Endpoint{InstanceGuid: "ig-1",
+				endpoint1 = routingtable.Endpoint{
+					InstanceGuid:    "ig-1",
 					Host:            "1.1.1.1",
 					Index:           0,
 					Port:            11,
@@ -1260,7 +1277,8 @@ var _ = Describe("NATSHandler", func() {
 					Evacuating:      false,
 					ModificationTag: currentTag,
 				}
-				endpoint2 = routingtable.Endpoint{InstanceGuid: "ig-2",
+				endpoint2 = routingtable.Endpoint{
+					InstanceGuid:    "ig-2",
 					Host:            "2.2.2.2",
 					Index:           0,
 					Port:            22,
@@ -1268,7 +1286,8 @@ var _ = Describe("NATSHandler", func() {
 					Evacuating:      false,
 					ModificationTag: currentTag,
 				}
-				endpoint3 = routingtable.Endpoint{InstanceGuid: "ig-3",
+				endpoint3 = routingtable.Endpoint{
+					InstanceGuid:    "ig-3",
 					Host:            "2.2.2.2",
 					Index:           1,
 					Port:            23,
@@ -1402,7 +1421,8 @@ var _ = Describe("NATSHandler", func() {
 						Instances:   1,
 					})
 
-					endpoint4 = routingtable.Endpoint{InstanceGuid: "ig-4",
+					endpoint4 = routingtable.Endpoint{
+						InstanceGuid:    "ig-4",
 						Host:            "3.3.3.3",
 						Index:           1,
 						Port:            23,
@@ -1447,9 +1467,33 @@ var _ = Describe("NATSHandler", func() {
 		var registrationMsgs routingtable.MessagesToEmit
 		BeforeEach(func() {
 			currentTag := &models.ModificationTag{Epoch: "abc", Index: 1}
-			endpoint1 := routingtable.Endpoint{InstanceGuid: "ig-1", Host: "1.1.1.1", Index: 0, Port: 11, ContainerPort: 8080, Evacuating: false, ModificationTag: currentTag}
-			endpoint2 := routingtable.Endpoint{InstanceGuid: "ig-2", Host: "2.2.2.2", Index: 0, Port: 22, ContainerPort: 8080, Evacuating: false, ModificationTag: currentTag}
-			endpoint3 := routingtable.Endpoint{InstanceGuid: "ig-3", Host: "2.2.2.2", Index: 1, Port: 23, ContainerPort: 8080, Evacuating: false, ModificationTag: currentTag}
+			endpoint1 := routingtable.Endpoint{
+				InstanceGuid:    "ig-1",
+				Host:            "1.1.1.1",
+				Index:           0,
+				Port:            11,
+				ContainerPort:   8080,
+				Evacuating:      false,
+				ModificationTag: currentTag,
+			}
+			endpoint2 := routingtable.Endpoint{
+				InstanceGuid:    "ig-2",
+				Host:            "2.2.2.2",
+				Index:           0,
+				Port:            22,
+				ContainerPort:   8080,
+				Evacuating:      false,
+				ModificationTag: currentTag,
+			}
+			endpoint3 := routingtable.Endpoint{
+				InstanceGuid:    "ig-3",
+				Host:            "2.2.2.2",
+				Index:           1,
+				Port:            23,
+				ContainerPort:   8080,
+				Evacuating:      false,
+				ModificationTag: currentTag,
+			}
 			route := routingtable.Route{}
 			registrationMsgs = routingtable.MessagesToEmit{
 				RegistrationMessages: []routingtable.RegistryMessage{
