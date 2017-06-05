@@ -16,6 +16,7 @@ type Endpoint struct {
 	InstanceGuid     string
 	Index            int32
 	Host             string
+	ContainerIP      string
 	Domain           string
 	Port             uint32
 	ContainerPort    uint32

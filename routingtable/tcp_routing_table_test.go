@@ -243,9 +243,9 @@ var _ = Describe("TCPRoutingTable", func() {
 				modificationTag = &models.ModificationTag{Epoch: "abc", Index: 1}
 				endpoints = map[endpoint.EndpointKey]endpoint.Endpoint{
 					endpoint.NewEndpointKey("instance-guid-1", false): endpoint.NewEndpoint(
-						"instance-guid-1", false, "some-ip-1", 62004, 5222, modificationTag),
+						"instance-guid-1", false, "some-ip-1", "container-ip-1", 62004, 5222, modificationTag),
 					endpoint.NewEndpointKey("instance-guid-2", false): endpoint.NewEndpoint(
-						"instance-guid-2", false, "some-ip-2", 62004, 5222, modificationTag),
+						"instance-guid-2", false, "some-ip-2", "container-ip-2", 62004, 5222, modificationTag),
 				}
 
 				tempRoutingTable = routingtable.NewTCPTable(logger, map[endpoint.RoutingKey]endpoint.RoutableEndpoints{
@@ -305,9 +305,9 @@ var _ = Describe("TCPRoutingTable", func() {
 			modificationTag = &models.ModificationTag{Epoch: "abc", Index: 1}
 			endpoints = map[endpoint.EndpointKey]endpoint.Endpoint{
 				endpoint.NewEndpointKey("instance-guid-1", false): endpoint.NewEndpoint(
-					"instance-guid-1", false, "some-ip-1", 62004, 5222, modificationTag),
+					"instance-guid-1", false, "some-ip-1", "container-ip-1", 62004, 5222, modificationTag),
 				endpoint.NewEndpointKey("instance-guid-2", false): endpoint.NewEndpoint(
-					"instance-guid-2", false, "some-ip-2", 62004, 5222, modificationTag),
+					"instance-guid-2", false, "some-ip-2", "container-ip-2", 62004, 5222, modificationTag),
 			}
 		})
 
@@ -548,7 +548,7 @@ var _ = Describe("TCPRoutingTable", func() {
 					key2 = endpoint.NewRoutingKey("process-guid-1", 5223)
 					endpoints2 = map[endpoint.EndpointKey]endpoint.Endpoint{
 						endpoint.NewEndpointKey("instance-guid-1", false): endpoint.NewEndpoint(
-							"instance-guid-1", false, "some-ip-1", 63004, 5223, modificationTag),
+							"instance-guid-1", false, "some-ip-1", "container-ip-1", 63004, 5223, modificationTag),
 					}
 					routingTable = routingtable.NewTCPTable(logger, map[endpoint.RoutingKey]endpoint.RoutableEndpoints{
 						key:  endpoint.NewRoutableEndpoints(externalEndpoints, endpoints, logGuid, modificationTag),
@@ -733,7 +733,7 @@ var _ = Describe("TCPRoutingTable", func() {
 							newKey = endpoint.NewRoutingKey("process-guid-1", 5223)
 							newEndpoints = map[endpoint.EndpointKey]endpoint.Endpoint{
 								endpoint.NewEndpointKey("instance-guid-1", false): endpoint.NewEndpoint(
-									"instance-guid-1", false, "some-ip-1", 62006, 5223, modificationTag),
+									"instance-guid-1", false, "some-ip-1", "container-ip-1", 62006, 5223, modificationTag),
 							}
 							routingTable = routingtable.NewTCPTable(logger, map[endpoint.RoutingKey]endpoint.RoutableEndpoints{
 								key:    endpoint.NewRoutableEndpoints(externalEndpoints, endpoints, logGuid, modificationTag),
@@ -822,7 +822,7 @@ var _ = Describe("TCPRoutingTable", func() {
 							newKey = endpoint.NewRoutingKey("process-guid-1", 5223)
 							newEndpoints = map[endpoint.EndpointKey]endpoint.Endpoint{
 								endpoint.NewEndpointKey("instance-guid-1", false): endpoint.NewEndpoint(
-									"instance-guid-1", false, "some-ip-1", 62006, 5223, modificationTag),
+									"instance-guid-1", false, "some-ip-1", "container-ip-1", 62006, 5223, modificationTag),
 							}
 							routingTable = routingtable.NewTCPTable(logger, map[endpoint.RoutingKey]endpoint.RoutableEndpoints{
 								key:    endpoint.NewRoutableEndpoints(externalEndpoints, endpoints, logGuid, modificationTag),
@@ -948,7 +948,7 @@ var _ = Describe("TCPRoutingTable", func() {
 							newKey = endpoint.NewRoutingKey("process-guid-1", 5223)
 							newEndpoints = map[endpoint.EndpointKey]endpoint.Endpoint{
 								endpoint.NewEndpointKey("instance-guid-1", false): endpoint.NewEndpoint(
-									"instance-guid-1", false, "some-ip-1", 62006, 5223, modificationTag),
+									"instance-guid-1", false, "some-ip-1", "container-ip-1", 62006, 5223, modificationTag),
 							}
 							routingTable = routingtable.NewTCPTable(logger, map[endpoint.RoutingKey]endpoint.RoutableEndpoints{
 								key:    endpoint.NewRoutableEndpoints(externalEndpoints, endpoints, logGuid, modificationTag),
@@ -1076,7 +1076,7 @@ var _ = Describe("TCPRoutingTable", func() {
 
 					expectedEndpoints := map[endpoint.EndpointKey]endpoint.Endpoint{
 						endpoint.NewEndpointKey("instance-guid-1", false): endpoint.NewEndpoint(
-							"instance-guid-1", false, "some-ip-1", 61104, 5222, newTag),
+							"instance-guid-1", false, "some-ip-1", "container-ip-1", 61104, 5222, newTag),
 					}
 
 					expectedEntry := endpoint.NewRoutableEndpoints(
@@ -1110,7 +1110,7 @@ var _ = Describe("TCPRoutingTable", func() {
 						}
 						expectedEndpoints[endpoint.NewEndpointKey("instance-guid-3", false)] =
 							endpoint.NewEndpoint(
-								"instance-guid-3", false, "some-ip-3", 61104, 5222, newTag)
+								"instance-guid-3", false, "some-ip-3", "container-ip-3", 61104, 5222, newTag)
 						expectedEntry := endpoint.NewRoutableEndpoints(
 							externalEndpoints, expectedEndpoints, logGuid, modificationTag)
 						Expect(routingEvent.Entry.Endpoints).Should(HaveLen(3))
@@ -1132,9 +1132,9 @@ var _ = Describe("TCPRoutingTable", func() {
 
 							expectedEndpoints := map[endpoint.EndpointKey]endpoint.Endpoint{
 								endpoint.NewEndpointKey("instance-guid-1", false): endpoint.NewEndpoint(
-									"instance-guid-1", false, "some-ip-1", 61105, 5222, newTag),
+									"instance-guid-1", false, "some-ip-1", "container-ip-1", 61105, 5222, newTag),
 								endpoint.NewEndpointKey("instance-guid-2", false): endpoint.NewEndpoint(
-									"instance-guid-2", false, "some-ip-2", 62004, 5222, modificationTag),
+									"instance-guid-2", false, "some-ip-2", "container-ip-2", 62004, 5222, modificationTag),
 							}
 							expectedEntry := endpoint.NewRoutableEndpoints(
 								externalEndpoints, expectedEndpoints, logGuid, modificationTag)
@@ -1203,7 +1203,7 @@ var _ = Describe("TCPRoutingTable", func() {
 
 							expectedEndpoints := map[endpoint.EndpointKey]endpoint.Endpoint{
 								endpoint.NewEndpointKey("instance-guid-1", false): endpoint.NewEndpoint(
-									"instance-guid-1", false, "some-ip-1", 62004, 5222, modificationTag),
+									"instance-guid-1", false, "some-ip-1", "container-ip-1", 62004, 5222, modificationTag),
 							}
 							expectedEntry := endpoint.NewRoutableEndpoints(
 								externalEndpoints, expectedEndpoints, logGuid, modificationTag)
@@ -1224,7 +1224,7 @@ var _ = Describe("TCPRoutingTable", func() {
 
 							expectedEndpoints := map[endpoint.EndpointKey]endpoint.Endpoint{
 								endpoint.NewEndpointKey("instance-guid-1", false): endpoint.NewEndpoint(
-									"instance-guid-1", false, "some-ip-1", 62004, 5222, modificationTag),
+									"instance-guid-1", false, "some-ip-1", "container-ip-1", 62004, 5222, modificationTag),
 							}
 							expectedEntry := endpoint.NewRoutableEndpoints(
 								externalEndpoints, expectedEndpoints, logGuid, modificationTag)
@@ -1293,9 +1293,9 @@ var _ = Describe("TCPRoutingTable", func() {
 				modificationTag = &models.ModificationTag{Epoch: "abc", Index: 1}
 				existingEndpoints = map[endpoint.EndpointKey]endpoint.Endpoint{
 					endpoint.NewEndpointKey("instance-guid-1", false): endpoint.NewEndpoint(
-						"instance-guid-1", false, "some-ip-1", 62004, 5222, modificationTag),
+						"instance-guid-1", false, "some-ip-1", "container-ip-1", 62004, 5222, modificationTag),
 					endpoint.NewEndpointKey("instance-guid-2", false): endpoint.NewEndpoint(
-						"instance-guid-2", false, "some-ip-2", 62004, 5222, modificationTag),
+						"instance-guid-2", false, "some-ip-2", "container-ip-2", 62004, 5222, modificationTag),
 				}
 				routingTable = routingtable.NewTCPTable(logger, map[endpoint.RoutingKey]endpoint.RoutableEndpoints{
 					existingKey: endpoint.NewRoutableEndpoints(existingExternalEndpoint, existingEndpoints, existingLogGuid, modificationTag),
@@ -1314,9 +1314,9 @@ var _ = Describe("TCPRoutingTable", func() {
 					newModificationTag = &models.ModificationTag{Epoch: "abc", Index: 2}
 					endpoints = map[endpoint.EndpointKey]endpoint.Endpoint{
 						endpoint.NewEndpointKey("instance-guid-1", false): endpoint.NewEndpoint(
-							"instance-guid-1", false, "some-ip-3", 63004, 6379, newModificationTag),
+							"instance-guid-1", false, "some-ip-3", "container-ip-3", 63004, 6379, newModificationTag),
 						endpoint.NewEndpointKey("instance-guid-2", false): endpoint.NewEndpoint(
-							"instance-guid-2", false, "some-ip-4", 63004, 6379, newModificationTag),
+							"instance-guid-2", false, "some-ip-4", "container-ip-4", 63004, 6379, newModificationTag),
 					}
 					tempRoutingTable = routingtable.NewTCPTable(logger, map[endpoint.RoutingKey]endpoint.RoutableEndpoints{
 						key: endpoint.NewRoutableEndpoints(externalEndpoints, endpoints, logGuid, newModificationTag),
@@ -1361,9 +1361,9 @@ var _ = Describe("TCPRoutingTable", func() {
 					newModificationTag = &models.ModificationTag{Epoch: "abc", Index: 2}
 					endpoints = map[endpoint.EndpointKey]endpoint.Endpoint{
 						endpoint.NewEndpointKey("instance-guid-3", false): endpoint.NewEndpoint(
-							"instance-guid-1", false, "some-ip-3", 63004, 5222, newModificationTag),
+							"instance-guid-1", false, "some-ip-3", "container-ip-3", 63004, 5222, newModificationTag),
 						endpoint.NewEndpointKey("instance-guid-4", false): endpoint.NewEndpoint(
-							"instance-guid-2", false, "some-ip-4", 63004, 5222, newModificationTag),
+							"instance-guid-2", false, "some-ip-4", "container-ip-4", 63004, 5222, newModificationTag),
 					}
 					tempRoutingTable = routingtable.NewTCPTable(logger, map[endpoint.RoutingKey]endpoint.RoutableEndpoints{
 						existingKey: endpoint.NewRoutableEndpoints(externalEndpoints, endpoints, logGuid, newModificationTag),

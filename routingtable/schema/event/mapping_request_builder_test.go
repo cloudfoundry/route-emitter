@@ -33,15 +33,15 @@ var _ = Describe("MappingRequestBuilder", func() {
 
 		endpoints1 = map[endpoint.EndpointKey]endpoint.Endpoint{
 			endpoint.NewEndpointKey("instance-guid-1", false): endpoint.NewEndpoint(
-				"instance-guid-1", false, "some-ip-1", 62003, 5222, &modificationTag),
+				"instance-guid-1", false, "some-ip-1", "container-ip-1", 62003, 5222, &modificationTag),
 			endpoint.NewEndpointKey("instance-guid-2", false): endpoint.NewEndpoint(
-				"instance-guid-2", false, "some-ip-2", 62004, 5222, &modificationTag),
+				"instance-guid-2", false, "some-ip-2", "container-ip-2", 62004, 5222, &modificationTag),
 		}
 		endpoints2 = map[endpoint.EndpointKey]endpoint.Endpoint{
 			endpoint.NewEndpointKey("instance-guid-1", false): endpoint.NewEndpoint(
-				"instance-guid-3", false, "some-ip-3", 62005, 5222, &modificationTag),
+				"instance-guid-3", false, "some-ip-3", "container-ip-3", 62005, 5222, &modificationTag),
 			endpoint.NewEndpointKey("instance-guid-2", false): endpoint.NewEndpoint(
-				"instance-guid-4", false, "some-ip-4", 62006, 5222, &modificationTag),
+				"instance-guid-4", false, "some-ip-4", "container-ip-4", 62006, 5222, &modificationTag),
 		}
 
 		routingKey1 = endpoint.NewRoutingKey("process-guid-1", 5222)

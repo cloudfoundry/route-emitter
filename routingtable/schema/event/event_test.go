@@ -24,9 +24,9 @@ var _ = Describe("RoutingEvent", func() {
 		modificationTag = &models.ModificationTag{Epoch: "abc", Index: 1}
 		endpoints = map[endpoint.EndpointKey]endpoint.Endpoint{
 			endpoint.NewEndpointKey("instance-guid-1", false): endpoint.NewEndpoint(
-				"instance-guid-1", false, "some-ip-1", 62004, 5222, modificationTag),
+				"instance-guid-1", false, "some-ip-1", "container-ip-1", 62004, 5222, modificationTag),
 			endpoint.NewEndpointKey("instance-guid-2", false): endpoint.NewEndpoint(
-				"instance-guid-2", false, "some-ip-2", 62004, 5222, modificationTag),
+				"instance-guid-2", false, "some-ip-2", "container-ip-2", 62004, 5222, modificationTag),
 		}
 	})
 

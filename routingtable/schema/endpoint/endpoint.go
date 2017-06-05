@@ -28,6 +28,7 @@ func NewEndpointKey(instanceGUID string, evacuating bool) EndpointKey {
 type Endpoint struct {
 	InstanceGUID    string
 	Host            string
+	ContainerIP     string
 	Port            uint32
 	ContainerPort   uint32
 	Evacuating      bool
@@ -40,12 +41,14 @@ func (e Endpoint) Key() EndpointKey {
 
 func NewEndpoint(
 	instanceGUID string, evacuating bool,
-	host string, port, containerPort uint32,
+	host, containerIP string,
+	port, containerPort uint32,
 	modificationTag *models.ModificationTag) Endpoint {
 	return Endpoint{
 		InstanceGUID:    instanceGUID,
 		Evacuating:      evacuating,
 		Host:            host,
+		ContainerIP:     containerIP,
 		Port:            port,
 		ContainerPort:   containerPort,
 		ModificationTag: modificationTag,
@@ -116,6 +119,7 @@ func NewEndpointsFromActual(actualInfo *ActualLRPRoutingInfo) map[uint32]Endpoin
 		endpoint := NewEndpoint(
 			actual.InstanceGuid, evacuating,
 			actual.Address,
+			actual.InstanceAddress,
 			portMapping.HostPort,
 			portMapping.ContainerPort,
 			&actual.ModificationTag,

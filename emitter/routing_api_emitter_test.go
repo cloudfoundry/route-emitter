@@ -45,7 +45,7 @@ var _ = Describe("RoutingAPIEmitter", func() {
 
 		endpoints1 := map[endpoint.EndpointKey]endpoint.Endpoint{
 			endpoint.NewEndpointKey("instance-guid-1", false): endpoint.NewEndpoint(
-				"instance-guid-1", false, "some-ip-1", 62003, 5222, &modificationTag),
+				"instance-guid-1", false, "some-ip-1", "container-ip-1", 62003, 5222, &modificationTag),
 		}
 
 		extenralEndpointInfo1 := endpoint.NewExternalEndpointInfo("123", 61000)
@@ -243,7 +243,7 @@ var _ = Describe("RoutingAPIEmitter", func() {
 
 			endpoints1 := map[endpoint.EndpointKey]endpoint.Endpoint{
 				endpoint.NewEndpointKey("instance-guid-1", false): endpoint.NewEndpoint(
-					"instance-guid-1", false, "some-ip-1", 62003, 5222, &modificationTag),
+					"instance-guid-1", false, "some-ip-1", "container-ip-1", 62003, 5222, &modificationTag),
 			}
 
 			routingKey1 := endpoint.NewRoutingKey("process-guid-1", 5222)
