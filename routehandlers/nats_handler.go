@@ -69,7 +69,7 @@ func (handler *NATSHandler) HandleEvent(logger lager.Logger, event models.Event)
 func (handler *NATSHandler) Emit(logger lager.Logger) {
 	messagesToEmit := handler.routingTable.MessagesToEmit()
 
-	logger.Debug("emitting-messages", lager.Data{"messages": messagesToEmit})
+	logger.Info("emitting-messages", lager.Data{"messages": messagesToEmit})
 	err := handler.emitter.Emit(messagesToEmit)
 	if err != nil {
 		logger.Error("failed-to-emit-routes", err)
@@ -157,8 +157,8 @@ func (handler *NATSHandler) ShouldRefreshDesired(actual *endpoint.ActualLRPRouti
 
 func (handler *NATSHandler) handleDesiredCreate(logger lager.Logger, desiredLRP *models.DesiredLRPSchedulingInfo) {
 	logger = logger.Session("handle-desired-create", util.DesiredLRPData(desiredLRP))
-	logger.Debug("starting")
-	defer logger.Debug("complete")
+	logger.Info("starting")
+	defer logger.Info("complete")
 	handler.setRoutesForDesired(logger, desiredLRP)
 }
 
@@ -293,7 +293,10 @@ func (handler *NATSHandler) emitMessages(logger lager.Logger, messagesToEmit rou
 		handler.emitter.Emit(messagesToEmit)
 		routesRegistered.Add(messagesToEmit.RouteRegistrationCount())
 		routesUnregistered.Add(messagesToEmit.RouteUnregistrationCount())
+	} else {
+		logger.Info("no-emitter-configured-skipping-emit-messages", lager.Data{"messages": messagesToEmit})
 	}
+
 }
 
 func (handler *NATSHandler) addAndEmit(logger lager.Logger, actualLRPInfo *endpoint.ActualLRPRoutingInfo) {

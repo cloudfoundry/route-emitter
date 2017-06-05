@@ -1,6 +1,9 @@
 package endpoint
 
 import (
+	"encoding/json"
+	"fmt"
+
 	"code.cloudfoundry.org/bbs/models"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/routing-info/tcp_routes"
@@ -9,6 +12,10 @@ import (
 type EndpointKey struct {
 	InstanceGUID string
 	Evacuating   bool
+}
+
+func (key *EndpointKey) String() string {
+	return fmt.Sprintf(`{"InstanceGUID": "%s", "Evacuating": %t}`, key.InstanceGUID, key.Evacuating)
 }
 
 func NewEndpointKey(instanceGUID string, evacuating bool) EndpointKey {
@@ -64,6 +71,26 @@ type RoutableEndpoints struct {
 	Endpoints         map[EndpointKey]Endpoint
 	LogGUID           string
 	ModificationTag   *models.ModificationTag
+}
+
+func (entry RoutableEndpoints) MarshalJSON() ([]byte, error) {
+	endpoints := make(map[string]Endpoint)
+	for k, v := range entry.Endpoints {
+		endpoints[k.String()] = v
+	}
+	jsonStruct := struct {
+		ExternalEndpoints ExternalEndpointInfos
+		Endpoints         map[string]Endpoint
+		LogGUID           string
+		ModificationTag   *models.ModificationTag
+	}{
+		ExternalEndpoints: entry.ExternalEndpoints,
+		Endpoints:         endpoints,
+		LogGUID:           entry.LogGUID,
+		ModificationTag:   entry.ModificationTag,
+	}
+
+	return json.Marshal(jsonStruct)
 }
 
 func (entry RoutableEndpoints) Copy() RoutableEndpoints {

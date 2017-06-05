@@ -103,7 +103,7 @@ func (handler *RoutingAPIHandler) Sync(
 func (handler *RoutingAPIHandler) Emit(logger lager.Logger) {
 	logger = logger.Session("routing-api-emit")
 	events := handler.routingTable.GetRoutingEvents()
-	logger.Debug("emitting-messages", lager.Data{"messages": events})
+	logger.Info("emitting-messages", lager.Data{"messages": events})
 	_, _, err := handler.emitter.Emit(events)
 	if err != nil {
 		logger.Error("failed-emitting-messages", err, lager.Data{"messages": events})

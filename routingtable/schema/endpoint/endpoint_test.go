@@ -1,6 +1,8 @@
 package endpoint_test
 
 import (
+	"encoding/json"
+
 	"code.cloudfoundry.org/bbs/models"
 	"code.cloudfoundry.org/route-emitter/routingtable/schema/endpoint"
 
@@ -17,6 +19,21 @@ var _ = Describe("RoutingTableEntry", func() {
 			endpoint.NewExternalEndpointInfo("routing-group-1", 6000),
 			endpoint.NewExternalEndpointInfo("routing-group-1", 6100),
 		}
+	})
+
+	Describe("RoutableEndpoints", func() {
+		It("marshals to json", func() {
+			key := endpoint.NewEndpointKey("instance-guid", true)
+			value := endpoint.NewEndpoint("instance-guid", true, "host", 1111, 2222, nil)
+			endpoints := map[endpoint.EndpointKey]endpoint.Endpoint{key: value}
+			e := endpoint.RoutableEndpoints{
+				ExternalEndpoints: source,
+				Endpoints:         endpoints,
+			}
+			data, err := json.Marshal(e)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(data).To(ContainSubstring(`{\"InstanceGUID\": \"instance-guid\", \"Evacuating\": true}`))
+		})
 	})
 
 	Context("Remove", func() {

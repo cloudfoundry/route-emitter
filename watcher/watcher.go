@@ -144,14 +144,14 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 			}
 
 			cachedEvents = make(map[string]models.Event)
-			logger.Debug("complete")
+			logger.Info("complete")
 		case <-watcher.syncEvents.Sync:
 			if syncing {
 				watcher.logger.Debug("sync-already-in-progress")
 				continue
 			}
 			logger := watcher.logger.Session("sync")
-			logger.Debug("starting")
+			logger.Info("starting")
 			go watcher.sync(logger, syncEnd)
 			syncing = true
 		case err := <-resubscribeChannel:
