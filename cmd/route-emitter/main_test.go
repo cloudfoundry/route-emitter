@@ -783,6 +783,44 @@ var _ = Describe("Route Emitter", func() {
 					))
 				})
 
+				FContext("and the route-emitter is running in direct instance routes mode", func() {
+					BeforeEach(func() {
+						cfgs = append(cfgs, func(cfg *config.RouteEmitterConfig) {
+							cfg.RegisterDirectInstaceRoutes = true
+						})
+					})
+
+					It("emits its routes immediately", func() {
+						var msg1, msg2 routingtable.RegistryMessage
+						Eventually(registeredRoutes).Should(Receive(&msg1))
+						Eventually(registeredRoutes).Should(Receive(&msg2))
+
+						Expect([]routingtable.RegistryMessage{msg1, msg2}).To(ConsistOf(
+							MatchRegistryMessage(routingtable.RegistryMessage{
+								URIs:                 []string{hostnames[1]},
+								Host:                 netInfo.InstanceAddress,
+								Port:                 netInfo.Ports[0].ContainerPort,
+								App:                  desiredLRP.LogGuid,
+								PrivateInstanceId:    instanceKey.InstanceGuid,
+								PrivateInstanceIndex: "0",
+								RouteServiceUrl:      "https://awesome.com",
+								Tags:                 map[string]string{"component": "route-emitter"},
+							}),
+							MatchRegistryMessage(routingtable.RegistryMessage{
+								URIs:                 []string{hostnames[0]},
+								Host:                 netInfo.InstanceAddress,
+								Port:                 netInfo.Ports[0].ContainerPort,
+								App:                  desiredLRP.LogGuid,
+								PrivateInstanceId:    instanceKey.InstanceGuid,
+								PrivateInstanceIndex: "0",
+								RouteServiceUrl:      "https://awesome.com",
+								Tags:                 map[string]string{"component": "route-emitter"},
+							}),
+						))
+					})
+
+				})
+
 				Context("and the route-emitter cell id doesn't match the actual lrp cell", func() {
 					BeforeEach(func() {
 						cellID = "some-random-cell-id"

@@ -33,12 +33,43 @@ var _ = Describe("RoutingTable", func() {
 	currentTag := &models.ModificationTag{Epoch: "abc", Index: 1}
 	newerTag := &models.ModificationTag{Epoch: "def", Index: 0}
 
-	endpoint1 := routingtable.Endpoint{InstanceGuid: "ig-1", Host: "1.1.1.1", Index: 0, Domain: domain, Port: 11, ContainerPort: 8080, Evacuating: false, ModificationTag: currentTag}
-	endpoint2 := routingtable.Endpoint{InstanceGuid: "ig-2", Host: "2.2.2.2", Index: 1, Domain: domain, Port: 22, ContainerPort: 8080, Evacuating: false, ModificationTag: currentTag}
-	endpoint3 := routingtable.Endpoint{InstanceGuid: "ig-3", Host: "3.3.3.3", Index: 2, Domain: domain, Port: 33, ContainerPort: 8080, Evacuating: false, ModificationTag: currentTag}
+	endpoint1 := routingtable.Endpoint{
+		InstanceGuid:    "ig-1",
+		Host:            "1.1.1.1",
+		ContainerIP:     "1.2.3.4",
+		Index:           0,
+		Domain:          domain,
+		Port:            11,
+		ContainerPort:   8080,
+		Evacuating:      false,
+		ModificationTag: currentTag,
+	}
+	endpoint2 := routingtable.Endpoint{
+		InstanceGuid:    "ig-2",
+		Host:            "2.2.2.2",
+		ContainerIP:     "2.3.4.5",
+		Index:           1,
+		Domain:          domain,
+		Port:            22,
+		ContainerPort:   8080,
+		Evacuating:      false,
+		ModificationTag: currentTag,
+	}
+	endpoint3 := routingtable.Endpoint{
+		InstanceGuid:    "ig-3",
+		Host:            "3.3.3.3",
+		ContainerIP:     "3.4.5.6",
+		Index:           2,
+		Domain:          domain,
+		Port:            33,
+		ContainerPort:   8080,
+		Evacuating:      false,
+		ModificationTag: currentTag,
+	}
 	collisionEndpoint := routingtable.Endpoint{
 		InstanceGuid:    "ig-4",
 		Host:            "1.1.1.1",
+		ContainerIP:     "1.2.3.4",
 		Index:           3,
 		Domain:          domain,
 		Port:            11,
@@ -46,9 +77,28 @@ var _ = Describe("RoutingTable", func() {
 		Evacuating:      false,
 		ModificationTag: currentTag,
 	}
-	newInstanceEndpointAfterEvacuation := routingtable.Endpoint{InstanceGuid: "ig-5", Host: "5.5.5.5", Index: 0, Domain: domain, Port: 55, ContainerPort: 8080, Evacuating: false, ModificationTag: currentTag}
-
-	evacuating1 := routingtable.Endpoint{InstanceGuid: "ig-1", Host: "1.1.1.1", Index: 0, Domain: domain, Port: 11, ContainerPort: 8080, Evacuating: true, ModificationTag: currentTag}
+	newInstanceEndpointAfterEvacuation := routingtable.Endpoint{
+		InstanceGuid:    "ig-5",
+		Host:            "5.5.5.5",
+		ContainerIP:     "4.5.6.7",
+		Index:           0,
+		Domain:          domain,
+		Port:            55,
+		ContainerPort:   8080,
+		Evacuating:      false,
+		ModificationTag: currentTag,
+	}
+	evacuating1 := routingtable.Endpoint{
+		InstanceGuid:    "ig-1",
+		Host:            "1.1.1.1",
+		ContainerIP:     "1.2.3.4",
+		Index:           0,
+		Domain:          domain,
+		Port:            11,
+		ContainerPort:   8080,
+		Evacuating:      true,
+		ModificationTag: currentTag,
+	}
 
 	logGuid := "some-log-guid"
 
@@ -57,7 +107,7 @@ var _ = Describe("RoutingTable", func() {
 
 	BeforeEach(func() {
 		logger = lagertest.NewTestLogger("test-route-emitter")
-		table = routingtable.NewNATSTable(logger)
+		table = routingtable.NewNATSTable(logger, routingtable.MessagesToEmitBuilder{})
 	})
 
 	Describe("Evacuating endpoints", func() {
@@ -101,6 +151,65 @@ var _ = Describe("RoutingTable", func() {
 					},
 				}
 				Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
+			})
+		})
+	})
+
+	Context("when internal address message builder is used", func() {
+		BeforeEach(func() {
+			table = routingtable.NewNATSTable(logger, routingtable.InternalAddressMessageBuilder{})
+			table.SetRoutes(key, []routingtable.Route{routingtable.Route{Hostname: hostname1, LogGuid: logGuid}}, currentTag)
+		})
+
+		Context("and an endpoint is added", func() {
+			BeforeEach(func() {
+				messagesToEmit = table.AddEndpoint(key, endpoint1)
+			})
+
+			It("emits the container ip and port instead of the host ip and port", func() {
+				expected := routingtable.MessagesToEmit{
+					RegistrationMessages: []routingtable.RegistryMessage{
+						{
+							URIs:             []string{hostname1},
+							Host:             "1.2.3.4",
+							Port:             8080,
+							App:              logGuid,
+							IsolationSegment: "",
+							Tags:             map[string]string{"component": "route-emitter"},
+
+							PrivateInstanceId:    "ig-1",
+							PrivateInstanceIndex: "0",
+							RouteServiceUrl:      "",
+						},
+					},
+				}
+				Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
+			})
+
+			Context("then the endpoint is removed", func() {
+				BeforeEach(func() {
+					messagesToEmit = table.RemoveEndpoint(key, endpoint1)
+				})
+
+				It("emits the container ip and port", func() {
+					expected := routingtable.MessagesToEmit{
+						UnregistrationMessages: []routingtable.RegistryMessage{
+							{
+								URIs:             []string{hostname1},
+								Host:             "1.2.3.4",
+								Port:             8080,
+								App:              logGuid,
+								IsolationSegment: "",
+								Tags:             map[string]string{"component": "route-emitter"},
+
+								PrivateInstanceId:    "ig-1",
+								PrivateInstanceIndex: "0",
+								RouteServiceUrl:      "",
+							},
+						},
+					}
+					Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
+				})
 			})
 		})
 	})
