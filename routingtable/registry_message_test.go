@@ -95,4 +95,58 @@ var _ = Describe("RegistryMessage", func() {
 			Expect(message).To(Equal(expectedMessage))
 		})
 	})
+
+	Describe("InternalAddressRegistryMessageFor", func() {
+		BeforeEach(func() {
+			expectedMessage = routingtable.RegistryMessage{
+				Host:                 "1.2.3.4",
+				Port:                 11,
+				URIs:                 []string{"host-1.example.com"},
+				App:                  "app-guid",
+				PrivateInstanceId:    "instance-guid",
+				PrivateInstanceIndex: "0",
+				RouteServiceUrl:      "https://hello.com",
+				Tags:                 map[string]string{"component": "route-emitter"},
+			}
+		})
+
+		It("creates a valid message from an endpoint and routes", func() {
+			endpoint := routingtable.Endpoint{
+				InstanceGuid:  "instance-guid",
+				Index:         0,
+				Host:          "1.1.1.1",
+				ContainerIP:   "1.2.3.4",
+				Port:          61001,
+				ContainerPort: 11,
+			}
+			route := routingtable.Route{
+				Hostname:        "host-1.example.com",
+				LogGuid:         "app-guid",
+				RouteServiceUrl: "https://hello.com",
+			}
+
+			message := routingtable.InternalAddressRegistryMessageFor(endpoint, route)
+			Expect(message).To(Equal(expectedMessage))
+		})
+
+		It("creates a valid message when instance index is greater than 0", func() {
+			endpoint := routingtable.Endpoint{
+				InstanceGuid:  "instance-guid",
+				Index:         2,
+				Host:          "1.1.1.1",
+				ContainerIP:   "1.2.3.4",
+				Port:          61001,
+				ContainerPort: 11,
+			}
+			route := routingtable.Route{
+				Hostname:        "host-1.example.com",
+				LogGuid:         "app-guid",
+				RouteServiceUrl: "https://hello.com",
+			}
+
+			expectedMessage.PrivateInstanceIndex = "2"
+			message := routingtable.InternalAddressRegistryMessageFor(endpoint, route)
+			Expect(message).To(Equal(expectedMessage))
+		})
+	})
 })

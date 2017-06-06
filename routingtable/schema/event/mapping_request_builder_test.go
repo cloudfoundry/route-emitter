@@ -89,11 +89,37 @@ var _ = Describe("MappingRequestBuilder", func() {
 		})
 
 		It("returns valid registration and unregistration mapping requests ", func() {
-			registrationRequests, unregistrationRequests := routingEvents.ToMappingRequests(logger, ttl)
+			registrationRequests, unregistrationRequests := routingEvents.ToMappingRequests(logger, ttl, false)
 			Expect(registrationRequests).Should(HaveLen(len(expectedRegistrationRequests)))
 			Expect(registrationRequests).Should(ConsistOf(expectedRegistrationRequests))
 			Expect(unregistrationRequests).Should(HaveLen(len(expectedUnregistrationRequests)))
 			Expect(unregistrationRequests).Should(ConsistOf(expectedUnregistrationRequests))
+		})
+
+		Context("when directInstanceRoutes is set to true", func() {
+			BeforeEach(func() {
+				expectedRegistrationRequests[0].HostIP = "container-ip-1"
+				expectedRegistrationRequests[0].HostPort = 5222
+				expectedRegistrationRequests[1].HostIP = "container-ip-2"
+				expectedRegistrationRequests[1].HostPort = 5222
+
+				expectedUnregistrationRequests[0].HostIP = "container-ip-3"
+				expectedUnregistrationRequests[0].HostPort = 5222
+				expectedUnregistrationRequests[1].HostIP = "container-ip-4"
+				expectedUnregistrationRequests[1].HostPort = 5222
+				expectedUnregistrationRequests[2].HostIP = "container-ip-3"
+				expectedUnregistrationRequests[2].HostPort = 5222
+				expectedUnregistrationRequests[3].HostIP = "container-ip-4"
+				expectedUnregistrationRequests[3].HostPort = 5222
+			})
+
+			It("uses the container ip and port", func() {
+				registrationRequests, unregistrationRequests := routingEvents.ToMappingRequests(logger, ttl, true)
+				Expect(registrationRequests).Should(HaveLen(len(expectedRegistrationRequests)))
+				Expect(registrationRequests).Should(ConsistOf(expectedRegistrationRequests))
+				Expect(unregistrationRequests).Should(HaveLen(len(expectedUnregistrationRequests)))
+				Expect(unregistrationRequests).Should(ConsistOf(expectedUnregistrationRequests))
+			})
 		})
 	})
 
@@ -125,7 +151,7 @@ var _ = Describe("MappingRequestBuilder", func() {
 		})
 
 		It("returns only registration mapping requests ", func() {
-			registrationRequests, unregistrationRequests := routingEvents.ToMappingRequests(logger, ttl)
+			registrationRequests, unregistrationRequests := routingEvents.ToMappingRequests(logger, ttl, false)
 			Expect(registrationRequests).Should(HaveLen(len(expectedRegistrationRequests)))
 			Expect(registrationRequests).Should(ConsistOf(expectedRegistrationRequests))
 			Expect(unregistrationRequests).Should(HaveLen(0))
@@ -160,7 +186,7 @@ var _ = Describe("MappingRequestBuilder", func() {
 		})
 
 		It("returns only unregistration mapping requests ", func() {
-			registrationRequests, unregistrationRequests := routingEvents.ToMappingRequests(logger, ttl)
+			registrationRequests, unregistrationRequests := routingEvents.ToMappingRequests(logger, ttl, false)
 			Expect(unregistrationRequests).Should(HaveLen(len(expectedUnregistrationRequests)))
 			Expect(unregistrationRequests).Should(ConsistOf(expectedUnregistrationRequests))
 			Expect(registrationRequests).Should(HaveLen(0))
@@ -168,8 +194,7 @@ var _ = Describe("MappingRequestBuilder", func() {
 	})
 
 	Context("with an invalid external port in route registration event", func() {
-
-		It("returns an empty registration request", func() {
+		BeforeEach(func() {
 			extenralEndpointInfo1 := endpoint.ExternalEndpointInfos{
 				endpoint.NewExternalEndpointInfo("123", 0),
 			}
@@ -184,13 +209,24 @@ var _ = Describe("MappingRequestBuilder", func() {
 					Entry:     routableEndpoints1,
 				},
 			}
-			registrationRequests, unregistrationRequests := routingEvents.ToMappingRequests(logger, ttl)
+		})
+
+		It("returns an empty registration request", func() {
+			registrationRequests, unregistrationRequests := routingEvents.ToMappingRequests(logger, ttl, false)
 			Expect(unregistrationRequests).Should(HaveLen(0))
 			Expect(registrationRequests).Should(HaveLen(0))
 		})
 
+		Context("when directInstanceRoutes is set to true", func() {
+			It("returns an empty registration request", func() {
+				registrationRequests, unregistrationRequests := routingEvents.ToMappingRequests(logger, ttl, true)
+				Expect(unregistrationRequests).Should(HaveLen(0))
+				Expect(registrationRequests).Should(HaveLen(0))
+			})
+		})
+
 		Context("and multiple external ports", func() {
-			It("disregards the entire routing event", func() {
+			BeforeEach(func() {
 				extenralEndpointInfo1 := endpoint.NewExternalEndpointInfo("123", 0)
 				extenralEndpointInfo2 := endpoint.NewExternalEndpointInfo("123", 61000)
 				externalInfo := []endpoint.ExternalEndpointInfo{
@@ -208,16 +244,26 @@ var _ = Describe("MappingRequestBuilder", func() {
 						Entry:     routableEndpoints1,
 					},
 				}
+			})
 
-				registrationRequests, unregistrationRequests := routingEvents.ToMappingRequests(logger, ttl)
+			It("disregards the entire routing event", func() {
+				registrationRequests, unregistrationRequests := routingEvents.ToMappingRequests(logger, ttl, false)
 				Expect(unregistrationRequests).Should(HaveLen(0))
 				Expect(registrationRequests).Should(HaveLen(0))
+			})
+
+			Context("when directInstanceRoutes is set to true", func() {
+				It("disregards the entire routing event", func() {
+					registrationRequests, unregistrationRequests := routingEvents.ToMappingRequests(logger, ttl, true)
+					Expect(unregistrationRequests).Should(HaveLen(0))
+					Expect(registrationRequests).Should(HaveLen(0))
+				})
 			})
 		})
 	})
 
 	Context("with empty endpoints in routing event", func() {
-		It("returns an empty mapping request", func() {
+		BeforeEach(func() {
 			extenralEndpointInfo1 := endpoint.ExternalEndpointInfos{
 				endpoint.NewExternalEndpointInfo("123", 0),
 			}
@@ -233,9 +279,20 @@ var _ = Describe("MappingRequestBuilder", func() {
 				},
 			}
 
-			registrationRequests, unregistrationRequests := routingEvents.ToMappingRequests(logger, ttl)
+		})
+
+		It("returns an empty mapping request", func() {
+			registrationRequests, unregistrationRequests := routingEvents.ToMappingRequests(logger, ttl, false)
 			Expect(unregistrationRequests).Should(HaveLen(0))
 			Expect(registrationRequests).Should(HaveLen(0))
+		})
+
+		Context("when directInstanceRoutes is set to true", func() {
+			It("returns an empty mapping request", func() {
+				registrationRequests, unregistrationRequests := routingEvents.ToMappingRequests(logger, ttl, true)
+				Expect(unregistrationRequests).Should(HaveLen(0))
+				Expect(registrationRequests).Should(HaveLen(0))
+			})
 		})
 	})
 })

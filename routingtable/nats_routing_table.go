@@ -71,12 +71,12 @@ func NewTempTable(routesMap RoutesByRoutingKey, endpointsByKey EndpointsByRoutin
 	}
 }
 
-func NewNATSTable(logger lager.Logger) NATSRoutingTable {
+func NewNATSTable(logger lager.Logger, builder MessageBuilder) NATSRoutingTable {
 	return &natsRoutingTable{
 		entries:        make(map[endpoint.RoutingKey]RoutableEndpoints),
 		addressEntries: make(map[Address]EndpointKey),
 		Locker:         &sync.Mutex{},
-		messageBuilder: MessagesToEmitBuilder{},
+		messageBuilder: builder,
 		logger:         logger,
 	}
 }
@@ -262,7 +262,8 @@ func (table *natsRoutingTable) RemoveEndpoint(key endpoint.RoutingKey, routingEn
 }
 
 func (table *natsRoutingTable) emit(key endpoint.RoutingKey, oldEntry, newEntry RoutableEndpoints) MessagesToEmit {
-	messagesToEmit := table.messageBuilder.RegistrationsFor(&oldEntry, &newEntry)
+	var messagesToEmit MessagesToEmit
+	messagesToEmit = table.messageBuilder.RegistrationsFor(&oldEntry, &newEntry)
 	messagesToEmit = messagesToEmit.Merge(table.messageBuilder.UnregistrationsFor(&oldEntry, &newEntry, nil))
 
 	return messagesToEmit

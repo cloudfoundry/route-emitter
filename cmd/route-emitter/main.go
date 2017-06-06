@@ -76,7 +76,7 @@ func main() {
 	bbsClient := initializeBBSClient(logger, cfg)
 
 	localMode := cfg.CellID != ""
-	table := initializeRoutingTable(logger)
+	table := initializeRoutingTable(logger, cfg.RegisterDirectInstanceRoutes)
 	natsEmitter := initializeNatsEmitter(logger, natsClient, cfg.RouteEmittingWorkers)
 	natsHandler := routehandlers.NewNATSHandler(table, natsEmitter, localMode)
 	handlers := []watcher.RouteHandler{natsHandler}
@@ -92,7 +92,7 @@ func main() {
 		routingAPIAddress := fmt.Sprintf("%s:%d", cfg.RoutingAPI.URL, cfg.RoutingAPI.Port)
 		logger.Debug("creating-routing-api-client", lager.Data{"api-location": routingAPIAddress})
 		routingAPIClient := routing_api.NewClient(routingAPIAddress, false)
-		routingAPIEmitter := emitter.NewRoutingAPIEmitter(tcpLogger, routingAPIClient, uaaClient, int(routeTTL.Seconds()))
+		routingAPIEmitter := emitter.NewRoutingAPIEmitter(tcpLogger, routingAPIClient, uaaClient, int(routeTTL.Seconds()), cfg.RegisterDirectInstanceRoutes)
 		tcpTable := routingtable.NewTCPTable(tcpLogger, nil)
 		routingAPIHandler := routehandlers.NewRoutingAPIHandler(tcpTable, routingAPIEmitter, localMode)
 		handlers = append(handlers, routingAPIHandler)
@@ -259,8 +259,13 @@ func initializeNatsEmitter(
 	return emitter.NewNATSEmitter(natsClient, workPool, logger)
 }
 
-func initializeRoutingTable(logger lager.Logger) routingtable.NATSRoutingTable {
-	return routingtable.NewNATSTable(logger)
+func initializeRoutingTable(logger lager.Logger, emitDirectInstanceRoute bool) routingtable.NATSRoutingTable {
+	var builder routingtable.MessageBuilder
+	builder = routingtable.MessagesToEmitBuilder{}
+	if emitDirectInstanceRoute {
+		builder = routingtable.InternalAddressMessageBuilder{}
+	}
+	return routingtable.NewNATSTable(logger, builder)
 }
 
 func initializeConsulClient(logger lager.Logger, consulCluster string) consuladapter.Client {

@@ -38,7 +38,7 @@ func (r RoutingEvent) Valid() bool {
 	return true
 }
 
-func (routingEvents RoutingEvents) ToMappingRequests(logger lager.Logger, ttl int) ([]models.TcpRouteMapping, []models.TcpRouteMapping) {
+func (routingEvents RoutingEvents) ToMappingRequests(logger lager.Logger, ttl int, directInstanceRoutes bool) ([]models.TcpRouteMapping, []models.TcpRouteMapping) {
 	registrationEvents := RoutingEvents{}
 	unregistrationEvents := RoutingEvents{}
 	for _, routingEvent := range routingEvents {
@@ -54,17 +54,17 @@ func (routingEvents RoutingEvents) ToMappingRequests(logger lager.Logger, ttl in
 		}
 	}
 
-	registrationMappingRequests := buildMappingRequests(registrationEvents, ttl)
+	registrationMappingRequests := buildMappingRequests(registrationEvents, ttl, directInstanceRoutes)
 
-	unregistrationMappingRequests := buildMappingRequests(unregistrationEvents, ttl)
+	unregistrationMappingRequests := buildMappingRequests(unregistrationEvents, ttl, directInstanceRoutes)
 
 	return registrationMappingRequests, unregistrationMappingRequests
 }
 
-func buildMappingRequests(routingEvents RoutingEvents, ttl int) []models.TcpRouteMapping {
+func buildMappingRequests(routingEvents RoutingEvents, ttl int, directInstanceRoutes bool) []models.TcpRouteMapping {
 	mappingRequests := make([]models.TcpRouteMapping, 0)
 	for _, routingEvent := range routingEvents {
-		mappingRequest := mapRoutingEvent(routingEvent, ttl)
+		mappingRequest := mapRoutingEvent(routingEvent, ttl, directInstanceRoutes)
 		if mappingRequest != nil {
 			mappingRequests = append(mappingRequests, (*mappingRequest)...)
 		}
@@ -72,12 +72,25 @@ func buildMappingRequests(routingEvents RoutingEvents, ttl int) []models.TcpRout
 	return mappingRequests
 }
 
-func mapRoutingEvent(routingEvent RoutingEvent, ttl int) *[]models.TcpRouteMapping {
+func mapRoutingEvent(routingEvent RoutingEvent, ttl int, directInstanceRoutes bool) *[]models.TcpRouteMapping {
 	mappingRequests := make([]models.TcpRouteMapping, 0)
 	for _, externalEndpoint := range routingEvent.Entry.ExternalEndpoints {
 		for _, endpoint := range routingEvent.Entry.Endpoints {
-			mappingRequests = append(mappingRequests, models.NewTcpRouteMapping(externalEndpoint.RouterGroupGUID, uint16(externalEndpoint.Port),
-				endpoint.Host, uint16(endpoint.Port), ttl))
+			host := endpoint.Host
+			port := uint16(endpoint.Port)
+
+			if directInstanceRoutes {
+				host = endpoint.ContainerIP
+				port = uint16(endpoint.ContainerPort)
+			}
+
+			mappingRequests = append(mappingRequests, models.NewTcpRouteMapping(
+				externalEndpoint.RouterGroupGUID,
+				uint16(externalEndpoint.Port),
+				host,
+				port,
+				ttl,
+			))
 		}
 	}
 	return &mappingRequests

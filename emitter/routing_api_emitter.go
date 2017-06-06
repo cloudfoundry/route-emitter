@@ -15,18 +15,20 @@ type RoutingAPIEmitter interface {
 }
 
 type routingAPIEmitter struct {
-	logger           lager.Logger
-	routingAPIClient routing_api.Client
-	ttl              int
-	uaaClient        uaaclient.Client
+	logger              lager.Logger
+	routingAPIClient    routing_api.Client
+	ttl                 int
+	uaaClient           uaaclient.Client
+	directInstanceRoute bool
 }
 
-func NewRoutingAPIEmitter(logger lager.Logger, routingAPIClient routing_api.Client, uaaClient uaaclient.Client, routeTTL int) RoutingAPIEmitter {
+func NewRoutingAPIEmitter(logger lager.Logger, routingAPIClient routing_api.Client, uaaClient uaaclient.Client, routeTTL int, directInstanceRoute bool) RoutingAPIEmitter {
 	return &routingAPIEmitter{
-		logger:           logger,
-		routingAPIClient: routingAPIClient,
-		ttl:              routeTTL,
-		uaaClient:        uaaClient,
+		logger:              logger,
+		routingAPIClient:    routingAPIClient,
+		ttl:                 routeTTL,
+		uaaClient:           uaaClient,
+		directInstanceRoute: directInstanceRoute,
 	}
 }
 
@@ -34,7 +36,7 @@ func (t *routingAPIEmitter) Emit(tcpEvents event.RoutingEvents) (int, int, error
 	t.logRoutingEvents(tcpEvents)
 	defer t.logger.Debug("complete-emit")
 
-	registrationMappingRequests, unregistrationMappingRequests := tcpEvents.ToMappingRequests(t.logger, t.ttl)
+	registrationMappingRequests, unregistrationMappingRequests := tcpEvents.ToMappingRequests(t.logger, t.ttl, t.directInstanceRoute)
 	err := t.emit(registrationMappingRequests, unregistrationMappingRequests)
 	if err != nil {
 		return 0, 0, err

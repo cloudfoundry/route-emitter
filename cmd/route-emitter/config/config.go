@@ -33,6 +33,7 @@ type RouteEmitterConfig struct {
 	BBSClientSessionCacheSize          int                   `json:"bbs_client_session_cache_size,omitempty"`
 	BBSMaxIdleConnsPerHost             int                   `json:"bbs_max_idle_conns_per_host,omitempty"`
 	CellID                             string                `json:"cell_id,omitempty"`
+	RegisterDirectInstanceRoutes       bool                  `json:"register_direct_instance_routes"`
 	CommunicationTimeout               durationjson.Duration `json:"communication_timeout,omitempty"`
 	ConsulCluster                      string                `json:"consul_cluster,omitempty"`
 	ConsulDownModeNotificationInterval durationjson.Duration `json:"consul_down_mode_notification_interval,omitempty"`

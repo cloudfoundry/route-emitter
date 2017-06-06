@@ -33,6 +33,25 @@ func RegistryMessageFor(endpoint Endpoint, route Route) RegistryMessage {
 	}
 }
 
+func InternalAddressRegistryMessageFor(endpoint Endpoint, route Route) RegistryMessage {
+	var index string
+	if endpoint.InstanceGuid != "" {
+		index = fmt.Sprintf("%d", endpoint.Index)
+	}
+	return RegistryMessage{
+		URIs:             []string{route.Hostname},
+		Host:             endpoint.ContainerIP,
+		Port:             endpoint.ContainerPort,
+		App:              route.LogGuid,
+		IsolationSegment: route.IsolationSegment,
+		Tags:             map[string]string{"component": "route-emitter"},
+
+		PrivateInstanceId:    endpoint.InstanceGuid,
+		PrivateInstanceIndex: index,
+		RouteServiceUrl:      route.RouteServiceUrl,
+	}
+}
+
 type RouterGreetingMessage struct {
 	MinimumRegisterInterval int `json:"minimumRegisterIntervalInSeconds"`
 	PruneThresholdInSeconds int `json:"pruneThresholdInSeconds"`

@@ -38,7 +38,7 @@ var _ = Describe("RoutingAPIEmitter", func() {
 		ttl = 60
 		logger = lagertest.NewTestLogger("test")
 		uaaClient = &fakeuaa.FakeClient{}
-		routingAPIEmitter = emitter.NewRoutingAPIEmitter(logger, routingApiClient, uaaClient, ttl)
+		routingAPIEmitter = emitter.NewRoutingAPIEmitter(logger, routingApiClient, uaaClient, ttl, false)
 
 		logGuid := "log-guid-1"
 		modificationTag := models.ModificationTag{Epoch: "abc", Index: 0}
@@ -116,6 +116,24 @@ var _ = Describe("RoutingAPIEmitter", func() {
 					Expect(numMappingReqests).To(Equal(len(mappingRequests)))
 				})
 
+				Context("when the emitter is running direct instance route mode", func() {
+					BeforeEach(func() {
+						routingAPIEmitter = emitter.NewRoutingAPIEmitter(logger, routingApiClient, uaaClient, ttl, true)
+					})
+
+					It("emits the container ip and port instead of host ip and port", func() {
+						expectedMappingRequests = []apimodels.TcpRouteMapping{
+							apimodels.NewTcpRouteMapping("123", 61000, "container-ip-1", 5222, int(ttl)),
+						}
+
+						numMappingRequests, _, err := routingAPIEmitter.Emit(routingEvents)
+						Expect(err).ShouldNot(HaveOccurred())
+						Expect(routingApiClient.UpsertTcpRouteMappingsCallCount()).To(Equal(1))
+						mappingRequests := routingApiClient.UpsertTcpRouteMappingsArgsForCall(0)
+						Expect(mappingRequests).To(ConsistOf(expectedMappingRequests))
+						Expect(numMappingRequests).To(Equal(len(mappingRequests)))
+					})
+				})
 			})
 
 			Context("and there are unregistration events", func() {
@@ -136,6 +154,25 @@ var _ = Describe("RoutingAPIEmitter", func() {
 					mappingRequests := routingApiClient.DeleteTcpRouteMappingsArgsForCall(0)
 					Expect(mappingRequests).To(ConsistOf(expectedMappingRequests))
 					Expect(numDeleteRequests).To(Equal(len(mappingRequests)))
+				})
+
+				Context("when the emitter is running direct instance route mode", func() {
+					BeforeEach(func() {
+						routingAPIEmitter = emitter.NewRoutingAPIEmitter(logger, routingApiClient, uaaClient, ttl, true)
+					})
+
+					It("emits the container ip and port instead of host ip and port", func() {
+						expectedMappingRequests = []apimodels.TcpRouteMapping{
+							apimodels.NewTcpRouteMapping("123", 61000, "container-ip-1", 5222, int(ttl)),
+						}
+
+						_, numDeleteRequests, err := routingAPIEmitter.Emit(routingEvents)
+						Expect(err).ShouldNot(HaveOccurred())
+						Expect(routingApiClient.DeleteTcpRouteMappingsCallCount()).To(Equal(1))
+						mappingRequests := routingApiClient.DeleteTcpRouteMappingsArgsForCall(0)
+						Expect(mappingRequests).To(ConsistOf(expectedMappingRequests))
+						Expect(numDeleteRequests).To(Equal(len(mappingRequests)))
+					})
 				})
 			})
 		})
