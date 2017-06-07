@@ -600,6 +600,67 @@ var _ = Describe("Route Emitter", func() {
 						}).Should(BeEmpty())
 					})
 				})
+
+				Context("an actual lrp created event is received during sync", func() {
+					var (
+						fakeBBS    *httptest.Server
+						blkChannel chan struct{}
+					)
+
+					BeforeEach(func() {
+						blkChannel = make(chan struct{}, 1)
+
+						proxy := httputil.NewSingleHostReverseProxy(bbsURL)
+						proxy.FlushInterval = 100 * time.Millisecond
+						fakeBBS = httptest.NewUnstartedServer(
+							http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+								if r.URL.Path == "/v1/domains/list" {
+									By("blocking the sync loop")
+									<-blkChannel
+								}
+								proxy.ServeHTTP(w, r)
+							}),
+						)
+
+						cfgs = append(cfgs, func(cfg *config.RouteEmitterConfig) {
+							cfg.BBSAddress = fakeBBS.URL
+							cfg.RoutingAPI.URL = "http://127.0.0.1"
+							cfg.RoutingAPI.Port = routingAPIRunner.Config.Port
+							cfg.CommunicationTimeout = durationjson.Duration(5 * time.Second)
+							cfg.SyncInterval = durationjson.Duration(1 * time.Hour)
+						})
+
+						fakeBBS.Start()
+						runner = createEmitterRunner("route-emitter", "cell-id", cfgs...)
+						runner.StartCheck = "succeeded-getting-actual-lrps"
+						desiredLRP.Instances = 1
+						Expect(bbsClient.UpsertDomain(logger, domain, time.Hour)).To(Succeed())
+					})
+
+					It("should emit a route registration", func() {
+						By("waiting for the sync loop to start")
+						lrpKey = models.NewActualLRPKey(expectedTCPProcessGUID, 0, domain)
+						instanceKey = models.NewActualLRPInstanceKey("instance-guid", "cell-id")
+						netInfo = models.NewActualLRPNetInfo("some-ip", "container-ip", models.NewPortMapping(5222, 5222))
+						Expect(bbsClient.StartActualLRP(logger, &lrpKey, &instanceKey, &netInfo)).To(Succeed())
+						Eventually(runner).Should(gbytes.Say("caching-event"))
+
+						By("unblocking the sync loop")
+						close(blkChannel)
+
+						expectedTcpRouteMapping = apimodels.NewTcpRouteMapping(routerGUID, 5222, "some-ip", 5222, 120)
+
+						Eventually(func() bool {
+							mappings, _ := routingAPIRunner.GetClient().TcpRouteMappings()
+							return contains(mappings, expectedTcpRouteMapping)
+						}, 5*time.Second).Should(BeTrue())
+					})
+
+					AfterEach(func() {
+						fakeBBS.CloseClientConnections()
+						fakeBBS.Close()
+					})
+				})
 			})
 
 			Context("when routing api server is down but bbs is running", func() {

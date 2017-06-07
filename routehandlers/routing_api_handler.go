@@ -85,6 +85,23 @@ func (handler *RoutingAPIHandler) Sync(
 		tempRoutingTable.AddEndpoint(actualLrp)
 	}
 
+	//
+
+	emitter := handler.emitter
+	handler.emitter = nil
+
+	table := handler.routingTable
+	handler.routingTable = tempRoutingTable
+
+	for _, event := range cachedEvents {
+		handler.HandleEvent(logger, event)
+	}
+
+	handler.routingTable = table
+	handler.emitter = emitter
+
+	//
+
 	numRoutes := 0
 	if tempRoutingTable.RouteCount() != 0 {
 		routingEvents := handler.routingTable.Swap(tempRoutingTable)

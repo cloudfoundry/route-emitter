@@ -731,6 +731,55 @@ var _ = Describe("RoutingAPIHandler", func() {
 				Expect(routingEvent.Entry).Should(Equal(expectedEntry))
 				Expect(fakeEmitter.EmitCallCount()).Should(Equal(1))
 			})
+
+			Context("when events are cached", func() {
+				BeforeEach(func() {
+					tcpRoutes := tcp_routes.TCPRoutes{
+						tcp_routes.TCPRoute{
+							RouterGroupGuid: "router-group-guid",
+							ExternalPort:    61007,
+							ContainerPort:   5222,
+						},
+					}
+					desiredLRPEvent := models.NewDesiredLRPCreatedEvent(&models.DesiredLRP{
+						ProcessGuid: "process-guid-2",
+						Routes:      tcpRoutes.RoutingInfo(),
+						Instances:   1,
+					})
+
+					actualLRPEvent := models.NewActualLRPCreatedEvent(&models.ActualLRPGroup{
+						Instance: &models.ActualLRP{
+							ActualLRPKey:         models.NewActualLRPKey("process-guid-2", 1, "domain"),
+							ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid-1", "cell-id"),
+							ActualLRPNetInfo: models.NewActualLRPNetInfo(
+								"some-ip-2",
+								"container-ip-2",
+								models.NewPortMapping(61006, 5222),
+							),
+							State:           models.ActualLRPStateRunning,
+							ModificationTag: modificationTag,
+						},
+					})
+
+					cachedEvents := map[string]models.Event{
+						desiredLRPEvent.Key(): desiredLRPEvent,
+						actualLRPEvent.Key():  actualLRPEvent,
+					}
+					routeHandler.Sync(
+						logger,
+						desiredInfo,
+						actualInfo,
+						nil,
+						cachedEvents,
+					)
+				})
+
+				It("updates the routing table and emit cached events", func() {
+					Expect(fakeRoutingTable.SwapCallCount()).Should(Equal(1))
+					tempRoutingTable := fakeRoutingTable.SwapArgsForCall(0)
+					Expect(tempRoutingTable.RouteCount()).Should(Equal(2))
+				})
+			})
 		})
 	})
 
