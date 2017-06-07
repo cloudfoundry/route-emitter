@@ -19,19 +19,17 @@ type routeInfo struct {
 
 //go:generate counterfeiter -o fakeroutingtable/fake_tcproutingtable.go . TCPRoutingTable
 type TCPRoutingTable interface {
-	RouteCount() int
-
-	AddRoutes(desiredLRP *models.DesiredLRPSchedulingInfo) event.RoutingEvents
-	UpdateRoutes(beforeLRP, afterLRP *models.DesiredLRPSchedulingInfo) event.RoutingEvents
-	RemoveRoutes(desiredLRP *models.DesiredLRPSchedulingInfo) event.RoutingEvents
-	GetRoutes(key endpoint.RoutingKey) endpoint.ExternalEndpointInfos
-
 	AddEndpoint(actualLRP *endpoint.ActualLRPRoutingInfo) event.RoutingEvents
+	GetRoutingEvents() event.RoutingEvents
 	RemoveEndpoint(actualLRP *endpoint.ActualLRPRoutingInfo) event.RoutingEvents
-
 	Swap(t TCPRoutingTable) event.RoutingEvents
 
-	GetRoutingEvents() event.RoutingEvents
+	// routes
+	AddRoutes(desiredLRP *models.DesiredLRPSchedulingInfo) event.RoutingEvents
+	UpdateRoutes(beforeLRP, afterLRP *models.DesiredLRPSchedulingInfo) event.RoutingEvents
+	GetRoutes(key endpoint.RoutingKey) endpoint.ExternalEndpointInfos
+	RemoveRoutes(desiredLRP *models.DesiredLRPSchedulingInfo) event.RoutingEvents
+	RouteCount() int
 }
 
 type tcpRoutingTable struct {

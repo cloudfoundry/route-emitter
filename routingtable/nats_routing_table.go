@@ -14,18 +14,15 @@ var addressCollisions = metric.Counter("AddressCollisions")
 //go:generate counterfeiter -o fakeroutingtable/fake_natsroutingtable.go . NATSRoutingTable
 
 type NATSRoutingTable interface {
-	RouteCount() int
-
-	Swap(newTable NATSRoutingTable, domains models.DomainSet) MessagesToEmit
-
-	SetRoutes(key endpoint.RoutingKey, routes []Route, modTag *models.ModificationTag) MessagesToEmit
-	GetRoutes(key endpoint.RoutingKey) []Route
-	RemoveRoutes(key endpoint.RoutingKey, modTag *models.ModificationTag) MessagesToEmit
 	AddEndpoint(key endpoint.RoutingKey, routingEndpoint Endpoint) MessagesToEmit
-	RemoveEndpoint(key endpoint.RoutingKey, routingEndpoint Endpoint) MessagesToEmit
+	SetRoutes(key endpoint.RoutingKey, routes []Route, modTag *models.ModificationTag) MessagesToEmit
 	EndpointsForIndex(key endpoint.RoutingKey, index int32) []Endpoint
-
+	GetRoutes(key endpoint.RoutingKey) []Route
 	MessagesToEmit() MessagesToEmit
+	RemoveEndpoint(key endpoint.RoutingKey, routingEndpoint Endpoint) MessagesToEmit
+	RemoveRoutes(key endpoint.RoutingKey, modTag *models.ModificationTag) MessagesToEmit
+	RouteCount() int
+	Swap(newTable NATSRoutingTable, domains models.DomainSet) MessagesToEmit
 }
 
 type noopLocker struct{}
