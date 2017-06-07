@@ -13,7 +13,6 @@ import (
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/lager/lagertest"
 	"code.cloudfoundry.org/route-emitter/routingtable"
-	"code.cloudfoundry.org/route-emitter/routingtable/schema/endpoint"
 	"code.cloudfoundry.org/route-emitter/syncer"
 	"code.cloudfoundry.org/route-emitter/watcher"
 	"code.cloudfoundry.org/route-emitter/watcher/fakes"
@@ -444,9 +443,9 @@ var _ = Describe("Watcher", func() {
 		hostname1 := "foo.example.com"
 		hostname2 := "bar.example.com"
 		hostname3 := "baz.example.com"
-		endpoint1 := routingtable.Endpoint{InstanceGuid: "ig-1", Host: "1.1.1.1", Index: 0, Port: 11, ContainerPort: 8080, Evacuating: false, ModificationTag: currentTag}
-		endpoint2 := routingtable.Endpoint{InstanceGuid: "ig-2", Host: "2.2.2.2", Index: 0, Port: 22, ContainerPort: 8080, Evacuating: false, ModificationTag: currentTag}
-		endpoint3 := routingtable.Endpoint{InstanceGuid: "ig-3", Host: "2.2.2.2", Index: 1, Port: 23, ContainerPort: 8080, Evacuating: false, ModificationTag: currentTag}
+		endpoint1 := routingtable.Endpoint{InstanceGUID: "ig-1", Host: "1.1.1.1", Index: 0, Port: 11, ContainerPort: 8080, Evacuating: false, ModificationTag: currentTag}
+		endpoint2 := routingtable.Endpoint{InstanceGUID: "ig-2", Host: "2.2.2.2", Index: 0, Port: 22, ContainerPort: 8080, Evacuating: false, ModificationTag: currentTag}
+		endpoint3 := routingtable.Endpoint{InstanceGUID: "ig-3", Host: "2.2.2.2", Index: 1, Port: 23, ContainerPort: 8080, Evacuating: false, ModificationTag: currentTag}
 
 		schedulingInfo1 := &models.DesiredLRPSchedulingInfo{
 			DesiredLRPKey: models.NewDesiredLRPKey("pg-1", "tests", "lg1"),
@@ -485,7 +484,7 @@ var _ = Describe("Watcher", func() {
 		actualLRPGroup1 := &models.ActualLRPGroup{
 			Instance: &models.ActualLRP{
 				ActualLRPKey:         models.NewActualLRPKey("pg-1", 0, "domain"),
-				ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint1.InstanceGuid, "cell-id"),
+				ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint1.InstanceGUID, "cell-id"),
 				ActualLRPNetInfo:     models.NewActualLRPNetInfo(endpoint1.Host, "container-ip", models.NewPortMapping(endpoint1.Port, endpoint1.ContainerPort)),
 				State:                models.ActualLRPStateRunning,
 			},
@@ -494,7 +493,7 @@ var _ = Describe("Watcher", func() {
 		actualLRPGroup2 := &models.ActualLRPGroup{
 			Instance: &models.ActualLRP{
 				ActualLRPKey:         models.NewActualLRPKey("pg-2", 0, "domain"),
-				ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint2.InstanceGuid, "cell-id"),
+				ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint2.InstanceGUID, "cell-id"),
 				ActualLRPNetInfo:     models.NewActualLRPNetInfo(endpoint2.Host, "container-ip", models.NewPortMapping(endpoint2.Port, endpoint2.ContainerPort)),
 				State:                models.ActualLRPStateRunning,
 			},
@@ -503,7 +502,7 @@ var _ = Describe("Watcher", func() {
 		actualLRPGroup3 := &models.ActualLRPGroup{
 			Instance: &models.ActualLRP{
 				ActualLRPKey:         models.NewActualLRPKey("pg-3", 1, "domain"),
-				ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint3.InstanceGuid, "cell-id"),
+				ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint3.InstanceGUID, "cell-id"),
 				ActualLRPNetInfo:     models.NewActualLRPNetInfo(endpoint3.Host, "container-ip", models.NewPortMapping(endpoint3.Port, endpoint3.ContainerPort)),
 				State:                models.ActualLRPStateRunning,
 			},
@@ -529,11 +528,11 @@ var _ = Describe("Watcher", func() {
 			Context("when cell id is set", func() {
 				BeforeEach(func() {
 					cellID = "cell-id"
-					endpoint4 := routingtable.Endpoint{InstanceGuid: "ig-4", Host: "2.2.2.3", Index: 1, Port: 23, ContainerPort: 8080, Evacuating: false, ModificationTag: currentTag}
+					endpoint4 := routingtable.Endpoint{InstanceGUID: "ig-4", Host: "2.2.2.3", Index: 1, Port: 23, ContainerPort: 8080, Evacuating: false, ModificationTag: currentTag}
 					actualLRPGroup4 := &models.ActualLRPGroup{
 						Instance: &models.ActualLRP{
 							ActualLRPKey:         models.NewActualLRPKey("pg-2", 1, "domain"),
-							ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint4.InstanceGuid, "cell-id4"),
+							ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint4.InstanceGUID, "cell-id4"),
 							ActualLRPNetInfo:     models.NewActualLRPNetInfo(endpoint4.Host, "container-ip", models.NewPortMapping(endpoint4.Port, endpoint4.ContainerPort)),
 							State:                models.ActualLRPStateRunning,
 						},
@@ -707,10 +706,10 @@ var _ = Describe("Watcher", func() {
 					schedulingInfo1,
 					schedulingInfo2,
 				}
-				expectedActuals := []*endpoint.ActualLRPRoutingInfo{
-					endpoint.NewActualLRPRoutingInfo(actualLRPGroup1),
-					endpoint.NewActualLRPRoutingInfo(actualLRPGroup2),
-					endpoint.NewActualLRPRoutingInfo(actualLRPGroup3),
+				expectedActuals := []*routingtable.ActualLRPRoutingInfo{
+					routingtable.NewActualLRPRoutingInfo(actualLRPGroup1),
+					routingtable.NewActualLRPRoutingInfo(actualLRPGroup2),
+					routingtable.NewActualLRPRoutingInfo(actualLRPGroup3),
 				}
 
 				expectedDomains := models.DomainSet{}
@@ -773,7 +772,7 @@ var _ = Describe("Watcher", func() {
 				It("registers endpoints for lrps on this cell", func() {
 					Eventually(routeHandler.SyncCallCount).Should(Equal(1))
 					_, _, actual, _, _ := routeHandler.SyncArgsForCall(0)
-					routingInfo2 := endpoint.NewActualLRPRoutingInfo(actualLRPGroup2)
+					routingInfo2 := routingtable.NewActualLRPRoutingInfo(actualLRPGroup2)
 					Expect(actual).To(ContainElement(routingInfo2))
 				})
 
@@ -796,7 +795,7 @@ var _ = Describe("Watcher", func() {
 					beforeActualLRPGroup3 := &models.ActualLRPGroup{
 						Instance: &models.ActualLRP{
 							ActualLRPKey:         models.NewActualLRPKey("pg-3", 1, "domain"),
-							ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint3.InstanceGuid, "cell-id"),
+							ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint3.InstanceGUID, "cell-id"),
 							State:                models.ActualLRPStateClaimed,
 						},
 					}
@@ -931,7 +930,7 @@ var _ = Describe("Watcher", func() {
 				actualLRPGroup4 := &models.ActualLRPGroup{
 					Instance: &models.ActualLRP{
 						ActualLRPKey:         models.NewActualLRPKey("pg-4", 1, "domain"),
-						ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint3.InstanceGuid, "cell-id"),
+						ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint3.InstanceGUID, "cell-id"),
 						State:                models.ActualLRPStateClaimed,
 					},
 				}

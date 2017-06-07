@@ -60,7 +60,7 @@ var _ = Describe("RegistryMessage", func() {
 	Describe("RegistryMessageFor", func() {
 		It("creates a valid message from an endpoint and routes", func() {
 			endpoint := routingtable.Endpoint{
-				InstanceGuid:  "instance-guid",
+				InstanceGUID:  "instance-guid",
 				Index:         0,
 				Host:          "1.1.1.1",
 				Port:          61001,
@@ -68,7 +68,7 @@ var _ = Describe("RegistryMessage", func() {
 			}
 			route := routingtable.Route{
 				Hostname:        "host-1.example.com",
-				LogGuid:         "app-guid",
+				LogGUID:         "app-guid",
 				RouteServiceUrl: "https://hello.com",
 			}
 
@@ -78,7 +78,7 @@ var _ = Describe("RegistryMessage", func() {
 
 		It("creates a valid message when instance index is greater than 0", func() {
 			endpoint := routingtable.Endpoint{
-				InstanceGuid:  "instance-guid",
+				InstanceGUID:  "instance-guid",
 				Index:         2,
 				Host:          "1.1.1.1",
 				Port:          61001,
@@ -86,7 +86,7 @@ var _ = Describe("RegistryMessage", func() {
 			}
 			route := routingtable.Route{
 				Hostname:        "host-1.example.com",
-				LogGuid:         "app-guid",
+				LogGUID:         "app-guid",
 				RouteServiceUrl: "https://hello.com",
 			}
 
@@ -112,7 +112,7 @@ var _ = Describe("RegistryMessage", func() {
 
 		It("creates a valid message from an endpoint and routes", func() {
 			endpoint := routingtable.Endpoint{
-				InstanceGuid:  "instance-guid",
+				InstanceGUID:  "instance-guid",
 				Index:         0,
 				Host:          "1.1.1.1",
 				ContainerIP:   "1.2.3.4",
@@ -121,7 +121,7 @@ var _ = Describe("RegistryMessage", func() {
 			}
 			route := routingtable.Route{
 				Hostname:        "host-1.example.com",
-				LogGuid:         "app-guid",
+				LogGUID:         "app-guid",
 				RouteServiceUrl: "https://hello.com",
 			}
 
@@ -131,7 +131,7 @@ var _ = Describe("RegistryMessage", func() {
 
 		It("creates a valid message when instance index is greater than 0", func() {
 			endpoint := routingtable.Endpoint{
-				InstanceGuid:  "instance-guid",
+				InstanceGUID:  "instance-guid",
 				Index:         2,
 				Host:          "1.1.1.1",
 				ContainerIP:   "1.2.3.4",
@@ -140,7 +140,7 @@ var _ = Describe("RegistryMessage", func() {
 			}
 			route := routingtable.Route{
 				Hostname:        "host-1.example.com",
-				LogGuid:         "app-guid",
+				LogGUID:         "app-guid",
 				RouteServiceUrl: "https://hello.com",
 			}
 

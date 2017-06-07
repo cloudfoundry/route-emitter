@@ -8,8 +8,7 @@ import (
 	"code.cloudfoundry.org/route-emitter/routehandlers"
 	"code.cloudfoundry.org/route-emitter/routingtable"
 	"code.cloudfoundry.org/route-emitter/routingtable/fakeroutingtable"
-	"code.cloudfoundry.org/route-emitter/routingtable/schema/endpoint"
-	"code.cloudfoundry.org/route-emitter/routingtable/schema/event"
+	tcpmodels "code.cloudfoundry.org/routing-api/models"
 	"code.cloudfoundry.org/routing-info/tcp_routes"
 	fake_metrics_sender "github.com/cloudfoundry/dropsonde/metric_sender/fake"
 	"github.com/cloudfoundry/dropsonde/metrics"
@@ -19,18 +18,20 @@ import (
 
 var _ = Describe("RoutingAPIHandler", func() {
 	var (
-		logger           lager.Logger
-		fakeRoutingTable *fakeroutingtable.FakeTCPRoutingTable
-		fakeEmitter      *emitterfakes.FakeRoutingAPIEmitter
-		routeHandler     *routehandlers.RoutingAPIHandler
-		fakeMetricSender *fake_metrics_sender.FakeMetricSender
+		logger                lager.Logger
+		fakeRoutingTable      *fakeroutingtable.FakeRoutingTable
+		fakeRoutingAPIEmitter *emitterfakes.FakeRoutingAPIEmitter
+		routeHandler          *routehandlers.Handler
+		fakeMetricSender      *fake_metrics_sender.FakeMetricSender
+		emptyNatsMessages     routingtable.MessagesToEmit
 	)
 
 	BeforeEach(func() {
 		logger = lagertest.NewTestLogger("test")
-		fakeRoutingTable = new(fakeroutingtable.FakeTCPRoutingTable)
-		fakeEmitter = new(emitterfakes.FakeRoutingAPIEmitter)
-		routeHandler = routehandlers.NewRoutingAPIHandler(fakeRoutingTable, fakeEmitter, false)
+		emptyNatsMessages = routingtable.MessagesToEmit{}
+		fakeRoutingTable = new(fakeroutingtable.FakeRoutingTable)
+		fakeRoutingAPIEmitter = new(emitterfakes.FakeRoutingAPIEmitter)
+		routeHandler = routehandlers.NewHandler(fakeRoutingTable, nil, fakeRoutingAPIEmitter, false)
 
 		fakeMetricSender = fake_metrics_sender.NewFakeMetricSender()
 		metrics.Initialize(fakeMetricSender, nil)
@@ -39,7 +40,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 	Describe("DesiredLRP Event", func() {
 		var (
 			desiredLRP    *models.DesiredLRP
-			routingEvents event.RoutingEvents
+			routingEvents routingtable.TCPRouteMappings
 		)
 
 		BeforeEach(func() {
@@ -57,12 +58,8 @@ var _ = Describe("RoutingAPIHandler", func() {
 				LogGuid:     "log-guid",
 				Routes:      tcpRoutes.RoutingInfo(),
 			}
-			routingEvents = event.RoutingEvents{
-				event.RoutingEvent{
-					EventType: event.RouteRegistrationEvent,
-					Key:       endpoint.RoutingKey{},
-					Entry:     endpoint.RoutableEndpoints{},
-				},
+			routingEvents = routingtable.TCPRouteMappings{
+				Registrations: []tcpmodels.TcpRouteMapping{},
 			}
 		})
 
@@ -72,30 +69,21 @@ var _ = Describe("RoutingAPIHandler", func() {
 			})
 
 			It("invokes AddRoutes on RoutingTable", func() {
-				Expect(fakeRoutingTable.AddRoutesCallCount()).Should(Equal(1))
-				lrp := fakeRoutingTable.AddRoutesArgsForCall(0)
-				Expect(*lrp).Should(Equal(desiredLRP.DesiredLRPSchedulingInfo()))
+				Expect(fakeRoutingTable.SetRoutesCallCount()).Should(Equal(1))
+				before, after := fakeRoutingTable.SetRoutesArgsForCall(0)
+				Expect(before).To(BeNil())
+				Expect(*after).Should(Equal(desiredLRP.DesiredLRPSchedulingInfo()))
 			})
 
 			Context("when there are routing events", func() {
 				BeforeEach(func() {
-					fakeRoutingTable.AddRoutesReturns(routingEvents)
+					fakeRoutingTable.SetRoutesReturns(routingEvents, emptyNatsMessages)
 				})
 
 				It("invokes Emit on Emitter", func() {
-					Expect(fakeEmitter.EmitCallCount()).Should(Equal(1))
-					events := fakeEmitter.EmitArgsForCall(0)
+					Expect(fakeRoutingAPIEmitter.EmitCallCount()).Should(Equal(1))
+					events := fakeRoutingAPIEmitter.EmitArgsForCall(0)
 					Expect(events).Should(Equal(routingEvents))
-				})
-			})
-
-			Context("when there are no routing events", func() {
-				BeforeEach(func() {
-					fakeRoutingTable.AddRoutesReturns(event.RoutingEvents{})
-				})
-
-				It("does not invoke Emit on Emitter", func() {
-					Expect(fakeEmitter.EmitCallCount()).Should(Equal(0))
 				})
 			})
 		})
@@ -125,45 +113,31 @@ var _ = Describe("RoutingAPIHandler", func() {
 			})
 
 			It("invokes UpdateRoutes on RoutingTable", func() {
-				Expect(fakeRoutingTable.UpdateRoutesCallCount()).Should(Equal(1))
-				beforeLrp, afterLrp := fakeRoutingTable.UpdateRoutesArgsForCall(0)
+				Expect(fakeRoutingTable.SetRoutesCallCount()).Should(Equal(1))
+				beforeLrp, afterLrp := fakeRoutingTable.SetRoutesArgsForCall(0)
 				Expect(*beforeLrp).Should(Equal(desiredLRP.DesiredLRPSchedulingInfo()))
 				Expect(*afterLrp).Should(Equal(after.DesiredLRPSchedulingInfo()))
 			})
 
 			Context("when there are routing events", func() {
 				BeforeEach(func() {
-					fakeRoutingTable.UpdateRoutesReturns(routingEvents)
+					fakeRoutingTable.SetRoutesReturns(routingEvents, emptyNatsMessages)
 				})
 
 				It("invokes Emit on Emitter", func() {
-					Expect(fakeEmitter.EmitCallCount()).Should(Equal(1))
-					events := fakeEmitter.EmitArgsForCall(0)
+					Expect(fakeRoutingAPIEmitter.EmitCallCount()).Should(Equal(1))
+					events := fakeRoutingAPIEmitter.EmitArgsForCall(0)
 					Expect(events).Should(Equal(routingEvents))
-				})
-			})
-
-			Context("when there are no routing events", func() {
-				BeforeEach(func() {
-					fakeRoutingTable.UpdateRoutesReturns(event.RoutingEvents{})
-				})
-
-				It("does not invoke Emit on Emitter", func() {
-					Expect(fakeEmitter.EmitCallCount()).Should(Equal(0))
 				})
 			})
 		})
 
 		Describe("HandleDesiredDelete", func() {
 			BeforeEach(func() {
-				unregistrationEvent := event.RoutingEvents{
-					event.RoutingEvent{
-						EventType: event.RouteUnregistrationEvent,
-						Key:       endpoint.RoutingKey{},
-						Entry:     endpoint.RoutableEndpoints{},
-					},
+				unregistrationEvent := routingtable.TCPRouteMappings{
+					Unregistrations: []tcpmodels.TcpRouteMapping{},
 				}
-				fakeRoutingTable.RemoveRoutesReturns(unregistrationEvent)
+				fakeRoutingTable.RemoveRoutesReturns(unregistrationEvent, emptyNatsMessages)
 			})
 			JustBeforeEach(func() {
 				routeHandler.HandleEvent(logger, models.NewDesiredLRPRemovedEvent(desiredLRP))
@@ -171,7 +145,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 
 			It("does not invoke AddRoutes on RoutingTable", func() {
 				Expect(fakeRoutingTable.RemoveRoutesCallCount()).Should(Equal(1))
-				Expect(fakeEmitter.EmitCallCount()).Should(Equal(1))
+				Expect(fakeRoutingAPIEmitter.EmitCallCount()).Should(Equal(1))
 				lrp := fakeRoutingTable.RemoveRoutesArgsForCall(0)
 				Expect(*lrp).Should(Equal(desiredLRP.DesiredLRPSchedulingInfo()))
 			})
@@ -181,17 +155,12 @@ var _ = Describe("RoutingAPIHandler", func() {
 	Describe("ActualLRP Event", func() {
 		var (
 			actualLRP     *models.ActualLRPGroup
-			routingEvents event.RoutingEvents
+			routingEvents routingtable.TCPRouteMappings
 		)
 
 		BeforeEach(func() {
-
-			routingEvents = event.RoutingEvents{
-				event.RoutingEvent{
-					EventType: event.RouteRegistrationEvent,
-					Key:       endpoint.RoutingKey{},
-					Entry:     endpoint.RoutableEndpoints{},
-				},
+			routingEvents = routingtable.TCPRouteMappings{
+				Registrations: []tcpmodels.TcpRouteMapping{},
 			}
 		})
 
@@ -220,28 +189,18 @@ var _ = Describe("RoutingAPIHandler", func() {
 				It("invokes AddEndpoint on RoutingTable", func() {
 					Expect(fakeRoutingTable.AddEndpointCallCount()).Should(Equal(1))
 					lrp := fakeRoutingTable.AddEndpointArgsForCall(0)
-					Expect(lrp).Should(Equal(endpoint.NewActualLRPRoutingInfo(actualLRP)))
+					Expect(lrp).Should(Equal(routingtable.NewActualLRPRoutingInfo(actualLRP)))
 				})
 
 				Context("when there are routing events", func() {
 					BeforeEach(func() {
-						fakeRoutingTable.AddEndpointReturns(routingEvents)
+						fakeRoutingTable.AddEndpointReturns(routingEvents, emptyNatsMessages)
 					})
 
 					It("invokes Emit on Emitter", func() {
-						Expect(fakeEmitter.EmitCallCount()).Should(Equal(1))
-						events := fakeEmitter.EmitArgsForCall(0)
+						Expect(fakeRoutingAPIEmitter.EmitCallCount()).Should(Equal(1))
+						events := fakeRoutingAPIEmitter.EmitArgsForCall(0)
 						Expect(events).Should(Equal(routingEvents))
-					})
-				})
-
-				Context("when there are no routing events", func() {
-					BeforeEach(func() {
-						fakeRoutingTable.AddEndpointReturns(event.RoutingEvents{})
-					})
-
-					It("does not invoke Emit on Emitter", func() {
-						Expect(fakeEmitter.EmitCallCount()).Should(Equal(0))
 					})
 				})
 			})
@@ -268,7 +227,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 				})
 
 				It("does not invoke Emit on Emitter", func() {
-					Expect(fakeEmitter.EmitCallCount()).Should(Equal(0))
+					Expect(fakeRoutingAPIEmitter.EmitCallCount()).Should(Equal(0))
 				})
 			})
 		})
@@ -320,23 +279,13 @@ var _ = Describe("RoutingAPIHandler", func() {
 
 				Context("when there are routing events", func() {
 					BeforeEach(func() {
-						fakeRoutingTable.AddEndpointReturns(routingEvents)
+						fakeRoutingTable.AddEndpointReturns(routingEvents, emptyNatsMessages)
 					})
 
 					It("invokes Emit on Emitter", func() {
-						Expect(fakeEmitter.EmitCallCount()).Should(Equal(1))
-						events := fakeEmitter.EmitArgsForCall(0)
+						Expect(fakeRoutingAPIEmitter.EmitCallCount()).Should(Equal(1))
+						events := fakeRoutingAPIEmitter.EmitArgsForCall(0)
 						Expect(events).Should(Equal(routingEvents))
-					})
-				})
-
-				Context("when there are no routing events", func() {
-					BeforeEach(func() {
-						fakeRoutingTable.AddEndpointReturns(event.RoutingEvents{})
-					})
-
-					It("does not invoke Emit on Emitter", func() {
-						Expect(fakeEmitter.EmitCallCount()).Should(Equal(0))
 					})
 				})
 			})
@@ -374,28 +323,18 @@ var _ = Describe("RoutingAPIHandler", func() {
 				It("invokes RemoveEndpoint on RoutingTable", func() {
 					Expect(fakeRoutingTable.RemoveEndpointCallCount()).Should(Equal(1))
 					lrp := fakeRoutingTable.RemoveEndpointArgsForCall(0)
-					Expect(lrp).Should(Equal(endpoint.NewActualLRPRoutingInfo(actualLRP)))
+					Expect(lrp).Should(Equal(routingtable.NewActualLRPRoutingInfo(actualLRP)))
 				})
 
 				Context("when there are routing events", func() {
 					BeforeEach(func() {
-						fakeRoutingTable.RemoveEndpointReturns(routingEvents)
+						fakeRoutingTable.RemoveEndpointReturns(routingEvents, emptyNatsMessages)
 					})
 
 					It("invokes Emit on Emitter", func() {
-						Expect(fakeEmitter.EmitCallCount()).Should(Equal(1))
-						events := fakeEmitter.EmitArgsForCall(0)
+						Expect(fakeRoutingAPIEmitter.EmitCallCount()).Should(Equal(1))
+						events := fakeRoutingAPIEmitter.EmitArgsForCall(0)
 						Expect(events).Should(Equal(routingEvents))
-					})
-				})
-
-				Context("when there are no routing events", func() {
-					BeforeEach(func() {
-						fakeRoutingTable.RemoveEndpointReturns(event.RoutingEvents{})
-					})
-
-					It("does not invoke Emit on Emitter", func() {
-						Expect(fakeEmitter.EmitCallCount()).Should(Equal(0))
 					})
 				})
 			})
@@ -436,10 +375,6 @@ var _ = Describe("RoutingAPIHandler", func() {
 				It("does not invoke RemoveEndpoint on RoutingTable", func() {
 					Expect(fakeRoutingTable.RemoveEndpointCallCount()).Should(Equal(0))
 				})
-
-				It("does not invoke Emit on Emitter", func() {
-					Expect(fakeEmitter.EmitCallCount()).Should(Equal(0))
-				})
 			})
 		})
 
@@ -468,28 +403,18 @@ var _ = Describe("RoutingAPIHandler", func() {
 				It("invokes RemoveEndpoint on RoutingTable", func() {
 					Expect(fakeRoutingTable.RemoveEndpointCallCount()).Should(Equal(1))
 					lrp := fakeRoutingTable.RemoveEndpointArgsForCall(0)
-					Expect(lrp).Should(Equal(endpoint.NewActualLRPRoutingInfo(actualLRP)))
+					Expect(lrp).Should(Equal(routingtable.NewActualLRPRoutingInfo(actualLRP)))
 				})
 
 				Context("when there are routing events", func() {
 					BeforeEach(func() {
-						fakeRoutingTable.RemoveEndpointReturns(routingEvents)
+						fakeRoutingTable.RemoveEndpointReturns(routingEvents, emptyNatsMessages)
 					})
 
 					It("invokes Emit on Emitter", func() {
-						Expect(fakeEmitter.EmitCallCount()).Should(Equal(1))
-						events := fakeEmitter.EmitArgsForCall(0)
+						Expect(fakeRoutingAPIEmitter.EmitCallCount()).Should(Equal(1))
+						events := fakeRoutingAPIEmitter.EmitArgsForCall(0)
 						Expect(events).Should(Equal(routingEvents))
-					})
-				})
-
-				Context("when there are no routing events", func() {
-					BeforeEach(func() {
-						fakeRoutingTable.RemoveEndpointReturns(event.RoutingEvents{})
-					})
-
-					It("does not invoke Emit on Emitter", func() {
-						Expect(fakeEmitter.EmitCallCount()).Should(Equal(0))
 					})
 				})
 			})
@@ -515,16 +440,16 @@ var _ = Describe("RoutingAPIHandler", func() {
 				})
 
 				It("does not invoke Emit on Emitter", func() {
-					Expect(fakeEmitter.EmitCallCount()).Should(Equal(0))
+					Expect(fakeRoutingAPIEmitter.EmitCallCount()).Should(Equal(0))
 				})
 			})
 		})
 	})
 
 	Describe("ShouldRefreshDesired", func() {
-		var actualInfo *endpoint.ActualLRPRoutingInfo
+		var actualInfo *routingtable.ActualLRPRoutingInfo
 		BeforeEach(func() {
-			actualInfo = &endpoint.ActualLRPRoutingInfo{
+			actualInfo = &routingtable.ActualLRPRoutingInfo{
 				ActualLRP: &models.ActualLRP{
 					ActualLRPKey:         models.NewActualLRPKey("process-guid-1", 0, "domain"),
 					ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
@@ -543,56 +468,28 @@ var _ = Describe("RoutingAPIHandler", func() {
 
 		Context("when corresponding desired state exists in the table", func() {
 			BeforeEach(func() {
-				fakeRoutingTable.GetRoutesReturns(endpoint.ExternalEndpointInfos{
-					{RouterGroupGUID: "guid", Port: 61006},
-				})
+				fakeRoutingTable.HasExternalRoutesReturns(false)
 			})
 
 			It("returns false", func() {
-				Expect(routeHandler.ShouldRefreshDesired(actualInfo)).To(BeFalse())
-			})
-		})
-
-		Context("when some ports are not known to the routing table", func() {
-			BeforeEach(func() {
-				fakeRoutingTable.GetRoutesStub = func(key endpoint.RoutingKey) endpoint.ExternalEndpointInfos {
-					if key.ContainerPort != 5222 {
-						return nil
-					}
-
-					return endpoint.ExternalEndpointInfos{
-						{RouterGroupGUID: "guid", Port: 61006},
-					}
-				}
-			})
-
-			It("returns false", func() {
-				Expect(routeHandler.ShouldRefreshDesired(actualInfo)).To(BeFalse())
+				Expect(routeHandler.ShouldRefreshDesired(actualInfo)).To(BeTrue())
 			})
 		})
 
 		Context("when corresponding desired state does not exist in the table", func() {
 			BeforeEach(func() {
-				fakeRoutingTable.GetRoutesReturns(nil)
+				fakeRoutingTable.HasExternalRoutesReturns(true)
 			})
 
 			It("returns true", func() {
-				Expect(routeHandler.ShouldRefreshDesired(actualInfo)).To(BeTrue())
+				Expect(routeHandler.ShouldRefreshDesired(actualInfo)).To(BeFalse())
 			})
 		})
 	})
 
 	Describe("RefreshDesired", func() {
 		BeforeEach(func() {
-			fakeRoutingTable.AddRoutesReturns(
-				event.RoutingEvents{
-					event.RoutingEvent{
-						EventType: event.RouteRegistrationEvent,
-						Key:       endpoint.RoutingKey{},
-						Entry:     endpoint.RoutableEndpoints{},
-					},
-				},
-			)
+			fakeRoutingTable.SetRoutesReturns(routingtable.TCPRouteMappings{}, emptyNatsMessages)
 		})
 
 		It("adds the desired info to the routing table", func() {
@@ -616,25 +513,18 @@ var _ = Describe("RoutingAPIHandler", func() {
 			}
 			routeHandler.RefreshDesired(logger, []*models.DesiredLRPSchedulingInfo{desiredInfo})
 
-			Expect(fakeRoutingTable.AddRoutesCallCount()).To(Equal(1))
-			info := fakeRoutingTable.AddRoutesArgsForCall(0)
-			Expect(info).To(Equal(desiredInfo))
-			Expect(fakeEmitter.EmitCallCount()).Should(Equal(1))
+			Expect(fakeRoutingTable.SetRoutesCallCount()).To(Equal(1))
+			_, after := fakeRoutingTable.SetRoutesArgsForCall(0)
+			Expect(after).To(Equal(desiredInfo))
+			Expect(fakeRoutingAPIEmitter.EmitCallCount()).Should(Equal(1))
 		})
 	})
 
 	Describe("Sync", func() {
-		Context("when bbs server returns no data", func() {
-			It("does not update the routing table", func() {
-				routeHandler.Sync(logger, nil, nil, nil, nil)
-				Expect(fakeRoutingTable.SwapCallCount()).Should(Equal(0))
-			})
-		})
-
 		Context("when bbs server returns desired and actual lrps", func() {
 			var (
 				desiredInfo     []*models.DesiredLRPSchedulingInfo
-				actualInfo      []*endpoint.ActualLRPRoutingInfo
+				actualInfo      []*routingtable.ActualLRPRoutingInfo
 				modificationTag models.ModificationTag
 			)
 
@@ -661,15 +551,15 @@ var _ = Describe("RoutingAPIHandler", func() {
 					},
 				}
 
-				actualInfo = []*endpoint.ActualLRPRoutingInfo{
-					&endpoint.ActualLRPRoutingInfo{
+				actualInfo = []*routingtable.ActualLRPRoutingInfo{
+					&routingtable.ActualLRPRoutingInfo{
 						ActualLRP: &models.ActualLRP{
 							ActualLRPKey:         models.NewActualLRPKey("process-guid-1", 0, "domain"),
 							ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
 							ActualLRPNetInfo: models.NewActualLRPNetInfo(
 								"some-ip",
 								"container-ip",
-								models.NewPortMapping(61006, 5222),
+								models.NewPortMapping(61006, containerPort),
 							),
 							State:           models.ActualLRPStateRunning,
 							ModificationTag: modificationTag,
@@ -678,23 +568,15 @@ var _ = Describe("RoutingAPIHandler", func() {
 					},
 				}
 
-				fakeRoutingTable.SwapStub = func(t routingtable.TCPRoutingTable) event.RoutingEvents {
-					routingEvents := event.RoutingEvents{
-						event.RoutingEvent{
-							EventType: event.RouteRegistrationEvent,
-							Key:       endpoint.RoutingKey{},
-							Entry:     endpoint.RoutableEndpoints{},
-						},
-					}
-					return routingEvents
+				fakeRoutingTable.SwapStub = func(t routingtable.RoutingTable, domains models.DomainSet) (routingtable.TCPRouteMappings, routingtable.MessagesToEmit) {
+					return routingtable.TCPRouteMappings{}, emptyNatsMessages
 				}
 			})
 
 			Context("when emitting metrics in localMode", func() {
 				BeforeEach(func() {
-					routeHandler = routehandlers.NewRoutingAPIHandler(fakeRoutingTable, fakeEmitter, true)
-
-					fakeEmitter.EmitReturns(1, 0, nil)
+					routeHandler = routehandlers.NewHandler(fakeRoutingTable, nil, fakeRoutingAPIEmitter, true)
+					fakeRoutingTable.TCPRouteCountReturns(1)
 				})
 
 				It("emits the TCPRouteCount", func() {
@@ -704,32 +586,26 @@ var _ = Describe("RoutingAPIHandler", func() {
 			})
 
 			It("updates the routing table", func() {
-				routeHandler.Sync(logger, desiredInfo, actualInfo, nil, nil)
+				domains := models.DomainSet{}
+				domains.Add("foo")
+				routeHandler.Sync(logger, desiredInfo, actualInfo, domains, nil)
 				Expect(fakeRoutingTable.SwapCallCount()).Should(Equal(1))
-				tempRoutingTable := fakeRoutingTable.SwapArgsForCall(0)
-				Expect(tempRoutingTable.RouteCount()).To(Equal(1))
-				routingEvents := tempRoutingTable.GetRoutingEvents()
-				Expect(routingEvents).To(HaveLen(1))
-				routingEvent := routingEvents[0]
+				tempRoutingTable, actualDomains := fakeRoutingTable.SwapArgsForCall(0)
+				Expect(actualDomains).To(Equal(domains))
+				Expect(tempRoutingTable.TCPRouteCount()).To(Equal(1))
+				routingEvents, _ := tempRoutingTable.GetRoutingEvents()
+				ttl := 0
+				Expect(routingEvents.Registrations).To(ConsistOf(tcpmodels.TcpRouteMapping{
+					TcpMappingEntity: tcpmodels.TcpMappingEntity{
+						RouterGroupGuid: "router-group-guid",
+						ExternalPort:    61000,
+						HostPort:        61006,
+						HostIP:          "some-ip",
+						TTL:             &ttl,
+					},
+				}))
 
-				key := endpoint.RoutingKey{
-					ProcessGUID:   "process-guid-1",
-					ContainerPort: 5222,
-				}
-				endpoints := map[endpoint.EndpointKey]endpoint.Endpoint{
-					endpoint.NewEndpointKey("instance-guid", false): endpoint.NewEndpoint(
-						"instance-guid", false, "some-ip", "container-ip", 61006, 5222, &modificationTag),
-				}
-
-				Expect(routingEvent.Key).Should(Equal(key))
-				Expect(routingEvent.EventType).Should(Equal(event.RouteRegistrationEvent))
-				externalInfo := []endpoint.ExternalEndpointInfo{
-					endpoint.NewExternalEndpointInfo("router-group-guid", 61000),
-				}
-				expectedEntry := endpoint.NewRoutableEndpoints(
-					externalInfo, endpoints, "log-guid", &modificationTag)
-				Expect(routingEvent.Entry).Should(Equal(expectedEntry))
-				Expect(fakeEmitter.EmitCallCount()).Should(Equal(1))
+				Expect(fakeRoutingAPIEmitter.EmitCallCount()).Should(Equal(1))
 			})
 
 			Context("when events are cached", func() {
@@ -776,31 +652,26 @@ var _ = Describe("RoutingAPIHandler", func() {
 
 				It("updates the routing table and emit cached events", func() {
 					Expect(fakeRoutingTable.SwapCallCount()).Should(Equal(1))
-					tempRoutingTable := fakeRoutingTable.SwapArgsForCall(0)
-					Expect(tempRoutingTable.RouteCount()).Should(Equal(2))
+					tempRoutingTable, _ := fakeRoutingTable.SwapArgsForCall(0)
+					Expect(tempRoutingTable.TCPRouteCount()).Should(Equal(2))
+					Expect(fakeRoutingAPIEmitter.EmitCallCount()).To(Equal(1))
 				})
 			})
 		})
 	})
 
 	Describe("Emit", func() {
-		var events event.RoutingEvents
+		var events routingtable.TCPRouteMappings
 		BeforeEach(func() {
-			events = event.RoutingEvents{
-				{
-					EventType: event.RouteRegistrationEvent,
-					Key:       endpoint.RoutingKey{},
-					Entry:     endpoint.RoutableEndpoints{},
-				},
-			}
-			fakeRoutingTable.GetRoutingEventsReturns(events)
+			events = routingtable.TCPRouteMappings{}
+			fakeRoutingTable.EmitReturns(events, emptyNatsMessages)
 		})
 
 		It("emits all valid registration events", func() {
 			routeHandler.Emit(logger)
-			Expect(fakeRoutingTable.GetRoutingEventsCallCount()).To(Equal(1))
-			Expect(fakeEmitter.EmitCallCount()).To(Equal(1))
-			Expect(fakeEmitter.EmitArgsForCall(0)).To(Equal(events))
+			Expect(fakeRoutingTable.EmitCallCount()).To(Equal(1))
+			Expect(fakeRoutingAPIEmitter.EmitCallCount()).To(Equal(1))
+			Expect(fakeRoutingAPIEmitter.EmitArgsForCall(0)).To(Equal(events))
 		})
 	})
 })

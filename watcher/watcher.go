@@ -12,8 +12,7 @@ import (
 	"code.cloudfoundry.org/bbs/models"
 	"code.cloudfoundry.org/clock"
 	"code.cloudfoundry.org/lager"
-	"code.cloudfoundry.org/route-emitter/routingtable/schema/endpoint"
-	"code.cloudfoundry.org/route-emitter/routingtable/util"
+	"code.cloudfoundry.org/route-emitter/routingtable"
 	"code.cloudfoundry.org/route-emitter/syncer"
 	"code.cloudfoundry.org/runtimeschema/metric"
 )
@@ -28,12 +27,12 @@ type RouteHandler interface {
 	Sync(
 		logger lager.Logger,
 		desired []*models.DesiredLRPSchedulingInfo,
-		runningActual []*endpoint.ActualLRPRoutingInfo,
+		runningActual []*routingtable.ActualLRPRoutingInfo,
 		domains models.DomainSet,
 		cachedEvents map[string]models.Event,
 	)
 	Emit(logger lager.Logger)
-	ShouldRefreshDesired(*endpoint.ActualLRPRoutingInfo) bool
+	ShouldRefreshDesired(*routingtable.ActualLRPRoutingInfo) bool
 	RefreshDesired(lager.Logger, []*models.DesiredLRPSchedulingInfo)
 }
 
@@ -67,7 +66,7 @@ func NewWatcher(
 type syncEventResult struct {
 	startTime     time.Time
 	desired       []*models.DesiredLRPSchedulingInfo
-	runningActual []*endpoint.ActualLRPRoutingInfo
+	runningActual []*routingtable.ActualLRPRoutingInfo
 	domains       models.DomainSet
 	err           error
 }
@@ -199,12 +198,12 @@ func (w *Watcher) cacheIncomingEvents(
 }
 
 func (w *Watcher) retrieveDesired(logger lager.Logger, event models.Event) []*models.DesiredLRPSchedulingInfo {
-	var routingInfo *endpoint.ActualLRPRoutingInfo
+	var routingInfo *routingtable.ActualLRPRoutingInfo
 	switch event := event.(type) {
 	case *models.ActualLRPCreatedEvent:
-		routingInfo = endpoint.NewActualLRPRoutingInfo(event.ActualLrpGroup)
+		routingInfo = routingtable.NewActualLRPRoutingInfo(event.ActualLrpGroup)
 	case *models.ActualLRPChangedEvent:
-		routingInfo = endpoint.NewActualLRPRoutingInfo(event.After)
+		routingInfo = routingtable.NewActualLRPRoutingInfo(event.After)
 	default:
 	}
 	var desiredLRPs []*models.DesiredLRPSchedulingInfo
@@ -241,12 +240,12 @@ func logSkippedEvent(logger lager.Logger, event models.Event) {
 	data := lager.Data{"event-type": event.EventType()}
 	switch e := event.(type) {
 	case *models.ActualLRPCreatedEvent:
-		data["lrp"] = util.ActualLRPData(endpoint.NewActualLRPRoutingInfo(e.ActualLrpGroup))
+		data["lrp"] = routingtable.ActualLRPData(routingtable.NewActualLRPRoutingInfo(e.ActualLrpGroup))
 	case *models.ActualLRPRemovedEvent:
-		data["lrp"] = util.ActualLRPData(endpoint.NewActualLRPRoutingInfo(e.ActualLrpGroup))
+		data["lrp"] = routingtable.ActualLRPData(routingtable.NewActualLRPRoutingInfo(e.ActualLrpGroup))
 	case *models.ActualLRPChangedEvent:
-		data["before"] = util.ActualLRPData(endpoint.NewActualLRPRoutingInfo(e.Before))
-		data["after"] = util.ActualLRPData(endpoint.NewActualLRPRoutingInfo(e.After))
+		data["before"] = routingtable.ActualLRPData(routingtable.NewActualLRPRoutingInfo(e.Before))
+		data["after"] = routingtable.ActualLRPData(routingtable.NewActualLRPRoutingInfo(e.After))
 	}
 	logger.Debug("skipping-event", data)
 }
@@ -289,7 +288,7 @@ func (watcher *Watcher) eventCellIDMatches(logger lager.Logger, event models.Eve
 
 func (w *Watcher) sync(logger lager.Logger, ch chan<- *syncEventResult) {
 	var desiredSchedulingInfo []*models.DesiredLRPSchedulingInfo
-	var runningActualLRPs []*endpoint.ActualLRPRoutingInfo
+	var runningActualLRPs []*routingtable.ActualLRPRoutingInfo
 	var domains models.DomainSet
 
 	var actualErr, desiredErr, domainsErr error
@@ -309,11 +308,11 @@ func (w *Watcher) sync(logger lager.Logger, ch chan<- *syncEventResult) {
 		}
 		logger.Debug("succeeded-getting-actual-lrps", lager.Data{"num-actual-responses": len(actualLRPGroups)})
 
-		runningActualLRPs = make([]*endpoint.ActualLRPRoutingInfo, 0, len(actualLRPGroups))
+		runningActualLRPs = make([]*routingtable.ActualLRPRoutingInfo, 0, len(actualLRPGroups))
 		for _, actualLRPGroup := range actualLRPGroups {
 			actualLRP, evacuating := actualLRPGroup.Resolve()
 			if actualLRP.State == models.ActualLRPStateRunning {
-				runningActualLRPs = append(runningActualLRPs, &endpoint.ActualLRPRoutingInfo{
+				runningActualLRPs = append(runningActualLRPs, &routingtable.ActualLRPRoutingInfo{
 					ActualLRP:  actualLRP,
 					Evacuating: evacuating,
 				})

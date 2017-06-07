@@ -57,15 +57,11 @@ var _ = Describe("Watcher Integration", func() {
 		workPool, err := workpool.NewWorkPool(1)
 		Expect(err).NotTo(HaveOccurred())
 		natsEmitter := emitter.NewNATSEmitter(natsClient, workPool, logger)
-		natsTable := routingtable.NewNATSTable(logger)
-		natsHandler := routehandlers.NewNATSHandler(natsTable, natsEmitter, false)
+		natsTable := routingtable.NewRoutingTable(logger, false)
 
 		uaaClient := uaaclient.NewNoOpUaaClient()
 		routingAPIEmitter := emitter.NewRoutingAPIEmitter(logger, routingApiClient, uaaClient, 100)
-		tcpTable := routingtable.NewTCPTable(logger, nil)
-		routingAPIHandler := routehandlers.NewRoutingAPIHandler(tcpTable, routingAPIEmitter, false)
-
-		handler := routehandlers.NewMultiHandler(natsHandler, routingAPIHandler)
+		handler := routehandlers.NewHandler(natsTable, natsEmitter, routingAPIEmitter, false)
 		clock := fakeclock.NewFakeClock(time.Now())
 		testWatcher = watcher.NewWatcher(
 			cellID,
@@ -109,7 +105,7 @@ var _ = Describe("Watcher Integration", func() {
 			nextEventValue := eventCh
 
 			modTag = &models.ModificationTag{Epoch: "abc", Index: 1}
-			endpoint1 := routingtable.Endpoint{InstanceGuid: "ig-1", Host: "1.1.1.1", Index: 0, Port: 11, ContainerPort: 8080, Evacuating: false, ModificationTag: modTag}
+			endpoint1 := routingtable.Endpoint{InstanceGUID: "ig-1", Host: "1.1.1.1", Index: 0, Port: 11, ContainerPort: 8080, Evacuating: false, ModificationTag: modTag}
 
 			hostname1 := "foo.example.com"
 			schedulingInfo1 = &models.DesiredLRPSchedulingInfo{
@@ -128,7 +124,7 @@ var _ = Describe("Watcher Integration", func() {
 			actualLRPGroup1 = &models.ActualLRPGroup{
 				Instance: &models.ActualLRP{
 					ActualLRPKey:         models.NewActualLRPKey("pg-1", 0, "domain"),
-					ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint1.InstanceGuid, "cell-id"),
+					ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint1.InstanceGUID, "cell-id"),
 					ActualLRPNetInfo:     models.NewActualLRPNetInfo(endpoint1.Host, "container-ip", models.NewPortMapping(endpoint1.Port, endpoint1.ContainerPort)),
 					State:                models.ActualLRPStateRunning,
 					ModificationTag:      *modTag,
@@ -138,7 +134,7 @@ var _ = Describe("Watcher Integration", func() {
 			removedActualLRP = &models.ActualLRPGroup{
 				Instance: &models.ActualLRP{
 					ActualLRPKey:         models.NewActualLRPKey("pg-1", 0, "domain"),
-					ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint1.InstanceGuid, "cell-id"),
+					ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint1.InstanceGUID, "cell-id"),
 					ActualLRPNetInfo:     models.NewActualLRPNetInfo(endpoint1.Host, "container-ip", models.NewPortMapping(endpoint1.Port, endpoint1.ContainerPort)),
 					State:                models.ActualLRPStateRunning,
 					ModificationTag:      *modTag,

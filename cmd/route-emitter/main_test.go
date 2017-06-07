@@ -165,7 +165,7 @@ var _ = Describe("Route Emitter", func() {
 			defer GinkgoRecover()
 
 			greeting := routingtable.RouterGreetingMessage{
-				MinimumRegisterInterval: 2,
+				MinimumRegisterInterval: int(emitInterval / time.Second),
 				PruneThresholdInSeconds: 6,
 			}
 
@@ -987,7 +987,7 @@ var _ = Describe("Route Emitter", func() {
 						MatchRegistryMessage(msg1),
 						MatchRegistryMessage(msg2),
 					))
-					Expect(t2.Sub(t1)).To(BeNumerically("~", 2*syncInterval, 500*time.Millisecond))
+					Expect(t2.Sub(t1)).To(BeNumerically("~", emitInterval, 100*time.Millisecond))
 				})
 
 				Context("when backing store goes away", func() {
@@ -1350,7 +1350,7 @@ var _ = Describe("Route Emitter", func() {
 		})
 	})
 
-	Context("when desired lrp is removed and sync starts and an actual lrp created event is received", func() {
+	Context("when desired lrp is missing and actual lrp created event is received during the sync loop", func() {
 		var (
 			fakeBBS    *httptest.Server
 			blkChannel chan struct{}
@@ -1387,7 +1387,7 @@ var _ = Describe("Route Emitter", func() {
 			Expect(bbsClient.DesireLRP(logger, desiredLRP)).To(Succeed())
 		})
 
-		It("should emit a route registration", func() {
+		It("should refresh the desired lrp and emit a route registration", func() {
 			By("waiting for the sync loop to start")
 			runner.StartCheck = "succeeded-getting-actual-lrps"
 			emitter = ginkgomon.Invoke(runner)

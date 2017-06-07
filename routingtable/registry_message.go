@@ -16,18 +16,18 @@ type RegistryMessage struct {
 
 func RegistryMessageFor(endpoint Endpoint, route Route) RegistryMessage {
 	var index string
-	if endpoint.InstanceGuid != "" {
+	if endpoint.InstanceGUID != "" {
 		index = fmt.Sprintf("%d", endpoint.Index)
 	}
 	return RegistryMessage{
 		URIs:             []string{route.Hostname},
 		Host:             endpoint.Host,
 		Port:             endpoint.Port,
-		App:              route.LogGuid,
+		App:              route.LogGUID,
 		IsolationSegment: route.IsolationSegment,
 		Tags:             map[string]string{"component": "route-emitter"},
 
-		PrivateInstanceId:    endpoint.InstanceGuid,
+		PrivateInstanceId:    endpoint.InstanceGUID,
 		PrivateInstanceIndex: index,
 		RouteServiceUrl:      route.RouteServiceUrl,
 	}
@@ -35,18 +35,18 @@ func RegistryMessageFor(endpoint Endpoint, route Route) RegistryMessage {
 
 func InternalAddressRegistryMessageFor(endpoint Endpoint, route Route) RegistryMessage {
 	var index string
-	if endpoint.InstanceGuid != "" {
+	if endpoint.InstanceGUID != "" {
 		index = fmt.Sprintf("%d", endpoint.Index)
 	}
 	return RegistryMessage{
 		URIs:             []string{route.Hostname},
 		Host:             endpoint.ContainerIP,
 		Port:             endpoint.ContainerPort,
-		App:              route.LogGuid,
+		App:              route.LogGUID,
 		IsolationSegment: route.IsolationSegment,
 		Tags:             map[string]string{"component": "route-emitter"},
 
-		PrivateInstanceId:    endpoint.InstanceGuid,
+		PrivateInstanceId:    endpoint.InstanceGUID,
 		PrivateInstanceIndex: index,
 		RouteServiceUrl:      route.RouteServiceUrl,
 	}

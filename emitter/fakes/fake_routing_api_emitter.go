@@ -5,35 +5,33 @@ import (
 	"sync"
 
 	"code.cloudfoundry.org/route-emitter/emitter"
-	"code.cloudfoundry.org/route-emitter/routingtable/schema/event"
+	"code.cloudfoundry.org/route-emitter/routingtable"
 )
 
 type FakeRoutingAPIEmitter struct {
-	EmitStub        func(routingEvents event.RoutingEvents) (int, int, error)
+	EmitStub        func(routingEvents routingtable.TCPRouteMappings) error
 	emitMutex       sync.RWMutex
 	emitArgsForCall []struct {
-		routingEvents event.RoutingEvents
+		routingEvents routingtable.TCPRouteMappings
 	}
 	emitReturns struct {
-		result1 int
-		result2 int
-		result3 error
+		result1 error
 	}
 	invocations      map[string][][]interface{}
 	invocationsMutex sync.RWMutex
 }
 
-func (fake *FakeRoutingAPIEmitter) Emit(routingEvents event.RoutingEvents) (int, int, error) {
+func (fake *FakeRoutingAPIEmitter) Emit(routingEvents routingtable.TCPRouteMappings) error {
 	fake.emitMutex.Lock()
 	fake.emitArgsForCall = append(fake.emitArgsForCall, struct {
-		routingEvents event.RoutingEvents
+		routingEvents routingtable.TCPRouteMappings
 	}{routingEvents})
 	fake.recordInvocation("Emit", []interface{}{routingEvents})
 	fake.emitMutex.Unlock()
 	if fake.EmitStub != nil {
 		return fake.EmitStub(routingEvents)
 	} else {
-		return fake.emitReturns.result1, fake.emitReturns.result2, fake.emitReturns.result3
+		return fake.emitReturns.result1
 	}
 }
 
@@ -43,19 +41,17 @@ func (fake *FakeRoutingAPIEmitter) EmitCallCount() int {
 	return len(fake.emitArgsForCall)
 }
 
-func (fake *FakeRoutingAPIEmitter) EmitArgsForCall(i int) event.RoutingEvents {
+func (fake *FakeRoutingAPIEmitter) EmitArgsForCall(i int) routingtable.TCPRouteMappings {
 	fake.emitMutex.RLock()
 	defer fake.emitMutex.RUnlock()
 	return fake.emitArgsForCall[i].routingEvents
 }
 
-func (fake *FakeRoutingAPIEmitter) EmitReturns(result1 int, result2 int, result3 error) {
+func (fake *FakeRoutingAPIEmitter) EmitReturns(result1 error) {
 	fake.EmitStub = nil
 	fake.emitReturns = struct {
-		result1 int
-		result2 int
-		result3 error
-	}{result1, result2, result3}
+		result1 error
+	}{result1}
 }
 
 func (fake *FakeRoutingAPIEmitter) Invocations() map[string][][]interface{} {

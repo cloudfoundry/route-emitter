@@ -9,8 +9,7 @@ import (
 	"code.cloudfoundry.org/lager/lagertest"
 	"code.cloudfoundry.org/route-emitter/routingtable"
 	"code.cloudfoundry.org/route-emitter/routingtable/fakeroutingtable"
-	"code.cloudfoundry.org/route-emitter/routingtable/schema/endpoint"
-	"code.cloudfoundry.org/route-emitter/routingtable/schema/event"
+	tcpmodels "code.cloudfoundry.org/routing-api/models"
 	"code.cloudfoundry.org/routing-info/tcp_routes"
 
 	. "github.com/onsi/ginkgo"
@@ -26,7 +25,7 @@ const (
 var _ = Describe("TCPRoutingTable", func() {
 
 	var (
-		routingTable    routingtable.TCPRoutingTable
+		routingTable    routingtable.RoutingTable
 		modificationTag *models.ModificationTag
 		tcpRoutes       tcp_routes.TCPRoutes
 		logger          lager.Logger
@@ -44,7 +43,7 @@ var _ = Describe("TCPRoutingTable", func() {
 		}
 
 		ports := []uint32{}
-		for k, _ := range portMap {
+		for k := range portMap {
 			ports = append(ports, k)
 		}
 
@@ -67,8 +66,8 @@ var _ = Describe("TCPRoutingTable", func() {
 		hostPort, containerPort uint32,
 		evacuating bool,
 		modificationTag *models.ModificationTag,
-	) *endpoint.ActualLRPRoutingInfo {
-		return &endpoint.ActualLRPRoutingInfo{
+	) *routingtable.ActualLRPRoutingInfo {
+		return &routingtable.ActualLRPRoutingInfo{
 			ActualLRP: &models.ActualLRP{
 				ActualLRPKey:         models.NewActualLRPKey(processGuid, 0, "domain"),
 				ActualLRPInstanceKey: models.NewActualLRPInstanceKey(instanceGuid, "cell-id-1"),
@@ -88,115 +87,95 @@ var _ = Describe("TCPRoutingTable", func() {
 		logger = lagertest.NewTestLogger("test")
 		tcpRoutes = tcp_routes.TCPRoutes{
 			tcp_routes.TCPRoute{
-				ExternalPort:  61000,
-				ContainerPort: 5222,
+				RouterGroupGuid: "router-group-guid",
+				ExternalPort:    61000,
+				ContainerPort:   5222,
 			},
 		}
 	})
 
 	Context("when no entry exist for route", func() {
 		BeforeEach(func() {
-			routingTable = routingtable.NewTCPTable(logger, nil)
+			routingTable = routingtable.NewRoutingTable(logger, false)
 			modificationTag = &models.ModificationTag{Epoch: "abc", Index: 0}
 		})
 
 		Describe("AddRoutes", func() {
 			It("emits nothing", func() {
 				desiredLRP := getDesiredLRP("process-guid-1", "log-guid-1", tcpRoutes, modificationTag)
-				routingEvents := routingTable.AddRoutes(desiredLRP)
-				Expect(routingEvents).To(HaveLen(0))
+				routingEvents, _ := routingTable.SetRoutes(nil, desiredLRP)
+				Expect(routingEvents.Registrations).To(HaveLen(0))
+				Expect(routingEvents.Unregistrations).To(HaveLen(0))
 			})
 
 			It("does not emit any sensitive information", func() {
 				desiredLRP := getDesiredLRP("process-guid-1", "log-guid-1", tcpRoutes, modificationTag)
-				routingEvents := routingTable.AddRoutes(desiredLRP)
+				routingEvents, _ := routingTable.SetRoutes(nil, desiredLRP)
 				Consistently(logger).ShouldNot(gbytes.Say("private_key"))
-				Expect(routingEvents).To(HaveLen(0))
+				Expect(routingEvents.Registrations).To(HaveLen(0))
+				Expect(routingEvents.Unregistrations).To(HaveLen(0))
 			})
 
 			It("logs required routing info", func() {
 				desiredLRP := getDesiredLRP("process-guid-1", "log-guid-1", tcpRoutes, modificationTag)
-				routingEvents := routingTable.AddRoutes(desiredLRP)
-				for i := 0; i < 3; i++ {
-					Eventually(logger, DEFAULT_TIMEOUT).Should(gbytes.Say("process-guid.*process-guid-1"))
-					Eventually(logger, DEFAULT_TIMEOUT).Should(gbytes.Say("routes.*tcp-router.*61000.*5222"))
-				}
+				routingEvents, _ := routingTable.SetRoutes(nil, desiredLRP)
+				// for i := 0; i < 3; i++ {
+				Eventually(logger, DEFAULT_TIMEOUT, DEFAULT_POLLING_INTERVAL).Should(gbytes.Say("process-guid.*process-guid-1"))
+				Eventually(logger, DEFAULT_TIMEOUT, DEFAULT_POLLING_INTERVAL).Should(gbytes.Say("routes.*tcp-router.*61000.*5222"))
+				// }
 
-				Expect(routingEvents).To(HaveLen(0))
-			})
-		})
-
-		Describe("UpdateRoutes", func() {
-			It("emits nothing", func() {
-				beforeLRP := getDesiredLRP("process-guid-1", "log-guid-1", tcpRoutes, modificationTag)
-				newModificationTag := &models.ModificationTag{Epoch: "abc", Index: 1}
-				afterLRP := getDesiredLRP("process-guid-1", "log-guid-1", tcpRoutes, newModificationTag)
-				routingEvents := routingTable.UpdateRoutes(beforeLRP, afterLRP)
-				Expect(routingEvents).To(HaveLen(0))
-			})
-
-			It("does not log sensitive info", func() {
-				beforeLRP := getDesiredLRP("process-guid-1", "log-guid-1", tcpRoutes, modificationTag)
-				newModificationTag := &models.ModificationTag{Epoch: "abc", Index: 1}
-				afterLRP := getDesiredLRP("process-guid-1", "log-guid-1", tcpRoutes, newModificationTag)
-				routingEvents := routingTable.UpdateRoutes(beforeLRP, afterLRP)
-				Consistently(logger).ShouldNot(gbytes.Say("private_key"))
-				Expect(routingEvents).To(HaveLen(0))
-			})
-
-			It("logs required routing info", func() {
-				beforeLRP := getDesiredLRP("process-guid-1", "log-guid-1", tcpRoutes, modificationTag)
-				newModificationTag := &models.ModificationTag{Epoch: "abc", Index: 1}
-				afterLRP := getDesiredLRP("process-guid-1", "log-guid-1", tcpRoutes, newModificationTag)
-				routingEvents := routingTable.UpdateRoutes(beforeLRP, afterLRP)
-				for i := 0; i < 3; i++ {
-					Eventually(logger, DEFAULT_TIMEOUT).Should(gbytes.Say("after_lrp.*process-guid.*process-guid-1.*routes.*tcp-router.*external_port.*61000.*container_port.*5222"))
-				}
-				Expect(routingEvents).To(HaveLen(0))
+				Expect(routingEvents.Registrations).To(HaveLen(0))
+				Expect(routingEvents.Unregistrations).To(HaveLen(0))
 			})
 		})
 
 		Describe("RemoveRoutes", func() {
 			It("emits nothing", func() {
 				desiredLRP := getDesiredLRP("process-guid-10", "log-guid-10", tcpRoutes, modificationTag)
-				routingEvents := routingTable.RemoveRoutes(desiredLRP)
-				Expect(routingEvents).To(HaveLen(0))
+				routingEvents, _ := routingTable.RemoveRoutes(desiredLRP)
+				Expect(routingEvents.Registrations).To(HaveLen(0))
+				Expect(routingEvents.Unregistrations).To(HaveLen(0))
 			})
 
 			It("does not log sensitive info", func() {
 				desiredLRP := getDesiredLRP("process-guid-10", "log-guid-10", tcpRoutes, modificationTag)
-				routingEvents := routingTable.RemoveRoutes(desiredLRP)
+				routingEvents, _ := routingTable.RemoveRoutes(desiredLRP)
 				Consistently(logger).ShouldNot(gbytes.Say("private_key"))
-				Expect(routingEvents).To(HaveLen(0))
+				Expect(routingEvents.Registrations).To(HaveLen(0))
+				Expect(routingEvents.Unregistrations).To(HaveLen(0))
 			})
 
 			It("logs required routing info", func() {
 				desiredLRP := getDesiredLRP("process-guid-10", "log-guid-10", tcpRoutes, modificationTag)
-				routingEvents := routingTable.RemoveRoutes(desiredLRP)
+				routingEvents, _ := routingTable.RemoveRoutes(desiredLRP)
 				Eventually(logger, DEFAULT_TIMEOUT, DEFAULT_POLLING_INTERVAL).Should(gbytes.Say("starting.*process-guid-10.*external_port.*61000.*container_port.*5222"))
 				Eventually(logger, DEFAULT_TIMEOUT, DEFAULT_POLLING_INTERVAL).Should(gbytes.Say("completed.*process-guid-10.*external_port.*61000.*container_port.*5222"))
-				Expect(routingEvents).To(HaveLen(0))
+				Expect(routingEvents.Registrations).To(HaveLen(0))
+				Expect(routingEvents.Unregistrations).To(HaveLen(0))
 			})
 		})
 
 		Describe("AddEndpoint", func() {
 			It("emits nothing", func() {
 				actualLRP := getActualLRP("process-guid-1", "instance-guid-1", "some-ip-1", "container-ip-1", 61104, 5222, false, modificationTag)
-				routingEvents := routingTable.AddEndpoint(actualLRP)
-				Expect(routingEvents).To(HaveLen(0))
+				routingEvents, _ := routingTable.AddEndpoint(actualLRP)
+				Expect(routingEvents.Registrations).To(HaveLen(0))
+				Expect(routingEvents.Unregistrations).To(HaveLen(0))
 			})
 
 			It("does not log sensitive info", func() {
 				actualLRP := getActualLRP("process-guid-1", "instance-guid-1", "some-ip-1", "container-ip-1", 61104, 5222, false, modificationTag)
-				routingEvents := routingTable.AddEndpoint(actualLRP)
-				Expect(routingEvents).To(HaveLen(0))
+				routingEvents, _ := routingTable.AddEndpoint(actualLRP)
+				Expect(routingEvents.Registrations).To(HaveLen(0))
+				Expect(routingEvents.Unregistrations).To(HaveLen(0))
 				Consistently(logger).ShouldNot(gbytes.Say("private_key"))
 			})
 
 			It("logs required routing info", func() {
 				actualLRP := getActualLRP("process-guid-1", "instance-guid-1", "some-ip-1", "container-ip-1", 61104, 5222, false, modificationTag)
-				routingEvents := routingTable.AddEndpoint(actualLRP)
-				Expect(routingEvents).To(HaveLen(0))
+				routingEvents, _ := routingTable.AddEndpoint(actualLRP)
+				Expect(routingEvents.Registrations).To(HaveLen(0))
+				Expect(routingEvents.Unregistrations).To(HaveLen(0))
 				Eventually(logger, DEFAULT_TIMEOUT, DEFAULT_POLLING_INTERVAL).Should(gbytes.Say("process_guid.*process-guid-1"))
 				Eventually(logger, DEFAULT_TIMEOUT, DEFAULT_POLLING_INTERVAL).Should(gbytes.Say("ports.*5222.*61104"))
 			})
@@ -205,21 +184,24 @@ var _ = Describe("TCPRoutingTable", func() {
 		Describe("RemoveEndpoint", func() {
 			It("emits nothing", func() {
 				actualLRP := getActualLRP("process-guid-1", "instance-guid-1", "some-ip-1", "container-ip-1", 61104, 5222, false, modificationTag)
-				routingEvents := routingTable.RemoveEndpoint(actualLRP)
-				Expect(routingEvents).To(HaveLen(0))
+				routingEvents, _ := routingTable.RemoveEndpoint(actualLRP)
+				Expect(routingEvents.Registrations).To(HaveLen(0))
+				Expect(routingEvents.Unregistrations).To(HaveLen(0))
 			})
 
 			It("does not log sensitive info", func() {
 				actualLRP := getActualLRP("process-guid-1", "instance-guid-1", "some-ip-1", "container-ip-1", 61104, 5222, false, modificationTag)
-				routingEvents := routingTable.RemoveEndpoint(actualLRP)
-				Expect(routingEvents).To(HaveLen(0))
+				routingEvents, _ := routingTable.RemoveEndpoint(actualLRP)
+				Expect(routingEvents.Registrations).To(HaveLen(0))
+				Expect(routingEvents.Unregistrations).To(HaveLen(0))
 				Consistently(logger).ShouldNot(gbytes.Say("private_key"))
 			})
 
 			It("logs required routing info", func() {
 				actualLRP := getActualLRP("process-guid-1", "instance-guid-1", "some-ip-1", "container-ip-1", 61104, 5222, false, modificationTag)
-				routingEvents := routingTable.RemoveEndpoint(actualLRP)
-				Expect(routingEvents).To(HaveLen(0))
+				routingEvents, _ := routingTable.RemoveEndpoint(actualLRP)
+				Expect(routingEvents.Registrations).To(HaveLen(0))
+				Expect(routingEvents.Unregistrations).To(HaveLen(0))
 				Eventually(logger, DEFAULT_TIMEOUT, DEFAULT_POLLING_INTERVAL).Should(gbytes.Say("starting.*process-guid-1.*ports.*5222.*61104"))
 				Eventually(logger, DEFAULT_TIMEOUT, DEFAULT_POLLING_INTERVAL).Should(gbytes.Say("completed.*process-guid-1.*ports.*5222.*61104"))
 			})
@@ -227,106 +209,127 @@ var _ = Describe("TCPRoutingTable", func() {
 
 		Describe("Swap", func() {
 			var (
-				tempRoutingTable routingtable.TCPRoutingTable
-				key              endpoint.RoutingKey
-				endpoints        map[endpoint.EndpointKey]endpoint.Endpoint
-				modificationTag  *models.ModificationTag
+				tempRoutingTable routingtable.RoutingTable
 				logGuid          string
 			)
 
 			BeforeEach(func() {
 				logGuid = "log-guid-1"
-				externalEndpoints := endpoint.ExternalEndpointInfos{
-					endpoint.NewExternalEndpointInfo("router-group-guid", 61000),
-				}
-				key = endpoint.NewRoutingKey("process-guid-1", 5222)
-				modificationTag = &models.ModificationTag{Epoch: "abc", Index: 1}
-				endpoints = map[endpoint.EndpointKey]endpoint.Endpoint{
-					endpoint.NewEndpointKey("instance-guid-1", false): endpoint.NewEndpoint(
-						"instance-guid-1", false, "some-ip-1", "container-ip-1", 62004, 5222, modificationTag),
-					endpoint.NewEndpointKey("instance-guid-2", false): endpoint.NewEndpoint(
-						"instance-guid-2", false, "some-ip-2", "container-ip-2", 62004, 5222, modificationTag),
-				}
-
-				tempRoutingTable = routingtable.NewTCPTable(logger, map[endpoint.RoutingKey]endpoint.RoutableEndpoints{
-					key: endpoint.NewRoutableEndpoints(externalEndpoints, endpoints, logGuid, modificationTag),
-				})
+				tempRoutingTable = routingtable.NewRoutingTable(logger, false)
+				beforeLRPSchedulingInfo := getDesiredLRP("process-guid-1", logGuid, tcpRoutes, modificationTag)
+				routingTable = routingtable.NewRoutingTable(logger, false)
+				tempRoutingTable.SetRoutes(nil, beforeLRPSchedulingInfo)
+				tempRoutingTable.AddEndpoint(getActualLRP("process-guid-1", "instance-guid-1", "some-ip-1", "container-ip-1", 62004, 5222, false, modificationTag))
+				tempRoutingTable.AddEndpoint(getActualLRP("process-guid-1", "instance-guid-2", "some-ip-2", "container-ip-2", 62004, 5222, false, modificationTag))
+				Expect(tempRoutingTable.TCPRouteCount()).Should(Equal(1))
 			})
 
 			It("emits routing events for new routes", func() {
-				Expect(routingTable.RouteCount()).Should(Equal(0))
-				routingEvents := routingTable.Swap(tempRoutingTable)
-				Expect(routingTable.RouteCount()).Should(Equal(1))
-				Expect(routingEvents).To(HaveLen(1))
-				routingEvent := routingEvents[0]
-				Expect(routingEvent.Key).Should(Equal(key))
-				Expect(routingEvent.EventType).Should(Equal(event.RouteRegistrationEvent))
-				externalInfo := endpoint.ExternalEndpointInfos{
-					endpoint.NewExternalEndpointInfo("router-group-guid", 61000),
-				}
-				expectedEntry := endpoint.NewRoutableEndpoints(
-					externalInfo, endpoints, logGuid, modificationTag)
-				Expect(routingEvent.Entry).Should(Equal(expectedEntry))
+				Expect(routingTable.TCPRouteCount()).Should(Equal(0))
+				routingEvents, _ := routingTable.Swap(tempRoutingTable, models.DomainSet{})
+				Expect(routingTable.TCPRouteCount()).Should(Equal(1))
+
+				ttl := 0
+				Expect(routingEvents.Registrations).To(ConsistOf(tcpmodels.TcpRouteMapping{
+					TcpMappingEntity: tcpmodels.TcpMappingEntity{
+						RouterGroupGuid: "router-group-guid",
+						HostPort:        62004,
+						HostIP:          "some-ip-1",
+						ExternalPort:    61000,
+						TTL:             &ttl,
+					},
+				}, tcpmodels.TcpRouteMapping{
+					TcpMappingEntity: tcpmodels.TcpMappingEntity{
+						RouterGroupGuid: "router-group-guid",
+						HostPort:        62004,
+						HostIP:          "some-ip-2",
+						ExternalPort:    61000,
+						TTL:             &ttl,
+					},
+				}))
+			})
+
+			Context("when the table is configured to emit direct instance route", func() {
+				BeforeEach(func() {
+					routingTable = routingtable.NewRoutingTable(logger, true)
+				})
+
+				It("emits routing events for new routes", func() {
+					Expect(routingTable.TCPRouteCount()).Should(Equal(0))
+					routingEvents, _ := routingTable.Swap(tempRoutingTable, models.DomainSet{})
+					Expect(routingTable.TCPRouteCount()).Should(Equal(1))
+
+					ttl := 0
+					Expect(routingEvents.Registrations).To(ConsistOf(tcpmodels.TcpRouteMapping{
+						TcpMappingEntity: tcpmodels.TcpMappingEntity{
+							RouterGroupGuid: "router-group-guid",
+							HostPort:        5222,
+							HostIP:          "container-ip-1",
+							ExternalPort:    61000,
+							TTL:             &ttl,
+						},
+					}, tcpmodels.TcpRouteMapping{
+						TcpMappingEntity: tcpmodels.TcpMappingEntity{
+							RouterGroupGuid: "router-group-guid",
+							HostPort:        5222,
+							HostIP:          "container-ip-2",
+							ExternalPort:    61000,
+							TTL:             &ttl,
+						},
+					}))
+				})
 			})
 		})
 
 		Describe("GetRoutingEvents", func() {
 			It("returns empty routing events", func() {
-				routingEvents := routingTable.GetRoutingEvents()
-				Expect(routingEvents).To(HaveLen(0))
+				routingEvents, _ := routingTable.GetRoutingEvents()
+				Expect(routingEvents.Registrations).To(HaveLen(0))
+				Expect(routingEvents.Unregistrations).To(HaveLen(0))
 			})
 		})
 
 		Context("when the routing tables are of different type", func() {
 			It("should not swap the tables", func() {
-				routingTable = routingtable.NewTCPTable(logger, nil)
-				fakeTable := &fakeroutingtable.FakeTCPRoutingTable{}
-				routingEvents := routingTable.Swap(fakeTable)
-				Expect(routingEvents).To(HaveLen(0))
-				Expect(routingTable.RouteCount()).Should(Equal(0))
+				routingTable = routingtable.NewRoutingTable(logger, false)
+				fakeTable := &fakeroutingtable.FakeRoutingTable{}
+				routingEvents, _ := routingTable.Swap(fakeTable, models.DomainSet{})
+				Expect(routingEvents.Registrations).To(HaveLen(0))
+				Expect(routingEvents.Unregistrations).To(HaveLen(0))
+				Expect(routingTable.TCPRouteCount()).Should(Equal(0))
 			})
 		})
 	})
 
 	Context("when there exists an entry for route", func() {
 		var (
-			endpoints         map[endpoint.EndpointKey]endpoint.Endpoint
-			key               endpoint.RoutingKey
-			logGuid           string
-			externalEndpoints endpoint.ExternalEndpointInfos
+			logGuid string
 		)
 
 		BeforeEach(func() {
 			logGuid = "log-guid-1"
-			externalEndpoints = endpoint.ExternalEndpointInfos{
-				endpoint.NewExternalEndpointInfo("router-group-guid", 61000),
-			}
-			key = endpoint.NewRoutingKey("process-guid-1", 5222)
 			modificationTag = &models.ModificationTag{Epoch: "abc", Index: 1}
-			endpoints = map[endpoint.EndpointKey]endpoint.Endpoint{
-				endpoint.NewEndpointKey("instance-guid-1", false): endpoint.NewEndpoint(
-					"instance-guid-1", false, "some-ip-1", "container-ip-1", 62004, 5222, modificationTag),
-				endpoint.NewEndpointKey("instance-guid-2", false): endpoint.NewEndpoint(
-					"instance-guid-2", false, "some-ip-2", "container-ip-2", 62004, 5222, modificationTag),
-			}
 		})
 
-		Describe("GetRoutes", func() {
+		Describe("HasExternalRoutes", func() {
 			It("returns the associated desired state", func() {
-				routingTable = routingtable.NewTCPTable(logger, map[endpoint.RoutingKey]endpoint.RoutableEndpoints{
-					key: endpoint.NewRoutableEndpoints(externalEndpoints, endpoints, logGuid, modificationTag),
-				})
-				Expect(routingTable.RouteCount()).To(Equal(1))
-				Expect(routingTable.GetRoutes(key)).To(Equal(externalEndpoints))
+				routingTable = routingtable.NewRoutingTable(logger, true)
+				beforeLRPSchedulingInfo := getDesiredLRP("process-guid-1", logGuid, tcpRoutes, modificationTag)
+				routingTable.SetRoutes(nil, beforeLRPSchedulingInfo)
+				routingInfo := getActualLRP("process-guid-1", "instance-guid-2", "some-ip-2", "container-ip-2", 62004, 5222, false, modificationTag)
+				routingTable.AddEndpoint(routingInfo)
+				Expect(routingTable.HasExternalRoutes(routingInfo)).To(BeTrue())
 			})
 		})
 
 		Describe("AddRoutes", func() {
 			BeforeEach(func() {
-				routingTable = routingtable.NewTCPTable(logger, map[endpoint.RoutingKey]endpoint.RoutableEndpoints{
-					key: endpoint.NewRoutableEndpoints(externalEndpoints, endpoints, logGuid, modificationTag),
-				})
-				Expect(routingTable.RouteCount()).Should(Equal(1))
+				routingTable = routingtable.NewRoutingTable(logger, false)
+				beforeLRPSchedulingInfo := getDesiredLRP("process-guid-1", "log-guid-1", tcpRoutes, modificationTag)
+				routingTable.SetRoutes(nil, beforeLRPSchedulingInfo)
+				routingTable.AddEndpoint(getActualLRP("process-guid-1", "instance-guid-1", "some-ip-1", "container-ip-1", 62004, 5222, false, modificationTag))
+				routingTable.AddEndpoint(getActualLRP("process-guid-1", "instance-guid-2", "some-ip-2", "container-ip-2", 62004, 5222, false, modificationTag))
+				Expect(routingTable.TCPRouteCount()).Should(Equal(1))
 			})
 
 			Context("existing external port changes", func() {
@@ -346,35 +349,55 @@ var _ = Describe("TCPRoutingTable", func() {
 				It("emits routing event with modified external port", func() {
 					newModificationTag := &models.ModificationTag{Epoch: "abc", Index: 2}
 					desiredLRP := getDesiredLRP("process-guid-1", "log-guid-1", newTcpRoutes, newModificationTag)
-					routingEvents := routingTable.AddRoutes(desiredLRP)
-					Expect(routingEvents).To(HaveLen(2))
+					routingEvents, _ := routingTable.SetRoutes(nil, desiredLRP)
 
-					routingEvent := routingEvents[1]
-					Expect(routingEvent.Key).Should(Equal(key))
-					Expect(routingEvent.EventType).Should(Equal(event.RouteUnregistrationEvent))
-					unregistrationExpectedEntry := endpoint.NewRoutableEndpoints(
-						externalEndpoints, endpoints, logGuid, modificationTag)
-					Expect(routingEvent.Entry).Should(Equal(unregistrationExpectedEntry))
+					ttl := 0
+					Expect(routingEvents.Unregistrations).Should(ConsistOf(tcpmodels.TcpRouteMapping{
+						TcpMappingEntity: tcpmodels.TcpMappingEntity{
+							RouterGroupGuid: "router-group-guid",
+							HostPort:        62004,
+							HostIP:          "some-ip-1",
+							ExternalPort:    61000,
+							TTL:             &ttl,
+						},
+					}, tcpmodels.TcpRouteMapping{
+						TcpMappingEntity: tcpmodels.TcpMappingEntity{
+							RouterGroupGuid: "router-group-guid",
+							HostPort:        62004,
+							HostIP:          "some-ip-2",
+							ExternalPort:    61000,
+							TTL:             &ttl,
+						},
+					}))
 
-					externalInfo := []endpoint.ExternalEndpointInfo{
-						endpoint.NewExternalEndpointInfo("router-group-guid", 61001),
-					}
-					routingEvent = routingEvents[0]
-					Expect(routingEvent.Key).Should(Equal(key))
-					Expect(routingEvent.EventType).Should(Equal(event.RouteRegistrationEvent))
-					registrationExpectedEntry := endpoint.NewRoutableEndpoints(
-						externalInfo, endpoints, logGuid, newModificationTag)
-					Expect(routingEvent.Entry).Should(Equal(registrationExpectedEntry))
+					Expect(routingEvents.Registrations).Should(ConsistOf(tcpmodels.TcpRouteMapping{
+						TcpMappingEntity: tcpmodels.TcpMappingEntity{
+							RouterGroupGuid: "router-group-guid",
+							HostPort:        62004,
+							HostIP:          "some-ip-1",
+							ExternalPort:    61001,
+							TTL:             &ttl,
+						},
+					}, tcpmodels.TcpRouteMapping{
+						TcpMappingEntity: tcpmodels.TcpMappingEntity{
+							RouterGroupGuid: "router-group-guid",
+							HostPort:        62004,
+							HostIP:          "some-ip-2",
+							ExternalPort:    61001,
+							TTL:             &ttl,
+						},
+					}))
 
-					Expect(routingTable.RouteCount()).Should(Equal(1))
+					Expect(routingTable.TCPRouteCount()).Should(Equal(1))
 				})
 
 				Context("older modification tag", func() {
 					It("emits nothing", func() {
 						desiredLRP := getDesiredLRP("process-guid-1", "log-guid-1", tcpRoutes, modificationTag)
-						routingEvents := routingTable.AddRoutes(desiredLRP)
-						Expect(routingEvents).To(HaveLen(0))
-						Expect(routingTable.RouteCount()).Should(Equal(1))
+						routingEvents, _ := routingTable.SetRoutes(nil, desiredLRP)
+						Expect(routingEvents.Registrations).To(HaveLen(0))
+						Expect(routingEvents.Unregistrations).To(HaveLen(0))
+						Expect(routingTable.TCPRouteCount()).Should(Equal(1))
 					})
 				})
 			})
@@ -403,28 +426,54 @@ var _ = Describe("TCPRoutingTable", func() {
 				It("emits routing event with both external ports", func() {
 					modificationTag = &models.ModificationTag{Epoch: "abc", Index: 2}
 					desiredLRP := getDesiredLRP("process-guid-1", "log-guid-1", tcpRoutes, modificationTag)
-					routingEvents := routingTable.AddRoutes(desiredLRP)
-					Expect(routingEvents).To(HaveLen(1))
-					routingEvent := routingEvents[0]
-					Expect(routingEvent.Key).Should(Equal(key))
-					Expect(routingEvent.EventType).Should(Equal(event.RouteRegistrationEvent))
-					externalInfo := []endpoint.ExternalEndpointInfo{
-						endpoint.NewExternalEndpointInfo("router-group-guid", 61000),
-						endpoint.NewExternalEndpointInfo("router-group-guid", 61001),
-						endpoint.NewExternalEndpointInfo("router-group-guid", 61002),
-					}
-					expectedEntry := endpoint.NewRoutableEndpoints(
-						externalInfo, endpoints, logGuid, modificationTag)
-					Expect(routingEvent.Entry).Should(Equal(expectedEntry))
-					Expect(routingTable.RouteCount()).Should(Equal(1))
+					routingEvents, _ := routingTable.SetRoutes(nil, desiredLRP)
+
+					ttl := 0
+					Expect(routingEvents.Registrations).Should(ConsistOf(tcpmodels.TcpRouteMapping{
+						TcpMappingEntity: tcpmodels.TcpMappingEntity{
+							RouterGroupGuid: "router-group-guid",
+							HostPort:        62004,
+							HostIP:          "some-ip-1",
+							ExternalPort:    61001,
+							TTL:             &ttl,
+						},
+					}, tcpmodels.TcpRouteMapping{
+						TcpMappingEntity: tcpmodels.TcpMappingEntity{
+							RouterGroupGuid: "router-group-guid",
+							HostPort:        62004,
+							HostIP:          "some-ip-2",
+							ExternalPort:    61001,
+							TTL:             &ttl,
+						},
+					}, tcpmodels.TcpRouteMapping{
+						TcpMappingEntity: tcpmodels.TcpMappingEntity{
+							RouterGroupGuid: "router-group-guid",
+							HostPort:        62004,
+							HostIP:          "some-ip-1",
+							ExternalPort:    61002,
+							TTL:             &ttl,
+						},
+					}, tcpmodels.TcpRouteMapping{
+						TcpMappingEntity: tcpmodels.TcpMappingEntity{
+							RouterGroupGuid: "router-group-guid",
+							HostPort:        62004,
+							HostIP:          "some-ip-2",
+							ExternalPort:    61002,
+							TTL:             &ttl,
+						},
+					}))
+					Expect(routingEvents.Unregistrations).Should(HaveLen(0))
+
+					Expect(routingTable.TCPRouteCount()).Should(Equal(1))
 				})
 
 				Context("older modification tag", func() {
 					It("emits nothing", func() {
 						desiredLRP := getDesiredLRP("process-guid-1", "log-guid-1", tcpRoutes, modificationTag)
-						routingEvents := routingTable.AddRoutes(desiredLRP)
-						Expect(routingEvents).To(HaveLen(0))
-						Expect(routingTable.RouteCount()).Should(Equal(1))
+						routingEvents, _ := routingTable.SetRoutes(nil, desiredLRP)
+						Expect(routingEvents.Registrations).To(HaveLen(0))
+						Expect(routingEvents.Unregistrations).To(HaveLen(0))
+						Expect(routingTable.TCPRouteCount()).Should(Equal(1))
 					})
 				})
 			})
@@ -434,14 +483,25 @@ var _ = Describe("TCPRoutingTable", func() {
 					newTcpRoutes tcp_routes.TCPRoutes
 				)
 				BeforeEach(func() {
-					externalEndpoints = endpoint.ExternalEndpointInfos{
-						endpoint.NewExternalEndpointInfo("router-group-guid", 61000),
-						endpoint.NewExternalEndpointInfo("router-group-guid", 61001),
+					currentTcpRoutes := tcp_routes.TCPRoutes{
+						tcp_routes.TCPRoute{
+							RouterGroupGuid: "router-group-guid",
+							ExternalPort:    61000,
+							ContainerPort:   5222,
+						},
+						tcp_routes.TCPRoute{
+							RouterGroupGuid: "router-group-guid",
+							ExternalPort:    61001,
+							ContainerPort:   5222,
+						},
 					}
-					routingTable = routingtable.NewTCPTable(logger, map[endpoint.RoutingKey]endpoint.RoutableEndpoints{
-						key: endpoint.NewRoutableEndpoints(externalEndpoints, endpoints, logGuid, modificationTag),
-					})
-					Expect(routingTable.RouteCount()).Should(Equal(1))
+
+					desiredLRP := getDesiredLRP("process-guid-1", "log-guid-1", currentTcpRoutes, modificationTag)
+					routingTable = routingtable.NewRoutingTable(logger, false)
+					routingTable.SetRoutes(nil, desiredLRP)
+					routingTable.AddEndpoint(getActualLRP("process-guid-1", "instance-guid-1", "some-ip-1", "container-ip-1", 62004, 5222, false, modificationTag))
+					routingTable.AddEndpoint(getActualLRP("process-guid-1", "instance-guid-2", "some-ip-2", "container-ip-2", 62004, 5222, false, modificationTag))
+					Expect(routingTable.TCPRouteCount()).Should(Equal(1))
 
 					newTcpRoutes = tcp_routes.TCPRoutes{
 						tcp_routes.TCPRoute{
@@ -460,37 +520,87 @@ var _ = Describe("TCPRoutingTable", func() {
 				It("emits routing event with both external ports", func() {
 					newModificationTag := &models.ModificationTag{Epoch: "abc", Index: 2}
 					desiredLRP := getDesiredLRP("process-guid-1", "log-guid-1", newTcpRoutes, newModificationTag)
-					routingEvents := routingTable.AddRoutes(desiredLRP)
-					Expect(routingEvents).To(HaveLen(2))
+					routingEvents, _ := routingTable.SetRoutes(nil, desiredLRP)
 
-					routingEvent := routingEvents[1]
-					Expect(routingEvent.Key).Should(Equal(key))
-					Expect(routingEvent.EventType).Should(Equal(event.RouteUnregistrationEvent))
-					unregistrationExpectedEntry := endpoint.NewRoutableEndpoints(
-						externalEndpoints, endpoints, logGuid, modificationTag)
-					Expect(routingEvent.Entry).Should(Equal(unregistrationExpectedEntry))
+					ttl := 0
+					Expect(routingEvents.Registrations).Should(ConsistOf(tcpmodels.TcpRouteMapping{
+						TcpMappingEntity: tcpmodels.TcpMappingEntity{
+							RouterGroupGuid: "router-group-guid",
+							HostPort:        62004,
+							HostIP:          "some-ip-1",
+							ExternalPort:    61002,
+							TTL:             &ttl,
+						},
+					}, tcpmodels.TcpRouteMapping{
+						TcpMappingEntity: tcpmodels.TcpMappingEntity{
+							RouterGroupGuid: "router-group-guid",
+							HostPort:        62004,
+							HostIP:          "some-ip-2",
+							ExternalPort:    61002,
+							TTL:             &ttl,
+						},
+					}, tcpmodels.TcpRouteMapping{
+						TcpMappingEntity: tcpmodels.TcpMappingEntity{
+							RouterGroupGuid: "router-group-guid",
+							HostPort:        62004,
+							HostIP:          "some-ip-1",
+							ExternalPort:    61003,
+							TTL:             &ttl,
+						},
+					}, tcpmodels.TcpRouteMapping{
+						TcpMappingEntity: tcpmodels.TcpMappingEntity{
+							RouterGroupGuid: "router-group-guid",
+							HostPort:        62004,
+							HostIP:          "some-ip-2",
+							ExternalPort:    61003,
+							TTL:             &ttl,
+						},
+					}))
 
-					externalInfo := []endpoint.ExternalEndpointInfo{
-						endpoint.NewExternalEndpointInfo("router-group-guid", 61002),
-						endpoint.NewExternalEndpointInfo("router-group-guid", 61003),
-					}
-					routingEvent = routingEvents[0]
-					Expect(routingEvent.Key).Should(Equal(key))
-					Expect(routingEvent.EventType).Should(Equal(event.RouteRegistrationEvent))
-					registrationExpectedEntry := endpoint.NewRoutableEndpoints(
-						externalInfo, endpoints, logGuid, newModificationTag)
-					Expect(routingEvent.Entry).Should(Equal(registrationExpectedEntry))
-
-					Expect(routingTable.RouteCount()).Should(Equal(1))
+					Expect(routingEvents.Unregistrations).Should(ConsistOf(tcpmodels.TcpRouteMapping{
+						TcpMappingEntity: tcpmodels.TcpMappingEntity{
+							RouterGroupGuid: "router-group-guid",
+							HostPort:        62004,
+							HostIP:          "some-ip-1",
+							ExternalPort:    61000,
+							TTL:             &ttl,
+						},
+					}, tcpmodels.TcpRouteMapping{
+						TcpMappingEntity: tcpmodels.TcpMappingEntity{
+							RouterGroupGuid: "router-group-guid",
+							HostPort:        62004,
+							HostIP:          "some-ip-2",
+							ExternalPort:    61000,
+							TTL:             &ttl,
+						},
+					}, tcpmodels.TcpRouteMapping{
+						TcpMappingEntity: tcpmodels.TcpMappingEntity{
+							RouterGroupGuid: "router-group-guid",
+							HostPort:        62004,
+							HostIP:          "some-ip-1",
+							ExternalPort:    61001,
+							TTL:             &ttl,
+						},
+					}, tcpmodels.TcpRouteMapping{
+						TcpMappingEntity: tcpmodels.TcpMappingEntity{
+							RouterGroupGuid: "router-group-guid",
+							HostPort:        62004,
+							HostIP:          "some-ip-2",
+							ExternalPort:    61001,
+							TTL:             &ttl,
+						},
+					}))
+					Expect(routingTable.TCPRouteCount()).Should(Equal(1))
 				})
+			})
 
-				Context("older modification tag", func() {
-					It("emits nothing", func() {
-						desiredLRP := getDesiredLRP("process-guid-1", "log-guid-1", tcpRoutes, modificationTag)
-						routingEvents := routingTable.AddRoutes(desiredLRP)
-						Expect(routingEvents).To(HaveLen(0))
-						Expect(routingTable.RouteCount()).Should(Equal(1))
-					})
+			Context("older modification tag", func() {
+				It("emits nothing", func() {
+					desiredLRP := getDesiredLRP("process-guid-1", "log-guid-1", tcpRoutes, modificationTag)
+					routingEvents, _ := routingTable.SetRoutes(nil, desiredLRP)
+					Expect(routingEvents.Registrations).To(HaveLen(0))
+					Expect(routingEvents.Unregistrations).To(HaveLen(0))
+					Expect(routingTable.TCPRouteCount()).Should(Equal(1))
 				})
 			})
 
@@ -498,65 +608,25 @@ var _ = Describe("TCPRoutingTable", func() {
 				It("emits nothing", func() {
 					tag := &models.ModificationTag{Epoch: "abc", Index: 2}
 					desiredLRP := getDesiredLRP("process-guid-1", "log-guid-1", tcpRoutes, tag)
-					routingEvents := routingTable.AddRoutes(desiredLRP)
-					Expect(routingEvents).To(HaveLen(0))
-					Expect(routingTable.RouteCount()).Should(Equal(1))
+					routingEvents, _ := routingTable.SetRoutes(nil, desiredLRP)
+					Expect(routingEvents.Registrations).To(HaveLen(0))
+					Expect(routingEvents.Unregistrations).To(HaveLen(0))
+					Expect(routingTable.TCPRouteCount()).Should(Equal(1))
 				})
 			})
 
 			Context("when two disjoint (external port, container port) pairs are given", func() {
-				var endpoints2 map[endpoint.EndpointKey]endpoint.Endpoint
-				var key2 endpoint.RoutingKey
-
-				createdExpectedEvents := func(newModificationTag *models.ModificationTag) []event.RoutingEvent {
-					externalInfo1 := []endpoint.ExternalEndpointInfo{
-						endpoint.NewExternalEndpointInfo("router-group-guid", 61001),
-					}
-					expectedEntry1 := endpoint.NewRoutableEndpoints(
-						externalInfo1, endpoints, logGuid, newModificationTag)
-
-					externalInfo2 := []endpoint.ExternalEndpointInfo{
-						endpoint.NewExternalEndpointInfo("router-group-guid", 61002),
-					}
-					expectedEntry2 := endpoint.NewRoutableEndpoints(
-						externalInfo2, endpoints2, logGuid, newModificationTag)
-
-					externalInfo3 := []endpoint.ExternalEndpointInfo{
-						endpoint.NewExternalEndpointInfo("router-group-guid", 61000),
-					}
-					expectedEntry3 := endpoint.NewRoutableEndpoints(
-						externalInfo3, endpoints, logGuid, modificationTag)
-
-					return []event.RoutingEvent{
-						event.RoutingEvent{
-							EventType: event.RouteRegistrationEvent,
-							Key:       key2,
-							Entry:     expectedEntry2,
-						}, event.RoutingEvent{
-							EventType: event.RouteRegistrationEvent,
-							Key:       key,
-							Entry:     expectedEntry1,
-						}, event.RoutingEvent{
-							EventType: event.RouteUnregistrationEvent,
-							Key:       key,
-							Entry:     expectedEntry3,
-						},
-					}
-				}
-
 				BeforeEach(func() {
-					key2 = endpoint.NewRoutingKey("process-guid-1", 5223)
-					endpoints2 = map[endpoint.EndpointKey]endpoint.Endpoint{
-						endpoint.NewEndpointKey("instance-guid-1", false): endpoint.NewEndpoint(
-							"instance-guid-1", false, "some-ip-1", "container-ip-1", 63004, 5223, modificationTag),
-					}
-					routingTable = routingtable.NewTCPTable(logger, map[endpoint.RoutingKey]endpoint.RoutableEndpoints{
-						key:  endpoint.NewRoutableEndpoints(externalEndpoints, endpoints, logGuid, modificationTag),
-						key2: endpoint.NewRoutableEndpoints(nil, endpoints2, logGuid, modificationTag),
-					})
-					Expect(routingTable.RouteCount()).Should(Equal(2))
+					beforeLRPSchedulingInfo := getDesiredLRP("process-guid-1", "log-guid-1", tcpRoutes, modificationTag)
+					routingTable = routingtable.NewRoutingTable(logger, false)
+					routingTable.SetRoutes(nil, beforeLRPSchedulingInfo)
+					routingTable.AddEndpoint(getActualLRP("process-guid-1", "instance-guid-1", "some-ip-1", "container-ip-1", 62004, 5222, false, modificationTag))
+					routingTable.AddEndpoint(getActualLRP("process-guid-1", "instance-guid-1", "some-ip-1", "container-ip-1", 63004, 5223, false, modificationTag))
+					Expect(routingTable.TCPRouteCount()).Should(Equal(2))
+				})
 
-					tcpRoutes = tcp_routes.TCPRoutes{
+				It("emits two separate registration events with no overlap", func() {
+					newTcpRoutes := tcp_routes.TCPRoutes{
 						tcp_routes.TCPRoute{
 							RouterGroupGuid: "router-group-guid",
 							ExternalPort:    61001,
@@ -568,25 +638,49 @@ var _ = Describe("TCPRoutingTable", func() {
 							ContainerPort:   5223,
 						},
 					}
-				})
-
-				It("emits two separate registration events with no overlap", func() {
 					newModificationTag := &models.ModificationTag{Epoch: "abc", Index: 2}
-					desiredLRP := getDesiredLRP("process-guid-1", "log-guid-1", tcpRoutes, newModificationTag)
-					routingEvents := routingTable.AddRoutes(desiredLRP)
-
-					expectedEvents := createdExpectedEvents(newModificationTag)
+					routingEvents, _ := routingTable.SetRoutes(nil, getDesiredLRP("process-guid-1", logGuid, newTcpRoutes, newModificationTag))
 
 					// Two registration and one unregistration events
-					Expect(routingEvents).To(HaveLen(3))
-					Expect(routingEvents).To(ConsistOf(expectedEvents))
-					Expect(routingTable.RouteCount()).Should(Equal(2))
+					ttl := 0
+					Expect(routingEvents.Registrations).To(ConsistOf(tcpmodels.TcpRouteMapping{
+						TcpMappingEntity: tcpmodels.TcpMappingEntity{
+							RouterGroupGuid: "router-group-guid",
+							HostPort:        62004,
+							HostIP:          "some-ip-1",
+							ExternalPort:    61001,
+							TTL:             &ttl,
+						},
+					}, tcpmodels.TcpRouteMapping{
+						TcpMappingEntity: tcpmodels.TcpMappingEntity{
+							RouterGroupGuid: "router-group-guid",
+							HostPort:        63004,
+							HostIP:          "some-ip-1",
+							ExternalPort:    61002,
+							TTL:             &ttl,
+						},
+					}))
+					Expect(routingEvents.Unregistrations).Should(ConsistOf(tcpmodels.TcpRouteMapping{
+						TcpMappingEntity: tcpmodels.TcpMappingEntity{
+							RouterGroupGuid: "router-group-guid",
+							HostPort:        62004,
+							HostIP:          "some-ip-1",
+							ExternalPort:    61000,
+							TTL:             &ttl,
+						},
+					}))
+					Expect(routingTable.TCPRouteCount()).Should(Equal(2))
 				})
 			})
 
 			Context("when container ports don't match", func() {
 				BeforeEach(func() {
 					tcpRoutes = tcp_routes.TCPRoutes{
+						tcp_routes.TCPRoute{
+							RouterGroupGuid: "router-group-guid",
+							ExternalPort:    61000,
+							ContainerPort:   5222,
+						},
 						tcp_routes.TCPRoute{
 							ExternalPort:  61000,
 							ContainerPort: 5223,
@@ -597,33 +691,28 @@ var _ = Describe("TCPRoutingTable", func() {
 				It("emits nothing", func() {
 					newTag := &models.ModificationTag{Epoch: "abc", Index: 2}
 					desiredLRP := getDesiredLRP("process-guid-1", "log-guid-1", tcpRoutes, newTag)
-					routingEvents := routingTable.AddRoutes(desiredLRP)
-					Expect(routingEvents).To(HaveLen(0))
-					Expect(routingTable.RouteCount()).Should(Equal(2))
+					routingEvents, _ := routingTable.SetRoutes(nil, desiredLRP)
+					Expect(routingEvents.Registrations).To(HaveLen(0))
+					Expect(routingEvents.Unregistrations).To(HaveLen(0))
+					Expect(routingTable.TCPRouteCount()).Should(Equal(2))
 				})
 			})
 		})
 
-		Describe("UpdateRoutes", func() {
+		Describe("Updating routes", func() {
 			var (
-				oldTcpRoutes       tcp_routes.TCPRoutes
-				newTcpRoutes       tcp_routes.TCPRoutes
-				newModificationTag *models.ModificationTag
+				newTcpRoutes            tcp_routes.TCPRoutes
+				newModificationTag      *models.ModificationTag
+				beforeLRPSchedulingInfo *models.DesiredLRPSchedulingInfo
 			)
 
 			BeforeEach(func() {
 				newModificationTag = &models.ModificationTag{Epoch: "abc", Index: 2}
-				routingTable = routingtable.NewTCPTable(logger, map[endpoint.RoutingKey]endpoint.RoutableEndpoints{
-					key: endpoint.NewRoutableEndpoints(externalEndpoints, endpoints, logGuid, modificationTag),
-				})
-				Expect(routingTable.RouteCount()).Should(Equal(1))
-				oldTcpRoutes = tcp_routes.TCPRoutes{
-					tcp_routes.TCPRoute{
-						RouterGroupGuid: "router-group-guid",
-						ExternalPort:    61000,
-						ContainerPort:   5222,
-					},
-				}
+				routingTable = routingtable.NewRoutingTable(logger, false)
+				beforeLRPSchedulingInfo = getDesiredLRP("process-guid-1", "log-guid-1", tcpRoutes, modificationTag)
+				routingTable.SetRoutes(nil, beforeLRPSchedulingInfo)
+				routingTable.AddEndpoint(getActualLRP("process-guid-1", "instance-guid-1", "some-ip-1", "container-ip-1", 62004, 5222, false, modificationTag))
+				Expect(routingTable.TCPRouteCount()).Should(Equal(1))
 			})
 
 			Context("when there is no change in container ports", func() {
@@ -637,51 +726,91 @@ var _ = Describe("TCPRoutingTable", func() {
 					}
 				})
 
+				Context("existing router group guid changes", func() {
+					BeforeEach(func() {
+						newTcpRoutes = tcp_routes.TCPRoutes{
+							tcp_routes.TCPRoute{
+								RouterGroupGuid: "new-router-group-guid",
+								ExternalPort:    61000,
+								ContainerPort:   5222,
+							},
+						}
+					})
+
+					It("emits unregistration and registration mappings", func() {
+						newModificationTag := &models.ModificationTag{Epoch: "abc", Index: 2}
+						beforeLRP := getDesiredLRP("process-guid-1", "log-guid-1", tcpRoutes, modificationTag)
+						afterLRP := getDesiredLRP("process-guid-1", "log-guid-1", newTcpRoutes, newModificationTag)
+						routingEvents, _ := routingTable.SetRoutes(beforeLRP, afterLRP)
+
+						ttl := 0
+						Expect(routingEvents.Registrations).To(ConsistOf(tcpmodels.TcpRouteMapping{
+							TcpMappingEntity: tcpmodels.TcpMappingEntity{
+								RouterGroupGuid: "new-router-group-guid",
+								HostPort:        62004,
+								HostIP:          "some-ip-1",
+								ExternalPort:    61000,
+								TTL:             &ttl,
+							},
+						}))
+						Expect(routingEvents.Unregistrations).To(ConsistOf(tcpmodels.TcpRouteMapping{
+							TcpMappingEntity: tcpmodels.TcpMappingEntity{
+								RouterGroupGuid: "router-group-guid",
+								HostPort:        62004,
+								HostIP:          "some-ip-1",
+								ExternalPort:    61000,
+								TTL:             &ttl,
+							},
+						}))
+					})
+				})
+
 				Context("when there is change in external port", func() {
 					It("emits registration and unregistration events", func() {
-						beforeLRP := getDesiredLRP("process-guid-1", "log-guid-1", oldTcpRoutes, modificationTag)
 						afterLRP := getDesiredLRP("process-guid-1", "log-guid-1", newTcpRoutes, newModificationTag)
-						routingEvents := routingTable.UpdateRoutes(beforeLRP, afterLRP)
-						Expect(routingEvents).To(HaveLen(2))
+						routingEvents, _ := routingTable.SetRoutes(nil, afterLRP)
 
-						externalInfo := []endpoint.ExternalEndpointInfo{
-							endpoint.NewExternalEndpointInfo("router-group-guid", 61001),
-						}
-						routingEvent := routingEvents[0]
-						Expect(routingEvent.Key).Should(Equal(key))
-						Expect(routingEvent.EventType).Should(Equal(event.RouteRegistrationEvent))
-						registrationExpectedEntry := endpoint.NewRoutableEndpoints(
-							externalInfo, endpoints, logGuid, newModificationTag)
-						Expect(routingEvent.Entry).Should(Equal(registrationExpectedEntry))
+						ttl := 0
+						Expect(routingEvents.Unregistrations).To(ConsistOf(tcpmodels.TcpRouteMapping{
+							TcpMappingEntity: tcpmodels.TcpMappingEntity{
+								RouterGroupGuid: "router-group-guid",
+								HostPort:        62004,
+								HostIP:          "some-ip-1",
+								ExternalPort:    61000,
+								TTL:             &ttl,
+							},
+						}))
+						Expect(routingEvents.Registrations).To(ConsistOf(tcpmodels.TcpRouteMapping{
+							TcpMappingEntity: tcpmodels.TcpMappingEntity{
+								RouterGroupGuid: "router-group-guid",
+								HostPort:        62004,
+								HostIP:          "some-ip-1",
+								ExternalPort:    61001,
+								TTL:             &ttl,
+							},
+						}))
 
-						routingEvent = routingEvents[1]
-						Expect(routingEvent.Key).Should(Equal(key))
-						Expect(routingEvent.EventType).Should(Equal(event.RouteUnregistrationEvent))
-						unregistrationExpectedEntry := endpoint.NewRoutableEndpoints(
-							externalEndpoints, endpoints, logGuid, modificationTag)
-						Expect(routingEvent.Entry).Should(Equal(unregistrationExpectedEntry))
-
-						Expect(routingTable.RouteCount()).Should(Equal(1))
+						Expect(routingTable.TCPRouteCount()).Should(Equal(1))
 					})
 
 					Context("with older modification tag", func() {
 						It("emits nothing", func() {
-							beforeLRP := getDesiredLRP("process-guid-1", "log-guid-1", oldTcpRoutes, modificationTag)
 							afterLRP := getDesiredLRP("process-guid-1", "log-guid-1", newTcpRoutes, modificationTag)
-							routingEvents := routingTable.UpdateRoutes(beforeLRP, afterLRP)
-							Expect(routingEvents).To(HaveLen(0))
-							Expect(routingTable.RouteCount()).Should(Equal(1))
+							routingEvents, _ := routingTable.SetRoutes(nil, afterLRP)
+							Expect(routingEvents.Registrations).To(HaveLen(0))
+							Expect(routingEvents.Unregistrations).To(HaveLen(0))
+							Expect(routingTable.TCPRouteCount()).Should(Equal(1))
 						})
 					})
 				})
 
 				Context("when there is no change in external port", func() {
 					It("emits nothing", func() {
-						beforeLRP := getDesiredLRP("process-guid-1", "log-guid-1", oldTcpRoutes, modificationTag)
-						afterLRP := getDesiredLRP("process-guid-1", "log-guid-1", oldTcpRoutes, newModificationTag)
-						routingEvents := routingTable.UpdateRoutes(beforeLRP, afterLRP)
-						Expect(routingEvents).To(HaveLen(0))
-						Expect(routingTable.RouteCount()).Should(Equal(1))
+						afterLRP := getDesiredLRP("process-guid-1", "log-guid-1", tcpRoutes, newModificationTag)
+						routingEvents, _ := routingTable.SetRoutes(beforeLRPSchedulingInfo, afterLRP)
+						Expect(routingEvents.Registrations).To(HaveLen(0))
+						Expect(routingEvents.Unregistrations).To(HaveLen(0))
+						Expect(routingTable.TCPRouteCount()).Should(Equal(1))
 					})
 				})
 			})
@@ -705,74 +834,49 @@ var _ = Describe("TCPRoutingTable", func() {
 
 					Context("no backends for new container port", func() {
 						It("emits no routing events and adds to routing table entry", func() {
-							beforeLRP := getDesiredLRP("process-guid-1", "log-guid-1", oldTcpRoutes, modificationTag)
 							afterLRP := getDesiredLRP("process-guid-1", "log-guid-1", newTcpRoutes, newModificationTag)
-							routingEvents := routingTable.UpdateRoutes(beforeLRP, afterLRP)
-							Expect(routingEvents).To(HaveLen(0))
-							Expect(routingTable.RouteCount()).Should(Equal(2))
+							routingEvents, _ := routingTable.SetRoutes(beforeLRPSchedulingInfo, afterLRP)
+							Expect(routingEvents.Registrations).To(HaveLen(0))
+							Expect(routingEvents.Unregistrations).To(HaveLen(0))
+							Expect(routingTable.TCPRouteCount()).Should(Equal(2))
 						})
 
 						Context("with older modification tag", func() {
 							It("emits nothing but add the routing table entry", func() {
-								beforeLRP := getDesiredLRP("process-guid-1", "log-guid-1", oldTcpRoutes, modificationTag)
 								afterLRP := getDesiredLRP("process-guid-1", "log-guid-1", newTcpRoutes, modificationTag)
-								currentRoutesCount := routingTable.RouteCount()
-								routingEvents := routingTable.UpdateRoutes(beforeLRP, afterLRP)
-								Expect(routingEvents).To(HaveLen(0))
-								Expect(routingTable.RouteCount()).Should(Equal(currentRoutesCount + 1))
+								currentRoutesCount := routingTable.TCPRouteCount()
+								routingEvents, _ := routingTable.SetRoutes(beforeLRPSchedulingInfo, afterLRP)
+								Expect(routingEvents.Registrations).To(HaveLen(0))
+								Expect(routingEvents.Unregistrations).To(HaveLen(0))
+								Expect(routingTable.TCPRouteCount()).Should(Equal(currentRoutesCount + 1))
 							})
 						})
 					})
 
 					Context("existing backends for new container port", func() {
-						var (
-							newKey       endpoint.RoutingKey
-							newEndpoints map[endpoint.EndpointKey]endpoint.Endpoint
-						)
 						BeforeEach(func() {
-							newKey = endpoint.NewRoutingKey("process-guid-1", 5223)
-							newEndpoints = map[endpoint.EndpointKey]endpoint.Endpoint{
-								endpoint.NewEndpointKey("instance-guid-1", false): endpoint.NewEndpoint(
-									"instance-guid-1", false, "some-ip-1", "container-ip-1", 62006, 5223, modificationTag),
-							}
-							routingTable = routingtable.NewTCPTable(logger, map[endpoint.RoutingKey]endpoint.RoutableEndpoints{
-								key:    endpoint.NewRoutableEndpoints(externalEndpoints, endpoints, logGuid, modificationTag),
-								newKey: endpoint.NewRoutableEndpoints(endpoint.ExternalEndpointInfos{}, newEndpoints, logGuid, modificationTag),
-							})
+							routingTable.AddEndpoint(getActualLRP("process-guid-1", "instance-guid-2", "some-ip-1", "container-ip-1", 62006, 5223, false, modificationTag))
 						})
 
 						It("emits registration events for new container port", func() {
-							beforeLRP := getDesiredLRP("process-guid-1", "log-guid-1", oldTcpRoutes, modificationTag)
 							afterLRP := getDesiredLRP("process-guid-1", "log-guid-1", newTcpRoutes, newModificationTag)
-							currentRoutesCount := routingTable.RouteCount()
-							routingEvents := routingTable.UpdateRoutes(beforeLRP, afterLRP)
-							Expect(routingEvents).To(HaveLen(1))
+							currentRoutesCount := routingTable.TCPRouteCount()
+							routingEvents, _ := routingTable.SetRoutes(beforeLRPSchedulingInfo, afterLRP)
+							ttl := 0
+							Expect(routingEvents.Registrations).To(ConsistOf(tcpmodels.TcpRouteMapping{
+								TcpMappingEntity: tcpmodels.TcpMappingEntity{
+									RouterGroupGuid: "router-group-guid",
+									HostPort:        62006,
+									HostIP:          "some-ip-1",
+									ExternalPort:    61001,
+									TTL:             &ttl,
+								},
+							}))
+							Expect(routingEvents.Unregistrations).To(HaveLen(0))
 
-							externalInfo := []endpoint.ExternalEndpointInfo{
-								endpoint.NewExternalEndpointInfo("router-group-guid", 61001),
-							}
-							routingEvent := routingEvents[0]
-							Expect(routingEvent.Key).Should(Equal(newKey))
-							Expect(routingEvent.EventType).Should(Equal(event.RouteRegistrationEvent))
-							registrationExpectedEntry := endpoint.NewRoutableEndpoints(
-								externalInfo, newEndpoints, logGuid, newModificationTag)
-							Expect(routingEvent.Entry).Should(Equal(registrationExpectedEntry))
-
-							Expect(routingTable.RouteCount()).Should(Equal(currentRoutesCount))
-						})
-
-						Context("with older modification tag", func() {
-							It("emits nothing", func() {
-								beforeLRP := getDesiredLRP("process-guid-1", "log-guid-1", oldTcpRoutes, modificationTag)
-								afterLRP := getDesiredLRP("process-guid-1", "log-guid-1", newTcpRoutes, modificationTag)
-								currentRoutesCount := routingTable.RouteCount()
-								routingEvents := routingTable.UpdateRoutes(beforeLRP, afterLRP)
-								Expect(routingEvents).To(HaveLen(0))
-								Expect(routingTable.RouteCount()).Should(Equal(currentRoutesCount))
-							})
+							Expect(routingTable.TCPRouteCount()).Should(Equal(currentRoutesCount))
 						})
 					})
-
 				})
 
 				Context("when mapped to existing external port", func() {
@@ -793,107 +897,81 @@ var _ = Describe("TCPRoutingTable", func() {
 
 					Context("no backends for new container port", func() {
 						It("emits no routing events and adds to routing table entry", func() {
-							beforeLRP := getDesiredLRP("process-guid-1", "log-guid-1", oldTcpRoutes, modificationTag)
 							afterLRP := getDesiredLRP("process-guid-1", "log-guid-1", newTcpRoutes, newModificationTag)
-							currentRoutesCount := routingTable.RouteCount()
-							routingEvents := routingTable.UpdateRoutes(beforeLRP, afterLRP)
-							Expect(routingEvents).To(HaveLen(0))
-							Expect(routingTable.RouteCount()).Should(Equal(currentRoutesCount + 1))
+							currentRoutesCount := routingTable.TCPRouteCount()
+							routingEvents, _ := routingTable.SetRoutes(beforeLRPSchedulingInfo, afterLRP)
+							Expect(routingEvents.Registrations).To(HaveLen(0))
+							Expect(routingEvents.Unregistrations).To(HaveLen(0))
+							Expect(routingTable.TCPRouteCount()).Should(Equal(currentRoutesCount + 1))
 						})
 
 						Context("with older modification tag", func() {
 							It("emits nothing but add the routing table entry", func() {
-								beforeLRP := getDesiredLRP("process-guid-1", "log-guid-1", oldTcpRoutes, modificationTag)
 								afterLRP := getDesiredLRP("process-guid-1", "log-guid-1", newTcpRoutes, modificationTag)
-								currentRoutesCount := routingTable.RouteCount()
-								routingEvents := routingTable.UpdateRoutes(beforeLRP, afterLRP)
-								Expect(routingEvents).To(HaveLen(0))
-								Expect(routingTable.RouteCount()).Should(Equal(currentRoutesCount + 1))
+								currentRoutesCount := routingTable.TCPRouteCount()
+								routingEvents, _ := routingTable.SetRoutes(beforeLRPSchedulingInfo, afterLRP)
+								Expect(routingEvents.Registrations).To(HaveLen(0))
+								Expect(routingEvents.Unregistrations).To(HaveLen(0))
+								Expect(routingTable.TCPRouteCount()).Should(Equal(currentRoutesCount + 1))
 							})
 						})
 					})
 
 					Context("existing backends for new container port", func() {
-						var (
-							newKey       endpoint.RoutingKey
-							newEndpoints map[endpoint.EndpointKey]endpoint.Endpoint
-						)
 						BeforeEach(func() {
-							newKey = endpoint.NewRoutingKey("process-guid-1", 5223)
-							newEndpoints = map[endpoint.EndpointKey]endpoint.Endpoint{
-								endpoint.NewEndpointKey("instance-guid-1", false): endpoint.NewEndpoint(
-									"instance-guid-1", false, "some-ip-1", "container-ip-1", 62006, 5223, modificationTag),
-							}
-							routingTable = routingtable.NewTCPTable(logger, map[endpoint.RoutingKey]endpoint.RoutableEndpoints{
-								key:    endpoint.NewRoutableEndpoints(externalEndpoints, endpoints, logGuid, modificationTag),
-								newKey: endpoint.NewRoutableEndpoints(endpoint.ExternalEndpointInfos{}, newEndpoints, logGuid, modificationTag),
-							})
+							routingTable.AddEndpoint(getActualLRP("process-guid-1", "instance-guid-2", "some-ip-1", "container-ip-1", 62006, 5223, false, modificationTag))
 						})
 
 						It("emits registration events for new container port", func() {
-							beforeLRP := getDesiredLRP("process-guid-1", "log-guid-1", oldTcpRoutes, modificationTag)
 							afterLRP := getDesiredLRP("process-guid-1", "log-guid-1", newTcpRoutes, newModificationTag)
-							currentRoutesCount := routingTable.RouteCount()
-							routingEvents := routingTable.UpdateRoutes(beforeLRP, afterLRP)
-							Expect(routingEvents).To(HaveLen(1))
+							currentRoutesCount := routingTable.TCPRouteCount()
+							routingEvents, _ := routingTable.SetRoutes(beforeLRPSchedulingInfo, afterLRP)
 
-							externalInfo := []endpoint.ExternalEndpointInfo{
-								endpoint.NewExternalEndpointInfo("router-group-guid", 61000),
-							}
-							routingEvent := routingEvents[0]
-							Expect(routingEvent.Key).Should(Equal(newKey))
-							Expect(routingEvent.EventType).Should(Equal(event.RouteRegistrationEvent))
-							registrationExpectedEntry := endpoint.NewRoutableEndpoints(
-								externalInfo, newEndpoints, logGuid, newModificationTag)
-							Expect(routingEvent.Entry).Should(Equal(registrationExpectedEntry))
-
-							Expect(routingTable.RouteCount()).Should(Equal(currentRoutesCount))
-						})
-
-						Context("with older modification tag", func() {
-							It("emits nothing", func() {
-								beforeLRP := getDesiredLRP("process-guid-1", "log-guid-1", oldTcpRoutes, modificationTag)
-								afterLRP := getDesiredLRP("process-guid-1", "log-guid-1", newTcpRoutes, modificationTag)
-								currentRoutesCount := routingTable.RouteCount()
-								routingEvents := routingTable.UpdateRoutes(beforeLRP, afterLRP)
-								Expect(routingEvents).To(HaveLen(0))
-								Expect(routingTable.RouteCount()).Should(Equal(currentRoutesCount))
-							})
+							ttl := 0
+							Expect(routingEvents.Registrations).To(ConsistOf(tcpmodels.TcpRouteMapping{
+								TcpMappingEntity: tcpmodels.TcpMappingEntity{
+									RouterGroupGuid: "router-group-guid",
+									HostPort:        62006,
+									HostIP:          "some-ip-1",
+									ExternalPort:    61000,
+									TTL:             &ttl,
+								},
+							}))
+							Expect(routingTable.TCPRouteCount()).Should(Equal(currentRoutesCount))
 						})
 					})
 				})
 			})
 
 			Context("when existing container port is removed", func() {
-
 				Context("when there are no routes left", func() {
 					BeforeEach(func() {
 						newTcpRoutes = tcp_routes.TCPRoutes{}
 					})
-					It("emits only unregistration events", func() {
-						beforeLRP := getDesiredLRP("process-guid-1", "log-guid-1", oldTcpRoutes, modificationTag)
-						afterLRP := getDesiredLRP("process-guid-1", "log-guid-1", newTcpRoutes, newModificationTag)
-						currentRoutesCount := routingTable.RouteCount()
-						routingEvents := routingTable.UpdateRoutes(beforeLRP, afterLRP)
-						Expect(routingEvents).To(HaveLen(1))
 
-						routingEvent := routingEvents[0]
-						Expect(routingEvent.Key).Should(Equal(key))
-						Expect(routingEvent.EventType).Should(Equal(event.RouteUnregistrationEvent))
-						unregistrationExpectedEntry := endpoint.NewRoutableEndpoints(
-							externalEndpoints, endpoints, logGuid, modificationTag)
-						Expect(routingEvent.Entry).Should(Equal(unregistrationExpectedEntry))
-						Expect(routingTable.RouteCount()).Should(Equal(currentRoutesCount - 1))
+					It("emits only unregistration events", func() {
+						afterLRP := getDesiredLRP("process-guid-1", "log-guid-1", newTcpRoutes, newModificationTag)
+						routingEvents, _ := routingTable.SetRoutes(beforeLRPSchedulingInfo, afterLRP)
+						ttl := 0
+						Expect(routingEvents.Unregistrations).To(ConsistOf(tcpmodels.TcpRouteMapping{
+							TcpMappingEntity: tcpmodels.TcpMappingEntity{
+								RouterGroupGuid: "router-group-guid",
+								HostPort:        62004,
+								HostIP:          "some-ip-1",
+								ExternalPort:    61000,
+								TTL:             &ttl,
+							},
+						}))
+						Expect(routingTable.TCPRouteCount()).Should(Equal(0))
 					})
 
 					Context("with older modification tag", func() {
 						It("emits nothing", func() {
-							beforeLRP := getDesiredLRP("process-guid-1", "log-guid-1", oldTcpRoutes, modificationTag)
 							afterLRP := getDesiredLRP("process-guid-1", "log-guid-1", newTcpRoutes, modificationTag)
-							currentRoutesCount := routingTable.RouteCount()
-							routingEvents := routingTable.UpdateRoutes(beforeLRP, afterLRP)
-							Expect(routingEvents).To(HaveLen(0))
-							Expect(routingTable.RouteCount()).Should(Equal(currentRoutesCount))
+							routingEvents, _ := routingTable.SetRoutes(beforeLRPSchedulingInfo, afterLRP)
+							Expect(routingEvents.Registrations).To(HaveLen(0))
+							Expect(routingEvents.Unregistrations).To(HaveLen(0))
+							Expect(routingTable.TCPRouteCount()).Should(Equal(1))
 						})
 					})
 				})
@@ -910,147 +988,192 @@ var _ = Describe("TCPRoutingTable", func() {
 					})
 
 					Context("no backends for new container port", func() {
-						It("emits no routing events and adds to routing table entry", func() {
-							beforeLRP := getDesiredLRP("process-guid-1", "log-guid-1", oldTcpRoutes, modificationTag)
+						It("only emits unregistration events and adds to routing table entry", func() {
 							afterLRP := getDesiredLRP("process-guid-1", "log-guid-1", newTcpRoutes, newModificationTag)
-							currentRoutesCount := routingTable.RouteCount()
-							routingEvents := routingTable.UpdateRoutes(beforeLRP, afterLRP)
-							Expect(routingEvents).To(HaveLen(1))
-
-							routingEvent := routingEvents[0]
-							Expect(routingEvent.Key).Should(Equal(key))
-							Expect(routingEvent.EventType).Should(Equal(event.RouteUnregistrationEvent))
-							unregistrationExpectedEntry := endpoint.NewRoutableEndpoints(
-								externalEndpoints, endpoints, logGuid, modificationTag)
-							Expect(routingEvent.Entry).Should(Equal(unregistrationExpectedEntry))
-
-							Expect(routingTable.RouteCount()).Should(Equal(currentRoutesCount))
+							routingEvents, _ := routingTable.SetRoutes(beforeLRPSchedulingInfo, afterLRP)
+							ttl := 0
+							Expect(routingEvents.Unregistrations).To(ConsistOf(tcpmodels.TcpRouteMapping{
+								TcpMappingEntity: tcpmodels.TcpMappingEntity{
+									RouterGroupGuid: "router-group-guid",
+									HostPort:        62004,
+									HostIP:          "some-ip-1",
+									ExternalPort:    61000,
+									TTL:             &ttl,
+								},
+							}))
+							Expect(routingTable.TCPRouteCount()).Should(Equal(1))
 						})
 
 						Context("with older modification tag", func() {
 							It("emits nothing but add the routing table entry", func() {
-								beforeLRP := getDesiredLRP("process-guid-1", "log-guid-1", oldTcpRoutes, modificationTag)
 								afterLRP := getDesiredLRP("process-guid-1", "log-guid-1", newTcpRoutes, modificationTag)
-								currentRoutesCount := routingTable.RouteCount()
-								routingEvents := routingTable.UpdateRoutes(beforeLRP, afterLRP)
-								Expect(routingEvents).To(HaveLen(0))
-								Expect(routingTable.RouteCount()).Should(Equal(currentRoutesCount + 1))
+								Expect(routingTable.TCPRouteCount()).Should(Equal(1))
+								routingEvents, _ := routingTable.SetRoutes(beforeLRPSchedulingInfo, afterLRP)
+								Expect(routingEvents.Registrations).To(HaveLen(0))
+								Expect(routingEvents.Unregistrations).To(HaveLen(0))
+								Expect(routingTable.TCPRouteCount()).Should(Equal(2))
 							})
 						})
 					})
 
 					Context("existing backends for new container port", func() {
-						var (
-							newKey       endpoint.RoutingKey
-							newEndpoints map[endpoint.EndpointKey]endpoint.Endpoint
-						)
 						BeforeEach(func() {
-							newKey = endpoint.NewRoutingKey("process-guid-1", 5223)
-							newEndpoints = map[endpoint.EndpointKey]endpoint.Endpoint{
-								endpoint.NewEndpointKey("instance-guid-1", false): endpoint.NewEndpoint(
-									"instance-guid-1", false, "some-ip-1", "container-ip-1", 62006, 5223, modificationTag),
-							}
-							routingTable = routingtable.NewTCPTable(logger, map[endpoint.RoutingKey]endpoint.RoutableEndpoints{
-								key:    endpoint.NewRoutableEndpoints(externalEndpoints, endpoints, logGuid, modificationTag),
-								newKey: endpoint.NewRoutableEndpoints(endpoint.ExternalEndpointInfos{}, newEndpoints, logGuid, modificationTag),
-							})
+							routingTable = routingtable.NewRoutingTable(logger, false)
+							routingTable.SetRoutes(nil, beforeLRPSchedulingInfo)
+							routingTable.AddEndpoint(getActualLRP("process-guid-1", "instance-guid-1", "some-ip-1", "container-ip-1", 62004, 5222, false, modificationTag))
+							routingTable.AddEndpoint(getActualLRP("process-guid-1", "instance-guid-1", "some-ip-1", "container-ip-1", 62006, 5223, false, modificationTag))
+							Expect(routingTable.TCPRouteCount()).Should(Equal(2))
 						})
 
 						It("emits registration events for new container port", func() {
-							beforeLRP := getDesiredLRP("process-guid-1", "log-guid-1", oldTcpRoutes, modificationTag)
 							afterLRP := getDesiredLRP("process-guid-1", "log-guid-1", newTcpRoutes, newModificationTag)
-							currentRoutesCount := routingTable.RouteCount()
-							routingEvents := routingTable.UpdateRoutes(beforeLRP, afterLRP)
-							Expect(routingEvents).To(HaveLen(2))
+							// currentRoutesCount := routingTable.RouteCount()
+							routingEvents, _ := routingTable.SetRoutes(beforeLRPSchedulingInfo, afterLRP)
+							Expect(routingEvents.Registrations).To(HaveLen(1))
+							Expect(routingEvents.Unregistrations).To(HaveLen(1))
 
-							externalInfo := []endpoint.ExternalEndpointInfo{
-								endpoint.NewExternalEndpointInfo("router-group-guid", 61000),
-							}
-							routingEvent := routingEvents[0]
-							Expect(routingEvent.Key).Should(Equal(newKey))
-							Expect(routingEvent.EventType).Should(Equal(event.RouteRegistrationEvent))
-							registrationExpectedEntry := endpoint.NewRoutableEndpoints(
-								externalInfo, newEndpoints, logGuid, newModificationTag)
-							Expect(routingEvent.Entry).Should(Equal(registrationExpectedEntry))
+							ttl := 0
+							Expect(routingEvents.Registrations).To(ConsistOf(tcpmodels.TcpRouteMapping{
+								TcpMappingEntity: tcpmodels.TcpMappingEntity{
+									RouterGroupGuid: "router-group-guid",
+									HostPort:        62006,
+									HostIP:          "some-ip-1",
+									ExternalPort:    61000,
+									TTL:             &ttl,
+								},
+							}))
 
-							routingEvent = routingEvents[1]
-							Expect(routingEvent.Key).Should(Equal(key))
-							Expect(routingEvent.EventType).Should(Equal(event.RouteUnregistrationEvent))
-							unregistrationExpectedEntry := endpoint.NewRoutableEndpoints(
-								externalInfo, endpoints, logGuid, modificationTag)
-							Expect(routingEvent.Entry).Should(Equal(unregistrationExpectedEntry))
-
-							Expect(routingTable.RouteCount()).Should(Equal(currentRoutesCount - 1))
-						})
-
-						Context("with older modification tag", func() {
-							It("emits nothing", func() {
-								beforeLRP := getDesiredLRP("process-guid-1", "log-guid-1", oldTcpRoutes, modificationTag)
-								afterLRP := getDesiredLRP("process-guid-1", "log-guid-1", newTcpRoutes, modificationTag)
-								currentRoutesCount := routingTable.RouteCount()
-								routingEvents := routingTable.UpdateRoutes(beforeLRP, afterLRP)
-								Expect(routingEvents).To(HaveLen(0))
-								Expect(routingTable.RouteCount()).Should(Equal(currentRoutesCount))
-							})
+							Expect(routingEvents.Unregistrations).To(ConsistOf(tcpmodels.TcpRouteMapping{
+								TcpMappingEntity: tcpmodels.TcpMappingEntity{
+									RouterGroupGuid: "router-group-guid",
+									HostPort:        62004,
+									HostIP:          "some-ip-1",
+									ExternalPort:    61000,
+									TTL:             &ttl,
+								},
+							}))
+							Expect(routingTable.TCPRouteCount()).Should(Equal(1))
 						})
 					})
+				})
+			})
+
+			Context("when an existing route is removed", func() {
+				BeforeEach(func() {
+					newTcpRoutes = tcp_routes.TCPRoutes{
+						tcp_routes.TCPRoute{
+							RouterGroupGuid: "router-group-guid",
+							ExternalPort:    61000,
+							ContainerPort:   5222,
+						},
+						tcp_routes.TCPRoute{
+							RouterGroupGuid: "router-group-guid",
+							ExternalPort:    62000,
+							ContainerPort:   5222,
+						},
+					}
+					routingTable = routingtable.NewRoutingTable(logger, false)
+					beforeLRPSchedulingInfo = getDesiredLRP("process-guid-1", "log-guid-1", newTcpRoutes, modificationTag)
+					routingTable.SetRoutes(nil, beforeLRPSchedulingInfo)
+					routingTable.AddEndpoint(getActualLRP("process-guid-1", "instance-guid-1", "some-ip-1", "container-ip-1", 62004, 5222, false, modificationTag))
+				})
+
+				It("emits an unregistration event and keeps the other route", func() {
+					afterLRP := getDesiredLRP("process-guid-1", "log-guid-1", tcpRoutes, newModificationTag)
+					// currentRoutesCount := routingTable.RouteCount()
+					routingEvents, _ := routingTable.SetRoutes(beforeLRPSchedulingInfo, afterLRP)
+					Expect(routingEvents.Unregistrations).To(HaveLen(1))
+
+					ttl := 0
+					Expect(routingEvents.Unregistrations).To(ConsistOf(
+						tcpmodels.TcpRouteMapping{
+							TcpMappingEntity: tcpmodels.TcpMappingEntity{
+								RouterGroupGuid: "router-group-guid",
+								HostPort:        62004,
+								HostIP:          "some-ip-1",
+								ExternalPort:    62000,
+								TTL:             &ttl,
+							},
+						},
+					))
+					Expect(routingTable.TCPRouteCount()).Should(Equal(1))
 				})
 			})
 		})
 
 		Describe("RemoveRoutes", func() {
 			Context("when entry does not have endpoints", func() {
+				var (
+					desiredLRP *models.DesiredLRPSchedulingInfo
+				)
+
 				BeforeEach(func() {
-					emptyEndpoints := make(map[endpoint.EndpointKey]endpoint.Endpoint)
-					routingTable = routingtable.NewTCPTable(logger, map[endpoint.RoutingKey]endpoint.RoutableEndpoints{
-						key: endpoint.NewRoutableEndpoints(externalEndpoints, emptyEndpoints, logGuid, modificationTag),
-					})
-					Expect(routingTable.RouteCount()).Should(Equal(1))
+					routingTable = routingtable.NewRoutingTable(logger, false)
+					desiredLRP = getDesiredLRP("process-guid-1", "log-guid-1", tcpRoutes, modificationTag)
+					routingTable.SetRoutes(nil, desiredLRP)
+					Expect(routingTable.TCPRouteCount()).Should(Equal(1))
 				})
 
 				It("emits nothing", func() {
 					modificationTag = &models.ModificationTag{Epoch: "abc", Index: 2}
 					desiredLRP := getDesiredLRP("process-guid-1", "log-guid-1", tcpRoutes, modificationTag)
-					routingEvents := routingTable.RemoveRoutes(desiredLRP)
-					Expect(routingEvents).To(HaveLen(0))
+					routingEvents, _ := routingTable.RemoveRoutes(desiredLRP)
+					Expect(routingEvents.Registrations).To(HaveLen(0))
+					Expect(routingEvents.Unregistrations).To(HaveLen(0))
 				})
 			})
 
 			Context("when entry does have endpoints", func() {
 				BeforeEach(func() {
-					routingTable = routingtable.NewTCPTable(logger, map[endpoint.RoutingKey]endpoint.RoutableEndpoints{
-						key: endpoint.NewRoutableEndpoints(externalEndpoints, endpoints, logGuid, modificationTag),
-					})
-					Expect(routingTable.RouteCount()).Should(Equal(1))
+					tcpRoutes = tcp_routes.TCPRoutes{
+						tcp_routes.TCPRoute{
+							RouterGroupGuid: "router-group-guid",
+							ExternalPort:    61000,
+							ContainerPort:   5222,
+						},
+					}
+					routingTable = routingtable.NewRoutingTable(logger, false)
+					modificationTag := &models.ModificationTag{Epoch: "abc", Index: 1}
+					desiredLRP := getDesiredLRP("process-guid-1", "log-guid-1", tcpRoutes, modificationTag)
+					routingTable.SetRoutes(nil, desiredLRP)
+					routingTable.AddEndpoint(getActualLRP("process-guid-1", "instance-guid-1", "some-ip-1", "container-ip-1", 61000, 5222, false, modificationTag))
+					Expect(routingTable.TCPRouteCount()).Should(Equal(1))
 				})
 
 				It("emits unregistration routing events", func() {
 					newModificationTag := &models.ModificationTag{Epoch: "abc", Index: 2}
 					desiredLRP := getDesiredLRP("process-guid-1", "log-guid-1", tcpRoutes, newModificationTag)
-					routingEvents := routingTable.RemoveRoutes(desiredLRP)
-					Expect(routingEvents).To(HaveLen(1))
-					routingEvent := routingEvents[0]
-					Expect(routingEvent.Key).Should(Equal(key))
-					Expect(routingEvent.EventType).Should(Equal(event.RouteUnregistrationEvent))
-					expectedEntry := endpoint.NewRoutableEndpoints(
-						externalEndpoints, endpoints, logGuid, modificationTag)
-					Expect(routingEvent.Entry).Should(Equal(expectedEntry))
-					Expect(routingTable.RouteCount()).Should(Equal(0))
+					routingEvents, _ := routingTable.RemoveRoutes(desiredLRP)
+					Expect(routingEvents.Unregistrations).To(HaveLen(1))
+					ttl := 0
+					Expect(routingEvents.Unregistrations).To(ConsistOf(tcpmodels.TcpRouteMapping{
+						TcpMappingEntity: tcpmodels.TcpMappingEntity{
+							RouterGroupGuid: "router-group-guid",
+							HostPort:        61000,
+							HostIP:          "some-ip-1",
+							ExternalPort:    61000,
+							TTL:             &ttl,
+						},
+					}))
+					Expect(routingTable.TCPRouteCount()).Should(Equal(0))
 				})
 
 				Context("when there are no external endpoints", func() {
 					BeforeEach(func() {
-						routingTable = routingtable.NewTCPTable(logger, map[endpoint.RoutingKey]endpoint.RoutableEndpoints{
-							key: endpoint.NewRoutableEndpoints(endpoint.ExternalEndpointInfos{}, endpoints, logGuid, modificationTag),
-						})
-						Expect(routingTable.RouteCount()).Should(Equal(1))
+						routingTable = routingtable.NewRoutingTable(logger, false)
+						modificationTag := &models.ModificationTag{Epoch: "abc", Index: 1}
+						desiredLRP := getDesiredLRP("process-guid-1", "log-guid-1", tcpRoutes, modificationTag)
+						routingTable.SetRoutes(nil, desiredLRP)
+						routingTable.AddEndpoint(getActualLRP("process-guid-1", "instance-guid-1", "some-ip-1", "container-ip-1", 61000, 5222, false, modificationTag))
+						Expect(routingTable.TCPRouteCount()).Should(Equal(1))
 					})
 
 					It("does not emit any routing events", func() {
 						newModificationTag := &models.ModificationTag{Epoch: "abc", Index: 2}
 						desiredLRP := getDesiredLRP("process-guid-1", "log-guid-1", tcp_routes.TCPRoutes{}, newModificationTag)
-						routingEvents := routingTable.RemoveRoutes(desiredLRP)
-						Expect(routingEvents).To(HaveLen(0))
+						routingEvents, _ := routingTable.RemoveRoutes(desiredLRP)
+						Expect(routingEvents.Registrations).To(HaveLen(0))
+						Expect(routingEvents.Unregistrations).To(HaveLen(0))
 					})
 				})
 			})
@@ -1059,63 +1182,57 @@ var _ = Describe("TCPRoutingTable", func() {
 		Describe("AddEndpoint", func() {
 			Context("with no existing endpoints", func() {
 				BeforeEach(func() {
-					routingTable = routingtable.NewTCPTable(logger, map[endpoint.RoutingKey]endpoint.RoutableEndpoints{
-						key: endpoint.NewRoutableEndpoints(externalEndpoints, nil, logGuid, modificationTag),
-					})
-					Expect(routingTable.RouteCount()).Should(Equal(1))
+					routingTable = routingtable.NewRoutingTable(logger, false)
+					beforeLRPSchedulingInfo := getDesiredLRP("process-guid-1", "log-guid-1", tcpRoutes, modificationTag)
+					routingTable.SetRoutes(nil, beforeLRPSchedulingInfo)
+					Expect(routingTable.TCPRouteCount()).Should(Equal(1))
 				})
 
 				It("emits routing events", func() {
 					newTag := &models.ModificationTag{Epoch: "abc", Index: 1}
 					actualLRP := getActualLRP("process-guid-1", "instance-guid-1", "some-ip-1", "container-ip-1", 61104, 5222, false, newTag)
-					routingEvents := routingTable.AddEndpoint(actualLRP)
-					Expect(routingEvents).To(HaveLen(1))
-					routingEvent := routingEvents[0]
-					Expect(routingEvent.Key).Should(Equal(key))
-					Expect(routingEvent.EventType).Should(Equal(event.RouteRegistrationEvent))
+					routingEvents, _ := routingTable.AddEndpoint(actualLRP)
 
-					expectedEndpoints := map[endpoint.EndpointKey]endpoint.Endpoint{
-						endpoint.NewEndpointKey("instance-guid-1", false): endpoint.NewEndpoint(
-							"instance-guid-1", false, "some-ip-1", "container-ip-1", 61104, 5222, newTag),
-					}
-
-					expectedEntry := endpoint.NewRoutableEndpoints(
-						externalEndpoints, expectedEndpoints, logGuid, modificationTag)
-					Expect(routingEvent.Entry).Should(Equal(expectedEntry))
-					Expect(routingTable.RouteCount()).Should(Equal(1))
+					ttl := 0
+					Expect(routingEvents.Registrations).To(ConsistOf(tcpmodels.TcpRouteMapping{
+						TcpMappingEntity: tcpmodels.TcpMappingEntity{
+							RouterGroupGuid: "router-group-guid",
+							HostPort:        61104,
+							HostIP:          "some-ip-1",
+							ExternalPort:    61000,
+							TTL:             &ttl,
+						},
+					}))
+					Expect(routingTable.TCPRouteCount()).Should(Equal(1))
 				})
 			})
 
 			Context("with existing endpoints", func() {
 				BeforeEach(func() {
-					routingTable = routingtable.NewTCPTable(logger, map[endpoint.RoutingKey]endpoint.RoutableEndpoints{
-						key: endpoint.NewRoutableEndpoints(externalEndpoints, endpoints, logGuid, modificationTag),
-					})
-					Expect(routingTable.RouteCount()).Should(Equal(1))
+					routingTable = routingtable.NewRoutingTable(logger, false)
+					beforeLRPSchedulingInfo := getDesiredLRP("process-guid-1", "log-guid-1", tcpRoutes, modificationTag)
+					routingTable.SetRoutes(nil, beforeLRPSchedulingInfo)
+					routingTable.AddEndpoint(getActualLRP("process-guid-1", "instance-guid-1", "some-ip-1", "container-ip-1", 62004, 5222, false, modificationTag))
+					routingTable.AddEndpoint(getActualLRP("process-guid-1", "instance-guid-2", "some-ip-2", "container-ip-2", 62004, 5222, false, modificationTag))
+					Expect(routingTable.TCPRouteCount()).Should(Equal(1))
 				})
 
 				Context("with different instance guid", func() {
 					It("emits routing events", func() {
 						newTag := &models.ModificationTag{Epoch: "abc", Index: 2}
 						actualLRP := getActualLRP("process-guid-1", "instance-guid-3", "some-ip-3", "container-ip-3", 61104, 5222, false, newTag)
-						routingEvents := routingTable.AddEndpoint(actualLRP)
-						Expect(routingEvents).To(HaveLen(1))
-						routingEvent := routingEvents[0]
-						Expect(routingEvent.Key).Should(Equal(key))
-						Expect(routingEvent.EventType).Should(Equal(event.RouteRegistrationEvent))
-
-						expectedEndpoints := map[endpoint.EndpointKey]endpoint.Endpoint{}
-						for k, v := range endpoints {
-							expectedEndpoints[k] = v
-						}
-						expectedEndpoints[endpoint.NewEndpointKey("instance-guid-3", false)] =
-							endpoint.NewEndpoint(
-								"instance-guid-3", false, "some-ip-3", "container-ip-3", 61104, 5222, newTag)
-						expectedEntry := endpoint.NewRoutableEndpoints(
-							externalEndpoints, expectedEndpoints, logGuid, modificationTag)
-						Expect(routingEvent.Entry.Endpoints).Should(HaveLen(3))
-						Expect(routingEvent.Entry).Should(Equal(expectedEntry))
-						Expect(routingTable.RouteCount()).Should(Equal(1))
+						routingEvents, _ := routingTable.AddEndpoint(actualLRP)
+						ttl := 0
+						Expect(routingEvents.Registrations).To(ConsistOf(tcpmodels.TcpRouteMapping{
+							TcpMappingEntity: tcpmodels.TcpMappingEntity{
+								RouterGroupGuid: "router-group-guid",
+								HostPort:        61104,
+								HostIP:          "some-ip-3",
+								ExternalPort:    61000,
+								TTL:             &ttl,
+							},
+						}))
+						Expect(routingTable.TCPRouteCount()).Should(Equal(1))
 					})
 				})
 
@@ -1124,23 +1241,18 @@ var _ = Describe("TCPRoutingTable", func() {
 						It("emits routing events", func() {
 							newTag := &models.ModificationTag{Epoch: "abc", Index: 2}
 							actualLRP := getActualLRP("process-guid-1", "instance-guid-1", "some-ip-1", "container-ip-1", 61105, 5222, false, newTag)
-							routingEvents := routingTable.AddEndpoint(actualLRP)
-							Expect(routingEvents).To(HaveLen(1))
-							routingEvent := routingEvents[0]
-							Expect(routingEvent.Key).Should(Equal(key))
-							Expect(routingEvent.EventType).Should(Equal(event.RouteRegistrationEvent))
-
-							expectedEndpoints := map[endpoint.EndpointKey]endpoint.Endpoint{
-								endpoint.NewEndpointKey("instance-guid-1", false): endpoint.NewEndpoint(
-									"instance-guid-1", false, "some-ip-1", "container-ip-1", 61105, 5222, newTag),
-								endpoint.NewEndpointKey("instance-guid-2", false): endpoint.NewEndpoint(
-									"instance-guid-2", false, "some-ip-2", "container-ip-2", 62004, 5222, modificationTag),
-							}
-							expectedEntry := endpoint.NewRoutableEndpoints(
-								externalEndpoints, expectedEndpoints, logGuid, modificationTag)
-							Expect(routingEvent.Entry.Endpoints).Should(HaveLen(2))
-							Expect(routingEvent.Entry).Should(Equal(expectedEntry))
-							Expect(routingTable.RouteCount()).Should(Equal(1))
+							routingEvents, _ := routingTable.AddEndpoint(actualLRP)
+							ttl := 0
+							Expect(routingEvents.Registrations).To(ConsistOf(tcpmodels.TcpRouteMapping{
+								TcpMappingEntity: tcpmodels.TcpMappingEntity{
+									RouterGroupGuid: "router-group-guid",
+									HostPort:        61105,
+									HostIP:          "some-ip-1",
+									ExternalPort:    61000,
+									TTL:             &ttl,
+								},
+							}))
+							Expect(routingTable.TCPRouteCount()).Should(Equal(1))
 						})
 					})
 
@@ -1148,8 +1260,9 @@ var _ = Describe("TCPRoutingTable", func() {
 						It("emits nothing", func() {
 							olderTag := &models.ModificationTag{Epoch: "abc", Index: 0}
 							actualLRP := getActualLRP("process-guid-1", "instance-guid-1", "some-ip-1", "container-ip-1", 61105, 5222, false, olderTag)
-							routingEvents := routingTable.AddEndpoint(actualLRP)
-							Expect(routingEvents).To(HaveLen(0))
+							routingEvents, _ := routingTable.AddEndpoint(actualLRP)
+							Expect(routingEvents.Registrations).To(HaveLen(0))
+							Expect(routingEvents.Unregistrations).To(HaveLen(0))
 						})
 					})
 				})
@@ -1159,34 +1272,37 @@ var _ = Describe("TCPRoutingTable", func() {
 		Describe("RemoveEndpoint", func() {
 			Context("with no existing endpoints", func() {
 				BeforeEach(func() {
-					routingTable = routingtable.NewTCPTable(logger, map[endpoint.RoutingKey]endpoint.RoutableEndpoints{
-						key: endpoint.NewRoutableEndpoints(externalEndpoints, nil, logGuid, modificationTag),
-					})
-					Expect(routingTable.RouteCount()).Should(Equal(1))
+					routingTable = routingtable.NewRoutingTable(logger, false)
+					beforeLRPSchedulingInfo := getDesiredLRP("process-guid-1", "log-guid-1", tcpRoutes, modificationTag)
+					routingTable.SetRoutes(nil, beforeLRPSchedulingInfo)
+					Expect(routingTable.TCPRouteCount()).Should(Equal(1))
 				})
 
 				It("emits nothing", func() {
 					newTag := &models.ModificationTag{Epoch: "abc", Index: 1}
 					actualLRP := getActualLRP("process-guid-1", "instance-guid-1", "some-ip-1", "container-ip-1", 61104, 5222, false, newTag)
-					routingEvents := routingTable.RemoveEndpoint(actualLRP)
-					Expect(routingEvents).To(HaveLen(0))
+					routingEvents, _ := routingTable.RemoveEndpoint(actualLRP)
+					Expect(routingEvents.Registrations).To(HaveLen(0))
+					Expect(routingEvents.Unregistrations).To(HaveLen(0))
 				})
 			})
 
 			Context("with existing endpoints", func() {
 				BeforeEach(func() {
-					routingTable = routingtable.NewTCPTable(logger, map[endpoint.RoutingKey]endpoint.RoutableEndpoints{
-						key: endpoint.NewRoutableEndpoints(externalEndpoints, endpoints, logGuid, modificationTag),
-					})
-					Expect(routingTable.RouteCount()).Should(Equal(1))
+					routingTable = routingtable.NewRoutingTable(logger, false)
+					beforeLRPSchedulingInfo := getDesiredLRP("process-guid-1", "log-guid-1", tcpRoutes, modificationTag)
+					routingTable.SetRoutes(nil, beforeLRPSchedulingInfo)
+					routingTable.AddEndpoint(getActualLRP("process-guid-1", "instance-guid-1", "some-ip-1", "container-ip-1", 62004, 5222, false, modificationTag))
+					Expect(routingTable.TCPRouteCount()).Should(Equal(1))
 				})
 
 				Context("with instance guid not present in existing endpoints", func() {
 					It("emits nothing", func() {
 						newTag := &models.ModificationTag{Epoch: "abc", Index: 2}
 						actualLRP := getActualLRP("process-guid-1", "instance-guid-3", "some-ip-3", "container-ip-3", 62004, 5222, false, newTag)
-						routingEvents := routingTable.RemoveEndpoint(actualLRP)
-						Expect(routingEvents).To(HaveLen(0))
+						routingEvents, _ := routingTable.RemoveEndpoint(actualLRP)
+						Expect(routingEvents.Registrations).To(HaveLen(0))
+						Expect(routingEvents.Unregistrations).To(HaveLen(0))
 					})
 				})
 
@@ -1195,42 +1311,37 @@ var _ = Describe("TCPRoutingTable", func() {
 						It("emits routing events", func() {
 							newTag := &models.ModificationTag{Epoch: "abc", Index: 2}
 							actualLRP := getActualLRP("process-guid-1", "instance-guid-1", "some-ip-1", "container-ip-1", 62004, 5222, false, newTag)
-							routingEvents := routingTable.RemoveEndpoint(actualLRP)
-							Expect(routingEvents).To(HaveLen(1))
-							routingEvent := routingEvents[0]
-							Expect(routingEvent.Key).Should(Equal(key))
-							Expect(routingEvent.EventType).Should(Equal(event.RouteUnregistrationEvent))
+							routingEvents, _ := routingTable.RemoveEndpoint(actualLRP)
+							ttl := 0
+							Expect(routingEvents.Unregistrations).To(ConsistOf(tcpmodels.TcpRouteMapping{
+								TcpMappingEntity: tcpmodels.TcpMappingEntity{
+									RouterGroupGuid: "router-group-guid",
+									HostPort:        62004,
+									HostIP:          "some-ip-1",
+									ExternalPort:    61000,
+									TTL:             &ttl,
+								},
+							}))
 
-							expectedEndpoints := map[endpoint.EndpointKey]endpoint.Endpoint{
-								endpoint.NewEndpointKey("instance-guid-1", false): endpoint.NewEndpoint(
-									"instance-guid-1", false, "some-ip-1", "container-ip-1", 62004, 5222, modificationTag),
-							}
-							expectedEntry := endpoint.NewRoutableEndpoints(
-								externalEndpoints, expectedEndpoints, logGuid, modificationTag)
-							Expect(routingEvent.Entry.Endpoints).Should(HaveLen(1))
-							Expect(routingEvent.Entry).Should(Equal(expectedEntry))
-							Expect(routingTable.RouteCount()).Should(Equal(1))
+							Expect(routingTable.TCPRouteCount()).Should(Equal(1))
 						})
 					})
 
 					Context("same modification tag", func() {
 						It("emits routing events", func() {
 							actualLRP := getActualLRP("process-guid-1", "instance-guid-1", "some-ip-1", "container-ip-1", 62004, 5222, false, modificationTag)
-							routingEvents := routingTable.RemoveEndpoint(actualLRP)
-							Expect(routingEvents).To(HaveLen(1))
-							routingEvent := routingEvents[0]
-							Expect(routingEvent.Key).Should(Equal(key))
-							Expect(routingEvent.EventType).Should(Equal(event.RouteUnregistrationEvent))
-
-							expectedEndpoints := map[endpoint.EndpointKey]endpoint.Endpoint{
-								endpoint.NewEndpointKey("instance-guid-1", false): endpoint.NewEndpoint(
-									"instance-guid-1", false, "some-ip-1", "container-ip-1", 62004, 5222, modificationTag),
-							}
-							expectedEntry := endpoint.NewRoutableEndpoints(
-								externalEndpoints, expectedEndpoints, logGuid, modificationTag)
-							Expect(routingEvent.Entry.Endpoints).Should(HaveLen(1))
-							Expect(routingEvent.Entry).Should(Equal(expectedEntry))
-							Expect(routingTable.RouteCount()).Should(Equal(1))
+							routingEvents, _ := routingTable.RemoveEndpoint(actualLRP)
+							ttl := 0
+							Expect(routingEvents.Unregistrations).To(ConsistOf(tcpmodels.TcpRouteMapping{
+								TcpMappingEntity: tcpmodels.TcpMappingEntity{
+									RouterGroupGuid: "router-group-guid",
+									HostPort:        62004,
+									HostIP:          "some-ip-1",
+									ExternalPort:    61000,
+									TTL:             &ttl,
+								},
+							}))
+							Expect(routingTable.TCPRouteCount()).Should(Equal(1))
 						})
 					})
 
@@ -1238,47 +1349,43 @@ var _ = Describe("TCPRoutingTable", func() {
 						It("emits nothing", func() {
 							olderTag := &models.ModificationTag{Epoch: "abc", Index: 0}
 							actualLRP := getActualLRP("process-guid-1", "instance-guid-1", "some-ip-1", "container-ip-1", 62004, 5222, false, olderTag)
-							routingEvents := routingTable.RemoveEndpoint(actualLRP)
-							Expect(routingEvents).To(HaveLen(0))
+							routingEvents, _ := routingTable.RemoveEndpoint(actualLRP)
+							Expect(routingEvents.Registrations).To(HaveLen(0))
+							Expect(routingEvents.Unregistrations).To(HaveLen(0))
 						})
 					})
 				})
-
 			})
 		})
 
 		Describe("GetRoutingEvents", func() {
 			BeforeEach(func() {
-				routingTable = routingtable.NewTCPTable(logger, map[endpoint.RoutingKey]endpoint.RoutableEndpoints{
-					key: endpoint.NewRoutableEndpoints(externalEndpoints, endpoints, logGuid, modificationTag),
-				})
-				Expect(routingTable.RouteCount()).Should(Equal(1))
+				routingTable = routingtable.NewRoutingTable(logger, false)
+				beforeLRPSchedulingInfo := getDesiredLRP("process-guid-1", "log-guid-1", tcpRoutes, modificationTag)
+				routingTable.SetRoutes(nil, beforeLRPSchedulingInfo)
+				routingTable.AddEndpoint(getActualLRP("process-guid-1", "instance-guid-1", "some-ip-1", "container-ip-1", 62004, 5222, false, modificationTag))
+				Expect(routingTable.TCPRouteCount()).Should(Equal(1))
 			})
 
 			It("returns routing events for entries in routing table", func() {
-				routingEvents := routingTable.GetRoutingEvents()
-				Expect(routingEvents).To(HaveLen(1))
-				routingEvent := routingEvents[0]
-				Expect(routingEvent.Key).Should(Equal(key))
-				Expect(routingEvent.EventType).Should(Equal(event.RouteRegistrationEvent))
-				externalInfo := []endpoint.ExternalEndpointInfo{
-					endpoint.NewExternalEndpointInfo("router-group-guid", 61000),
-				}
-				expectedEntry := endpoint.NewRoutableEndpoints(
-					externalInfo, endpoints, logGuid, modificationTag)
-				Expect(routingEvent.Entry).Should(Equal(expectedEntry))
-				Expect(routingTable.RouteCount()).Should(Equal(1))
+				routingEvents, _ := routingTable.GetRoutingEvents()
+				ttl := 0
+				Expect(routingEvents.Registrations).To(ConsistOf(tcpmodels.TcpRouteMapping{
+					TcpMappingEntity: tcpmodels.TcpMappingEntity{
+						RouterGroupGuid: "router-group-guid",
+						HostPort:        62004,
+						HostIP:          "some-ip-1",
+						ExternalPort:    61000,
+						TTL:             &ttl,
+					},
+				}))
+				Expect(routingTable.TCPRouteCount()).Should(Equal(1))
 			})
 		})
 
 		Describe("Swap", func() {
 			var (
-				tempRoutingTable   routingtable.TCPRoutingTable
-				key                endpoint.RoutingKey
-				existingKey        endpoint.RoutingKey
-				endpoints          map[endpoint.EndpointKey]endpoint.Endpoint
-				existingEndpoints  map[endpoint.EndpointKey]endpoint.Endpoint
-				modificationTag    *models.ModificationTag
+				tempRoutingTable   routingtable.RoutingTable
 				newModificationTag *models.ModificationTag
 				logGuid            string
 				existingLogGuid    string
@@ -1286,115 +1393,181 @@ var _ = Describe("TCPRoutingTable", func() {
 
 			BeforeEach(func() {
 				existingLogGuid = "log-guid-1"
-				existingExternalEndpoint := endpoint.ExternalEndpointInfos{
-					endpoint.NewExternalEndpointInfo("router-group-guid", 61000),
-				}
-				existingKey = endpoint.NewRoutingKey("process-guid-1", 5222)
-				modificationTag = &models.ModificationTag{Epoch: "abc", Index: 1}
-				existingEndpoints = map[endpoint.EndpointKey]endpoint.Endpoint{
-					endpoint.NewEndpointKey("instance-guid-1", false): endpoint.NewEndpoint(
-						"instance-guid-1", false, "some-ip-1", "container-ip-1", 62004, 5222, modificationTag),
-					endpoint.NewEndpointKey("instance-guid-2", false): endpoint.NewEndpoint(
-						"instance-guid-2", false, "some-ip-2", "container-ip-2", 62004, 5222, modificationTag),
-				}
-				routingTable = routingtable.NewTCPTable(logger, map[endpoint.RoutingKey]endpoint.RoutableEndpoints{
-					existingKey: endpoint.NewRoutableEndpoints(existingExternalEndpoint, existingEndpoints, existingLogGuid, modificationTag),
-				})
-				Expect(routingTable.RouteCount()).Should(Equal(1))
+				newModificationTag = &models.ModificationTag{Epoch: "abc", Index: 2}
+				routingTable = routingtable.NewRoutingTable(logger, false)
+				beforeLRPSchedulingInfo := getDesiredLRP("process-guid-1", existingLogGuid, tcpRoutes, modificationTag)
+				routingTable.SetRoutes(nil, beforeLRPSchedulingInfo)
+				routingTable.AddEndpoint(getActualLRP("process-guid-1", "instance-guid-1", "some-ip-1", "container-ip-1", 62004, 5222, false, modificationTag))
+				routingTable.AddEndpoint(getActualLRP("process-guid-1", "instance-guid-2", "some-ip-2", "container-ip-2", 62004, 5222, false, modificationTag))
+				Expect(routingTable.TCPRouteCount()).Should(Equal(1))
 			})
 
 			Context("when adding a new routing key (process-guid, container-port)", func() {
 
 				BeforeEach(func() {
 					logGuid = "log-guid-2"
-					externalEndpoints := endpoint.ExternalEndpointInfos{
-						endpoint.NewExternalEndpointInfo("router-group-guid", 62000),
-					}
-					key = endpoint.NewRoutingKey("process-guid-2", 6379)
-					newModificationTag = &models.ModificationTag{Epoch: "abc", Index: 2}
-					endpoints = map[endpoint.EndpointKey]endpoint.Endpoint{
-						endpoint.NewEndpointKey("instance-guid-1", false): endpoint.NewEndpoint(
-							"instance-guid-1", false, "some-ip-3", "container-ip-3", 63004, 6379, newModificationTag),
-						endpoint.NewEndpointKey("instance-guid-2", false): endpoint.NewEndpoint(
-							"instance-guid-2", false, "some-ip-4", "container-ip-4", 63004, 6379, newModificationTag),
-					}
-					tempRoutingTable = routingtable.NewTCPTable(logger, map[endpoint.RoutingKey]endpoint.RoutableEndpoints{
-						key: endpoint.NewRoutableEndpoints(externalEndpoints, endpoints, logGuid, newModificationTag),
-					})
-					Expect(tempRoutingTable.RouteCount()).Should(Equal(1))
+					tempRoutingTable = routingtable.NewRoutingTable(logger, false)
+					beforeLRPSchedulingInfo := getDesiredLRP("process-guid-2", logGuid, tcpRoutes, newModificationTag)
+					tempRoutingTable.SetRoutes(nil, beforeLRPSchedulingInfo)
+					tempRoutingTable.AddEndpoint(getActualLRP("process-guid-2", "instance-guid-1", "some-ip-3", "container-ip-3", 63004, 5222, false, newModificationTag))
+					tempRoutingTable.AddEndpoint(getActualLRP("process-guid-2", "instance-guid-2", "some-ip-4", "container-ip-4", 63004, 5222, false, newModificationTag))
+					Expect(tempRoutingTable.TCPRouteCount()).Should(Equal(1))
 				})
 
 				It("overwrites the existing entries and emits registration and unregistration routing events", func() {
-					routingEvents := routingTable.Swap(tempRoutingTable)
-					Expect(routingEvents).To(HaveLen(2))
+					routingEvents, _ := routingTable.Swap(tempRoutingTable, models.DomainSet{})
+					ttl := 0
+					Expect(routingEvents.Unregistrations).To(ConsistOf(tcpmodels.TcpRouteMapping{
+						TcpMappingEntity: tcpmodels.TcpMappingEntity{
+							RouterGroupGuid: "router-group-guid",
+							HostPort:        62004,
+							HostIP:          "some-ip-1",
+							ExternalPort:    61000,
+							TTL:             &ttl,
+						},
+					}, tcpmodels.TcpRouteMapping{
+						TcpMappingEntity: tcpmodels.TcpMappingEntity{
+							RouterGroupGuid: "router-group-guid",
+							HostPort:        62004,
+							HostIP:          "some-ip-2",
+							ExternalPort:    61000,
+							TTL:             &ttl,
+						},
+					}))
 
-					routingEvent := routingEvents[0]
-					Expect(routingEvent.Key).Should(Equal(key))
-					Expect(routingEvent.EventType).Should(Equal(event.RouteRegistrationEvent))
-					externalInfo := endpoint.ExternalEndpointInfos{
-						endpoint.NewExternalEndpointInfo("router-group-guid", 62000),
-					}
-					expectedEntry := endpoint.NewRoutableEndpoints(
-						externalInfo, endpoints, logGuid, newModificationTag)
-					Expect(routingEvent.Entry).Should(Equal(expectedEntry))
-
-					routingEvent = routingEvents[1]
-					Expect(routingEvent.Key).Should(Equal(existingKey))
-					Expect(routingEvent.EventType).Should(Equal(event.RouteUnregistrationEvent))
-					externalInfo = endpoint.ExternalEndpointInfos{
-						endpoint.NewExternalEndpointInfo("router-group-guid", 61000),
-					}
-					expectedEntry = endpoint.NewRoutableEndpoints(
-						externalInfo, existingEndpoints, existingLogGuid, modificationTag)
-					Expect(routingEvent.Entry).Should(Equal(expectedEntry))
-					Expect(routingTable.RouteCount()).Should(Equal(1))
+					Expect(routingEvents.Registrations).To(ConsistOf(tcpmodels.TcpRouteMapping{
+						TcpMappingEntity: tcpmodels.TcpMappingEntity{
+							RouterGroupGuid: "router-group-guid",
+							HostPort:        63004,
+							HostIP:          "some-ip-3",
+							ExternalPort:    61000,
+							TTL:             &ttl,
+						},
+					}, tcpmodels.TcpRouteMapping{
+						TcpMappingEntity: tcpmodels.TcpMappingEntity{
+							RouterGroupGuid: "router-group-guid",
+							HostPort:        63004,
+							HostIP:          "some-ip-4",
+							ExternalPort:    61000,
+							TTL:             &ttl,
+						},
+					}))
 				})
 			})
 
 			Context("when updating an existing routing key (process-guid, container-port)", func() {
-
 				BeforeEach(func() {
 					logGuid = "log-guid-2"
-					externalEndpoints := endpoint.ExternalEndpointInfos{
-						endpoint.NewExternalEndpointInfo("router-group-guid", 62000),
-					}
-					newModificationTag = &models.ModificationTag{Epoch: "abc", Index: 2}
-					endpoints = map[endpoint.EndpointKey]endpoint.Endpoint{
-						endpoint.NewEndpointKey("instance-guid-3", false): endpoint.NewEndpoint(
-							"instance-guid-1", false, "some-ip-3", "container-ip-3", 63004, 5222, newModificationTag),
-						endpoint.NewEndpointKey("instance-guid-4", false): endpoint.NewEndpoint(
-							"instance-guid-2", false, "some-ip-4", "container-ip-4", 63004, 5222, newModificationTag),
-					}
-					tempRoutingTable = routingtable.NewTCPTable(logger, map[endpoint.RoutingKey]endpoint.RoutableEndpoints{
-						existingKey: endpoint.NewRoutableEndpoints(externalEndpoints, endpoints, logGuid, newModificationTag),
-					})
-					Expect(tempRoutingTable.RouteCount()).Should(Equal(1))
+					tempRoutingTable = routingtable.NewRoutingTable(logger, false)
+					beforeLRPSchedulingInfo := getDesiredLRP("process-guid-1", logGuid, tcpRoutes, newModificationTag)
+					tempRoutingTable.SetRoutes(nil, beforeLRPSchedulingInfo)
+					tempRoutingTable.AddEndpoint(getActualLRP("process-guid-1", "instance-guid-1", "some-ip-3", "container-ip-3", 63004, 5222, false, newModificationTag))
+					tempRoutingTable.AddEndpoint(getActualLRP("process-guid-1", "instance-guid-2", "some-ip-4", "container-ip-4", 63004, 5222, false, newModificationTag))
+					Expect(tempRoutingTable.TCPRouteCount()).Should(Equal(1))
+
 				})
 
 				It("overwrites the existing entries and emits registration and unregistration routing events", func() {
-					routingEvents := routingTable.Swap(tempRoutingTable)
-					Expect(routingEvents).To(HaveLen(2))
+					routingEvents, _ := routingTable.Swap(tempRoutingTable, models.DomainSet{})
+					ttl := 0
+					Expect(routingEvents.Unregistrations).To(ConsistOf(tcpmodels.TcpRouteMapping{
+						TcpMappingEntity: tcpmodels.TcpMappingEntity{
+							RouterGroupGuid: "router-group-guid",
+							HostPort:        62004,
+							HostIP:          "some-ip-1",
+							ExternalPort:    61000,
+							TTL:             &ttl,
+						},
+					}, tcpmodels.TcpRouteMapping{
+						TcpMappingEntity: tcpmodels.TcpMappingEntity{
+							RouterGroupGuid: "router-group-guid",
+							HostPort:        62004,
+							HostIP:          "some-ip-2",
+							ExternalPort:    61000,
+							TTL:             &ttl,
+						},
+					}))
 
-					routingEvent := routingEvents[0]
-					Expect(routingEvent.Key).Should(Equal(existingKey))
-					Expect(routingEvent.EventType).Should(Equal(event.RouteRegistrationEvent))
-					externalInfo := endpoint.ExternalEndpointInfos{
-						endpoint.NewExternalEndpointInfo("router-group-guid", 62000),
-					}
-					expectedEntry := endpoint.NewRoutableEndpoints(
-						externalInfo, endpoints, logGuid, newModificationTag)
-					Expect(routingEvent.Entry).Should(Equal(expectedEntry))
+					Expect(routingEvents.Registrations).To(ConsistOf(tcpmodels.TcpRouteMapping{
+						TcpMappingEntity: tcpmodels.TcpMappingEntity{
+							RouterGroupGuid: "router-group-guid",
+							HostPort:        63004,
+							HostIP:          "some-ip-3",
+							ExternalPort:    61000,
+							TTL:             &ttl,
+						},
+					}, tcpmodels.TcpRouteMapping{
+						TcpMappingEntity: tcpmodels.TcpMappingEntity{
+							RouterGroupGuid: "router-group-guid",
+							HostPort:        63004,
+							HostIP:          "some-ip-4",
+							ExternalPort:    61000,
+							TTL:             &ttl,
+						},
+					}))
+					Expect(routingTable.TCPRouteCount()).Should(Equal(1))
+				})
+			})
 
-					routingEvent = routingEvents[1]
-					Expect(routingEvent.Key).Should(Equal(existingKey))
-					Expect(routingEvent.EventType).Should(Equal(event.RouteUnregistrationEvent))
-					externalInfo = endpoint.ExternalEndpointInfos{
-						endpoint.NewExternalEndpointInfo("router-group-guid", 61000),
+			Context("when updating the router group guid", func() {
+				BeforeEach(func() {
+					newModificationTag = &models.ModificationTag{Epoch: "abc", Index: 2}
+					newTcpRoutes := tcp_routes.TCPRoutes{
+						tcp_routes.TCPRoute{
+							RouterGroupGuid: "new-router-group-guid",
+							ExternalPort:    61000,
+							ContainerPort:   5222,
+						},
 					}
-					expectedEntry = endpoint.NewRoutableEndpoints(
-						externalInfo, existingEndpoints, existingLogGuid, modificationTag)
-					Expect(routingEvent.Entry).Should(Equal(expectedEntry))
-					Expect(routingTable.RouteCount()).Should(Equal(1))
+					beforeLRPSchedulingInfo := getDesiredLRP("process-guid-1", existingLogGuid, newTcpRoutes, newModificationTag)
+					tempRoutingTable = routingtable.NewRoutingTable(logger, false)
+					tempRoutingTable.SetRoutes(nil, beforeLRPSchedulingInfo)
+					tempRoutingTable.AddEndpoint(getActualLRP("process-guid-1", "instance-guid-1", "some-ip-1", "container-ip-1", 62004, 5222, false, modificationTag))
+					tempRoutingTable.AddEndpoint(getActualLRP("process-guid-1", "instance-guid-2", "some-ip-2", "container-ip-2", 62004, 5222, false, modificationTag))
+
+					Expect(tempRoutingTable.TCPRouteCount()).Should(Equal(1))
+				})
+
+				It("emits registration and unregistration events", func() {
+					domains := models.DomainSet{}
+					domains.Add("domain")
+					routingEvents, _ := routingTable.Swap(tempRoutingTable, domains)
+
+					ttl := 0
+					Expect(routingEvents.Registrations).To(ConsistOf(tcpmodels.TcpRouteMapping{
+						TcpMappingEntity: tcpmodels.TcpMappingEntity{
+							RouterGroupGuid: "new-router-group-guid",
+							HostPort:        62004,
+							HostIP:          "some-ip-1",
+							ExternalPort:    61000,
+							TTL:             &ttl,
+						},
+					}, tcpmodels.TcpRouteMapping{
+						TcpMappingEntity: tcpmodels.TcpMappingEntity{
+							RouterGroupGuid: "new-router-group-guid",
+							HostPort:        62004,
+							HostIP:          "some-ip-2",
+							ExternalPort:    61000,
+							TTL:             &ttl,
+						},
+					}))
+					Expect(routingEvents.Unregistrations).To(ConsistOf(tcpmodels.TcpRouteMapping{
+						TcpMappingEntity: tcpmodels.TcpMappingEntity{
+							RouterGroupGuid: "router-group-guid",
+							HostPort:        62004,
+							HostIP:          "some-ip-1",
+							ExternalPort:    61000,
+							TTL:             &ttl,
+						},
+					}, tcpmodels.TcpRouteMapping{
+						TcpMappingEntity: tcpmodels.TcpMappingEntity{
+							RouterGroupGuid: "router-group-guid",
+							HostPort:        62004,
+							HostIP:          "some-ip-2",
+							ExternalPort:    61000,
+							TTL:             &ttl,
+						},
+					}))
 				})
 			})
 		})

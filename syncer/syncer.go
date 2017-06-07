@@ -60,7 +60,7 @@ func (s *NatsSyncer) Run(signals <-chan os.Signal, ready chan<- struct{}) error 
 	close(ready)
 	s.logger.Info("started")
 
-	var routerPruneInterval time.Duration
+	var routerRegisterInterval time.Duration
 	retryGreetingTicker := s.clock.NewTicker(time.Second)
 
 	//keep trying to greet until we hear from the router
@@ -74,8 +74,8 @@ GREET_LOOP:
 		}
 
 		select {
-		case routerPruneInterval = <-s.routerGreet:
-			s.logger.Info("received-router-prune-interval", lager.Data{"interval": routerPruneInterval.String()})
+		case routerRegisterInterval = <-s.routerGreet:
+			s.logger.Info("received-router-prune-interval", lager.Data{"interval": routerRegisterInterval.String()})
 			break GREET_LOOP
 		case <-retryGreetingTicker.C():
 		case <-signals:
@@ -89,14 +89,14 @@ GREET_LOOP:
 
 	// now keep emitting at the desired interval, syncing every syncInterval
 	syncTicker := s.clock.NewTicker(s.syncInterval)
-	routerTicker := s.clock.NewTicker(routerPruneInterval)
+	routerTicker := s.clock.NewTicker(routerRegisterInterval)
 
 	for {
 		select {
-		case routerPruneInterval = <-s.routerGreet:
-			s.logger.Info("received-new-router-prune-interval", lager.Data{"interval": routerPruneInterval.String()})
+		case routerRegisterInterval = <-s.routerGreet:
+			s.logger.Info("received-new-router-prune-interval", lager.Data{"interval": routerRegisterInterval.String()})
 			routerTicker.Stop()
-			routerTicker = s.clock.NewTicker(routerPruneInterval)
+			routerTicker = s.clock.NewTicker(routerRegisterInterval)
 			s.emit()
 		case <-routerTicker.C():
 			s.logger.Info("emitting-routes")

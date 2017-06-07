@@ -1,8 +1,9 @@
-package endpoint
+package routingtable
 
 import (
-	"encoding/json"
 	"fmt"
+
+	tcpmodels "code.cloudfoundry.org/routing-api/models"
 
 	"code.cloudfoundry.org/bbs/models"
 	"code.cloudfoundry.org/lager"
@@ -25,29 +26,44 @@ func NewEndpointKey(instanceGUID string, evacuating bool) EndpointKey {
 	}
 }
 
-type Endpoint struct {
-	InstanceGUID    string
-	Host            string
-	ContainerIP     string
-	Port            uint32
-	ContainerPort   uint32
-	Evacuating      bool
-	ModificationTag *models.ModificationTag
+type Address struct {
+	Host string
+	Port uint32
 }
 
-func (e Endpoint) Key() EndpointKey {
+type Endpoint struct {
+	InstanceGUID     string
+	Index            int32
+	Host             string
+	ContainerIP      string
+	Domain           string
+	Port             uint32
+	ContainerPort    uint32
+	Evacuating       bool
+	IsolationSegment string
+	ModificationTag  *models.ModificationTag
+}
+
+func (e Endpoint) key() EndpointKey {
 	return EndpointKey{InstanceGUID: e.InstanceGUID, Evacuating: e.Evacuating}
+}
+
+func (e Endpoint) address() Address {
+	return Address{Host: e.Host, Port: e.Port}
 }
 
 func NewEndpoint(
 	instanceGUID string, evacuating bool,
 	host, containerIP string,
 	port, containerPort uint32,
-	modificationTag *models.ModificationTag) Endpoint {
+	modificationTag *models.ModificationTag,
+	domain string,
+) Endpoint {
 	return Endpoint{
 		InstanceGUID:    instanceGUID,
 		Evacuating:      evacuating,
 		Host:            host,
+		Domain:          domain,
 		ContainerIP:     containerIP,
 		Port:            port,
 		ContainerPort:   containerPort,
@@ -60,6 +76,26 @@ type ExternalEndpointInfo struct {
 	Port            uint32
 }
 
+func (info ExternalEndpointInfo) MessageFor(e Endpoint, directInstanceRoute bool) (*RegistryMessage, *tcpmodels.TcpRouteMapping) {
+	mapping := tcpmodels.NewTcpRouteMapping(
+		info.RouterGroupGUID,
+		uint16(info.Port),
+		e.Host,
+		uint16(e.Port),
+		0,
+	)
+	if directInstanceRoute {
+		mapping = tcpmodels.NewTcpRouteMapping(
+			info.RouterGroupGUID,
+			uint16(info.Port),
+			e.ContainerIP,
+			uint16(e.ContainerPort),
+			0,
+		)
+	}
+	return nil, &mapping
+}
+
 type ExternalEndpointInfos []ExternalEndpointInfo
 
 func NewExternalEndpointInfo(routerGroupGUID string, port uint32) ExternalEndpointInfo {
@@ -69,38 +105,50 @@ func NewExternalEndpointInfo(routerGroupGUID string, port uint32) ExternalEndpoi
 	}
 }
 
-type RoutableEndpoints struct {
-	ExternalEndpoints ExternalEndpointInfos
-	Endpoints         map[EndpointKey]Endpoint
-	LogGUID           string
-	ModificationTag   *models.ModificationTag
+type Route struct {
+	Hostname         string
+	RouteServiceUrl  string
+	IsolationSegment string
+	LogGUID          string
 }
 
-func (entry RoutableEndpoints) MarshalJSON() ([]byte, error) {
-	endpoints := make(map[string]Endpoint)
-	for k, v := range entry.Endpoints {
-		endpoints[k.String()] = v
+func (r Route) MessageFor(endpoint Endpoint, directInstanceAddress bool) (*RegistryMessage, *tcpmodels.TcpRouteMapping) {
+	generator := RegistryMessageFor
+	if directInstanceAddress {
+		generator = InternalAddressRegistryMessageFor
 	}
-	jsonStruct := struct {
-		ExternalEndpoints ExternalEndpointInfos
-		Endpoints         map[string]Endpoint
-		LogGUID           string
-		ModificationTag   *models.ModificationTag
-	}{
-		ExternalEndpoints: entry.ExternalEndpoints,
-		Endpoints:         endpoints,
-		LogGUID:           entry.LogGUID,
+	msg := generator(endpoint, r)
+	return &msg, nil
+}
+
+func (entry RoutableEndpoints) copy() RoutableEndpoints {
+	clone := RoutableEndpoints{
+		Endpoints:         map[EndpointKey]Endpoint{},
+		Routes:            make([]externalRoute, len(entry.Routes)),
+		ExternalEndpoints: make([]externalRoute, len(entry.ExternalEndpoints)),
 		ModificationTag:   entry.ModificationTag,
 	}
 
-	return json.Marshal(jsonStruct)
+	copy(clone.Routes, entry.Routes)
+
+	for k, v := range entry.Endpoints {
+		clone.Endpoints[k] = v
+	}
+
+	return clone
+}
+
+type RoutableEndpoints struct {
+	Routes            []externalRoute
+	ExternalEndpoints []externalRoute
+	Endpoints         map[EndpointKey]Endpoint
+	ModificationTag   *models.ModificationTag
 }
 
 func (entry RoutableEndpoints) Copy() RoutableEndpoints {
 	clone := RoutableEndpoints{
 		ExternalEndpoints: entry.ExternalEndpoints,
 		Endpoints:         map[EndpointKey]Endpoint{},
-		LogGUID:           entry.LogGUID,
 		ModificationTag:   entry.ModificationTag,
 	}
 
@@ -111,20 +159,25 @@ func (entry RoutableEndpoints) Copy() RoutableEndpoints {
 	return clone
 }
 
-func NewEndpointsFromActual(actualInfo *ActualLRPRoutingInfo) map[uint32]Endpoint {
+func NewEndpointsFromActual(actualLRPInfo *ActualLRPRoutingInfo) map[uint32]Endpoint {
 	endpoints := map[uint32]Endpoint{}
-	actual, evacuating := actualInfo.ActualLRP, actualInfo.Evacuating
+	actual := actualLRPInfo.ActualLRP
 
 	for _, portMapping := range actual.Ports {
-		endpoint := NewEndpoint(
-			actual.InstanceGuid, evacuating,
-			actual.Address,
-			actual.InstanceAddress,
-			portMapping.HostPort,
-			portMapping.ContainerPort,
-			&actual.ModificationTag,
-		)
-		endpoints[portMapping.ContainerPort] = endpoint
+		if portMapping != nil {
+			endpoint := Endpoint{
+				InstanceGUID:    actual.InstanceGuid,
+				Index:           actual.Index,
+				Host:            actual.Address,
+				ContainerIP:     actual.InstanceAddress,
+				Domain:          actual.Domain,
+				Port:            portMapping.HostPort,
+				ContainerPort:   portMapping.ContainerPort,
+				Evacuating:      actualLRPInfo.Evacuating,
+				ModificationTag: &actual.ModificationTag,
+			}
+			endpoints[portMapping.ContainerPort] = endpoint
+		}
 	}
 
 	return endpoints
@@ -161,58 +214,18 @@ func (e ExternalEndpointInfos) HasNoExternalPorts(logger lager.Logger) bool {
 	return false
 }
 
-func (e RoutableEndpoints) HaveEndpointsChanged(newEntry RoutableEndpoints) bool {
-	if len(e.Endpoints) != len(newEntry.Endpoints) {
-		// length not same...so something changed
-		return true
-	}
-	//Check if new endpoints are added or existing endpoints are modified
-	for key, newEndpoint := range newEntry.Endpoints {
-		if existingEndpoint, ok := e.Endpoints[key]; !ok {
-			// new endpoint
-			return true
-		} else {
-			if existingEndpoint.ModificationTag.SucceededBy(newEndpoint.ModificationTag) {
-				// existing endpoint modified
-				return true
-			}
-		}
-	}
-	return false
-}
-
-func (e RoutableEndpoints) HaveExternalEndpointsChanged(newEntry RoutableEndpoints) bool {
-	if len(e.ExternalEndpoints) != len(newEntry.ExternalEndpoints) {
-		// length not same...so something changed
-		return true
-	}
-	//Check if new endpoints are added
-	for _, existing := range e.ExternalEndpoints {
-		found := false
-		for _, proposed := range newEntry.ExternalEndpoints {
-			if proposed.Port == existing.Port {
-				found = true
-				break
-			}
-		}
-
-		// Could not find existing endpoint, something changed
-		if !found {
-			return true
-		}
-	}
-	return false
-}
-
 func NewRoutableEndpoints(
 	externalEndPoint ExternalEndpointInfos,
 	endpoints map[EndpointKey]Endpoint,
 	logGUID string,
 	modificationTag *models.ModificationTag) RoutableEndpoints {
+	externalEndpoints := []externalRoute{}
+	for _, endpoint := range externalEndPoint {
+		externalEndpoints = append(externalEndpoints, endpoint)
+	}
 	return RoutableEndpoints{
-		ExternalEndpoints: externalEndPoint,
+		ExternalEndpoints: externalEndpoints,
 		Endpoints:         endpoints,
-		LogGUID:           logGUID,
 		ModificationTag:   modificationTag,
 	}
 }
@@ -229,26 +242,6 @@ func NewRoutingKey(processGUID string, containerPort uint32) RoutingKey {
 		ProcessGUID:   processGUID,
 		ContainerPort: containerPort,
 	}
-}
-
-// this function returns the entry with the external externalEndpoints substracted from its internal collection
-// Ex; Given, entry { externalEndpoints={p1,p2,p4} } and externalEndpoints = {p2,p3} ==> entryA { externalEndpoints={p1,p4} }
-func (entry RoutableEndpoints) RemoveExternalEndpoints(externalEndpoints ExternalEndpointInfos) RoutableEndpoints {
-	subtractedExternalEndpoints := entry.ExternalEndpoints.Remove(externalEndpoints)
-	resultEntry := entry.Copy()
-	resultEntry.ExternalEndpoints = subtractedExternalEndpoints
-	return resultEntry
-}
-
-// this function return a-b set. Ex: a = {p1,p2, p4} b={p2,p3} ===> a-b = {p1, p4}
-func (setA ExternalEndpointInfos) Remove(setB ExternalEndpointInfos) ExternalEndpointInfos {
-	diffSet := ExternalEndpointInfos{}
-	for _, externalEndpoint := range setA {
-		if !setB.ContainsExternalPort(externalEndpoint.Port) {
-			diffSet = append(diffSet, ExternalEndpointInfo{externalEndpoint.RouterGroupGUID, externalEndpoint.Port})
-		}
-	}
-	return diffSet
 }
 
 func (e ExternalEndpointInfos) ContainsExternalPort(port uint32) bool {

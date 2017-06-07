@@ -1,14 +1,17 @@
-package util
+package routingtable
 
 import (
 	"code.cloudfoundry.org/bbs/models"
 	"code.cloudfoundry.org/lager"
-	"code.cloudfoundry.org/route-emitter/routingtable/schema/endpoint"
 	"code.cloudfoundry.org/routing-info/cfroutes"
 	"code.cloudfoundry.org/routing-info/tcp_routes"
 )
 
 func DesiredLRPData(lrp *models.DesiredLRPSchedulingInfo) lager.Data {
+	if lrp == nil {
+		return lager.Data{}
+	}
+
 	logRoutes := make(models.Routes)
 	logRoutes[cfroutes.CF_ROUTER] = lrp.Routes[cfroutes.CF_ROUTER]
 	logRoutes[tcp_routes.TCP_ROUTER] = lrp.Routes[tcp_routes.TCP_ROUTER]
@@ -20,7 +23,7 @@ func DesiredLRPData(lrp *models.DesiredLRPSchedulingInfo) lager.Data {
 	}
 }
 
-func ActualLRPData(info *endpoint.ActualLRPRoutingInfo) lager.Data {
+func ActualLRPData(info *ActualLRPRoutingInfo) lager.Data {
 	lrp := info.ActualLRP
 
 	return lager.Data{

@@ -10,12 +10,11 @@ import (
 	"code.cloudfoundry.org/route-emitter/routehandlers"
 	"code.cloudfoundry.org/route-emitter/routingtable"
 	"code.cloudfoundry.org/route-emitter/routingtable/fakeroutingtable"
-	"code.cloudfoundry.org/route-emitter/routingtable/schema/endpoint"
 	"code.cloudfoundry.org/routing-info/cfroutes"
 	fake_metrics_sender "github.com/cloudfoundry/dropsonde/metric_sender/fake"
+	"github.com/cloudfoundry/dropsonde/metrics"
 	"github.com/gogo/protobuf/proto"
 
-	"github.com/cloudfoundry/dropsonde/metrics"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gbytes"
@@ -34,11 +33,11 @@ func (e randomEvent) Key() string {
 	return "random"
 }
 
-var _ = Describe("NATSHandler", func() {
+var _ = Describe("Handler", func() {
 	const (
 		expectedDomain                  = "domain"
 		expectedProcessGuid             = "process-guid"
-		expectedInstanceGuid            = "instance-guid"
+		expectedInstanceGUID            = "instance-guid"
 		expectedIndex                   = 0
 		expectedHost                    = "1.1.1.1"
 		expectedInstanceAddress         = "2.2.2.2"
@@ -50,62 +49,49 @@ var _ = Describe("NATSHandler", func() {
 	)
 
 	var (
-		fakeTable   *fakeroutingtable.FakeNATSRoutingTable
+		fakeTable   *fakeroutingtable.FakeRoutingTable
 		natsEmitter *fakes.FakeNATSEmitter
 
-		expectedRoutes     []string
-		expectedRoutingKey endpoint.RoutingKey
-		expectedCFRoute    cfroutes.CFRoute
-
-		expectedAdditionalRoutes     []string
-		expectedAdditionalRoutingKey endpoint.RoutingKey
-		expectedAdditionalCFRoute    cfroutes.CFRoute
+		expectedRoutes  []string
+		expectedCFRoute cfroutes.CFRoute
 
 		dummyMessagesToEmit routingtable.MessagesToEmit
 		fakeMetricSender    *fake_metrics_sender.FakeMetricSender
 
 		logger *lagertest.TestLogger
 
-		routeHandler *routehandlers.NATSHandler
+		routeHandler *routehandlers.Handler
+
+		emptyTCPRouteMappings routingtable.TCPRouteMappings
 	)
 
 	BeforeEach(func() {
-		fakeTable = &fakeroutingtable.FakeNATSRoutingTable{}
+		fakeTable = &fakeroutingtable.FakeRoutingTable{}
 		natsEmitter = &fakes.FakeNATSEmitter{}
 		logger = lagertest.NewTestLogger("test")
 
 		dummyEndpoint := routingtable.Endpoint{
-			InstanceGuid: expectedInstanceGuid,
+			InstanceGUID: expectedInstanceGUID,
 			Index:        expectedIndex,
 			Host:         expectedHost,
 			Port:         expectedContainerPort,
 		}
-		dummyMessageFoo := routingtable.RegistryMessageFor(dummyEndpoint, routingtable.Route{Hostname: "foo.com", LogGuid: logGuid})
-		dummyMessageBar := routingtable.RegistryMessageFor(dummyEndpoint, routingtable.Route{Hostname: "bar.com", LogGuid: logGuid})
+		dummyMessageFoo := routingtable.RegistryMessageFor(dummyEndpoint, routingtable.Route{Hostname: "foo.com", LogGUID: logGuid})
+		dummyMessageBar := routingtable.RegistryMessageFor(dummyEndpoint, routingtable.Route{Hostname: "bar.com", LogGUID: logGuid})
 		dummyMessagesToEmit = routingtable.MessagesToEmit{
 			RegistrationMessages: []routingtable.RegistryMessage{dummyMessageFoo, dummyMessageBar},
 		}
 
 		expectedRoutes = []string{"route-1", "route-2"}
 		expectedCFRoute = cfroutes.CFRoute{Hostnames: expectedRoutes, Port: expectedContainerPort, RouteServiceUrl: expectedRouteServiceUrl}
-		expectedRoutingKey = endpoint.RoutingKey{
-			ProcessGUID:   expectedProcessGuid,
-			ContainerPort: expectedContainerPort,
-		}
 
-		expectedAdditionalRoutes = []string{"additional-1", "additional-2"}
-		expectedAdditionalCFRoute = cfroutes.CFRoute{Hostnames: expectedAdditionalRoutes, Port: expectedAdditionalContainerPort}
-		expectedAdditionalRoutingKey = endpoint.RoutingKey{
-			ProcessGUID:   expectedProcessGuid,
-			ContainerPort: expectedAdditionalContainerPort,
-		}
 		fakeMetricSender = fake_metrics_sender.NewFakeMetricSender()
 		metrics.Initialize(fakeMetricSender, nil)
 
-		routeHandler = routehandlers.NewNATSHandler(fakeTable, natsEmitter, false)
+		routeHandler = routehandlers.NewHandler(fakeTable, natsEmitter, nil, false)
 	})
 
-	Context("when an unrecoginzed event is received", func() {
+	Context("when an unrecognized event is received", func() {
 		It("logs an error", func() {
 			routeHandler.HandleEvent(logger, randomEvent{})
 			Expect(logger).To(gbytes.Say("did-not-handle-unrecognizable-event"))
@@ -130,8 +116,9 @@ var _ = Describe("NATSHandler", func() {
 					LogGuid:     logGuid,
 				}
 
-				fakeTable.SetRoutesReturns(dummyMessagesToEmit)
+				fakeTable.SetRoutesReturns(emptyTCPRouteMappings, dummyMessagesToEmit)
 			})
+
 			JustBeforeEach(func() {
 				routeHandler.HandleEvent(logger, models.NewDesiredLRPCreatedEvent(desiredLRP))
 			})
@@ -139,20 +126,9 @@ var _ = Describe("NATSHandler", func() {
 			It("should set the routes on the table", func() {
 				Expect(fakeTable.SetRoutesCallCount()).To(Equal(1))
 
-				key, routes, _ := fakeTable.SetRoutesArgsForCall(0)
-				Expect(key).To(Equal(expectedRoutingKey))
-				Expect(routes).To(ConsistOf(
-					routingtable.Route{
-						Hostname:        expectedRoutes[0],
-						LogGuid:         logGuid,
-						RouteServiceUrl: expectedRouteServiceUrl,
-					},
-					routingtable.Route{
-						Hostname:        expectedRoutes[1],
-						LogGuid:         logGuid,
-						RouteServiceUrl: expectedRouteServiceUrl,
-					},
-				))
+				before, after := fakeTable.SetRoutesArgsForCall(0)
+				Expect(before).To(BeNil())
+				Expect(*after).To(Equal(desiredLRP.DesiredLRPSchedulingInfo()))
 			})
 
 			It("sends a 'routes registered' metric", func() {
@@ -167,55 +143,6 @@ var _ = Describe("NATSHandler", func() {
 				Expect(natsEmitter.EmitCallCount()).To(Equal(1))
 				messagesToEmit := natsEmitter.EmitArgsForCall(0)
 				Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
-			})
-
-			Context("when isolation segments are part of the desired_lrp", func() {
-				var expectedIsolationSegment = "default-http"
-
-				BeforeEach(func() {
-					expectedCFRoute = cfroutes.CFRoute{Hostnames: expectedRoutes, Port: expectedContainerPort, RouteServiceUrl: expectedRouteServiceUrl, IsolationSegment: expectedIsolationSegment}
-					routesNew := cfroutes.CFRoutes{expectedCFRoute}.RoutingInfo()
-					desiredLRP.Routes = &routesNew
-					dummyEndpoint := routingtable.Endpoint{
-						InstanceGuid: expectedInstanceGuid,
-						Index:        expectedIndex,
-						Host:         expectedHost,
-						Port:         expectedContainerPort,
-					}
-					dummyMessageFoo := routingtable.RegistryMessageFor(dummyEndpoint, routingtable.Route{Hostname: "foo.com", LogGuid: logGuid, IsolationSegment: expectedIsolationSegment})
-					dummyMessageBar := routingtable.RegistryMessageFor(dummyEndpoint, routingtable.Route{Hostname: "bar.com", LogGuid: logGuid, IsolationSegment: expectedIsolationSegment})
-
-					dummyMessagesToEmit = routingtable.MessagesToEmit{
-						RegistrationMessages: []routingtable.RegistryMessage{dummyMessageFoo, dummyMessageBar},
-					}
-					fakeTable.SetRoutesReturns(dummyMessagesToEmit)
-				})
-
-				It("should set the routes on the table with the isolation segment", func() {
-					Expect(fakeTable.SetRoutesCallCount()).To(Equal(1))
-					key, routes, _ := fakeTable.SetRoutesArgsForCall(0)
-					Expect(key).To(Equal(expectedRoutingKey))
-					Expect(routes).To(ConsistOf(
-						routingtable.Route{
-							Hostname:         expectedRoutes[0],
-							LogGuid:          logGuid,
-							RouteServiceUrl:  expectedRouteServiceUrl,
-							IsolationSegment: expectedIsolationSegment,
-						},
-						routingtable.Route{
-							Hostname:         expectedRoutes[1],
-							LogGuid:          logGuid,
-							RouteServiceUrl:  expectedRouteServiceUrl,
-							IsolationSegment: expectedIsolationSegment,
-						},
-					))
-				})
-
-				It("should emit whatever the table tells it to emit", func() {
-					Expect(natsEmitter.EmitCallCount()).To(Equal(1))
-					messagesToEmit := natsEmitter.EmitArgsForCall(0)
-					Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
-				})
 			})
 
 			Context("when there are diego ssh-keys on the route", func() {
@@ -250,102 +177,13 @@ var _ = Describe("NATSHandler", func() {
 					Expect(len(*desiredLRP.Routes)).To(Equal(2))
 				})
 			})
-
-			Context("when there is a route service binding to only one hostname for a route", func() {
-				BeforeEach(func() {
-					cfRoute1 := cfroutes.CFRoute{
-						Hostnames:       []string{"route-1"},
-						Port:            expectedContainerPort,
-						RouteServiceUrl: expectedRouteServiceUrl,
-					}
-					cfRoute2 := cfroutes.CFRoute{
-						Hostnames: []string{"route-2"},
-						Port:      expectedContainerPort,
-					}
-					routes := cfroutes.CFRoutes{cfRoute1, cfRoute2}.RoutingInfo()
-					desiredLRP.Routes = &routes
-				})
-				It("registers all of the routes on the table", func() {
-					Expect(fakeTable.SetRoutesCallCount()).To(Equal(1))
-
-					key, routes, _ := fakeTable.SetRoutesArgsForCall(0)
-					Expect(key).To(Equal(expectedRoutingKey))
-					Expect(routes).To(ConsistOf(
-						routingtable.Route{
-							Hostname:        "route-1",
-							LogGuid:         logGuid,
-							RouteServiceUrl: expectedRouteServiceUrl,
-						},
-						routingtable.Route{
-							Hostname: "route-2",
-							LogGuid:  logGuid,
-						},
-					))
-				})
-
-				It("emits whatever the table tells it to emit", func() {
-					Expect(natsEmitter.EmitCallCount()).To(Equal(1))
-
-					messagesToEmit := natsEmitter.EmitArgsForCall(0)
-					Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
-				})
-			})
-
-			Context("when there are multiple CF routes", func() {
-				BeforeEach(func() {
-					routes := cfroutes.CFRoutes{expectedCFRoute, expectedAdditionalCFRoute}.RoutingInfo()
-					desiredLRP.Routes = &routes
-				})
-
-				It("registers all of the routes on the table", func() {
-					Expect(fakeTable.SetRoutesCallCount()).To(Equal(2))
-
-					key1, routes1, _ := fakeTable.SetRoutesArgsForCall(0)
-					key2, routes2, _ := fakeTable.SetRoutesArgsForCall(1)
-					var routes = []routingtable.Route{}
-					routes = append(routes, routes1...)
-					routes = append(routes, routes2...)
-
-					Expect([]endpoint.RoutingKey{key1, key2}).To(ConsistOf(expectedRoutingKey, expectedAdditionalRoutingKey))
-					Expect(routes).To(ConsistOf(
-						routingtable.Route{
-							Hostname:        expectedRoutes[0],
-							LogGuid:         logGuid,
-							RouteServiceUrl: expectedRouteServiceUrl,
-						},
-						routingtable.Route{
-							Hostname:        expectedRoutes[1],
-							LogGuid:         logGuid,
-							RouteServiceUrl: expectedRouteServiceUrl,
-						},
-						routingtable.Route{
-							Hostname: expectedAdditionalRoutes[0],
-							LogGuid:  logGuid,
-						},
-						routingtable.Route{
-							Hostname: expectedAdditionalRoutes[1],
-							LogGuid:  logGuid,
-						},
-					))
-				})
-
-				It("emits whatever the table tells it to emit", func() {
-					Expect(natsEmitter.EmitCallCount()).To(Equal(2))
-
-					messagesToEmit := natsEmitter.EmitArgsForCall(0)
-					Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
-
-					messagesToEmit = natsEmitter.EmitArgsForCall(1)
-					Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
-				})
-			})
 		})
 
 		Context("DesiredLRPChanged Event", func() {
 			var originalDesiredLRP, changedDesiredLRP *models.DesiredLRP
 
 			BeforeEach(func() {
-				fakeTable.SetRoutesReturns(dummyMessagesToEmit)
+				fakeTable.SetRoutesReturns(emptyTCPRouteMappings, dummyMessagesToEmit)
 				routes := cfroutes.CFRoutes{{Hostnames: expectedRoutes, Port: expectedContainerPort}}.RoutingInfo()
 
 				originalDesiredLRP = &models.DesiredLRP{
@@ -377,44 +215,11 @@ var _ = Describe("NATSHandler", func() {
 				routeHandler.HandleEvent(logger, models.NewDesiredLRPChangedEvent(originalDesiredLRP, changedDesiredLRP))
 			})
 
-			Context("when scaling down the number of LRP instances", func() {
-				BeforeEach(func() {
-					changedDesiredLRP.Instances = 1
-
-					fakeTable.EndpointsForIndexStub = func(key endpoint.RoutingKey, index int32) []routingtable.Endpoint {
-						endpoint := routingtable.Endpoint{
-							InstanceGuid:  fmt.Sprintf("instance-guid-%d", index),
-							Index:         index,
-							Host:          fmt.Sprintf("1.1.1.%d", index),
-							Domain:        "domain",
-							Port:          expectedExternalPort,
-							ContainerPort: expectedContainerPort,
-							Evacuating:    false,
-						}
-
-						return []routingtable.Endpoint{endpoint}
-					}
-				})
-
-				It("removes route endpoints for instances that are no longer desired", func() {
-					Expect(fakeTable.RemoveEndpointCallCount()).To(Equal(2))
-				})
-			})
-
 			It("should set the routes on the table", func() {
 				Expect(fakeTable.SetRoutesCallCount()).To(Equal(1))
-				key, routes, _ := fakeTable.SetRoutesArgsForCall(0)
-				Expect(key).To(Equal(expectedRoutingKey))
-				Expect(routes).To(ConsistOf(
-					routingtable.Route{
-						Hostname: expectedRoutes[0],
-						LogGuid:  logGuid,
-					},
-					routingtable.Route{
-						Hostname: expectedRoutes[1],
-						LogGuid:  logGuid,
-					},
-				))
+				before, after := fakeTable.SetRoutesArgsForCall(0)
+				Expect(*before).To(Equal(originalDesiredLRP.DesiredLRPSchedulingInfo()))
+				Expect(*after).To(Equal(changedDesiredLRP.DesiredLRPSchedulingInfo()))
 			})
 
 			It("sends a 'routes registered' metric", func() {
@@ -429,72 +234,6 @@ var _ = Describe("NATSHandler", func() {
 				Expect(natsEmitter.EmitCallCount()).To(Equal(1))
 				messagesToEmit := natsEmitter.EmitArgsForCall(0)
 				Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
-			})
-
-			Context("when router_group_guids are part of the desired_lrp", func() {
-				var expectedIsolationSegment = "default-http"
-
-				BeforeEach(func() {
-					changedDesiredLRP.Instances = 1
-					fakeTable.EndpointsForIndexStub = func(key endpoint.RoutingKey, index int32) []routingtable.Endpoint {
-						endpoint := routingtable.Endpoint{
-							InstanceGuid:  fmt.Sprintf("instance-guid-%d", index),
-							Index:         index,
-							Host:          fmt.Sprintf("1.1.1.%d", index),
-							Domain:        "domain",
-							Port:          expectedExternalPort,
-							ContainerPort: expectedContainerPort,
-							Evacuating:    false,
-						}
-
-						return []routingtable.Endpoint{endpoint}
-					}
-					fakeTable.SetRoutesReturns(dummyMessagesToEmit)
-					routes := cfroutes.CFRoutes{{Hostnames: expectedRoutes, Port: expectedContainerPort, IsolationSegment: expectedIsolationSegment}}.RoutingInfo()
-
-					originalDesiredLRP = &models.DesiredLRP{
-						Action: models.WrapAction(&models.RunAction{
-							User: "me",
-							Path: "ls",
-						}),
-						Domain:      "tests",
-						ProcessGuid: expectedProcessGuid,
-						LogGuid:     logGuid,
-						Routes:      &routes,
-						Instances:   3,
-					}
-					routesNew := cfroutes.CFRoutes{{Hostnames: expectedRoutes, Port: expectedContainerPort, IsolationSegment: "other-group"}}.RoutingInfo()
-					changedDesiredLRP = &models.DesiredLRP{
-						Action: models.WrapAction(&models.RunAction{
-							User: "me",
-							Path: "ls",
-						}),
-						Domain:          "tests",
-						ProcessGuid:     expectedProcessGuid,
-						LogGuid:         logGuid,
-						Routes:          &routesNew,
-						ModificationTag: &models.ModificationTag{Epoch: "abcd", Index: 1},
-						Instances:       3,
-					}
-				})
-
-				It("should set the routes on the table with the isolation segment", func() {
-					Expect(fakeTable.SetRoutesCallCount()).To(Equal(1))
-					key, routes, _ := fakeTable.SetRoutesArgsForCall(0)
-					Expect(key).To(Equal(expectedRoutingKey))
-					Expect(routes).To(ConsistOf(
-						routingtable.Route{
-							Hostname:         expectedRoutes[0],
-							LogGuid:          logGuid,
-							IsolationSegment: "other-group",
-						},
-						routingtable.Route{
-							Hostname:         expectedRoutes[1],
-							LogGuid:          logGuid,
-							IsolationSegment: "other-group",
-						},
-					))
-				})
 			})
 
 			Context("when there are diego ssh-keys on the route", func() {
@@ -531,133 +270,13 @@ var _ = Describe("NATSHandler", func() {
 					Expect(len(*changedDesiredLRP.Routes)).To(Equal(2))
 				})
 			})
-
-			Context("when CF routes are added without an associated container port", func() {
-				BeforeEach(func() {
-					routes := cfroutes.CFRoutes{expectedCFRoute, expectedAdditionalCFRoute}.RoutingInfo()
-					changedDesiredLRP.Routes = &routes
-				})
-
-				It("registers all of the routes associated with a port on the table", func() {
-					Expect(fakeTable.SetRoutesCallCount()).To(Equal(2))
-
-					key1, routes1, _ := fakeTable.SetRoutesArgsForCall(0)
-					key2, routes2, _ := fakeTable.SetRoutesArgsForCall(1)
-					var routes = []routingtable.Route{}
-					routes = append(routes, routes1...)
-					routes = append(routes, routes2...)
-
-					Expect([]endpoint.RoutingKey{key1, key2}).To(ConsistOf(expectedRoutingKey, expectedAdditionalRoutingKey))
-					Expect(routes).To(ConsistOf(
-						routingtable.Route{
-							Hostname:        expectedRoutes[0],
-							LogGuid:         logGuid,
-							RouteServiceUrl: expectedRouteServiceUrl,
-						},
-						routingtable.Route{
-							Hostname:        expectedRoutes[1],
-							LogGuid:         logGuid,
-							RouteServiceUrl: expectedRouteServiceUrl,
-						},
-						routingtable.Route{
-							Hostname: expectedAdditionalRoutes[0],
-							LogGuid:  logGuid,
-						},
-						routingtable.Route{
-							Hostname: expectedAdditionalRoutes[1],
-							LogGuid:  logGuid,
-						},
-					))
-				})
-
-				It("emits whatever the table tells it to emit", func() {
-					Expect(natsEmitter.EmitCallCount()).To(Equal(2))
-
-					messagesToEmit := natsEmitter.EmitArgsForCall(1)
-					Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
-				})
-			})
-
-			Context("when CF routes and container ports are added", func() {
-				BeforeEach(func() {
-					routes := cfroutes.CFRoutes{expectedCFRoute, expectedAdditionalCFRoute}.RoutingInfo()
-					changedDesiredLRP.Routes = &routes
-				})
-
-				It("registers all of the routes on the table", func() {
-					Expect(fakeTable.SetRoutesCallCount()).To(Equal(2))
-
-					key1, routes1, _ := fakeTable.SetRoutesArgsForCall(0)
-					key2, routes2, _ := fakeTable.SetRoutesArgsForCall(1)
-					var routes = []routingtable.Route{}
-					routes = append(routes, routes1...)
-					routes = append(routes, routes2...)
-
-					Expect([]endpoint.RoutingKey{key1, key2}).To(ConsistOf(expectedRoutingKey, expectedAdditionalRoutingKey))
-					Expect(routes).To(ConsistOf(
-						routingtable.Route{
-							Hostname:        expectedRoutes[0],
-							LogGuid:         logGuid,
-							RouteServiceUrl: expectedRouteServiceUrl,
-						},
-						routingtable.Route{
-							Hostname:        expectedRoutes[1],
-							LogGuid:         logGuid,
-							RouteServiceUrl: expectedRouteServiceUrl,
-						},
-						routingtable.Route{
-							Hostname: expectedAdditionalRoutes[0],
-							LogGuid:  logGuid,
-						},
-						routingtable.Route{
-							Hostname: expectedAdditionalRoutes[1],
-							LogGuid:  logGuid,
-						},
-					))
-				})
-
-				It("emits whatever the table tells it to emit", func() {
-					Expect(natsEmitter.EmitCallCount()).To(Equal(2))
-
-					messagesToEmit := natsEmitter.EmitArgsForCall(0)
-					Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
-
-					messagesToEmit = natsEmitter.EmitArgsForCall(1)
-					Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
-				})
-			})
-
-			Context("when CF routes are removed", func() {
-				BeforeEach(func() {
-					routes := cfroutes.CFRoutes{}.RoutingInfo()
-					changedDesiredLRP.Routes = &routes
-
-					fakeTable.SetRoutesReturns(routingtable.MessagesToEmit{})
-					fakeTable.RemoveRoutesReturns(dummyMessagesToEmit)
-				})
-
-				It("deletes the routes for the missng key", func() {
-					Expect(fakeTable.RemoveRoutesCallCount()).To(Equal(1))
-
-					key, modTag := fakeTable.RemoveRoutesArgsForCall(0)
-					Expect(key).To(Equal(expectedRoutingKey))
-					Expect(modTag).To(Equal(changedDesiredLRP.ModificationTag))
-				})
-
-				It("emits whatever the table tells it to emit", func() {
-					Expect(natsEmitter.EmitCallCount()).To(Equal(1))
-
-					messagesToEmit := natsEmitter.EmitArgsForCall(0)
-					Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
-				})
-			})
 		})
 
 		Context("when a delete event occurs", func() {
 			var desiredLRP *models.DesiredLRP
 
 			BeforeEach(func() {
-				fakeTable.RemoveRoutesReturns(dummyMessagesToEmit)
+				fakeTable.RemoveRoutesReturns(emptyTCPRouteMappings, dummyMessagesToEmit)
 				routes := cfroutes.CFRoutes{expectedCFRoute}.RoutingInfo()
 				desiredLRP = &models.DesiredLRP{
 					Action: models.WrapAction(&models.RunAction{
@@ -679,9 +298,8 @@ var _ = Describe("NATSHandler", func() {
 
 			It("should remove the routes from the table", func() {
 				Expect(fakeTable.RemoveRoutesCallCount()).To(Equal(1))
-				key, modTag := fakeTable.RemoveRoutesArgsForCall(0)
-				Expect(key).To(Equal(expectedRoutingKey))
-				Expect(modTag).To(Equal(desiredLRP.ModificationTag))
+				lrp := fakeTable.RemoveRoutesArgsForCall(0)
+				Expect(*lrp).To(Equal(desiredLRP.DesiredLRPSchedulingInfo()))
 			})
 
 			It("should emit whatever the table tells it to emit", func() {
@@ -723,39 +341,6 @@ var _ = Describe("NATSHandler", func() {
 					Expect(len(*desiredLRP.Routes)).To(Equal(2))
 				})
 			})
-
-			Context("when there are multiple CF routes", func() {
-				BeforeEach(func() {
-					routes := cfroutes.CFRoutes{expectedCFRoute, expectedAdditionalCFRoute}.RoutingInfo()
-					desiredLRP.Routes = &routes
-				})
-
-				It("should remove the routes from the table", func() {
-					Expect(fakeTable.RemoveRoutesCallCount()).To(Equal(2))
-
-					key, modTag := fakeTable.RemoveRoutesArgsForCall(0)
-					Expect(key).To(Equal(expectedRoutingKey))
-					Expect(modTag).To(Equal(desiredLRP.ModificationTag))
-
-					key, modTag = fakeTable.RemoveRoutesArgsForCall(1)
-					Expect(key).To(Equal(expectedAdditionalRoutingKey))
-					Expect(modTag).To(Equal(desiredLRP.ModificationTag))
-
-					key, modTag = fakeTable.RemoveRoutesArgsForCall(0)
-					Expect(key).To(Equal(expectedRoutingKey))
-					Expect(modTag).To(Equal(desiredLRP.ModificationTag))
-				})
-
-				It("emits whatever the table tells it to emit", func() {
-					Expect(natsEmitter.EmitCallCount()).To(Equal(2))
-
-					messagesToEmit := natsEmitter.EmitArgsForCall(0)
-					Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
-
-					messagesToEmit = natsEmitter.EmitArgsForCall(1)
-					Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
-				})
-			})
 		})
 	})
 
@@ -764,14 +349,14 @@ var _ = Describe("NATSHandler", func() {
 			var (
 				actualLRPGroup       *models.ActualLRPGroup
 				actualLRP            *models.ActualLRP
-				actualLRPRoutingInfo *endpoint.ActualLRPRoutingInfo
+				actualLRPRoutingInfo *routingtable.ActualLRPRoutingInfo
 			)
 
 			Context("when the resulting LRP is in the RUNNING state", func() {
 				BeforeEach(func() {
 					actualLRP = &models.ActualLRP{
 						ActualLRPKey:         models.NewActualLRPKey(expectedProcessGuid, expectedIndex, "domain"),
-						ActualLRPInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGuid, "cell-id"),
+						ActualLRPInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGUID, "cell-id"),
 						ActualLRPNetInfo: models.NewActualLRPNetInfo(
 							expectedHost,
 							expectedInstanceAddress,
@@ -785,11 +370,11 @@ var _ = Describe("NATSHandler", func() {
 						Instance: actualLRP,
 					}
 
-					actualLRPRoutingInfo = &endpoint.ActualLRPRoutingInfo{
+					actualLRPRoutingInfo = &routingtable.ActualLRPRoutingInfo{
 						ActualLRP:  actualLRP,
 						Evacuating: false,
 					}
-					fakeTable.AddEndpointReturns(dummyMessagesToEmit)
+					fakeTable.AddEndpointReturns(emptyTCPRouteMappings, dummyMessagesToEmit)
 				})
 
 				JustBeforeEach(func() {
@@ -811,30 +396,20 @@ var _ = Describe("NATSHandler", func() {
 				})
 
 				It("should add/update the endpoints on the table", func() {
-					Expect(fakeTable.AddEndpointCallCount()).To(Equal(2))
-
-					keys := routingtable.RoutingKeysFromActual(actualLRP)
-					endpoints, err := routingtable.EndpointsFromActual(actualLRPRoutingInfo)
-					Expect(err).NotTo(HaveOccurred())
-
-					key, endpoint := fakeTable.AddEndpointArgsForCall(0)
-					Expect(keys).To(ContainElement(key))
-					Expect(endpoint).To(Equal(endpoints[key.ContainerPort]))
-
-					key, endpoint = fakeTable.AddEndpointArgsForCall(1)
-					Expect(keys).To(ContainElement(key))
-					Expect(endpoint).To(Equal(endpoints[key.ContainerPort]))
+					Expect(fakeTable.AddEndpointCallCount()).To(Equal(1))
+					lrpInfo := fakeTable.AddEndpointArgsForCall(0)
+					Expect(lrpInfo).To(Equal(actualLRPRoutingInfo))
 				})
 
 				It("should emit whatever the table tells it to emit", func() {
-					Expect(natsEmitter.EmitCallCount()).To(Equal(2))
+					Expect(natsEmitter.EmitCallCount()).To(Equal(1))
 
 					messagesToEmit := natsEmitter.EmitArgsForCall(0)
 					Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
 				})
 
 				It("sends a 'routes registered' metric", func() {
-					Expect(fakeMetricSender.GetCounter("RoutesRegistered")).To(BeEquivalentTo(4))
+					Expect(fakeMetricSender.GetCounter("RoutesRegistered")).To(BeEquivalentTo(2))
 				})
 
 				It("sends a 'routes unregistered' metric", func() {
@@ -846,7 +421,7 @@ var _ = Describe("NATSHandler", func() {
 				JustBeforeEach(func() {
 					actualLRP = &models.ActualLRP{
 						ActualLRPKey:         models.NewActualLRPKey(expectedProcessGuid, expectedIndex, "domain"),
-						ActualLRPInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGuid, "cell-id"),
+						ActualLRPInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGUID, "cell-id"),
 						ActualLRPNetInfo: models.NewActualLRPNetInfo(
 							expectedHost,
 							expectedInstanceAddress,
@@ -891,19 +466,19 @@ var _ = Describe("NATSHandler", func() {
 				)
 
 				BeforeEach(func() {
-					fakeTable.AddEndpointReturns(dummyMessagesToEmit)
+					fakeTable.AddEndpointReturns(emptyTCPRouteMappings, dummyMessagesToEmit)
 
 					beforeActualLRP = &models.ActualLRPGroup{
 						Instance: &models.ActualLRP{
 							ActualLRPKey:         models.NewActualLRPKey(expectedProcessGuid, expectedIndex, "domain"),
-							ActualLRPInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGuid, "cell-id"),
+							ActualLRPInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGUID, "cell-id"),
 							State:                models.ActualLRPStateClaimed,
 						},
 					}
 					afterActualLRP = &models.ActualLRPGroup{
 						Instance: &models.ActualLRP{
 							ActualLRPKey:         models.NewActualLRPKey(expectedProcessGuid, expectedIndex, "domain"),
-							ActualLRPInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGuid, "cell-id"),
+							ActualLRPInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGUID, "cell-id"),
 							ActualLRPNetInfo: models.NewActualLRPNetInfo(
 								expectedHost,
 								expectedInstanceAddress,
@@ -934,52 +509,32 @@ var _ = Describe("NATSHandler", func() {
 				})
 
 				It("should add/update the endpoint on the table", func() {
-					Expect(fakeTable.AddEndpointCallCount()).To(Equal(2))
+					Expect(fakeTable.AddEndpointCallCount()).To(Equal(1))
 
 					// Verify the arguments that were passed to AddEndpoint independent of which call was made first.
 					type endpointArgs struct {
-						key      endpoint.RoutingKey
+						key      routingtable.RoutingKey
 						endpoint routingtable.Endpoint
 					}
-					args := make([]endpointArgs, 2)
-					key, endpoint := fakeTable.AddEndpointArgsForCall(0)
-					args[0] = endpointArgs{key, endpoint}
-					key, endpoint = fakeTable.AddEndpointArgsForCall(1)
-					args[1] = endpointArgs{key, endpoint}
+					lrp, evacuating := afterActualLRP.Resolve()
+					routingInfo := &routingtable.ActualLRPRoutingInfo{
+						ActualLRP:  lrp,
+						Evacuating: evacuating,
+					}
 
-					Expect(args).To(ConsistOf([]endpointArgs{
-						endpointArgs{expectedRoutingKey, routingtable.Endpoint{
-							InstanceGuid:    expectedInstanceGuid,
-							Index:           expectedIndex,
-							Host:            expectedHost,
-							ContainerIP:     expectedInstanceAddress,
-							Domain:          expectedDomain,
-							Port:            expectedExternalPort,
-							ContainerPort:   expectedContainerPort,
-							ModificationTag: &models.ModificationTag{},
-						}},
-						endpointArgs{expectedAdditionalRoutingKey, routingtable.Endpoint{
-							InstanceGuid:    expectedInstanceGuid,
-							Index:           expectedIndex,
-							Host:            expectedHost,
-							ContainerIP:     expectedInstanceAddress,
-							Domain:          expectedDomain,
-							Port:            expectedAdditionalExternalPort,
-							ContainerPort:   expectedAdditionalContainerPort,
-							ModificationTag: &models.ModificationTag{},
-						}},
-					}))
+					actualLRP := fakeTable.AddEndpointArgsForCall(0)
+					Expect(actualLRP).To(Equal(routingInfo))
 				})
 
 				It("should emit whatever the table tells it to emit", func() {
-					Expect(natsEmitter.EmitCallCount()).Should(Equal(2))
+					Expect(natsEmitter.EmitCallCount()).Should(Equal(1))
 
 					messagesToEmit := natsEmitter.EmitArgsForCall(0)
 					Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
 				})
 
 				It("sends a 'routes registered' metric", func() {
-					Expect(fakeMetricSender.GetCounter("RoutesRegistered")).To(BeEquivalentTo(4))
+					Expect(fakeMetricSender.GetCounter("RoutesRegistered")).To(BeEquivalentTo(2))
 				})
 
 				It("sends a 'routes unregistered' metric", func() {
@@ -996,7 +551,7 @@ var _ = Describe("NATSHandler", func() {
 					beforeActualLRP = &models.ActualLRPGroup{
 						Instance: &models.ActualLRP{
 							ActualLRPKey:         models.NewActualLRPKey(expectedProcessGuid, expectedIndex, "domain"),
-							ActualLRPInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGuid, "cell-id"),
+							ActualLRPInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGUID, "cell-id"),
 							ActualLRPNetInfo: models.NewActualLRPNetInfo(
 								expectedHost,
 								expectedInstanceAddress,
@@ -1012,7 +567,7 @@ var _ = Describe("NATSHandler", func() {
 							State:        models.ActualLRPStateUnclaimed,
 						},
 					}
-					fakeTable.RemoveEndpointReturns(dummyMessagesToEmit)
+					fakeTable.RemoveEndpointReturns(emptyTCPRouteMappings, dummyMessagesToEmit)
 				})
 
 				JustBeforeEach(func() {
@@ -1034,38 +589,20 @@ var _ = Describe("NATSHandler", func() {
 				})
 
 				It("should remove the endpoint from the table", func() {
-					Expect(fakeTable.RemoveEndpointCallCount()).To(Equal(2))
+					Expect(fakeTable.RemoveEndpointCallCount()).To(Equal(1))
 
-					key, endpoint := fakeTable.RemoveEndpointArgsForCall(0)
-					Expect(key).To(Equal(expectedRoutingKey))
-					Expect(endpoint).To(Equal(routingtable.Endpoint{
-						InstanceGuid:    expectedInstanceGuid,
-						Index:           expectedIndex,
-						Host:            expectedHost,
-						ContainerIP:     expectedInstanceAddress,
-						Domain:          expectedDomain,
-						Port:            expectedExternalPort,
-						ContainerPort:   expectedContainerPort,
-						ModificationTag: &models.ModificationTag{},
-					}))
+					lrp, evacuating := beforeActualLRP.Resolve()
+					lrpRoutingInfo := &routingtable.ActualLRPRoutingInfo{
+						ActualLRP:  lrp,
+						Evacuating: evacuating,
+					}
 
-					key, endpoint = fakeTable.RemoveEndpointArgsForCall(1)
-					Expect(key).To(Equal(expectedAdditionalRoutingKey))
-					Expect(endpoint).To(Equal(routingtable.Endpoint{
-						InstanceGuid:    expectedInstanceGuid,
-						Index:           expectedIndex,
-						Host:            expectedHost,
-						ContainerIP:     expectedInstanceAddress,
-						Domain:          expectedDomain,
-						Port:            expectedAdditionalExternalPort,
-						ContainerPort:   expectedAdditionalContainerPort,
-						ModificationTag: &models.ModificationTag{},
-					}))
-
+					routingInfo := fakeTable.RemoveEndpointArgsForCall(0)
+					Expect(routingInfo).To(Equal(lrpRoutingInfo))
 				})
 
 				It("should emit whatever the table tells it to emit", func() {
-					Expect(natsEmitter.EmitCallCount()).To(Equal(2))
+					Expect(natsEmitter.EmitCallCount()).To(Equal(1))
 
 					messagesToEmit := natsEmitter.EmitArgsForCall(0)
 					Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
@@ -1083,7 +620,7 @@ var _ = Describe("NATSHandler", func() {
 					afterActualLRP := &models.ActualLRPGroup{
 						Instance: &models.ActualLRP{
 							ActualLRPKey:         models.NewActualLRPKey(expectedProcessGuid, expectedIndex, "domain"),
-							ActualLRPInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGuid, "cell-id"),
+							ActualLRPInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGUID, "cell-id"),
 							ActualLRPNetInfo: models.NewActualLRPNetInfo(
 								expectedHost,
 								expectedInstanceAddress,
@@ -1117,10 +654,6 @@ var _ = Describe("NATSHandler", func() {
 				It("should not add or update the endpoint", func() {
 					Expect(fakeTable.AddEndpointCallCount()).To(BeZero())
 				})
-
-				It("should not emit anything", func() {
-					Expect(natsEmitter.EmitCallCount()).To(Equal(0))
-				})
 			})
 
 		})
@@ -1132,12 +665,12 @@ var _ = Describe("NATSHandler", func() {
 				)
 
 				BeforeEach(func() {
-					fakeTable.RemoveEndpointReturns(dummyMessagesToEmit)
+					fakeTable.RemoveEndpointReturns(emptyTCPRouteMappings, dummyMessagesToEmit)
 
 					actualLRP = &models.ActualLRPGroup{
 						Instance: &models.ActualLRP{
 							ActualLRPKey:         models.NewActualLRPKey(expectedProcessGuid, expectedIndex, "domain"),
-							ActualLRPInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGuid, "cell-id"),
+							ActualLRPInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGUID, "cell-id"),
 							ActualLRPNetInfo: models.NewActualLRPNetInfo(
 								expectedHost,
 								expectedInstanceAddress,
@@ -1168,43 +701,21 @@ var _ = Describe("NATSHandler", func() {
 				})
 
 				It("should remove the endpoint from the table", func() {
-					Expect(fakeTable.RemoveEndpointCallCount()).To(Equal(2))
+					Expect(fakeTable.RemoveEndpointCallCount()).To(Equal(1))
 
-					key, endpoint := fakeTable.RemoveEndpointArgsForCall(0)
-					Expect(key).To(Equal(expectedRoutingKey))
-					Expect(endpoint).To(Equal(routingtable.Endpoint{
-						InstanceGuid:    expectedInstanceGuid,
-						Index:           expectedIndex,
-						Host:            expectedHost,
-						ContainerIP:     expectedInstanceAddress,
-						Domain:          expectedDomain,
-						Port:            expectedExternalPort,
-						ContainerPort:   expectedContainerPort,
-						ModificationTag: &models.ModificationTag{},
-					}))
-
-					key, endpoint = fakeTable.RemoveEndpointArgsForCall(1)
-					Expect(key).To(Equal(expectedAdditionalRoutingKey))
-					Expect(endpoint).To(Equal(routingtable.Endpoint{
-						InstanceGuid:    expectedInstanceGuid,
-						Index:           expectedIndex,
-						Host:            expectedHost,
-						ContainerIP:     expectedInstanceAddress,
-						Domain:          expectedDomain,
-						Port:            expectedAdditionalExternalPort,
-						ContainerPort:   expectedAdditionalContainerPort,
-						ModificationTag: &models.ModificationTag{},
-					}))
-
+					lrp, evacuating := actualLRP.Resolve()
+					lrpRoutingInfo := &routingtable.ActualLRPRoutingInfo{
+						ActualLRP:  lrp,
+						Evacuating: evacuating,
+					}
+					routingInfo := fakeTable.RemoveEndpointArgsForCall(0)
+					Expect(routingInfo).To(Equal(lrpRoutingInfo))
 				})
 
 				It("should emit whatever the table tells it to emit", func() {
-					Expect(natsEmitter.EmitCallCount()).To(Equal(2))
+					Expect(natsEmitter.EmitCallCount()).To(Equal(1))
 
 					messagesToEmit := natsEmitter.EmitArgsForCall(0)
-					Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
-
-					messagesToEmit = natsEmitter.EmitArgsForCall(1)
 					Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
 				})
 			})
@@ -1256,7 +767,7 @@ var _ = Describe("NATSHandler", func() {
 		Context("when bbs server returns desired and actual lrps", func() {
 			var (
 				desiredInfo []*models.DesiredLRPSchedulingInfo
-				actualInfo  []*endpoint.ActualLRPRoutingInfo
+				actualInfo  []*routingtable.ActualLRPRoutingInfo
 				domains     models.DomainSet
 
 				endpoint1, endpoint2, endpoint3, endpoint4 routingtable.Endpoint
@@ -1269,7 +780,7 @@ var _ = Describe("NATSHandler", func() {
 				hostname3 := "baz.example.com"
 
 				endpoint1 = routingtable.Endpoint{
-					InstanceGuid:    "ig-1",
+					InstanceGUID:    "ig-1",
 					Host:            "1.1.1.1",
 					Index:           0,
 					Port:            11,
@@ -1278,7 +789,7 @@ var _ = Describe("NATSHandler", func() {
 					ModificationTag: currentTag,
 				}
 				endpoint2 = routingtable.Endpoint{
-					InstanceGuid:    "ig-2",
+					InstanceGUID:    "ig-2",
 					Host:            "2.2.2.2",
 					Index:           0,
 					Port:            22,
@@ -1287,7 +798,7 @@ var _ = Describe("NATSHandler", func() {
 					ModificationTag: currentTag,
 				}
 				endpoint3 = routingtable.Endpoint{
-					InstanceGuid:    "ig-3",
+					InstanceGUID:    "ig-3",
 					Host:            "2.2.2.2",
 					Index:           1,
 					Port:            23,
@@ -1333,7 +844,7 @@ var _ = Describe("NATSHandler", func() {
 				actualLRPGroup1 := &models.ActualLRPGroup{
 					Instance: &models.ActualLRP{
 						ActualLRPKey:         models.NewActualLRPKey("pg-1", 0, "domain"),
-						ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint1.InstanceGuid, "cell-id"),
+						ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint1.InstanceGUID, "cell-id"),
 						ActualLRPNetInfo:     models.NewActualLRPNetInfo(endpoint1.Host, "container-ip-1", models.NewPortMapping(endpoint1.Port, endpoint1.ContainerPort)),
 						State:                models.ActualLRPStateRunning,
 					},
@@ -1342,7 +853,7 @@ var _ = Describe("NATSHandler", func() {
 				actualLRPGroup2 := &models.ActualLRPGroup{
 					Instance: &models.ActualLRP{
 						ActualLRPKey:         models.NewActualLRPKey("pg-2", 0, "domain"),
-						ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint2.InstanceGuid, "cell-id"),
+						ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint2.InstanceGUID, "cell-id"),
 						ActualLRPNetInfo:     models.NewActualLRPNetInfo(endpoint2.Host, "container-ip-2", models.NewPortMapping(endpoint2.Port, endpoint2.ContainerPort)),
 						State:                models.ActualLRPStateRunning,
 					},
@@ -1351,7 +862,7 @@ var _ = Describe("NATSHandler", func() {
 				actualLRPGroup3 := &models.ActualLRPGroup{
 					Instance: &models.ActualLRP{
 						ActualLRPKey:         models.NewActualLRPKey("pg-3", 1, "domain"),
-						ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint3.InstanceGuid, "cell-id"),
+						ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint3.InstanceGUID, "cell-id"),
 						ActualLRPNetInfo:     models.NewActualLRPNetInfo(endpoint3.Host, "container-ip-3", models.NewPortMapping(endpoint3.Port, endpoint3.ContainerPort)),
 						State:                models.ActualLRPStateRunning,
 					},
@@ -1360,22 +871,47 @@ var _ = Describe("NATSHandler", func() {
 				desiredInfo = []*models.DesiredLRPSchedulingInfo{
 					schedulingInfo1, schedulingInfo2, schedulingInfo3,
 				}
-				actualInfo = []*endpoint.ActualLRPRoutingInfo{
-					endpoint.NewActualLRPRoutingInfo(actualLRPGroup1),
-					endpoint.NewActualLRPRoutingInfo(actualLRPGroup2),
-					endpoint.NewActualLRPRoutingInfo(actualLRPGroup3),
+				actualInfo = []*routingtable.ActualLRPRoutingInfo{
+					routingtable.NewActualLRPRoutingInfo(actualLRPGroup1),
+					routingtable.NewActualLRPRoutingInfo(actualLRPGroup2),
+					routingtable.NewActualLRPRoutingInfo(actualLRPGroup3),
 				}
 
 				domains = models.NewDomainSet([]string{"domain"})
 
-				fakeTable.SwapStub = func(t routingtable.NATSRoutingTable, d models.DomainSet) routingtable.MessagesToEmit {
-					routes := routingtable.RoutesByRoutingKeyFromSchedulingInfos(desiredInfo)
+				routesByRoutingKey := func(schedulingInfos []*models.DesiredLRPSchedulingInfo) map[routingtable.RoutingKey][]routingtable.Route {
+					byRoutingKey := map[routingtable.RoutingKey][]routingtable.Route{}
+					for _, desired := range schedulingInfos {
+						routes, err := cfroutes.CFRoutesFromRoutingInfo(desired.Routes)
+						if err == nil && len(routes) > 0 {
+							for _, cfRoute := range routes {
+								key := routingtable.RoutingKey{ProcessGUID: desired.ProcessGuid, ContainerPort: cfRoute.Port}
+								var routeEntries []routingtable.Route
+								for _, hostname := range cfRoute.Hostnames {
+									routeEntries = append(routeEntries, routingtable.Route{
+										Hostname:         hostname,
+										LogGUID:          desired.LogGuid,
+										RouteServiceUrl:  cfRoute.RouteServiceUrl,
+										IsolationSegment: cfRoute.IsolationSegment,
+									})
+								}
+								byRoutingKey[key] = append(byRoutingKey[key], routeEntries...)
+							}
+						}
+					}
+
+					return byRoutingKey
+				}
+
+				fakeTable.SwapStub = func(t routingtable.RoutingTable, d models.DomainSet) (routingtable.TCPRouteMappings, routingtable.MessagesToEmit) {
+
+					routes := routesByRoutingKey(desiredInfo)
 					routesList := make([]routingtable.Route, 3)
 					for _, route := range routes {
 						routesList = append(routesList, route[0])
 					}
 
-					return routingtable.MessagesToEmit{
+					return emptyTCPRouteMappings, routingtable.MessagesToEmit{
 						RegistrationMessages: []routingtable.RegistryMessage{
 							routingtable.RegistryMessageFor(endpoint1, routesList[0]),
 							routingtable.RegistryMessageFor(endpoint2, routesList[1]),
@@ -1389,7 +925,7 @@ var _ = Describe("NATSHandler", func() {
 				routeHandler.Sync(logger, desiredInfo, actualInfo, domains, nil)
 				Expect(fakeTable.SwapCallCount()).Should(Equal(1))
 				tempRoutingTable, swapDomains := fakeTable.SwapArgsForCall(0)
-				Expect(tempRoutingTable.RouteCount()).To(Equal(3))
+				Expect(tempRoutingTable.HTTPEndpointCount()).To(Equal(3))
 				Expect(swapDomains).To(Equal(domains))
 
 				Expect(natsEmitter.EmitCallCount()).Should(Equal(1))
@@ -1397,8 +933,8 @@ var _ = Describe("NATSHandler", func() {
 
 			Context("when emitting metrics in localMode", func() {
 				BeforeEach(func() {
-					routeHandler = routehandlers.NewNATSHandler(fakeTable, natsEmitter, true)
-					fakeTable.RouteCountReturns(5)
+					routeHandler = routehandlers.NewHandler(fakeTable, natsEmitter, nil, true)
+					fakeTable.HTTPEndpointCountReturns(5)
 				})
 
 				It("emits the HTTPRouteCount", func() {
@@ -1422,7 +958,7 @@ var _ = Describe("NATSHandler", func() {
 					})
 
 					endpoint4 = routingtable.Endpoint{
-						InstanceGuid:    "ig-4",
+						InstanceGUID:    "ig-4",
 						Host:            "3.3.3.3",
 						Index:           1,
 						Port:            23,
@@ -1434,7 +970,7 @@ var _ = Describe("NATSHandler", func() {
 					actualLRPEvent := models.NewActualLRPCreatedEvent(&models.ActualLRPGroup{
 						Instance: &models.ActualLRP{
 							ActualLRPKey:         models.NewActualLRPKey("pg-4", 1, "domain"),
-							ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint4.InstanceGuid, "cell-id"),
+							ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint4.InstanceGUID, "cell-id"),
 							ActualLRPNetInfo:     models.NewActualLRPNetInfo(endpoint4.Host, "container-ip-4", models.NewPortMapping(endpoint4.Port, endpoint4.ContainerPort)),
 							State:                models.ActualLRPStateRunning,
 						},
@@ -1456,7 +992,7 @@ var _ = Describe("NATSHandler", func() {
 				It("updates the routing table and emit cached events", func() {
 					Expect(fakeTable.SwapCallCount()).Should(Equal(1))
 					tempRoutingTable, _ := fakeTable.SwapArgsForCall(0)
-					Expect(tempRoutingTable.RouteCount()).Should(Equal(4))
+					Expect(tempRoutingTable.HTTPEndpointCount()).Should(Equal(4))
 					Expect(natsEmitter.EmitCallCount()).Should(Equal(1))
 				})
 			})
@@ -1468,7 +1004,7 @@ var _ = Describe("NATSHandler", func() {
 		BeforeEach(func() {
 			currentTag := &models.ModificationTag{Epoch: "abc", Index: 1}
 			endpoint1 := routingtable.Endpoint{
-				InstanceGuid:    "ig-1",
+				InstanceGUID:    "ig-1",
 				Host:            "1.1.1.1",
 				Index:           0,
 				Port:            11,
@@ -1477,7 +1013,7 @@ var _ = Describe("NATSHandler", func() {
 				ModificationTag: currentTag,
 			}
 			endpoint2 := routingtable.Endpoint{
-				InstanceGuid:    "ig-2",
+				InstanceGUID:    "ig-2",
 				Host:            "2.2.2.2",
 				Index:           0,
 				Port:            22,
@@ -1486,7 +1022,7 @@ var _ = Describe("NATSHandler", func() {
 				ModificationTag: currentTag,
 			}
 			endpoint3 := routingtable.Endpoint{
-				InstanceGuid:    "ig-3",
+				InstanceGUID:    "ig-3",
 				Host:            "2.2.2.2",
 				Index:           1,
 				Port:            23,
@@ -1503,12 +1039,12 @@ var _ = Describe("NATSHandler", func() {
 				},
 			}
 
-			fakeTable.MessagesToEmitReturns(registrationMsgs)
-			fakeTable.RouteCountReturns(3)
+			fakeTable.EmitReturns(emptyTCPRouteMappings, registrationMsgs)
+			fakeTable.HTTPEndpointCountReturns(3)
 		})
 		It("emits all registration events", func() {
 			routeHandler.Emit(logger)
-			Expect(fakeTable.MessagesToEmitCallCount()).To(Equal(1))
+			Expect(fakeTable.EmitCallCount()).To(Equal(1))
 			Expect(natsEmitter.EmitCallCount()).To(Equal(1))
 			Expect(natsEmitter.EmitArgsForCall(0)).To(Equal(registrationMsgs))
 		})
@@ -1526,7 +1062,7 @@ var _ = Describe("NATSHandler", func() {
 
 	Describe("RefreshDesired", func() {
 		BeforeEach(func() {
-			fakeTable.SetRoutesReturns(routingtable.MessagesToEmit{})
+			fakeTable.SetRoutesReturns(emptyTCPRouteMappings, routingtable.MessagesToEmit{})
 		})
 
 		It("adds the desired info to the routing table", func() {
@@ -1544,23 +1080,21 @@ var _ = Describe("NATSHandler", func() {
 			routeHandler.RefreshDesired(logger, []*models.DesiredLRPSchedulingInfo{desiredInfo})
 
 			Expect(fakeTable.SetRoutesCallCount()).To(Equal(1))
-			key, routes, _ := fakeTable.SetRoutesArgsForCall(0)
-			Expect(key).To(Equal(endpoint.RoutingKey{"pg-1", 8080}))
-			Expect(routes).To(Equal([]routingtable.Route{{Hostname: "foo.example.com", LogGuid: "lg1", RouteServiceUrl: "https://rs.example.com"}}))
+			before, after := fakeTable.SetRoutesArgsForCall(0)
+			Expect(before).To(BeNil())
+			Expect(after).To(Equal(desiredInfo))
 			Expect(natsEmitter.EmitCallCount()).Should(Equal(1))
 		})
 	})
 
 	Describe("ShouldRefreshDesired", func() {
 		var (
-			actualInfo *endpoint.ActualLRPRoutingInfo
-			hostname   string
+			actualInfo *routingtable.ActualLRPRoutingInfo
 		)
 		BeforeEach(func() {
 			currentTag := models.ModificationTag{Epoch: "abc", Index: 1}
-			hostname = "foo.example.com"
 			endpoint1 := routingtable.Endpoint{
-				InstanceGuid:    "ig-1",
+				InstanceGUID:    "ig-1",
 				Host:            "1.1.1.1",
 				Index:           0,
 				Port:            11,
@@ -1569,10 +1103,10 @@ var _ = Describe("NATSHandler", func() {
 				ModificationTag: &currentTag,
 			}
 
-			actualInfo = &endpoint.ActualLRPRoutingInfo{
+			actualInfo = &routingtable.ActualLRPRoutingInfo{
 				ActualLRP: &models.ActualLRP{
 					ActualLRPKey:         models.NewActualLRPKey("pg-1", 0, "domain"),
-					ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint1.InstanceGuid, "cell-id"),
+					ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint1.InstanceGUID, "cell-id"),
 					ActualLRPNetInfo: models.NewActualLRPNetInfo(endpoint1.Host,
 						"container-ip-1",
 						models.NewPortMapping(endpoint1.Port, endpoint1.ContainerPort),
@@ -1587,41 +1121,21 @@ var _ = Describe("NATSHandler", func() {
 
 		Context("when corresponding desired state exists in the table", func() {
 			BeforeEach(func() {
-				fakeTable.GetRoutesReturns([]routingtable.Route{
-					routingtable.Route{Hostname: hostname, LogGuid: "skldjfls", RouteServiceUrl: "https://rs.example.com"},
-				})
+				fakeTable.HasExternalRoutesReturns(false)
 			})
 
 			It("returns false", func() {
-				Expect(routeHandler.ShouldRefreshDesired(actualInfo)).To(BeFalse())
-			})
-		})
-
-		Context("when some ports are not known to the routing table", func() {
-			BeforeEach(func() {
-				fakeTable.GetRoutesStub = func(key endpoint.RoutingKey) []routingtable.Route {
-					if key.ContainerPort != 8080 {
-						return nil
-					}
-
-					return []routingtable.Route{
-						routingtable.Route{Hostname: hostname, LogGuid: "skldjfls", RouteServiceUrl: "https://rs.example.com"},
-					}
-				}
-			})
-
-			It("returns false", func() {
-				Expect(routeHandler.ShouldRefreshDesired(actualInfo)).To(BeFalse())
+				Expect(routeHandler.ShouldRefreshDesired(actualInfo)).To(BeTrue())
 			})
 		})
 
 		Context("when corresponding desired state does not exist in the table", func() {
 			BeforeEach(func() {
-				fakeTable.GetRoutesReturns(nil)
+				fakeTable.HasExternalRoutesReturns(true)
 			})
 
 			It("returns true", func() {
-				Expect(routeHandler.ShouldRefreshDesired(actualInfo)).To(BeTrue())
+				Expect(routeHandler.ShouldRefreshDesired(actualInfo)).To(BeFalse())
 			})
 		})
 	})
