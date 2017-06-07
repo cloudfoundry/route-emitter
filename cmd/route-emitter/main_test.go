@@ -471,6 +471,23 @@ var _ = Describe("Route Emitter", func() {
 						}, 5*time.Second).Should(BeTrue())
 					})
 
+					FContext("and the route-emitter is running in direct instance routes mode", func() {
+						BeforeEach(func() {
+							cfgs = append(cfgs, func(cfg *config.RouteEmitterConfig) {
+								cfg.RegisterDirectInstanceRoutes = true
+							})
+						})
+
+						It("contains the container host and port", func() {
+							expectedTcpRouteMapping.HostIP = netInfo.InstanceAddress
+							expectedTcpRouteMapping.HostPort = uint16(netInfo.Ports[0].ContainerPort)
+							Eventually(func() bool {
+								mappings, _ := routingAPIRunner.GetClient().TcpRouteMappings()
+								return contains(mappings, expectedTcpRouteMapping)
+							}, 5*time.Second).Should(BeTrue())
+						})
+					})
+
 					Context("when running in local mode", func() {
 						BeforeEach(func() {
 							consulClusterAddress = ""
@@ -786,7 +803,7 @@ var _ = Describe("Route Emitter", func() {
 				FContext("and the route-emitter is running in direct instance routes mode", func() {
 					BeforeEach(func() {
 						cfgs = append(cfgs, func(cfg *config.RouteEmitterConfig) {
-							cfg.RegisterDirectInstaceRoutes = true
+							cfg.RegisterDirectInstanceRoutes = true
 						})
 					})
 

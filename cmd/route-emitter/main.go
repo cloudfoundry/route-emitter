@@ -76,7 +76,7 @@ func main() {
 	bbsClient := initializeBBSClient(logger, cfg)
 
 	localMode := cfg.CellID != ""
-	table := initializeRoutingTable(logger, cfg.RegisterDirectInstaceRoutes)
+	table := initializeRoutingTable(logger, cfg.RegisterDirectInstanceRoutes)
 	natsEmitter := initializeNatsEmitter(logger, natsClient, cfg.RouteEmittingWorkers)
 	natsHandler := routehandlers.NewNATSHandler(table, natsEmitter, localMode)
 	handlers := []watcher.RouteHandler{natsHandler}
@@ -92,7 +92,7 @@ func main() {
 		routingAPIAddress := fmt.Sprintf("%s:%d", cfg.RoutingAPI.URL, cfg.RoutingAPI.Port)
 		logger.Debug("creating-routing-api-client", lager.Data{"api-location": routingAPIAddress})
 		routingAPIClient := routing_api.NewClient(routingAPIAddress, false)
-		routingAPIEmitter := emitter.NewRoutingAPIEmitter(tcpLogger, routingAPIClient, uaaClient, int(routeTTL.Seconds()), false)
+		routingAPIEmitter := emitter.NewRoutingAPIEmitter(tcpLogger, routingAPIClient, uaaClient, int(routeTTL.Seconds()), cfg.RegisterDirectInstanceRoutes)
 		tcpTable := routingtable.NewTCPTable(tcpLogger, nil)
 		routingAPIHandler := routehandlers.NewRoutingAPIHandler(tcpTable, routingAPIEmitter, localMode)
 		handlers = append(handlers, routingAPIHandler)
