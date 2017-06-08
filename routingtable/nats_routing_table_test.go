@@ -176,10 +176,10 @@ var _ = Describe("RoutingTable", func() {
 			Consistently(logger).ShouldNot(Say("collision-detected-with-endpoint"))
 		})
 
-		Context("when we have an evacuating endpoint and we add an instance for that added", func() {
+		Context("when we have an evacuating endpoint and an instance for that added", func() {
 			FIt("emits a registration for the instance and a unregister for the evacuating", func() {
-				actualLRP := createActualLRP(key, newInstanceEndpointAfterEvacuation)
-				_, messagesToEmit = table.AddEndpoint(actualLRP)
+				evacuatingActualLRP := createActualLRP(key, newInstanceEndpointAfterEvacuation)
+				_, messagesToEmit = table.AddEndpoint(evacuatingActualLRP)
 				expected := routingtable.MessagesToEmit{
 					RegistrationMessages: []routingtable.RegistryMessage{
 						routingtable.RegistryMessageFor(newInstanceEndpointAfterEvacuation, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
@@ -187,6 +187,7 @@ var _ = Describe("RoutingTable", func() {
 				}
 				Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
 
+				actualLRP := createActualLRP(key, evacuating1)
 				_, messagesToEmit = table.RemoveEndpoint(actualLRP)
 				expected = routingtable.MessagesToEmit{
 					UnregistrationMessages: []routingtable.RegistryMessage{

@@ -58,7 +58,10 @@ func (table *routingTable) AddEndpoint(actualLRP *endpoint.ActualLRPRoutingInfo)
 		table.Lock()
 		defer table.Unlock()
 
-		key := endpoint.RoutingKey{ProcessGUID: actualLRP.ActualLRP.ProcessGuid, ContainerPort: uint32(routingEndpoint.ContainerPort)}
+		key := endpoint.RoutingKey{
+			ProcessGUID:   actualLRP.ActualLRP.ProcessGuid,
+			ContainerPort: routingEndpoint.ContainerPort,
+		}
 		currentEntry := table.entries[key]
 		newEntry := currentEntry.copy()
 		newEntry.Endpoints[routingEndpoint.key()] = routingEndpoint
@@ -82,6 +85,7 @@ func (table *routingTable) AddEndpoint(actualLRP *endpoint.ActualLRPRoutingInfo)
 	}
 	return nil, messagesToEmit
 }
+
 func (table *routingTable) RemoveEndpoint(actualLRP *endpoint.ActualLRPRoutingInfo) (event.RoutingEvents, MessagesToEmit) {
 	table.logger.Session("removing-endpoint")
 	table.logger.Info("starting")
@@ -94,7 +98,10 @@ func (table *routingTable) RemoveEndpoint(actualLRP *endpoint.ActualLRPRoutingIn
 
 	var messagesToEmit MessagesToEmit
 	for _, routingEndpoint := range endpoints {
-		key := endpoint.RoutingKey{ProcessGUID: actualLRP.ActualLRP.ProcessGuid, ContainerPort: uint32(routingEndpoint.ContainerPort)}
+		key := endpoint.RoutingKey{
+			ProcessGUID:   actualLRP.ActualLRP.ProcessGuid,
+			ContainerPort: routingEndpoint.ContainerPort,
+		}
 		table.Lock()
 		defer table.Unlock()
 
@@ -102,7 +109,9 @@ func (table *routingTable) RemoveEndpoint(actualLRP *endpoint.ActualLRPRoutingIn
 		endpointKey := routingEndpoint.key()
 		currentEndpoint, ok := currentEntry.Endpoints[endpointKey]
 
-		if !ok || (!currentEndpoint.ModificationTag.Equal(routingEndpoint.ModificationTag) && !currentEndpoint.ModificationTag.SucceededBy(routingEndpoint.ModificationTag)) {
+		if !ok ||
+			(!currentEndpoint.ModificationTag.Equal(routingEndpoint.ModificationTag) &&
+				!currentEndpoint.ModificationTag.SucceededBy(routingEndpoint.ModificationTag)) {
 			continue
 		}
 
