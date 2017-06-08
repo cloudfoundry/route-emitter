@@ -287,6 +287,7 @@ func routeServiceUrlHasChanged(existingEntry, newEntry *RoutableEndpoints) bool 
 func createAndAddMessages(endpoint Endpoint, routes []Route, messages *[]RegistryMessage) {
 	for _, route := range routes {
 		message := RegistryMessageFor(endpoint, route)
+		fmt.Printf("adding-message  %#v\n\n", message)
 		*messages = append(*messages, message)
 	}
 }

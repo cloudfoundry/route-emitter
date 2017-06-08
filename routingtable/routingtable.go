@@ -63,7 +63,7 @@ func (table *routingTable) AddEndpoint(actualLRP *endpoint.ActualLRPRoutingInfo)
 		newEntry := currentEntry.copy()
 		newEntry.Endpoints[routingEndpoint.key()] = routingEndpoint
 		table.entries[key] = newEntry
-		table.logger.Debug("getting-route", lager.Data{"key": key, "routes": currentEntry.Routes})
+		table.logger.Debug("getting-route", lager.Data{"key": key, "routes": currentEntry.Routes, "endpoint": routingEndpoint})
 
 		// address := routingEndpoint.address()
 
@@ -85,8 +85,39 @@ func (table *routingTable) AddEndpoint(actualLRP *endpoint.ActualLRPRoutingInfo)
 	}
 	return nil, messagesToEmit
 }
-func (t *routingTable) RemoveEndpoint(actualLRP *endpoint.ActualLRPRoutingInfo) (event.RoutingEvents, MessagesToEmit) {
-	return nil, MessagesToEmit{}
+func (table *routingTable) RemoveEndpoint(actualLRP *endpoint.ActualLRPRoutingInfo) (event.RoutingEvents, MessagesToEmit) {
+	table.logger.Session("removing-endpoint")
+	table.logger.Info("starting")
+	defer table.logger.Info("complete")
+	endpoints, err := EndpointsFromActual(actualLRP)
+	if err != nil {
+		table.logger.Error("failed-to-extract-endpoint-from-actual", err)
+		return nil, MessagesToEmit{}
+	}
+
+	var messagesToEmit MessagesToEmit
+	for _, routingEndpoint := range endpoints {
+		key := endpoint.RoutingKey{ProcessGUID: actualLRP.ActualLRP.ProcessGuid, ContainerPort: uint32(routingEndpoint.ContainerPort)}
+		table.Lock()
+		defer table.Unlock()
+
+		currentEntry := table.entries[key]
+		endpointKey := routingEndpoint.key()
+		currentEndpoint, ok := currentEntry.Endpoints[endpointKey]
+
+		if !ok || (!currentEndpoint.ModificationTag.Equal(routingEndpoint.ModificationTag) && !currentEndpoint.ModificationTag.SucceededBy(routingEndpoint.ModificationTag)) {
+			continue
+		}
+
+		newEntry := currentEntry.copy()
+		delete(newEntry.Endpoints, endpointKey)
+		table.entries[key] = newEntry
+
+		//delete(table.addressEntries, routingEndpoint.address())
+
+		messagesToEmit = messagesToEmit.Merge(table.emit(key, currentEntry, newEntry))
+	}
+	return nil, messagesToEmit
 }
 func (t *routingTable) Swap(other RoutingTable, domains models.DomainSet) (event.RoutingEvents, MessagesToEmit) {
 	return nil, MessagesToEmit{}
@@ -144,6 +175,7 @@ func (table *routingTable) SetRoutes(desiredLRP *models.DesiredLRPSchedulingInfo
 
 func (table *routingTable) emit(key endpoint.RoutingKey, oldEntry, newEntry RoutableEndpoints) MessagesToEmit {
 	var messagesToEmit MessagesToEmit
+	table.logger.Debug("in-emit", lager.Data{"oldEntry": oldEntry, "newEntry": newEntry})
 	messagesToEmit = table.messageBuilder.RegistrationsFor(&oldEntry, &newEntry)
 	messagesToEmit = messagesToEmit.Merge(table.messageBuilder.UnregistrationsFor(&oldEntry, &newEntry, nil))
 

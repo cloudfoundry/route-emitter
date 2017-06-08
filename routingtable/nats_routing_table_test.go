@@ -10,6 +10,7 @@ import (
 	"code.cloudfoundry.org/route-emitter/routingtable/schema/endpoint"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	. "github.com/onsi/gomega/gbytes"
 )
 
 var _ = Describe("RoutingTable", func() {
@@ -75,17 +76,17 @@ var _ = Describe("RoutingTable", func() {
 	// 	Evacuating:      false,
 	// 	ModificationTag: currentTag,
 	// }
-	// newInstanceEndpointAfterEvacuation := routingtable.Endpoint{
-	// 	InstanceGuid:    "ig-5",
-	// 	Host:            "5.5.5.5",
-	// 	ContainerIP:     "4.5.6.7",
-	// 	Index:           0,
-	// 	Domain:          domain,
-	// 	Port:            55,
-	// 	ContainerPort:   8080,
-	// 	Evacuating:      false,
-	// 	ModificationTag: currentTag,
-	// }
+	newInstanceEndpointAfterEvacuation := routingtable.Endpoint{
+		InstanceGuid:    "ig-5",
+		Host:            "5.5.5.5",
+		ContainerIP:     "4.5.6.7",
+		Index:           0,
+		Domain:          domain,
+		Port:            55,
+		ContainerPort:   8080,
+		Evacuating:      false,
+		ModificationTag: currentTag,
+	}
 	evacuating1 := routingtable.Endpoint{
 		InstanceGuid:    "ig-1",
 		Host:            "1.1.1.1",
@@ -149,7 +150,7 @@ var _ = Describe("RoutingTable", func() {
 
 	Describe("Evacuating endpoints", func() {
 		BeforeEach(func() {
-			schedulingInfo := createDesiredLRPSchedulingInfo("pg", hostname1, key.ContainerPort, logGuid, *currentTag)
+			schedulingInfo := createDesiredLRPSchedulingInfo(key.ProcessGUID, hostname1, key.ContainerPort, logGuid, *currentTag)
 			_, messagesToEmit = table.SetRoutes(schedulingInfo)
 			Expect(messagesToEmit).To(BeZero())
 
@@ -171,29 +172,30 @@ var _ = Describe("RoutingTable", func() {
 			Expect(messagesToEmit).To(BeZero())
 		})
 
-		// It("does not log an address collision", func() {
-		// 	Consistently(logger).ShouldNot(Say("collision-detected-with-endpoint"))
-		// })
+		It("does not log an address collision", func() {
+			Consistently(logger).ShouldNot(Say("collision-detected-with-endpoint"))
+		})
 
-		// Context("when we have an evacuating endpoint and we add an instance for that added", func() {
-		// 	It("emits a registration for the instance and a unregister for the evacuating", func() {
-		// 		messagesToEmit = table.AddEndpoint(key, newInstanceEndpointAfterEvacuation)
-		// 		expected := routingtable.MessagesToEmit{
-		// 			RegistrationMessages: []routingtable.RegistryMessage{
-		// 				routingtable.RegistryMessageFor(newInstanceEndpointAfterEvacuation, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
-		// 			},
-		// 		}
-		// 		Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
+		Context("when we have an evacuating endpoint and we add an instance for that added", func() {
+			FIt("emits a registration for the instance and a unregister for the evacuating", func() {
+				actualLRP := createActualLRP(key, newInstanceEndpointAfterEvacuation)
+				_, messagesToEmit = table.AddEndpoint(actualLRP)
+				expected := routingtable.MessagesToEmit{
+					RegistrationMessages: []routingtable.RegistryMessage{
+						routingtable.RegistryMessageFor(newInstanceEndpointAfterEvacuation, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
+					},
+				}
+				Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
 
-		// 		messagesToEmit = table.RemoveEndpoint(key, evacuating1)
-		// 		expected = routingtable.MessagesToEmit{
-		// 			UnregistrationMessages: []routingtable.RegistryMessage{
-		// 				routingtable.RegistryMessageFor(evacuating1, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
-		// 			},
-		// 		}
-		// 		Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
-		// 	})
-		// })
+				_, messagesToEmit = table.RemoveEndpoint(actualLRP)
+				expected = routingtable.MessagesToEmit{
+					UnregistrationMessages: []routingtable.RegistryMessage{
+						routingtable.RegistryMessageFor(evacuating1, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
+					},
+				}
+				Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
+			})
+		})
 	})
 
 	Context("when internal address message builder is used", func() {
