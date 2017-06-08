@@ -19,7 +19,6 @@ func RegistryMessageFor(endpoint Endpoint, route Route) RegistryMessage {
 	if endpoint.InstanceGuid != "" {
 		index = fmt.Sprintf("%d", endpoint.Index)
 	}
-	fmt.Printf("endpoint is %#v\n\n", endpoint)
 	return RegistryMessage{
 		URIs:             []string{route.Hostname},
 		Host:             endpoint.Host,

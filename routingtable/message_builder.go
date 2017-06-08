@@ -1,10 +1,6 @@
 package routingtable
 
-import (
-	"fmt"
-
-	"code.cloudfoundry.org/bbs/models"
-)
+import "code.cloudfoundry.org/bbs/models"
 
 type MessageBuilder interface {
 	RegistrationsFor(existingEntry, newEntry *RoutableEndpoints) MessagesToEmit
@@ -40,14 +36,12 @@ func (InternalAddressMessageBuilder) RegistrationsFor(existingEntry, newEntry *R
 	messagesToEmit := MessagesToEmit{}
 	if len(newEntry.Routes) == 0 {
 		//no hostnames, so nothing could possibly be registered
-		fmt.Println("no-hostname")
 		return messagesToEmit
 	}
 
 	// only new entry OR something changed between existing and new entry
 	if existingEntry == nil || hostnamesHaveChanged(existingEntry, newEntry) || routeServiceUrlHasChanged(existingEntry, newEntry) {
 		for _, endpoint := range newEntry.Endpoints {
-			fmt.Println("in-registrations-for")
 			createAndAddInternalAddressMessages(endpoint, newEntry.Routes, &messagesToEmit.RegistrationMessages)
 		}
 		return messagesToEmit
@@ -287,7 +281,6 @@ func routeServiceUrlHasChanged(existingEntry, newEntry *RoutableEndpoints) bool 
 func createAndAddMessages(endpoint Endpoint, routes []Route, messages *[]RegistryMessage) {
 	for _, route := range routes {
 		message := RegistryMessageFor(endpoint, route)
-		fmt.Printf("adding-message  %#v\n\n", message)
 		*messages = append(*messages, message)
 	}
 }

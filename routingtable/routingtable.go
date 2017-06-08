@@ -63,8 +63,6 @@ func (table *routingTable) AddEndpoint(actualLRP *endpoint.ActualLRPRoutingInfo)
 		newEntry := currentEntry.copy()
 		newEntry.Endpoints[routingEndpoint.key()] = routingEndpoint
 		table.entries[key] = newEntry
-		table.logger.Debug("getting-route", lager.Data{"key": key, "routes": currentEntry.Routes, "endpoint": routingEndpoint})
-
 		// address := routingEndpoint.address()
 
 		// if existingEndpointKey, ok := table.addressEntries[address]; ok {
@@ -81,7 +79,6 @@ func (table *routingTable) AddEndpoint(actualLRP *endpoint.ActualLRPRoutingInfo)
 
 		// table.addressEntries[address] = routingEndpoint.key()
 		messagesToEmit = messagesToEmit.Merge(table.emit(key, currentEntry, newEntry))
-		table.logger.Debug("emit-messages", lager.Data{"messages": messagesToEmit})
 	}
 	return nil, messagesToEmit
 }
@@ -149,7 +146,6 @@ func (table *routingTable) SetRoutes(desiredLRP *models.DesiredLRPSchedulingInfo
 				IsolationSegment: route.IsolationSegment,
 			}
 			routes = append(routes, route)
-			table.logger.Debug("adding-route", lager.Data{"key": key, "route": route})
 		}
 		routeEntries[key] = append(routeEntries[key], routes...)
 	}
@@ -164,7 +160,6 @@ func (table *routingTable) SetRoutes(desiredLRP *models.DesiredLRPSchedulingInfo
 
 		newEntry := currentEntry.copy()
 		newEntry.Routes = routes
-		table.logger.Debug("setting-routes", lager.Data{"key": key, "routes": routes})
 		newEntry.ModificationTag = &desiredLRP.ModificationTag
 		table.entries[key] = newEntry
 		messagesToEmit = messagesToEmit.Merge(table.emit(key, currentEntry, newEntry))
@@ -175,7 +170,6 @@ func (table *routingTable) SetRoutes(desiredLRP *models.DesiredLRPSchedulingInfo
 
 func (table *routingTable) emit(key endpoint.RoutingKey, oldEntry, newEntry RoutableEndpoints) MessagesToEmit {
 	var messagesToEmit MessagesToEmit
-	table.logger.Debug("in-emit", lager.Data{"oldEntry": oldEntry, "newEntry": newEntry})
 	messagesToEmit = table.messageBuilder.RegistrationsFor(&oldEntry, &newEntry)
 	messagesToEmit = messagesToEmit.Merge(table.messageBuilder.UnregistrationsFor(&oldEntry, &newEntry, nil))
 
