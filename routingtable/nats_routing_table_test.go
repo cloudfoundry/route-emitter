@@ -151,7 +151,7 @@ var _ = Describe("RoutingTable", func() {
 	Describe("Evacuating endpoints", func() {
 		BeforeEach(func() {
 			schedulingInfo := createDesiredLRPSchedulingInfo(key.ProcessGUID, hostname1, key.ContainerPort, logGuid, *currentTag)
-			_, messagesToEmit = table.SetRoutes(schedulingInfo)
+			_, messagesToEmit = table.SetRoutes(nil, schedulingInfo)
 			Expect(messagesToEmit).To(BeZero())
 
 			actualLRP := createActualLRP(key, endpoint1)
@@ -177,7 +177,7 @@ var _ = Describe("RoutingTable", func() {
 		})
 
 		Context("when we have an evacuating endpoint and an instance for that added", func() {
-			FIt("emits a registration for the instance and a unregister for the evacuating", func() {
+			It("emits a registration for the instance and a unregister for the evacuating", func() {
 				evacuatingActualLRP := createActualLRP(key, newInstanceEndpointAfterEvacuation)
 				_, messagesToEmit = table.AddEndpoint(evacuatingActualLRP)
 				expected := routingtable.MessagesToEmit{
@@ -203,7 +203,7 @@ var _ = Describe("RoutingTable", func() {
 		BeforeEach(func() {
 			table = routingtable.NewRoutingTable(logger, routingtable.InternalAddressMessageBuilder{})
 			desiredLRP := createDesiredLRPSchedulingInfo(key.ProcessGUID, hostname1, key.ContainerPort, logGuid, *currentTag)
-			table.SetRoutes(desiredLRP)
+			table.SetRoutes(nil, desiredLRP)
 		})
 
 		Context("and an endpoint is added", func() {

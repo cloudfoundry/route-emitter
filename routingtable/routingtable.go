@@ -1,6 +1,7 @@
 package routingtable
 
 import (
+	"fmt"
 	"sync"
 
 	tcpmodels "code.cloudfoundry.org/routing-api/models"
@@ -8,6 +9,7 @@ import (
 	"code.cloudfoundry.org/bbs/models"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/route-emitter/routingtable/schema/endpoint"
+	"code.cloudfoundry.org/route-emitter/routingtable/util"
 	"code.cloudfoundry.org/routing-info/cfroutes"
 	"code.cloudfoundry.org/routing-info/tcp_routes"
 )
@@ -36,7 +38,7 @@ type RoutingTable interface {
 	EndpointsForIndex(key endpoint.RoutingKey, index int32) []Endpoint
 
 	// routes
-	SetRoutes(desiredLRP *models.DesiredLRPSchedulingInfo) (TCPRouteMappings, MessagesToEmit)
+	SetRoutes(beforeLRP, afterLRP *models.DesiredLRPSchedulingInfo) (TCPRouteMappings, MessagesToEmit)
 	RemoveRoutes(desiredLRP *models.DesiredLRPSchedulingInfo) (TCPRouteMappings, MessagesToEmit)
 	GetHTTPRoutes(key endpoint.RoutingKey) []Route
 	GetTCPRoutes(key endpoint.RoutingKey) endpoint.ExternalEndpointInfos
@@ -176,22 +178,22 @@ func (t *routingTable) EndpointsForIndex(key endpoint.RoutingKey, index int32) [
 	return nil
 }
 
-func (table *routingTable) SetRoutes(desiredLRP *models.DesiredLRPSchedulingInfo) (TCPRouteMappings, MessagesToEmit) {
+func (table *routingTable) SetRoutes(before, after *models.DesiredLRPSchedulingInfo) (TCPRouteMappings, MessagesToEmit) {
 	table.Lock()
 	defer table.Unlock()
 
 	// update http routes
-	routes, _ := cfroutes.CFRoutesFromRoutingInfo(desiredLRP.Routes)
+	routes, _ := cfroutes.CFRoutesFromRoutingInfo(after.Routes)
 
 	routeEntries := make(map[endpoint.RoutingKey][]Route)
 	for _, route := range routes {
-		key := endpoint.RoutingKey{ProcessGUID: desiredLRP.ProcessGuid, ContainerPort: route.Port}
+		key := endpoint.RoutingKey{ProcessGUID: after.ProcessGuid, ContainerPort: route.Port}
 
 		routes := []Route{}
 		for _, hostname := range route.Hostnames {
 			route := Route{
 				Hostname:         hostname,
-				LogGuid:          desiredLRP.LogGuid,
+				LogGuid:          after.LogGuid,
 				RouteServiceUrl:  route.RouteServiceUrl,
 				IsolationSegment: route.IsolationSegment,
 			}
@@ -200,27 +202,27 @@ func (table *routingTable) SetRoutes(desiredLRP *models.DesiredLRPSchedulingInfo
 		routeEntries[key] = append(routeEntries[key], routes...)
 	}
 
-	var messagesToEmit MessagesToEmit
+	var messagesToEmit MessagesToEmit = MessagesToEmit{}
 
 	for key, routes := range routeEntries {
 		currentEntry := table.httpEntries[key]
-		if !currentEntry.ModificationTag.SucceededBy(&desiredLRP.ModificationTag) {
+		if !currentEntry.ModificationTag.SucceededBy(&after.ModificationTag) {
 			continue
 		}
 
 		newEntry := currentEntry.copy()
 		newEntry.Routes = routes
-		newEntry.ModificationTag = &desiredLRP.ModificationTag
+		newEntry.ModificationTag = &after.ModificationTag
 		table.httpEntries[key] = newEntry
 		messagesToEmit = messagesToEmit.Merge(table.emit(key, currentEntry, newEntry))
 	}
 
 	// update tcp routes
 
-	tcpRoutes, _ := tcp_routes.TCPRoutesFromRoutingInfo(&desiredLRP.Routes)
+	tcpRoutes, _ := tcp_routes.TCPRoutesFromRoutingInfo(&after.Routes)
 	tcpRouteEntries := make(map[endpoint.RoutingKey]endpoint.ExternalEndpointInfos)
 	for _, route := range tcpRoutes {
-		key := endpoint.RoutingKey{ProcessGUID: desiredLRP.ProcessGuid, ContainerPort: route.ContainerPort}
+		key := endpoint.RoutingKey{ProcessGUID: after.ProcessGuid, ContainerPort: route.ContainerPort}
 
 		tcpRouteEntries[key] = append(tcpRouteEntries[key], endpoint.ExternalEndpointInfo{
 			RouterGroupGUID: route.RouterGroupGuid,
@@ -228,19 +230,47 @@ func (table *routingTable) SetRoutes(desiredLRP *models.DesiredLRPSchedulingInfo
 		})
 	}
 
+	removedTCPRouteEntries := make(map[endpoint.RoutingKey]endpoint.ExternalEndpointInfos)
+	if before != nil {
+		oldTCPRoutes, _ := tcp_routes.TCPRoutesFromRoutingInfo(&before.Routes)
+		for _, route := range oldTCPRoutes {
+			key := endpoint.RoutingKey{ProcessGUID: after.ProcessGuid, ContainerPort: route.ContainerPort}
+
+			if _, ok := tcpRouteEntries[key]; ok {
+				// this key exists in the new desired lrp, skip it
+				continue
+			}
+
+			removedTCPRouteEntries[key] = append(tcpRouteEntries[key], endpoint.ExternalEndpointInfo{
+				RouterGroupGUID: route.RouterGroupGuid,
+				Port:            route.ExternalPort,
+			})
+		}
+	}
+
 	routingEvents := TCPRouteMappings{}
 	for key, routes := range tcpRouteEntries {
 		currentEntry := table.tcpEntries[key]
-		if !currentEntry.ModificationTag.SucceededBy(&desiredLRP.ModificationTag) {
+		if !currentEntry.ModificationTag.SucceededBy(&after.ModificationTag) {
 			continue
 		}
 
 		newEntry := currentEntry.Copy()
 		newEntry.ExternalEndpoints = routes
-		newEntry.ModificationTag = &desiredLRP.ModificationTag
+		newEntry.ModificationTag = &after.ModificationTag
 		table.tcpEntries[key] = newEntry
 
 		routingEvents = routingEvents.Merge(table.emitTCP(key, currentEntry, newEntry))
+	}
+
+	for key := range removedTCPRouteEntries {
+		currentEntry := table.tcpEntries[key]
+		if !currentEntry.ModificationTag.SucceededBy(&after.ModificationTag) {
+			continue
+		}
+		delete(table.tcpEntries, key)
+
+		routingEvents = routingEvents.Merge(table.emitTCP(key, currentEntry, endpoint.RoutableEndpoints{}))
 	}
 
 	return routingEvents, messagesToEmit
@@ -264,6 +294,7 @@ type tcpRoutesDiff struct {
 }
 
 func diffTCPRoutes(before, after endpoint.ExternalEndpointInfos) tcpRoutesDiff {
+
 	existingRoutes := map[endpoint.ExternalEndpointInfo]struct{}{}
 	newRoutes := map[endpoint.ExternalEndpointInfo]struct{}{}
 	for _, route := range before {
@@ -285,6 +316,7 @@ func diffTCPRoutes(before, after endpoint.ExternalEndpointInfos) tcpRoutesDiff {
 			diff.added = append(diff.added, route)
 		}
 	}
+
 	return diff
 }
 
@@ -318,8 +350,40 @@ func (table *routingTable) routingEvents(diff tcpRoutesDiff, before, after endpo
 	return events
 }
 
-func (t *routingTable) RemoveRoutes(desiredLRP *models.DesiredLRPSchedulingInfo) (TCPRouteMappings, MessagesToEmit) {
-	return TCPRouteMappings{}, MessagesToEmit{}
+func (table *routingTable) RemoveRoutes(desiredLRP *models.DesiredLRPSchedulingInfo) (TCPRouteMappings, MessagesToEmit) {
+	logger := table.logger.Session("RemoveRoutes", lager.Data{"desired_lrp": util.DesiredLRPData(desiredLRP)})
+	logger.Debug("starting")
+	defer logger.Debug("completed")
+
+	table.Lock()
+	defer table.Unlock()
+
+	// tcpRoutes, _ := tcp_routes.TCPRoutesFromRoutingInfo(&desiredLRP.Routes)
+	routingKeys := endpoint.NewRoutingKeysFromDesired(desiredLRP)
+
+	routingEvents := TCPRouteMappings{}
+	for _, key := range routingKeys {
+		fmt.Printf("================ key is %#v\n", key)
+		if existingEntry, ok := table.tcpEntries[key]; ok {
+			existingModificationTag := existingEntry.ModificationTag
+			if !existingModificationTag.SucceededBy(&desiredLRP.ModificationTag) {
+				continue
+			}
+			// if len(existingEntry.Endpoints) > 0 && len(existingEntry.ExternalEndpoints) > 0 {
+			// 	routingEvents = append(routingEvents, event.RoutingEvent{
+			// 		EventType: event.RouteUnregistrationEvent,
+			// 		Key:       key,
+			// 		Entry:     existingEntry,
+			// 	})
+			// }
+
+			delete(table.tcpEntries, key)
+			routingEvents = routingEvents.Merge(table.emitTCP(key, existingEntry, endpoint.RoutableEndpoints{}))
+			logger.Debug("route-deleted", lager.Data{"routing-key": key})
+		}
+	}
+	// return routingEvents
+	return routingEvents, MessagesToEmit{}
 }
 func (t *routingTable) GetHTTPRoutes(key endpoint.RoutingKey) []Route {
 	return nil
