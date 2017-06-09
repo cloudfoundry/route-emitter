@@ -1,6 +1,10 @@
 package routingtable
 
-import "code.cloudfoundry.org/bbs/models"
+import (
+	"fmt"
+
+	"code.cloudfoundry.org/bbs/models"
+)
 
 type MessageBuilder interface {
 	RegistrationsFor(existingEntry, newEntry *RoutableEndpoints) MessagesToEmit
@@ -238,6 +242,8 @@ func (MessagesToEmitBuilder) UnregistrationsFor(existingEntry, newEntry *Routabl
 		}
 	}
 
+	fmt.Println("ROUTES THAT DISAPPEARED:")
+	fmt.Println(routesThatDisappeared)
 	if len(routesThatDisappeared) > 0 {
 		for _, endpoint := range endpointsThatAreStillPresent {
 			// only unregister if domain is fresh or preforming event processing
