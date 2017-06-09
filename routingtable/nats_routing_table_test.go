@@ -1,6 +1,8 @@
 package routingtable_test
 
 import (
+	"fmt"
+
 	"code.cloudfoundry.org/bbs/models"
 	"code.cloudfoundry.org/lager/lagertest"
 	"code.cloudfoundry.org/route-emitter/routingtable"
@@ -23,8 +25,8 @@ var _ = Describe("RoutingTable", func() {
 	key := endpoint.RoutingKey{ProcessGUID: "some-process-guid", ContainerPort: 8080}
 
 	hostname1 := "foo.example.com"
-	// hostname2 := "bar.example.com"
-	// hostname3 := "baz.example.com"
+	hostname2 := "bar.example.com"
+	hostname3 := "baz.example.com"
 
 	domain := "domain"
 
@@ -43,39 +45,39 @@ var _ = Describe("RoutingTable", func() {
 		Evacuating:      false,
 		ModificationTag: currentTag,
 	}
-	// endpoint2 := routingtable.Endpoint{
-	// 	InstanceGuid:    "ig-2",
-	// 	Host:            "2.2.2.2",
-	// 	ContainerIP:     "2.3.4.5",
-	// 	Index:           1,
-	// 	Domain:          domain,
-	// 	Port:            22,
-	// 	ContainerPort:   8080,
-	// 	Evacuating:      false,
-	// 	ModificationTag: currentTag,
-	// }
-	// endpoint3 := routingtable.Endpoint{
-	// 	InstanceGuid:    "ig-3",
-	// 	Host:            "3.3.3.3",
-	// 	ContainerIP:     "3.4.5.6",
-	// 	Index:           2,
-	// 	Domain:          domain,
-	// 	Port:            33,
-	// 	ContainerPort:   8080,
-	// 	Evacuating:      false,
-	// 	ModificationTag: currentTag,
-	// }
-	// collisionEndpoint := routingtable.Endpoint{
-	// 	InstanceGuid:    "ig-4",
-	// 	Host:            "1.1.1.1",
-	// 	ContainerIP:     "1.2.3.4",
-	// 	Index:           3,
-	// 	Domain:          domain,
-	// 	Port:            11,
-	// 	ContainerPort:   8080,
-	// 	Evacuating:      false,
-	// 	ModificationTag: currentTag,
-	// }
+	endpoint2 := routingtable.Endpoint{
+		InstanceGuid:    "ig-2",
+		Host:            "2.2.2.2",
+		ContainerIP:     "2.3.4.5",
+		Index:           1,
+		Domain:          domain,
+		Port:            22,
+		ContainerPort:   8080,
+		Evacuating:      false,
+		ModificationTag: currentTag,
+	}
+	endpoint3 := routingtable.Endpoint{
+		InstanceGuid:    "ig-3",
+		Host:            "3.3.3.3",
+		ContainerIP:     "3.4.5.6",
+		Index:           2,
+		Domain:          domain,
+		Port:            33,
+		ContainerPort:   8080,
+		Evacuating:      false,
+		ModificationTag: currentTag,
+	}
+	collisionEndpoint := routingtable.Endpoint{
+		InstanceGuid:    "ig-4",
+		Host:            "1.1.1.1",
+		ContainerIP:     "1.2.3.4",
+		Index:           3,
+		Domain:          domain,
+		Port:            11,
+		ContainerPort:   8080,
+		Evacuating:      false,
+		ModificationTag: currentTag,
+	}
 	newInstanceEndpointAfterEvacuation := routingtable.Endpoint{
 		InstanceGuid:    "ig-5",
 		Host:            "5.5.5.5",
@@ -101,18 +103,18 @@ var _ = Describe("RoutingTable", func() {
 
 	logGuid := "some-log-guid"
 
-	// domains := models.NewDomainSet([]string{domain})
-	// noFreshDomains := models.NewDomainSet([]string{})
+	domains := models.NewDomainSet([]string{domain})
+	noFreshDomains := models.NewDomainSet([]string{})
 
 	BeforeEach(func() {
 		logger = lagertest.NewTestLogger("test-route-emitter")
 		table = routingtable.NewRoutingTable(logger, routingtable.MessagesToEmitBuilder{})
 	})
 
-	createDesiredLRPSchedulingInfo := func(processGuid string, hostname string, port uint32, logGuid string, currentTag models.ModificationTag) *models.DesiredLRPSchedulingInfo {
+	createDesiredLRPSchedulingInfo := func(processGuid string, port uint32, logGuid string, currentTag models.ModificationTag, hostnames ...string) *models.DesiredLRPSchedulingInfo {
 		routingInfo := cfroutes.CFRoutes{
 			{
-				Hostnames:       []string{hostname},
+				Hostnames:       hostnames,
 				Port:            port,
 				RouteServiceUrl: "",
 			},
@@ -134,7 +136,7 @@ var _ = Describe("RoutingTable", func() {
 	) *endpoint.ActualLRPRoutingInfo {
 		return &endpoint.ActualLRPRoutingInfo{
 			ActualLRP: &models.ActualLRP{
-				ActualLRPKey:         models.NewActualLRPKey(key.ProcessGUID, 0, instance.Domain),
+				ActualLRPKey:         models.NewActualLRPKey(key.ProcessGUID, instance.Index, instance.Domain),
 				ActualLRPInstanceKey: models.NewActualLRPInstanceKey(instance.InstanceGuid, "cell-id"),
 				ActualLRPNetInfo: models.NewActualLRPNetInfo(
 					instance.Host,
@@ -150,7 +152,7 @@ var _ = Describe("RoutingTable", func() {
 
 	Describe("Evacuating endpoints", func() {
 		BeforeEach(func() {
-			schedulingInfo := createDesiredLRPSchedulingInfo(key.ProcessGUID, hostname1, key.ContainerPort, logGuid, *currentTag)
+			schedulingInfo := createDesiredLRPSchedulingInfo(key.ProcessGUID, key.ContainerPort, logGuid, *currentTag, hostname1)
 			_, messagesToEmit = table.SetRoutes(nil, schedulingInfo)
 			Expect(messagesToEmit).To(BeZero())
 
@@ -202,7 +204,7 @@ var _ = Describe("RoutingTable", func() {
 	Context("when internal address message builder is used", func() {
 		BeforeEach(func() {
 			table = routingtable.NewRoutingTable(logger, routingtable.InternalAddressMessageBuilder{})
-			desiredLRP := createDesiredLRPSchedulingInfo(key.ProcessGUID, hostname1, key.ContainerPort, logGuid, *currentTag)
+			desiredLRP := createDesiredLRPSchedulingInfo(key.ProcessGUID, key.ContainerPort, logGuid, *currentTag, hostname1)
 			table.SetRoutes(nil, desiredLRP)
 		})
 
@@ -264,763 +266,773 @@ var _ = Describe("RoutingTable", func() {
 		})
 	})
 
-	// Describe("Swap", func() {
-
-	// 	Context("when we have existing stuff in the table", func() {
-	// 		BeforeEach(func() {
-	// 			tempTable := routingtable.NewTempTable(
-	// 				routingtable.RoutesByRoutingKey{key: []routingtable.Route{
-	// 					routingtable.Route{Hostname: hostname1, LogGuid: logGuid},
-	// 					routingtable.Route{Hostname: hostname2, LogGuid: logGuid},
-	// 				}},
-	// 				routingtable.EndpointsByRoutingKey{key: {endpoint1}},
-	// 			)
-
-	// 			messagesToEmit = table.Swap(tempTable, domains)
-
-	// 			tempTable = routingtable.NewTempTable(
-	// 				routingtable.RoutesByRoutingKey{key: []routingtable.Route{
-	// 					routingtable.Route{Hostname: hostname1, LogGuid: logGuid},
-	// 					routingtable.Route{Hostname: hostname3, LogGuid: logGuid},
-	// 				}},
-	// 				routingtable.EndpointsByRoutingKey{key: {endpoint1}},
-	// 			)
-
-	// 			messagesToEmit = table.Swap(tempTable, noFreshDomains)
-	// 		})
-
-	// 		It("emits all three routes", func() {
-	// 			expected := routingtable.MessagesToEmit{
-	// 				RegistrationMessages: []routingtable.RegistryMessage{
-	// 					routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
-	// 					routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname2, LogGuid: logGuid}),
-	// 					routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname3, LogGuid: logGuid}),
-	// 				},
-	// 			}
-	// 			Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
-	// 		})
-
-	// 		Context("when an endpoint is added that is a collision", func() {
-	// 			It("logs the collision", func() {
-	// 				table.AddEndpoint(key, collisionEndpoint)
-	// 				Eventually(logger).Should(Say(
-	// 					fmt.Sprintf(
-	// 						`\{"Address":\{"Host":"%s","Port":%d\},"instance_guid_a":"%s","instance_guid_b":"%s"\}`,
-	// 						endpoint1.Host,
-	// 						endpoint1.Port,
-	// 						endpoint1.InstanceGuid,
-	// 						collisionEndpoint.InstanceGuid,
-	// 					),
-	// 				))
-	// 			})
-	// 		})
-
-	// 		Context("subsequent swaps with still not fresh", func() {
-	// 			BeforeEach(func() {
-	// 				tempTable := routingtable.NewTempTable(
-	// 					routingtable.RoutesByRoutingKey{key: []routingtable.Route{
-	// 						routingtable.Route{Hostname: hostname1, LogGuid: logGuid},
-	// 						routingtable.Route{Hostname: hostname3, LogGuid: logGuid},
-	// 					}},
-	// 					routingtable.EndpointsByRoutingKey{key: {endpoint1}},
-	// 				)
-
-	// 				messagesToEmit = table.Swap(tempTable, noFreshDomains)
-	// 			})
-
-	// 			It("emits all three routes", func() {
-	// 				expected := routingtable.MessagesToEmit{
-	// 					RegistrationMessages: []routingtable.RegistryMessage{
-	// 						routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
-	// 						routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname2, LogGuid: logGuid}),
-	// 						routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname3, LogGuid: logGuid}),
-	// 					},
-	// 				}
-	// 				Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
-	// 			})
-	// 		})
-
-	// 		Context("subsequent swaps with fresh", func() {
-	// 			BeforeEach(func() {
-	// 				tempTable := routingtable.NewTempTable(
-	// 					routingtable.RoutesByRoutingKey{key: []routingtable.Route{
-	// 						routingtable.Route{Hostname: hostname1, LogGuid: logGuid},
-	// 						routingtable.Route{Hostname: hostname3, LogGuid: logGuid},
-	// 					}},
-	// 					routingtable.EndpointsByRoutingKey{key: {endpoint1}},
-	// 				)
-
-	// 				messagesToEmit = table.Swap(tempTable, domains)
-	// 			})
-
-	// 			It("emits two routes and unregisters the old route", func() {
-	// 				expected := routingtable.MessagesToEmit{
-	// 					RegistrationMessages: []routingtable.RegistryMessage{
-	// 						routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
-	// 						routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname3, LogGuid: logGuid}),
-	// 					},
-	// 					UnregistrationMessages: []routingtable.RegistryMessage{
-	// 						routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname2, LogGuid: logGuid}),
-	// 					},
-	// 				}
-	// 				Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
-	// 			})
-	// 		})
-	// 	})
-
-	// 	Context("when a new routing key arrives", func() {
-	// 		Context("when the routing key has both routes and endpoints", func() {
-	// 			BeforeEach(func() {
-	// 				tempTable := routingtable.NewTempTable(
-	// 					routingtable.RoutesByRoutingKey{key: []routingtable.Route{
-	// 						routingtable.Route{Hostname: hostname1, LogGuid: logGuid},
-	// 						routingtable.Route{Hostname: hostname2, LogGuid: logGuid},
-	// 					}},
-	// 					routingtable.EndpointsByRoutingKey{key: {endpoint1, endpoint2}},
-	// 				)
-
-	// 				messagesToEmit = table.Swap(tempTable, domains)
-	// 			})
-
-	// 			It("emits registrations for each pairing", func() {
-	// 				expected := routingtable.MessagesToEmit{
-	// 					RegistrationMessages: []routingtable.RegistryMessage{
-	// 						routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
-	// 						routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname2, LogGuid: logGuid}),
-	// 						routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
-	// 						routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname2, LogGuid: logGuid}),
-	// 					},
-	// 				}
-	// 				Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
-	// 			})
-	// 		})
-
-	// 		Context("when the process only has routes", func() {
-	// 			BeforeEach(func() {
-	// 				tempTable := routingtable.NewTempTable(
-	// 					routingtable.RoutesByRoutingKey{key: []routingtable.Route{
-	// 						routingtable.Route{Hostname: hostname1, LogGuid: logGuid},
-	// 					}},
-	// 					routingtable.EndpointsByRoutingKey{},
-	// 				)
-	// 				messagesToEmit = table.Swap(tempTable, domains)
-	// 			})
-
-	// 			It("should not emit a registration", func() {
-	// 				Expect(messagesToEmit).To(BeZero())
-	// 			})
-
-	// 			Context("when the endpoints subsequently arrive", func() {
-	// 				BeforeEach(func() {
-	// 					tempTable := routingtable.NewTempTable(
-	// 						routingtable.RoutesByRoutingKey{key: []routingtable.Route{
-	// 							routingtable.Route{Hostname: hostname1, LogGuid: logGuid},
-	// 						}},
-	// 						routingtable.EndpointsByRoutingKey{key: {endpoint1}},
-	// 					)
-	// 					messagesToEmit = table.Swap(tempTable, domains)
-	// 				})
-
-	// 				It("emits registrations for each pairing", func() {
-	// 					expected := routingtable.MessagesToEmit{
-	// 						RegistrationMessages: []routingtable.RegistryMessage{
-	// 							routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
-	// 						},
-	// 					}
-	// 					Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
-	// 				})
-	// 			})
-
-	// 			Context("when the routing key subsequently disappears", func() {
-	// 				BeforeEach(func() {
-	// 					tempTable := routingtable.NewTempTable(
-	// 						routingtable.RoutesByRoutingKey{},
-	// 						routingtable.EndpointsByRoutingKey{},
-	// 					)
-	// 					messagesToEmit = table.Swap(tempTable, domains)
-	// 				})
-
-	// 				It("emits nothing", func() {
-	// 					Expect(messagesToEmit).To(BeZero())
-	// 				})
-	// 			})
-	// 		})
-
-	// 		Context("when the process only has endpoints", func() {
-	// 			BeforeEach(func() {
-	// 				tempTable := routingtable.NewTempTable(
-	// 					routingtable.RoutesByRoutingKey{},
-	// 					routingtable.EndpointsByRoutingKey{key: {endpoint1}},
-	// 				)
-	// 				messagesToEmit = table.Swap(tempTable, domains)
-	// 			})
-
-	// 			It("should not emit a registration", func() {
-	// 				Expect(messagesToEmit).To(BeZero())
-	// 			})
-
-	// 			Context("when the routes subsequently arrive", func() {
-	// 				BeforeEach(func() {
-	// 					tempTable := routingtable.NewTempTable(
-	// 						routingtable.RoutesByRoutingKey{key: []routingtable.Route{
-	// 							routingtable.Route{Hostname: hostname1, LogGuid: logGuid},
-	// 						}},
-	// 						routingtable.EndpointsByRoutingKey{key: {endpoint1}},
-	// 					)
-	// 					messagesToEmit = table.Swap(tempTable, domains)
-	// 				})
-
-	// 				It("emits registrations for each pairing", func() {
-	// 					expected := routingtable.MessagesToEmit{
-	// 						RegistrationMessages: []routingtable.RegistryMessage{
-	// 							routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
-	// 						},
-	// 					}
-	// 					Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
-	// 				})
-	// 			})
-
-	// 			Context("when the endpoint subsequently disappears", func() {
-	// 				BeforeEach(func() {
-	// 					tempTable := routingtable.NewTempTable(
-	// 						routingtable.RoutesByRoutingKey{},
-	// 						routingtable.EndpointsByRoutingKey{},
-	// 					)
-	// 					messagesToEmit = table.Swap(tempTable, domains)
-	// 				})
-
-	// 				It("emits nothing", func() {
-	// 					Expect(messagesToEmit).To(BeZero())
-	// 				})
-	// 			})
-	// 		})
-	// 	})
-
-	// 	Context("when there is an existing routing key with a route service url", func() {
-	// 		BeforeEach(func() {
-	// 			tempTable := routingtable.NewTempTable(
-	// 				routingtable.RoutesByRoutingKey{key: []routingtable.Route{
-	// 					routingtable.Route{Hostname: hostname1, LogGuid: logGuid, RouteServiceUrl: "https://rs.example.com"},
-	// 					routingtable.Route{Hostname: hostname2, LogGuid: logGuid, RouteServiceUrl: "https://rs.example.com"},
-	// 				}},
-	// 				routingtable.EndpointsByRoutingKey{key: {endpoint1, endpoint2}},
-	// 			)
-	// 			table.Swap(tempTable, domains)
-	// 		})
-
-	// 		Context("when the route service url changes", func() {
-	// 			BeforeEach(func() {
-	// 				tempTable := routingtable.NewTempTable(
-	// 					routingtable.RoutesByRoutingKey{key: []routingtable.Route{
-	// 						routingtable.Route{Hostname: hostname1, LogGuid: logGuid, RouteServiceUrl: "https://rs.new.example.com"},
-	// 						routingtable.Route{Hostname: hostname2, LogGuid: logGuid, RouteServiceUrl: "https://rs.new.example.com"},
-	// 					}},
-	// 					routingtable.EndpointsByRoutingKey{key: {endpoint1, endpoint2}},
-	// 				)
-	// 				messagesToEmit = table.Swap(tempTable, domains)
-	// 			})
-
-	// 			It("emits all registrations and no unregistration", func() {
-	// 				expected := routingtable.MessagesToEmit{
-	// 					RegistrationMessages: []routingtable.RegistryMessage{
-	// 						routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGuid: logGuid, RouteServiceUrl: "https://rs.new.example.com"}),
-	// 						routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname2, LogGuid: logGuid, RouteServiceUrl: "https://rs.new.example.com"}),
-	// 						routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname1, LogGuid: logGuid, RouteServiceUrl: "https://rs.new.example.com"}),
-	// 						routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname2, LogGuid: logGuid, RouteServiceUrl: "https://rs.new.example.com"}),
-	// 					},
-	// 				}
-	// 				Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
-	// 			})
-
-	// 		})
-	// 	})
-
-	// 	Context("when there is an existing routing key", func() {
-	// 		BeforeEach(func() {
-	// 			tempTable := routingtable.NewTempTable(
-	// 				routingtable.RoutesByRoutingKey{key: []routingtable.Route{
-	// 					routingtable.Route{Hostname: hostname1, LogGuid: logGuid},
-	// 					routingtable.Route{Hostname: hostname2, LogGuid: logGuid},
-	// 				}},
-	// 				routingtable.EndpointsByRoutingKey{key: {endpoint1, endpoint2}},
-	// 			)
-	// 			table.Swap(tempTable, domains)
-	// 		})
-
-	// 		Context("when nothing changes", func() {
-	// 			BeforeEach(func() {
-	// 				tempTable := routingtable.NewTempTable(
-	// 					routingtable.RoutesByRoutingKey{key: []routingtable.Route{
-	// 						routingtable.Route{Hostname: hostname1, LogGuid: logGuid},
-	// 						routingtable.Route{Hostname: hostname2, LogGuid: logGuid},
-	// 					}},
-	// 					routingtable.EndpointsByRoutingKey{key: {endpoint1, endpoint2}},
-	// 				)
-	// 				messagesToEmit = table.Swap(tempTable, domains)
-	// 			})
-
-	// 			It("emits all registrations and no unregisration", func() {
-	// 				expected := routingtable.MessagesToEmit{
-	// 					RegistrationMessages: []routingtable.RegistryMessage{
-	// 						routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
-	// 						routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname2, LogGuid: logGuid}),
-	// 						routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
-	// 						routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname2, LogGuid: logGuid}),
-	// 					},
-	// 				}
-	// 				Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
-	// 			})
-	// 		})
-
-	// 		Context("when the routing key gets new routes", func() {
-	// 			BeforeEach(func() {
-	// 				tempTable := routingtable.NewTempTable(
-	// 					routingtable.RoutesByRoutingKey{key: []routingtable.Route{
-	// 						routingtable.Route{Hostname: hostname1, LogGuid: logGuid},
-	// 						routingtable.Route{Hostname: hostname2, LogGuid: logGuid},
-	// 						routingtable.Route{Hostname: hostname3, LogGuid: logGuid},
-	// 					}},
-	// 					routingtable.EndpointsByRoutingKey{key: {endpoint1, endpoint2}},
-	// 				)
-	// 				messagesToEmit = table.Swap(tempTable, domains)
-	// 			})
-
-	// 			It("emits all registrations and no unregistration", func() {
-	// 				expected := routingtable.MessagesToEmit{
-	// 					RegistrationMessages: []routingtable.RegistryMessage{
-	// 						routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
-	// 						routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname2, LogGuid: logGuid}),
-	// 						routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname3, LogGuid: logGuid}),
-	// 						routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
-	// 						routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname2, LogGuid: logGuid}),
-	// 						routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname3, LogGuid: logGuid}),
-	// 					},
-	// 				}
-	// 				Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
-	// 			})
-	// 		})
-
-	// 		Context("when the routing key without any route service url gets routes with a new route service url", func() {
-	// 			BeforeEach(func() {
-	// 				tempTable := routingtable.NewTempTable(
-	// 					routingtable.RoutesByRoutingKey{key: []routingtable.Route{
-	// 						routingtable.Route{Hostname: hostname1, LogGuid: logGuid, RouteServiceUrl: "https://rs.example.com"},
-	// 						routingtable.Route{Hostname: hostname2, LogGuid: logGuid, RouteServiceUrl: "https://rs.example.com"},
-	// 					}},
-	// 					routingtable.EndpointsByRoutingKey{key: {endpoint1, endpoint2}},
-	// 				)
-	// 				messagesToEmit = table.Swap(tempTable, domains)
-	// 			})
-
-	// 			It("emits all registrations and no unregistration", func() {
-	// 				expected := routingtable.MessagesToEmit{
-	// 					RegistrationMessages: []routingtable.RegistryMessage{
-	// 						routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGuid: logGuid, RouteServiceUrl: "https://rs.example.com"}),
-	// 						routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname2, LogGuid: logGuid, RouteServiceUrl: "https://rs.example.com"}),
-	// 						routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname1, LogGuid: logGuid, RouteServiceUrl: "https://rs.example.com"}),
-	// 						routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname2, LogGuid: logGuid, RouteServiceUrl: "https://rs.example.com"}),
-	// 					},
-	// 				}
-	// 				Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
-	// 			})
-
-	// 		})
-
-	// 		Context("when the routing key gets new endpoints", func() {
-	// 			BeforeEach(func() {
-	// 				tempTable := routingtable.NewTempTable(
-	// 					routingtable.RoutesByRoutingKey{key: []routingtable.Route{
-	// 						routingtable.Route{Hostname: hostname1, LogGuid: logGuid},
-	// 						routingtable.Route{Hostname: hostname2, LogGuid: logGuid},
-	// 					}},
-	// 					routingtable.EndpointsByRoutingKey{key: {endpoint1, endpoint2, endpoint3}},
-	// 				)
-	// 				messagesToEmit = table.Swap(tempTable, domains)
-	// 			})
-
-	// 			It("emits all registrations and no unregistration", func() {
-	// 				expected := routingtable.MessagesToEmit{
-	// 					RegistrationMessages: []routingtable.RegistryMessage{
-	// 						routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
-	// 						routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname2, LogGuid: logGuid}),
-	// 						routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
-	// 						routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname2, LogGuid: logGuid}),
-	// 						routingtable.RegistryMessageFor(endpoint3, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
-	// 						routingtable.RegistryMessageFor(endpoint3, routingtable.Route{Hostname: hostname2, LogGuid: logGuid}),
-	// 					},
-	// 				}
-	// 				Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
-	// 			})
-	// 		})
-
-	// 		Context("when the routing key gets a new evacuating endpoint", func() {
-	// 			BeforeEach(func() {
-	// 				tempTable := routingtable.NewTempTable(
-	// 					routingtable.RoutesByRoutingKey{key: []routingtable.Route{
-	// 						routingtable.Route{Hostname: hostname1, LogGuid: logGuid},
-	// 						routingtable.Route{Hostname: hostname2, LogGuid: logGuid},
-	// 					}},
-	// 					routingtable.EndpointsByRoutingKey{key: {endpoint1, endpoint2, evacuating1}},
-	// 				)
-	// 				messagesToEmit = table.Swap(tempTable, domains)
-	// 			})
-
-	// 			It("emits all registrations and no unregisration", func() {
-	// 				expected := routingtable.MessagesToEmit{
-	// 					RegistrationMessages: []routingtable.RegistryMessage{
-	// 						routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
-	// 						routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname2, LogGuid: logGuid}),
-	// 						routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
-	// 						routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname2, LogGuid: logGuid}),
-	// 						routingtable.RegistryMessageFor(evacuating1, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
-	// 						routingtable.RegistryMessageFor(evacuating1, routingtable.Route{Hostname: hostname2, LogGuid: logGuid}),
-	// 					},
-	// 				}
-	// 				Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
-	// 			})
-	// 		})
-
-	// 		Context("when the routing key has an evacuating and instance endpoint", func() {
-	// 			BeforeEach(func() {
-	// 				tempTable := routingtable.NewTempTable(
-	// 					routingtable.RoutesByRoutingKey{key: []routingtable.Route{
-	// 						routingtable.Route{Hostname: hostname1, LogGuid: logGuid},
-	// 						routingtable.Route{Hostname: hostname2, LogGuid: logGuid},
-	// 					}},
-	// 					routingtable.EndpointsByRoutingKey{key: {endpoint1, endpoint2, evacuating1}},
-	// 				)
-	// 				table.Swap(tempTable, domains)
-
-	// 				tempTable = routingtable.NewTempTable(
-	// 					routingtable.RoutesByRoutingKey{key: []routingtable.Route{
-	// 						routingtable.Route{Hostname: hostname1, LogGuid: logGuid},
-	// 						routingtable.Route{Hostname: hostname2, LogGuid: logGuid},
-	// 					}},
-	// 					routingtable.EndpointsByRoutingKey{key: {endpoint2, evacuating1}},
-	// 				)
-	// 				messagesToEmit = table.Swap(tempTable, domains)
-	// 			})
-
-	// 			It("should not emit an unregistration ", func() {
-	// 				expected := routingtable.MessagesToEmit{
-	// 					RegistrationMessages: []routingtable.RegistryMessage{
-	// 						routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
-	// 						routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname2, LogGuid: logGuid}),
-	// 						routingtable.RegistryMessageFor(evacuating1, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
-	// 						routingtable.RegistryMessageFor(evacuating1, routingtable.Route{Hostname: hostname2, LogGuid: logGuid}),
-	// 					},
-	// 				}
-	// 				Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
-	// 			})
-	// 		})
-
-	// 		Context("when the routing key gets new routes and endpoints", func() {
-	// 			BeforeEach(func() {
-	// 				tempTable := routingtable.NewTempTable(
-	// 					routingtable.RoutesByRoutingKey{key: []routingtable.Route{
-	// 						routingtable.Route{Hostname: hostname1, LogGuid: logGuid},
-	// 						routingtable.Route{Hostname: hostname2, LogGuid: logGuid},
-	// 						routingtable.Route{Hostname: hostname3, LogGuid: logGuid},
-	// 					}},
-	// 					routingtable.EndpointsByRoutingKey{key: {endpoint1, endpoint2, endpoint3}},
-	// 				)
-	// 				messagesToEmit = table.Swap(tempTable, domains)
-	// 			})
-
-	// 			It("emits all registrations and no unregisration", func() {
-	// 				expected := routingtable.MessagesToEmit{
-	// 					RegistrationMessages: []routingtable.RegistryMessage{
-	// 						routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
-	// 						routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname2, LogGuid: logGuid}),
-	// 						routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname3, LogGuid: logGuid}),
-	// 						routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
-	// 						routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname2, LogGuid: logGuid}),
-	// 						routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname3, LogGuid: logGuid}),
-	// 						routingtable.RegistryMessageFor(endpoint3, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
-	// 						routingtable.RegistryMessageFor(endpoint3, routingtable.Route{Hostname: hostname2, LogGuid: logGuid}),
-	// 						routingtable.RegistryMessageFor(endpoint3, routingtable.Route{Hostname: hostname3, LogGuid: logGuid}),
-	// 					},
-	// 				}
-	// 				Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
-	// 			})
-	// 		})
-
-	// 		Context("when the routing key loses routes", func() {
-	// 			BeforeEach(func() {
-	// 				tempTable := routingtable.NewTempTable(
-	// 					routingtable.RoutesByRoutingKey{key: []routingtable.Route{
-	// 						routingtable.Route{Hostname: hostname1, LogGuid: logGuid},
-	// 					}},
-	// 					routingtable.EndpointsByRoutingKey{key: {endpoint1, endpoint2}},
-	// 				)
-	// 				messagesToEmit = table.Swap(tempTable, domains)
-	// 			})
-
-	// 			It("emits all registrations and the relevant unregisrations", func() {
-	// 				expected := routingtable.MessagesToEmit{
-	// 					RegistrationMessages: []routingtable.RegistryMessage{
-	// 						routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
-	// 						routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
-	// 					},
-	// 					UnregistrationMessages: []routingtable.RegistryMessage{
-	// 						routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname2, LogGuid: logGuid}),
-	// 						routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname2, LogGuid: logGuid}),
-	// 					},
-	// 				}
-	// 				Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
-	// 			})
-	// 		})
-
-	// 		Context("when the routing key loses endpoints", func() {
-	// 			BeforeEach(func() {
-	// 				tempTable := routingtable.NewTempTable(
-	// 					routingtable.RoutesByRoutingKey{key: []routingtable.Route{
-	// 						routingtable.Route{Hostname: hostname1, LogGuid: logGuid},
-	// 						routingtable.Route{Hostname: hostname2, LogGuid: logGuid},
-	// 					}},
-	// 					routingtable.EndpointsByRoutingKey{key: {endpoint1}},
-	// 				)
-	// 				messagesToEmit = table.Swap(tempTable, domains)
-	// 			})
-
-	// 			It("emits all registrations and the relevant unregisrations", func() {
-	// 				expected := routingtable.MessagesToEmit{
-	// 					RegistrationMessages: []routingtable.RegistryMessage{
-	// 						routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
-	// 						routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname2, LogGuid: logGuid}),
-	// 					},
-	// 					UnregistrationMessages: []routingtable.RegistryMessage{
-	// 						routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
-	// 						routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname2, LogGuid: logGuid}),
-	// 					},
-	// 				}
-	// 				Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
-	// 			})
-	// 		})
-
-	// 		Context("when the routing key loses both routes and endpoints", func() {
-	// 			BeforeEach(func() {
-	// 				tempTable := routingtable.NewTempTable(
-	// 					routingtable.RoutesByRoutingKey{key: []routingtable.Route{
-	// 						routingtable.Route{Hostname: hostname1, LogGuid: logGuid},
-	// 					}},
-	// 					routingtable.EndpointsByRoutingKey{key: {endpoint1}},
-	// 				)
-	// 				messagesToEmit = table.Swap(tempTable, domains)
-	// 			})
-
-	// 			It("emits all registrations and the relevant unregisrations", func() {
-	// 				expected := routingtable.MessagesToEmit{
-	// 					RegistrationMessages: []routingtable.RegistryMessage{
-	// 						routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
-	// 					},
-	// 					UnregistrationMessages: []routingtable.RegistryMessage{
-	// 						routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname2, LogGuid: logGuid}),
-	// 						routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
-	// 						routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname2, LogGuid: logGuid}),
-	// 					},
-	// 				}
-	// 				Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
-	// 			})
-	// 		})
-
-	// 		Context("when the routing key gains routes but loses endpoints", func() {
-	// 			BeforeEach(func() {
-	// 				tempTable := routingtable.NewTempTable(
-	// 					routingtable.RoutesByRoutingKey{key: []routingtable.Route{
-	// 						routingtable.Route{Hostname: hostname1, LogGuid: logGuid},
-	// 						routingtable.Route{Hostname: hostname2, LogGuid: logGuid},
-	// 						routingtable.Route{Hostname: hostname3, LogGuid: logGuid},
-	// 					}},
-	// 					routingtable.EndpointsByRoutingKey{key: {endpoint1}},
-	// 				)
-	// 				messagesToEmit = table.Swap(tempTable, domains)
-	// 			})
-
-	// 			It("emits all registrations and the relevant unregisrations", func() {
-	// 				expected := routingtable.MessagesToEmit{
-	// 					RegistrationMessages: []routingtable.RegistryMessage{
-	// 						routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
-	// 						routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname2, LogGuid: logGuid}),
-	// 						routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname3, LogGuid: logGuid}),
-	// 					},
-	// 					UnregistrationMessages: []routingtable.RegistryMessage{
-	// 						routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
-	// 						routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname2, LogGuid: logGuid}),
-	// 					},
-	// 				}
-	// 				Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
-	// 			})
-	// 		})
-
-	// 		Context("when the routing key loses routes but gains endpoints", func() {
-	// 			BeforeEach(func() {
-	// 				tempTable := routingtable.NewTempTable(
-	// 					routingtable.RoutesByRoutingKey{key: []routingtable.Route{
-	// 						routingtable.Route{Hostname: hostname1, LogGuid: logGuid},
-	// 					}},
-	// 					routingtable.EndpointsByRoutingKey{key: {endpoint1, endpoint2, endpoint3}},
-	// 				)
-	// 				messagesToEmit = table.Swap(tempTable, domains)
-	// 			})
-
-	// 			It("emits all registrations and the relevant unregisrations", func() {
-	// 				expected := routingtable.MessagesToEmit{
-	// 					RegistrationMessages: []routingtable.RegistryMessage{
-	// 						routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
-	// 						routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
-	// 						routingtable.RegistryMessageFor(endpoint3, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
-	// 					},
-	// 					UnregistrationMessages: []routingtable.RegistryMessage{
-	// 						routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname2, LogGuid: logGuid}),
-	// 						routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname2, LogGuid: logGuid}),
-	// 					},
-	// 				}
-	// 				Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
-	// 			})
-	// 		})
-
-	// 		Context("when the routing key disappears entirely", func() {
-	// 			var tempTable routingtable.NATSRoutingTable
-	// 			var domainSet models.DomainSet
-
-	// 			BeforeEach(func() {
-	// 				tempTable = routingtable.NewTempTable(
-	// 					routingtable.RoutesByRoutingKey{},
-	// 					routingtable.EndpointsByRoutingKey{},
-	// 				)
-	// 			})
-
-	// 			JustBeforeEach(func() {
-	// 				messagesToEmit = table.Swap(tempTable, domainSet)
-	// 			})
-
-	// 			Context("when the domain is fresh", func() {
-	// 				BeforeEach(func() {
-	// 					domainSet = domains
-	// 				})
-
-	// 				It("should unregister the missing guids", func() {
-	// 					expected := routingtable.MessagesToEmit{
-	// 						UnregistrationMessages: []routingtable.RegistryMessage{
-	// 							routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
-	// 							routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
-	// 							routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname2, LogGuid: logGuid}),
-	// 							routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname2, LogGuid: logGuid}),
-	// 						},
-	// 					}
-	// 					Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
-	// 				})
-	// 			})
-
-	// 			Context("when the domain is not fresh", func() {
-	// 				BeforeEach(func() {
-	// 					domainSet = noFreshDomains
-	// 				})
-
-	// 				It("should register the missing guids", func() {
-	// 					expected := routingtable.MessagesToEmit{
-	// 						RegistrationMessages: []routingtable.RegistryMessage{
-	// 							routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
-	// 							routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
-	// 							routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname2, LogGuid: logGuid}),
-	// 							routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname2, LogGuid: logGuid}),
-	// 						},
-	// 					}
-	// 					Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
-	// 				})
-
-	// 				Context("when the domain is repeatedly not fresh", func() {
-	// 					BeforeEach(func() {
-	// 						tempTable = routingtable.NewTempTable(
-	// 							routingtable.RoutesByRoutingKey{},
-	// 							routingtable.EndpointsByRoutingKey{},
-	// 						)
-	// 					})
-
-	// 					JustBeforeEach(func() {
-	// 						// doing another swap to make sure the old table is still good
-	// 						messagesToEmit = table.Swap(tempTable, domainSet)
-	// 					})
-
-	// 					It("logs the collision", func() {
-	// 						table.AddEndpoint(key, collisionEndpoint)
-	// 						Eventually(logger).Should(Say(
-	// 							fmt.Sprintf(
-	// 								`\{"Address":\{"Host":"%s","Port":%d\},"instance_guid_a":"%s","instance_guid_b":"%s"\}`,
-	// 								endpoint1.Host,
-	// 								endpoint1.Port,
-	// 								endpoint1.InstanceGuid,
-	// 								collisionEndpoint.InstanceGuid,
-	// 							),
-	// 						))
-	// 					})
-
-	// 					It("should register the missing guids", func() {
-	// 						expected := routingtable.MessagesToEmit{
-	// 							RegistrationMessages: []routingtable.RegistryMessage{
-	// 								routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
-	// 								routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
-	// 								routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname2, LogGuid: logGuid}),
-	// 								routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname2, LogGuid: logGuid}),
-	// 							},
-	// 						}
-	// 						Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
-	// 					})
-	// 				})
-	// 			})
-	// 		})
-
-	// 		Describe("edge cases", func() {
-	// 			Context("when the original registration had no routes, and then the routing key loses endpoints", func() {
-	// 				BeforeEach(func() {
-	// 					//override previous set up
-	// 					tempTable := routingtable.NewTempTable(
-	// 						routingtable.RoutesByRoutingKey{},
-	// 						routingtable.EndpointsByRoutingKey{key: {endpoint1, endpoint2}},
-	// 					)
-	// 					table.Swap(tempTable, domains)
-
-	// 					tempTable = routingtable.NewTempTable(
-	// 						routingtable.RoutesByRoutingKey{key: {}},
-	// 						routingtable.EndpointsByRoutingKey{key: {endpoint1}},
-	// 					)
-	// 					messagesToEmit = table.Swap(tempTable, domains)
-	// 				})
-
-	// 				It("emits nothing", func() {
-	// 					Expect(messagesToEmit).To(BeZero())
-	// 				})
-	// 			})
-
-	// 			Context("when the original registration had no endpoints, and then the routing key loses a route", func() {
-	// 				BeforeEach(func() {
-	// 					//override previous set up
-	// 					tempTable := routingtable.NewTempTable(
-	// 						routingtable.RoutesByRoutingKey{key: []routingtable.Route{
-	// 							routingtable.Route{Hostname: hostname1, LogGuid: logGuid},
-	// 							routingtable.Route{Hostname: hostname2, LogGuid: logGuid},
-	// 						}},
-	// 						routingtable.EndpointsByRoutingKey{},
-	// 					)
-	// 					table.Swap(tempTable, domains)
-
-	// 					tempTable = routingtable.NewTempTable(
-	// 						routingtable.RoutesByRoutingKey{key: []routingtable.Route{
-	// 							routingtable.Route{Hostname: hostname1, LogGuid: logGuid},
-	// 						}},
-	// 						routingtable.EndpointsByRoutingKey{},
-	// 					)
-	// 					messagesToEmit = table.Swap(tempTable, domains)
-	// 				})
-
-	// 				It("emits nothing", func() {
-	// 					Expect(messagesToEmit).To(BeZero())
-	// 				})
-	// 			})
-	// 		})
-	// 	})
-	// })
+	Describe("Swap", func() {
+		FContext("when we have existing stuff in the table", func() {
+			BeforeEach(func() {
+				tempTable := routingtable.NewRoutingTable(logger, routingtable.MessagesToEmitBuilder{})
+				schedulingInfo := createDesiredLRPSchedulingInfo(key.ProcessGUID, key.ContainerPort, logGuid, *currentTag, hostname1, hostname2)
+				lrp := createActualLRP(key, endpoint1)
+				tempTable.SetRoutes(nil, schedulingInfo)
+				tempTable.AddEndpoint(lrp)
+
+				table.Swap(tempTable, domains)
+
+				schedulingInfo = createDesiredLRPSchedulingInfo(key.ProcessGUID, key.ContainerPort, logGuid, *currentTag, hostname1, hostname2, hostname3)
+				tempTable = routingtable.NewRoutingTable(logger, routingtable.MessagesToEmitBuilder{})
+				tempTable.SetRoutes(nil, schedulingInfo)
+				tempTable.AddEndpoint(lrp)
+
+				_, messagesToEmit = table.Swap(tempTable, noFreshDomains)
+			})
+
+			It("emits all three routes", func() {
+				expected := routingtable.MessagesToEmit{
+					RegistrationMessages: []routingtable.RegistryMessage{
+						routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
+						routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname2, LogGuid: logGuid}),
+						routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname3, LogGuid: logGuid}),
+					},
+				}
+				Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
+			})
+
+			Context("when an endpoint is added that is a collision", func() {
+				It("logs the collision", func() {
+					lrp := createActualLRP(key, collisionEndpoint)
+					table.AddEndpoint(lrp)
+					Eventually(logger).Should(Say(
+						fmt.Sprintf(
+							`\{"Address":\{"Host":"%s","Port":%d\},"instance_guid_a":"%s","instance_guid_b":"%s"\}`,
+							endpoint1.Host,
+							endpoint1.Port,
+							endpoint1.InstanceGuid,
+							collisionEndpoint.InstanceGuid,
+						),
+					))
+				})
+			})
+
+			Context("subsequent swaps with still not fresh", func() {
+				BeforeEach(func() {
+					tempTable := routingtable.NewRoutingTable(logger, routingtable.MessagesToEmitBuilder{})
+					schedulingInfo := createDesiredLRPSchedulingInfo(key.ProcessGUID, key.ContainerPort, logGuid, *currentTag, hostname1, hostname3)
+					lrp := createActualLRP(key, endpoint1)
+					tempTable.SetRoutes(nil, schedulingInfo)
+					tempTable.AddEndpoint(lrp)
+
+					_, messagesToEmit = table.Swap(tempTable, noFreshDomains)
+				})
+
+				It("emits all three routes", func() {
+					expected := routingtable.MessagesToEmit{
+						RegistrationMessages: []routingtable.RegistryMessage{
+							routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
+							routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname2, LogGuid: logGuid}),
+							routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname3, LogGuid: logGuid}),
+						},
+					}
+					Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
+				})
+			})
+
+			Context("subsequent swaps with fresh", func() {
+				BeforeEach(func() {
+					tempTable := routingtable.NewRoutingTable(logger, routingtable.MessagesToEmitBuilder{})
+					schedulingInfo := createDesiredLRPSchedulingInfo(key.ProcessGUID, key.ContainerPort, logGuid, *currentTag, hostname1, hostname3)
+					lrp := createActualLRP(key, endpoint1)
+					tempTable.SetRoutes(nil, schedulingInfo)
+					tempTable.AddEndpoint(lrp)
+					_, messagesToEmit = table.Swap(tempTable, domains)
+				})
+
+				It("emits two routes and unregisters the old route", func() {
+					expected := routingtable.MessagesToEmit{
+						RegistrationMessages: []routingtable.RegistryMessage{
+							routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
+							routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname3, LogGuid: logGuid}),
+						},
+						UnregistrationMessages: []routingtable.RegistryMessage{
+							routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname2, LogGuid: logGuid}),
+						},
+					}
+					Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
+				})
+			})
+		})
+
+		Context("when a new routing key arrives", func() {
+			Context("when the routing key has both routes and endpoints", func() {
+				BeforeEach(func() {
+					tempTable := routingtable.NewRoutingTable(logger, routingtable.MessagesToEmitBuilder{})
+					schedulingInfo := createDesiredLRPSchedulingInfo(key.ProcessGUID, key.ContainerPort, logGuid, *currentTag, hostname1, hostname2)
+					lrp1 := createActualLRP(key, endpoint1)
+					lrp2 := createActualLRP(key, endpoint2)
+					tempTable.SetRoutes(nil, schedulingInfo)
+					tempTable.AddEndpoint(lrp1)
+					tempTable.AddEndpoint(lrp2)
+
+					_, messagesToEmit = table.Swap(tempTable, domains)
+				})
+
+				It("emits registrations for each pairing", func() {
+					expected := routingtable.MessagesToEmit{
+						RegistrationMessages: []routingtable.RegistryMessage{
+							routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
+							routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname2, LogGuid: logGuid}),
+							routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
+							routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname2, LogGuid: logGuid}),
+						},
+					}
+					Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
+				})
+			})
+
+			Context("when the process only has routes", func() {
+				BeforeEach(func() {
+					tempTable := routingtable.NewRoutingTable(logger, routingtable.MessagesToEmitBuilder{})
+					schedulingInfo := createDesiredLRPSchedulingInfo(key.ProcessGUID, key.ContainerPort, logGuid, *currentTag, hostname1)
+					tempTable.SetRoutes(nil, schedulingInfo)
+
+					_, messagesToEmit = table.Swap(tempTable, domains)
+				})
+
+				It("should not emit a registration", func() {
+					Expect(messagesToEmit).To(BeZero())
+				})
+
+				Context("when the endpoints subsequently arrive", func() {
+					BeforeEach(func() {
+						tempTable := routingtable.NewRoutingTable(logger, routingtable.MessagesToEmitBuilder{})
+						schedulingInfo := createDesiredLRPSchedulingInfo(key.ProcessGUID, key.ContainerPort, logGuid, *currentTag, hostname1)
+						lrp := createActualLRP(key, endpoint1)
+						tempTable.SetRoutes(nil, schedulingInfo)
+						tempTable.AddEndpoint(lrp)
+
+						_, messagesToEmit = table.Swap(tempTable, domains)
+					})
+
+					It("emits registrations for each pairing", func() {
+						expected := routingtable.MessagesToEmit{
+							RegistrationMessages: []routingtable.RegistryMessage{
+								routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
+							},
+						}
+						Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
+					})
+				})
+
+				Context("when the routing key subsequently disappears", func() {
+					BeforeEach(func() {
+						tempTable := routingtable.NewRoutingTable(logger, routingtable.MessagesToEmitBuilder{})
+						_, messagesToEmit = table.Swap(tempTable, domains)
+					})
+
+					It("emits nothing", func() {
+						Expect(messagesToEmit).To(BeZero())
+					})
+				})
+			})
+
+			Context("when the process only has endpoints", func() {
+				BeforeEach(func() {
+					tempTable := routingtable.NewRoutingTable(logger, routingtable.MessagesToEmitBuilder{})
+					lrp := createActualLRP(key, endpoint1)
+					tempTable.AddEndpoint(lrp)
+
+					_, messagesToEmit = table.Swap(tempTable, domains)
+				})
+
+				It("should not emit a registration", func() {
+					Expect(messagesToEmit).To(BeZero())
+				})
+
+				Context("when the routes subsequently arrive", func() {
+					BeforeEach(func() {
+						tempTable := routingtable.NewRoutingTable(logger, routingtable.MessagesToEmitBuilder{})
+						schedulingInfo := createDesiredLRPSchedulingInfo(key.ProcessGUID, key.ContainerPort, logGuid, *currentTag, hostname1)
+						lrp := createActualLRP(key, endpoint1)
+						tempTable.SetRoutes(nil, schedulingInfo)
+						tempTable.AddEndpoint(lrp)
+
+						_, messagesToEmit = table.Swap(tempTable, domains)
+					})
+
+					It("emits registrations for each pairing", func() {
+						expected := routingtable.MessagesToEmit{
+							RegistrationMessages: []routingtable.RegistryMessage{
+								routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
+							},
+						}
+						Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
+					})
+				})
+
+				Context("when the endpoint subsequently disappears", func() {
+					BeforeEach(func() {
+						tempTable := routingtable.NewRoutingTable(logger, routingtable.MessagesToEmitBuilder{})
+						_, messagesToEmit = table.Swap(tempTable, domains)
+					})
+
+					It("emits nothing", func() {
+						Expect(messagesToEmit).To(BeZero())
+					})
+				})
+			})
+		})
+
+		Context("when there is an existing routing key with a route service url", func() {
+			createSchedulingInfo := func(serviceURL string) *models.DesiredLRPSchedulingInfo {
+				routingInfo := cfroutes.CFRoutes{
+					{
+						Hostnames:       []string{"hostname1", "hostname2"},
+						Port:            key.ContainerPort,
+						RouteServiceUrl: serviceURL,
+					},
+				}.RoutingInfo()
+				routes := models.Routes{}
+				for key, message := range routingInfo {
+					routes[key] = message
+				}
+
+				info := models.NewDesiredLRPSchedulingInfo(models.NewDesiredLRPKey(key.ProcessGUID, "domain", logGuid), "", 1, models.NewDesiredLRPResource(0, 0, 0, ""), routes, *currentTag, nil, nil)
+				return &info
+			}
+
+			BeforeEach(func() {
+				tempTable := routingtable.NewRoutingTable(logger, routingtable.MessagesToEmitBuilder{})
+				schedulingInfo := createSchedulingInfo("https://rs.example.com")
+				tempTable.SetRoutes(nil, schedulingInfo)
+				lrp := createActualLRP(key, endpoint1)
+				tempTable.AddEndpoint(lrp)
+				table.Swap(tempTable, domains)
+			})
+
+			Context("when the route service url changes", func() {
+				BeforeEach(func() {
+					tempTable := routingtable.NewRoutingTable(logger, routingtable.MessagesToEmitBuilder{})
+					schedulingInfo := createSchedulingInfo("https://rs.new.example.com")
+					tempTable.SetRoutes(nil, schedulingInfo)
+					lrp1 := createActualLRP(key, endpoint1)
+					tempTable.AddEndpoint(lrp1)
+					lrp2 := createActualLRP(key, endpoint2)
+					tempTable.AddEndpoint(lrp2)
+					_, messagesToEmit = table.Swap(tempTable, domains)
+				})
+
+				It("emits all registrations and no unregistration", func() {
+					expected := routingtable.MessagesToEmit{
+						RegistrationMessages: []routingtable.RegistryMessage{
+							routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGuid: logGuid, RouteServiceUrl: "https://rs.new.example.com"}),
+							routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname2, LogGuid: logGuid, RouteServiceUrl: "https://rs.new.example.com"}),
+							routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname1, LogGuid: logGuid, RouteServiceUrl: "https://rs.new.example.com"}),
+							routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname2, LogGuid: logGuid, RouteServiceUrl: "https://rs.new.example.com"}),
+						},
+					}
+					Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
+				})
+
+			})
+		})
+
+		Context("when there is an existing routing key", func() {
+			BeforeEach(func() {
+				tempTable := routingtable.NewRoutingTable(logger, routingtable.MessagesToEmitBuilder{})
+				schedulingInfo := createDesiredLRPSchedulingInfo(key.ProcessGUID, key.ContainerPort, logGuid, *currentTag, hostname1, hostname2)
+				tempTable.SetRoutes(nil, schedulingInfo)
+				lrp1 := createActualLRP(key, endpoint1)
+				tempTable.AddEndpoint(lrp1)
+				lrp2 := createActualLRP(key, endpoint2)
+				tempTable.AddEndpoint(lrp2)
+
+				table.Swap(tempTable, domains)
+			})
+
+			Context("when nothing changes", func() {
+				BeforeEach(func() {
+					tempTable := routingtable.NewRoutingTable(logger, routingtable.MessagesToEmitBuilder{})
+					schedulingInfo := createDesiredLRPSchedulingInfo(key.ProcessGUID, key.ContainerPort, logGuid, *currentTag, hostname1, hostname2)
+					tempTable.SetRoutes(nil, schedulingInfo)
+					lrp1 := createActualLRP(key, endpoint1)
+					tempTable.AddEndpoint(lrp1)
+					lrp2 := createActualLRP(key, endpoint2)
+					tempTable.AddEndpoint(lrp2)
+
+					_, messagesToEmit = table.Swap(tempTable, domains)
+				})
+
+				It("emits all registrations and no unregisration", func() {
+					expected := routingtable.MessagesToEmit{
+						RegistrationMessages: []routingtable.RegistryMessage{
+							routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
+							routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname2, LogGuid: logGuid}),
+							routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
+							routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname2, LogGuid: logGuid}),
+						},
+					}
+					Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
+				})
+			})
+
+			Context("when the routing key gets new routes", func() {
+				BeforeEach(func() {
+					tempTable := routingtable.NewRoutingTable(logger, routingtable.MessagesToEmitBuilder{})
+					schedulingInfo := createDesiredLRPSchedulingInfo(key.ProcessGUID, key.ContainerPort, logGuid, *currentTag, hostname1, hostname2, hostname3)
+					tempTable.SetRoutes(nil, schedulingInfo)
+					lrp1 := createActualLRP(key, endpoint1)
+					tempTable.AddEndpoint(lrp1)
+					lrp2 := createActualLRP(key, endpoint2)
+					tempTable.AddEndpoint(lrp2)
+
+					_, messagesToEmit = table.Swap(tempTable, domains)
+				})
+
+				It("emits all registrations and no unregistration", func() {
+					expected := routingtable.MessagesToEmit{
+						RegistrationMessages: []routingtable.RegistryMessage{
+							routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
+							routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname2, LogGuid: logGuid}),
+							routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname3, LogGuid: logGuid}),
+							routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
+							routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname2, LogGuid: logGuid}),
+							routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname3, LogGuid: logGuid}),
+						},
+					}
+					Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
+				})
+			})
+
+			Context("when the routing key without any route service url gets routes with a new route service url", func() {
+				BeforeEach(func() {
+					tempTable := routingtable.NewRoutingTable(logger, routingtable.MessagesToEmitBuilder{})
+					schedulingInfo := createDesiredLRPSchedulingInfo(key.ProcessGUID, key.ContainerPort, logGuid, *currentTag, hostname1, hostname2)
+					tempTable.SetRoutes(nil, schedulingInfo)
+					lrp1 := createActualLRP(key, endpoint1)
+					tempTable.AddEndpoint(lrp1)
+					lrp2 := createActualLRP(key, endpoint2)
+					tempTable.AddEndpoint(lrp2)
+
+					_, messagesToEmit = table.Swap(tempTable, domains)
+				})
+
+				It("emits all registrations and no unregistration", func() {
+					expected := routingtable.MessagesToEmit{
+						RegistrationMessages: []routingtable.RegistryMessage{
+							routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGuid: logGuid, RouteServiceUrl: "https://rs.example.com"}),
+							routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname2, LogGuid: logGuid, RouteServiceUrl: "https://rs.example.com"}),
+							routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname1, LogGuid: logGuid, RouteServiceUrl: "https://rs.example.com"}),
+							routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname2, LogGuid: logGuid, RouteServiceUrl: "https://rs.example.com"}),
+						},
+					}
+					Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
+				})
+
+			})
+
+			Context("when the routing key gets new endpoints", func() {
+				BeforeEach(func() {
+					tempTable := routingtable.NewRoutingTable(logger, routingtable.MessagesToEmitBuilder{})
+					schedulingInfo := createDesiredLRPSchedulingInfo(key.ProcessGUID, key.ContainerPort, logGuid, *currentTag, hostname1, hostname2)
+					tempTable.SetRoutes(nil, schedulingInfo)
+					lrp1 := createActualLRP(key, endpoint1)
+					tempTable.AddEndpoint(lrp1)
+					lrp2 := createActualLRP(key, endpoint2)
+					tempTable.AddEndpoint(lrp2)
+					lrp3 := createActualLRP(key, endpoint3)
+					tempTable.AddEndpoint(lrp3)
+
+					_, messagesToEmit = table.Swap(tempTable, domains)
+				})
+
+				It("emits all registrations and no unregistration", func() {
+					expected := routingtable.MessagesToEmit{
+						RegistrationMessages: []routingtable.RegistryMessage{
+							routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
+							routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname2, LogGuid: logGuid}),
+							routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
+							routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname2, LogGuid: logGuid}),
+							routingtable.RegistryMessageFor(endpoint3, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
+							routingtable.RegistryMessageFor(endpoint3, routingtable.Route{Hostname: hostname2, LogGuid: logGuid}),
+						},
+					}
+					Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
+				})
+			})
+
+			Context("when the routing key gets a new evacuating endpoint", func() {
+				BeforeEach(func() {
+					tempTable := routingtable.NewRoutingTable(logger, routingtable.MessagesToEmitBuilder{})
+					schedulingInfo := createDesiredLRPSchedulingInfo(key.ProcessGUID, key.ContainerPort, logGuid, *currentTag, hostname1, hostname2)
+					tempTable.SetRoutes(nil, schedulingInfo)
+					lrp1 := createActualLRP(key, endpoint1)
+					tempTable.AddEndpoint(lrp1)
+					lrp2 := createActualLRP(key, endpoint2)
+					tempTable.AddEndpoint(lrp2)
+					evacuating := createActualLRP(key, evacuating1)
+					tempTable.AddEndpoint(evacuating)
+
+					_, messagesToEmit = table.Swap(tempTable, domains)
+				})
+
+				It("emits all registrations and no unregisration", func() {
+					expected := routingtable.MessagesToEmit{
+						RegistrationMessages: []routingtable.RegistryMessage{
+							routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
+							routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname2, LogGuid: logGuid}),
+							routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
+							routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname2, LogGuid: logGuid}),
+							routingtable.RegistryMessageFor(evacuating1, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
+							routingtable.RegistryMessageFor(evacuating1, routingtable.Route{Hostname: hostname2, LogGuid: logGuid}),
+						},
+					}
+					Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
+				})
+			})
+
+			Context("when the routing key has an evacuating and instance endpoint", func() {
+				BeforeEach(func() {
+					tempTable := routingtable.NewRoutingTable(logger, routingtable.MessagesToEmitBuilder{})
+					schedulingInfo := createDesiredLRPSchedulingInfo(key.ProcessGUID, key.ContainerPort, logGuid, *currentTag, hostname1, hostname2)
+					tempTable.SetRoutes(nil, schedulingInfo)
+					lrp1 := createActualLRP(key, endpoint1)
+					tempTable.AddEndpoint(lrp1)
+					lrp2 := createActualLRP(key, endpoint2)
+					tempTable.AddEndpoint(lrp2)
+					evacuating := createActualLRP(key, evacuating1)
+					tempTable.AddEndpoint(evacuating)
+
+					table.Swap(tempTable, domains)
+
+					tempTable = routingtable.NewRoutingTable(logger, routingtable.MessagesToEmitBuilder{})
+					schedulingInfo = createDesiredLRPSchedulingInfo(key.ProcessGUID, key.ContainerPort, logGuid, *currentTag, hostname1, hostname2)
+					tempTable.SetRoutes(nil, schedulingInfo)
+					lrp2 = createActualLRP(key, endpoint2)
+					tempTable.AddEndpoint(lrp2)
+					evacuating = createActualLRP(key, evacuating1)
+					tempTable.AddEndpoint(evacuating)
+
+					_, messagesToEmit = table.Swap(tempTable, domains)
+				})
+
+				It("should not emit an unregistration ", func() {
+					expected := routingtable.MessagesToEmit{
+						RegistrationMessages: []routingtable.RegistryMessage{
+							routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
+							routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname2, LogGuid: logGuid}),
+							routingtable.RegistryMessageFor(evacuating1, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
+							routingtable.RegistryMessageFor(evacuating1, routingtable.Route{Hostname: hostname2, LogGuid: logGuid}),
+						},
+					}
+					Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
+				})
+			})
+
+			// Context("when the routing key gets new routes and endpoints", func() {
+			// 	BeforeEach(func() {
+			// 		tempTable := routingtable.NewTempTable(
+			// 			routingtable.RoutesByRoutingKey{key: []routingtable.Route{
+			// 				routingtable.Route{Hostname: hostname1, LogGuid: logGuid},
+			// 				routingtable.Route{Hostname: hostname2, LogGuid: logGuid},
+			// 				routingtable.Route{Hostname: hostname3, LogGuid: logGuid},
+			// 			}},
+			// 			routingtable.EndpointsByRoutingKey{key: {endpoint1, endpoint2, endpoint3}},
+			// 		)
+			// 		messagesToEmit = table.Swap(tempTable, domains)
+			// 	})
+
+			// 	It("emits all registrations and no unregisration", func() {
+			// 		expected := routingtable.MessagesToEmit{
+			// 			RegistrationMessages: []routingtable.RegistryMessage{
+			// 				routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
+			// 				routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname2, LogGuid: logGuid}),
+			// 				routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname3, LogGuid: logGuid}),
+			// 				routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
+			// 				routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname2, LogGuid: logGuid}),
+			// 				routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname3, LogGuid: logGuid}),
+			// 				routingtable.RegistryMessageFor(endpoint3, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
+			// 				routingtable.RegistryMessageFor(endpoint3, routingtable.Route{Hostname: hostname2, LogGuid: logGuid}),
+			// 				routingtable.RegistryMessageFor(endpoint3, routingtable.Route{Hostname: hostname3, LogGuid: logGuid}),
+			// 			},
+			// 		}
+			// 		Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
+			// 	})
+			// })
+
+			// Context("when the routing key loses routes", func() {
+			// 	BeforeEach(func() {
+			// 		tempTable := routingtable.NewTempTable(
+			// 			routingtable.RoutesByRoutingKey{key: []routingtable.Route{
+			// 				routingtable.Route{Hostname: hostname1, LogGuid: logGuid},
+			// 			}},
+			// 			routingtable.EndpointsByRoutingKey{key: {endpoint1, endpoint2}},
+			// 		)
+			// 		messagesToEmit = table.Swap(tempTable, domains)
+			// 	})
+
+			// 	It("emits all registrations and the relevant unregisrations", func() {
+			// 		expected := routingtable.MessagesToEmit{
+			// 			RegistrationMessages: []routingtable.RegistryMessage{
+			// 				routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
+			// 				routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
+			// 			},
+			// 			UnregistrationMessages: []routingtable.RegistryMessage{
+			// 				routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname2, LogGuid: logGuid}),
+			// 				routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname2, LogGuid: logGuid}),
+			// 			},
+			// 		}
+			// 		Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
+			// 	})
+			// })
+
+			// Context("when the routing key loses endpoints", func() {
+			// 	BeforeEach(func() {
+			// 		tempTable := routingtable.NewTempTable(
+			// 			routingtable.RoutesByRoutingKey{key: []routingtable.Route{
+			// 				routingtable.Route{Hostname: hostname1, LogGuid: logGuid},
+			// 				routingtable.Route{Hostname: hostname2, LogGuid: logGuid},
+			// 			}},
+			// 			routingtable.EndpointsByRoutingKey{key: {endpoint1}},
+			// 		)
+			// 		messagesToEmit = table.Swap(tempTable, domains)
+			// 	})
+
+			// 	It("emits all registrations and the relevant unregisrations", func() {
+			// 		expected := routingtable.MessagesToEmit{
+			// 			RegistrationMessages: []routingtable.RegistryMessage{
+			// 				routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
+			// 				routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname2, LogGuid: logGuid}),
+			// 			},
+			// 			UnregistrationMessages: []routingtable.RegistryMessage{
+			// 				routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
+			// 				routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname2, LogGuid: logGuid}),
+			// 			},
+			// 		}
+			// 		Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
+			// 	})
+			// })
+
+			// Context("when the routing key loses both routes and endpoints", func() {
+			// 	BeforeEach(func() {
+			// 		tempTable := routingtable.NewTempTable(
+			// 			routingtable.RoutesByRoutingKey{key: []routingtable.Route{
+			// 				routingtable.Route{Hostname: hostname1, LogGuid: logGuid},
+			// 			}},
+			// 			routingtable.EndpointsByRoutingKey{key: {endpoint1}},
+			// 		)
+			// 		messagesToEmit = table.Swap(tempTable, domains)
+			// 	})
+
+			// 	It("emits all registrations and the relevant unregisrations", func() {
+			// 		expected := routingtable.MessagesToEmit{
+			// 			RegistrationMessages: []routingtable.RegistryMessage{
+			// 				routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
+			// 			},
+			// 			UnregistrationMessages: []routingtable.RegistryMessage{
+			// 				routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname2, LogGuid: logGuid}),
+			// 				routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
+			// 				routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname2, LogGuid: logGuid}),
+			// 			},
+			// 		}
+			// 		Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
+			// 	})
+			// })
+
+			// Context("when the routing key gains routes but loses endpoints", func() {
+			// 	BeforeEach(func() {
+			// 		tempTable := routingtable.NewTempTable(
+			// 			routingtable.RoutesByRoutingKey{key: []routingtable.Route{
+			// 				routingtable.Route{Hostname: hostname1, LogGuid: logGuid},
+			// 				routingtable.Route{Hostname: hostname2, LogGuid: logGuid},
+			// 				routingtable.Route{Hostname: hostname3, LogGuid: logGuid},
+			// 			}},
+			// 			routingtable.EndpointsByRoutingKey{key: {endpoint1}},
+			// 		)
+			// 		messagesToEmit = table.Swap(tempTable, domains)
+			// 	})
+
+			// 	It("emits all registrations and the relevant unregisrations", func() {
+			// 		expected := routingtable.MessagesToEmit{
+			// 			RegistrationMessages: []routingtable.RegistryMessage{
+			// 				routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
+			// 				routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname2, LogGuid: logGuid}),
+			// 				routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname3, LogGuid: logGuid}),
+			// 			},
+			// 			UnregistrationMessages: []routingtable.RegistryMessage{
+			// 				routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
+			// 				routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname2, LogGuid: logGuid}),
+			// 			},
+			// 		}
+			// 		Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
+			// 	})
+			// })
+
+			// Context("when the routing key loses routes but gains endpoints", func() {
+			// 	BeforeEach(func() {
+			// 		tempTable := routingtable.NewTempTable(
+			// 			routingtable.RoutesByRoutingKey{key: []routingtable.Route{
+			// 				routingtable.Route{Hostname: hostname1, LogGuid: logGuid},
+			// 			}},
+			// 			routingtable.EndpointsByRoutingKey{key: {endpoint1, endpoint2, endpoint3}},
+			// 		)
+			// 		messagesToEmit = table.Swap(tempTable, domains)
+			// 	})
+
+			// 	It("emits all registrations and the relevant unregisrations", func() {
+			// 		expected := routingtable.MessagesToEmit{
+			// 			RegistrationMessages: []routingtable.RegistryMessage{
+			// 				routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
+			// 				routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
+			// 				routingtable.RegistryMessageFor(endpoint3, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
+			// 			},
+			// 			UnregistrationMessages: []routingtable.RegistryMessage{
+			// 				routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname2, LogGuid: logGuid}),
+			// 				routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname2, LogGuid: logGuid}),
+			// 			},
+			// 		}
+			// 		Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
+			// 	})
+			// })
+
+			// Context("when the routing key disappears entirely", func() {
+			// 	var tempTable routingtable.NATSRoutingTable
+			// 	var domainSet models.DomainSet
+
+			// 	BeforeEach(func() {
+			// 		tempTable = routingtable.NewTempTable(
+			// 			routingtable.RoutesByRoutingKey{},
+			// 			routingtable.EndpointsByRoutingKey{},
+			// 		)
+			// 	})
+
+			// 	JustBeforeEach(func() {
+			// 		messagesToEmit = table.Swap(tempTable, domainSet)
+			// 	})
+
+			// 	Context("when the domain is fresh", func() {
+			// 		BeforeEach(func() {
+			// 			domainSet = domains
+			// 		})
+
+			// 		It("should unregister the missing guids", func() {
+			// 			expected := routingtable.MessagesToEmit{
+			// 				UnregistrationMessages: []routingtable.RegistryMessage{
+			// 					routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
+			// 					routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
+			// 					routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname2, LogGuid: logGuid}),
+			// 					routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname2, LogGuid: logGuid}),
+			// 				},
+			// 			}
+			// 			Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
+			// 		})
+			// 	})
+
+			// 	Context("when the domain is not fresh", func() {
+			// 		BeforeEach(func() {
+			// 			domainSet = noFreshDomains
+			// 		})
+
+			// 		It("should register the missing guids", func() {
+			// 			expected := routingtable.MessagesToEmit{
+			// 				RegistrationMessages: []routingtable.RegistryMessage{
+			// 					routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
+			// 					routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
+			// 					routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname2, LogGuid: logGuid}),
+			// 					routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname2, LogGuid: logGuid}),
+			// 				},
+			// 			}
+			// 			Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
+			// 		})
+
+			// 		Context("when the domain is repeatedly not fresh", func() {
+			// 			BeforeEach(func() {
+			// 				tempTable = routingtable.NewTempTable(
+			// 					routingtable.RoutesByRoutingKey{},
+			// 					routingtable.EndpointsByRoutingKey{},
+			// 				)
+			// 			})
+
+			// 			JustBeforeEach(func() {
+			// 				// doing another swap to make sure the old table is still good
+			// 				messagesToEmit = table.Swap(tempTable, domainSet)
+			// 			})
+
+			// 			It("logs the collision", func() {
+			// 				table.AddEndpoint(key, collisionEndpoint)
+			// 				Eventually(logger).Should(Say(
+			// 					fmt.Sprintf(
+			// 						`\{"Address":\{"Host":"%s","Port":%d\},"instance_guid_a":"%s","instance_guid_b":"%s"\}`,
+			// 						endpoint1.Host,
+			// 						endpoint1.Port,
+			// 						endpoint1.InstanceGuid,
+			// 						collisionEndpoint.InstanceGuid,
+			// 					),
+			// 				))
+			// 			})
+
+			// 			It("should register the missing guids", func() {
+			// 				expected := routingtable.MessagesToEmit{
+			// 					RegistrationMessages: []routingtable.RegistryMessage{
+			// 						routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
+			// 						routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
+			// 						routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname2, LogGuid: logGuid}),
+			// 						routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname2, LogGuid: logGuid}),
+			// 					},
+			// 				}
+			// 				Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
+			// 			})
+			// 		})
+			// 	})
+			// })
+
+			// Describe("edge cases", func() {
+			// 	Context("when the original registration had no routes, and then the routing key loses endpoints", func() {
+			// 		BeforeEach(func() {
+			// 			//override previous set up
+			// 			tempTable := routingtable.NewTempTable(
+			// 				routingtable.RoutesByRoutingKey{},
+			// 				routingtable.EndpointsByRoutingKey{key: {endpoint1, endpoint2}},
+			// 			)
+			// 			table.Swap(tempTable, domains)
+
+			// 			tempTable = routingtable.NewTempTable(
+			// 				routingtable.RoutesByRoutingKey{key: {}},
+			// 				routingtable.EndpointsByRoutingKey{key: {endpoint1}},
+			// 			)
+			// 			messagesToEmit = table.Swap(tempTable, domains)
+			// 		})
+
+			// 		It("emits nothing", func() {
+			// 			Expect(messagesToEmit).To(BeZero())
+			// 		})
+			// 	})
+
+			// 	Context("when the original registration had no endpoints, and then the routing key loses a route", func() {
+			// 		BeforeEach(func() {
+			// 			//override previous set up
+			// 			tempTable := routingtable.NewTempTable(
+			// 				routingtable.RoutesByRoutingKey{key: []routingtable.Route{
+			// 					routingtable.Route{Hostname: hostname1, LogGuid: logGuid},
+			// 					routingtable.Route{Hostname: hostname2, LogGuid: logGuid},
+			// 				}},
+			// 				routingtable.EndpointsByRoutingKey{},
+			// 			)
+			// 			table.Swap(tempTable, domains)
+
+			// 			tempTable = routingtable.NewTempTable(
+			// 				routingtable.RoutesByRoutingKey{key: []routingtable.Route{
+			// 					routingtable.Route{Hostname: hostname1, LogGuid: logGuid},
+			// 				}},
+			// 				routingtable.EndpointsByRoutingKey{},
+			// 			)
+			// 			messagesToEmit = table.Swap(tempTable, domains)
+			// 		})
+
+			// 		It("emits nothing", func() {
+			// 			Expect(messagesToEmit).To(BeZero())
+			// 		})
+			// 	})
+			// })
+		})
+	})
 
 	// Describe("Processing deltas", func() {
 	// 	Context("when the table is empty", func() {
@@ -1541,46 +1553,45 @@ var _ = Describe("RoutingTable", func() {
 	// 	})
 	// })
 
-	// Describe("RouteCount", func() {
-	// 	It("returns 0 on a new routing table", func() {
-	// 		Expect(table.RouteCount()).To(Equal(0))
-	// 	})
+	Describe("RouteCount", func() {
+		It("returns 0 on a new routing table", func() {
+			Expect(table.HTTPEndpointCount()).To(Equal(0))
+		})
 
-	// 	It("returns 1 after adding a route to a single process", func() {
-	// 		table.SetRoutes(endpoint.RoutingKey{ProcessGUID: "fake-process-guid"}, []routingtable.Route{
-	// 			routingtable.Route{Hostname: "fake-route-url", LogGuid: logGuid},
-	// 		}, nil)
-	// 		table.AddEndpoint(endpoint.RoutingKey{ProcessGUID: "fake-process-guid"}, routingtable.Endpoint{InstanceGuid: "fake-instance-guid"})
+		It("returns 1 after adding a route to a single process", func() {
+			schedulingInfo := createDesiredLRPSchedulingInfo("fake-process-guid", 0, logGuid, *currentTag, "fake-route-url")
+			table.SetRoutes(nil, schedulingInfo)
+			lrp := createActualLRP(endpoint.RoutingKey{ProcessGUID: "fake-process-guid"}, routingtable.Endpoint{InstanceGuid: "fake-instance-guid", ModificationTag: currentTag})
+			table.AddEndpoint(lrp)
 
-	// 		Expect(table.RouteCount()).To(Equal(1))
-	// 	})
+			Expect(table.HTTPEndpointCount()).To(Equal(1))
+		})
 
-	// 	It("returns 2 after associating 2 urls with a single process", func() {
-	// 		table.SetRoutes(endpoint.RoutingKey{ProcessGUID: "fake-process-guid"}, []routingtable.Route{
-	// 			routingtable.Route{Hostname: "fake-route-url-1", LogGuid: logGuid},
-	// 			routingtable.Route{Hostname: "fake-route-url-2", LogGuid: logGuid},
-	// 		}, nil)
-	// 		table.AddEndpoint(endpoint.RoutingKey{ProcessGUID: "fake-process-guid"}, routingtable.Endpoint{InstanceGuid: "fake-instance-guid-1"})
+		It("returns 2 after associating 2 urls with a single process", func() {
+			schedulingInfo := createDesiredLRPSchedulingInfo("fake-process-guid", 0, logGuid, *currentTag, "fake-route-url-1", "fake-route-url-2")
+			table.SetRoutes(nil, schedulingInfo)
+			lrp := createActualLRP(endpoint.RoutingKey{ProcessGUID: "fake-process-guid"}, routingtable.Endpoint{InstanceGuid: "fake-instance-guid-1", ModificationTag: currentTag})
+			table.AddEndpoint(lrp)
 
-	// 		Expect(table.RouteCount()).To(Equal(2))
-	// 	})
+			Expect(table.HTTPEndpointCount()).To(Equal(2))
+		})
 
-	// 	It("returns 8 after associating 2 urls with 2 processes with 2 instances each", func() {
-	// 		table.SetRoutes(endpoint.RoutingKey{ProcessGUID: "fake-process-guid-a"}, []routingtable.Route{
-	// 			routingtable.Route{Hostname: "fake-route-url-a-1", LogGuid: logGuid},
-	// 			routingtable.Route{Hostname: "fake-route-url-a-2", LogGuid: logGuid},
-	// 		}, nil)
-	// 		table.AddEndpoint(endpoint.RoutingKey{ProcessGUID: "fake-process-guid-a"}, routingtable.Endpoint{InstanceGuid: "fake-instance-guid-a-1"})
-	// 		table.AddEndpoint(endpoint.RoutingKey{ProcessGUID: "fake-process-guid-a"}, routingtable.Endpoint{InstanceGuid: "fake-instance-guid-a-2"})
+		It("returns 8 after associating 2 urls with 2 processes with 2 instances each", func() {
+			schedulingInfo := createDesiredLRPSchedulingInfo("fake-process-guid-a", 0, logGuid, *currentTag, "fake-route-url-a1", "fake-route-url-a2")
+			table.SetRoutes(nil, schedulingInfo)
+			lrp := createActualLRP(endpoint.RoutingKey{ProcessGUID: "fake-process-guid-a"}, routingtable.Endpoint{InstanceGuid: "fake-instance-guid-a1", ModificationTag: currentTag})
+			table.AddEndpoint(lrp)
+			lrp = createActualLRP(endpoint.RoutingKey{ProcessGUID: "fake-process-guid-a"}, routingtable.Endpoint{InstanceGuid: "fake-instance-guid-a2", ModificationTag: currentTag})
+			table.AddEndpoint(lrp)
 
-	// 		table.SetRoutes(endpoint.RoutingKey{ProcessGUID: "fake-process-guid-b"}, []routingtable.Route{
-	// 			routingtable.Route{Hostname: "fake-route-url-b-1", LogGuid: logGuid},
-	// 			routingtable.Route{Hostname: "fake-route-url-b-2", LogGuid: logGuid},
-	// 		}, nil)
-	// 		table.AddEndpoint(endpoint.RoutingKey{ProcessGUID: "fake-process-guid-b"}, routingtable.Endpoint{InstanceGuid: "fake-instance-guid-b-1"})
-	// 		table.AddEndpoint(endpoint.RoutingKey{ProcessGUID: "fake-process-guid-b"}, routingtable.Endpoint{InstanceGuid: "fake-instance-guid-b-2"})
+			schedulingInfo = createDesiredLRPSchedulingInfo("fake-process-guid-b", 0, logGuid, *currentTag, "fake-route-url-b1", "fake-route-url-b2")
+			table.SetRoutes(nil, schedulingInfo)
+			lrp = createActualLRP(endpoint.RoutingKey{ProcessGUID: "fake-process-guid-b"}, routingtable.Endpoint{InstanceGuid: "fake-instance-guid-b1", ModificationTag: currentTag})
+			table.AddEndpoint(lrp)
+			lrp = createActualLRP(endpoint.RoutingKey{ProcessGUID: "fake-process-guid-b"}, routingtable.Endpoint{InstanceGuid: "fake-instance-guid-b2", ModificationTag: currentTag})
+			table.AddEndpoint(lrp)
 
-	// 		Expect(table.RouteCount()).To(Equal(8))
-	// 	})
-	// })
+			Expect(table.HTTPEndpointCount()).To(Equal(8))
+		})
+	})
 })

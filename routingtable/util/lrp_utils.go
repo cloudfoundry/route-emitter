@@ -9,6 +9,10 @@ import (
 )
 
 func DesiredLRPData(lrp *models.DesiredLRPSchedulingInfo) lager.Data {
+	if lrp == nil {
+		return lager.Data{}
+	}
+
 	logRoutes := make(models.Routes)
 	logRoutes[cfroutes.CF_ROUTER] = lrp.Routes[cfroutes.CF_ROUTER]
 	logRoutes[tcp_routes.TCP_ROUTER] = lrp.Routes[tcp_routes.TCP_ROUTER]
