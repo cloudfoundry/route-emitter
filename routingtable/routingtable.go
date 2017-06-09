@@ -1,6 +1,7 @@
 package routingtable
 
 import (
+	"fmt"
 	"sync"
 
 	tcpmodels "code.cloudfoundry.org/routing-api/models"
@@ -103,7 +104,7 @@ func (table *routingTable) AddEndpoint(actualLRP *endpoint.ActualLRPRoutingInfo)
 		// }
 
 		// table.addressEntries[address] = routingEndpoint.key()
-		messagesToEmit = messagesToEmit.Merge(table.emitHTP(key, currentEntry, newEntry))
+		messagesToEmit = messagesToEmit.Merge(table.emitHTP(key, currentEntry, newEntry, nil))
 	}
 
 	// add tcp endpoints
@@ -163,7 +164,7 @@ func (table *routingTable) RemoveEndpoint(actualLRP *endpoint.ActualLRPRoutingIn
 
 		//delete(table.addressEntries, routingEndpoint.address())
 
-		messagesToEmit = messagesToEmit.Merge(table.emitHTP(key, currentEntry, newEntry))
+		messagesToEmit = messagesToEmit.Merge(table.emitHTP(key, currentEntry, newEntry, nil))
 	}
 
 	// remove tcp endpoints
@@ -211,17 +212,22 @@ func (t *routingTable) Swap(other RoutingTable, domains models.DomainSet) (TCPRo
 	for key, endpoints := range otherTable.httpEntries {
 		existingEntry, ok := t.httpEntries[key]
 		if !ok {
-			messagesToEmit = messagesToEmit.Merge(t.emitHTP(key, RoutableEndpoints{}, endpoints))
+			// entry doesn't exist in current table, add it and emit event
+			messagesToEmit = messagesToEmit.Merge(t.emitHTP(key, RoutableEndpoints{}, endpoints, domains))
 			continue
 		}
-		messagesToEmit = messagesToEmit.Merge(t.emitHTP(key, existingEntry, endpoints))
+		// entry exists in both tables, merge the two entries to ensure non-fresh domain endpoints aren't removed then diff them
+		merged := mergeHTTP(existingEntry, endpoints, domains)
+		messagesToEmit = messagesToEmit.Merge(t.emitHTP(key, existingEntry, merged, domains))
 	}
 	for key, endpoints := range t.httpEntries {
 		_, ok := otherTable.httpEntries[key]
 		if ok {
 			continue
 		}
-		messagesToEmit = messagesToEmit.Merge(t.emitHTP(key, endpoints, RoutableEndpoints{}))
+		// entry exists in old table, merge the two entries to ensure non-fresh domain endpoints aren't removed
+		merged := mergeHTTP(endpoints, RoutableEndpoints{}, domains)
+		messagesToEmit = messagesToEmit.Merge(t.emitHTP(key, endpoints, merged, domains))
 	}
 
 	t.httpEntries = otherTable.httpEntries
@@ -248,6 +254,32 @@ func (t *routingTable) Swap(other RoutingTable, domains models.DomainSet) (TCPRo
 	t.tcpEntries = otherTable.tcpEntries
 
 	return routingEvents, messagesToEmit
+}
+
+// merge the routes from both endpoints, ensuring that non-fresh routes aren't removed
+func mergeHTTP(before, after RoutableEndpoints, domains models.DomainSet) RoutableEndpoints {
+	merged := after.copy()
+
+	for _, endpoint := range before.Endpoints {
+		if !domains.Contains(endpoint.Domain) {
+			// non-fresh domain, append routes from older endpoint
+			for _, oldRoute := range before.Routes {
+				routeExistInNewLRP := func() bool {
+					for _, newRoute := range after.Routes {
+						if newRoute == oldRoute {
+							return true
+						}
+					}
+					return false
+				}
+				if !routeExistInNewLRP() {
+					merged.Routes = append(merged.Routes, oldRoute)
+				}
+			}
+		}
+	}
+	fmt.Printf("################ merged routes: %#v\n", merged.Routes)
+	return merged
 }
 
 func (t *routingTable) Emit() (TCPRouteMappings, MessagesToEmit) {
@@ -307,7 +339,7 @@ func (table *routingTable) SetRoutes(before, after *models.DesiredLRPSchedulingI
 		newEntry.Routes = routes
 		newEntry.ModificationTag = &after.ModificationTag
 		table.httpEntries[key] = newEntry
-		messagesToEmit = messagesToEmit.Merge(table.emitHTP(key, currentEntry, newEntry))
+		messagesToEmit = messagesToEmit.Merge(table.emitHTP(key, currentEntry, newEntry, nil))
 	}
 
 	// update tcp routes
@@ -374,7 +406,7 @@ func (table *routingTable) SetRoutes(before, after *models.DesiredLRPSchedulingI
 	return routingEvents, messagesToEmit
 }
 
-func (table *routingTable) emitHTP(key endpoint.RoutingKey, oldEntry, newEntry RoutableEndpoints) MessagesToEmit {
+func (table *routingTable) emitHTP(key endpoint.RoutingKey, oldEntry, newEntry RoutableEndpoints, domains models.DomainSet) MessagesToEmit {
 	var messagesToEmit MessagesToEmit
 	messagesToEmit = table.messageBuilder.RegistrationsFor(&oldEntry, &newEntry)
 	messagesToEmit = messagesToEmit.Merge(table.messageBuilder.UnregistrationsFor(&oldEntry, &newEntry, nil))
