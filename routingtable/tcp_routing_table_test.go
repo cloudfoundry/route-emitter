@@ -109,7 +109,7 @@ var _ = Describe("TCPRoutingTable", func() {
 				Expect(routingEvents.Unregistrations).To(HaveLen(0))
 			})
 
-			XIt("does not emit any sensitive information", func() {
+			It("does not emit any sensitive information", func() {
 				desiredLRP := getDesiredLRP("process-guid-1", "log-guid-1", tcpRoutes, modificationTag)
 				routingEvents, _ := routingTable.SetRoutes(nil, desiredLRP)
 				Consistently(logger).ShouldNot(gbytes.Say("private_key"))
@@ -117,13 +117,13 @@ var _ = Describe("TCPRoutingTable", func() {
 				Expect(routingEvents.Unregistrations).To(HaveLen(0))
 			})
 
-			XIt("logs required routing info", func() {
+			It("logs required routing info", func() {
 				desiredLRP := getDesiredLRP("process-guid-1", "log-guid-1", tcpRoutes, modificationTag)
 				routingEvents, _ := routingTable.SetRoutes(nil, desiredLRP)
-				for i := 0; i < 3; i++ {
-					Eventually(logger, DEFAULT_TIMEOUT).Should(gbytes.Say("process-guid.*process-guid-1"))
-					Eventually(logger, DEFAULT_TIMEOUT).Should(gbytes.Say("routes.*tcp-router.*61000.*5222"))
-				}
+				// for i := 0; i < 3; i++ {
+				Eventually(logger, DEFAULT_TIMEOUT, DEFAULT_POLLING_INTERVAL).Should(gbytes.Say("process-guid.*process-guid-1"))
+				Eventually(logger, DEFAULT_TIMEOUT, DEFAULT_POLLING_INTERVAL).Should(gbytes.Say("routes.*tcp-router.*61000.*5222"))
+				// }
 
 				Expect(routingEvents.Registrations).To(HaveLen(0))
 				Expect(routingEvents.Unregistrations).To(HaveLen(0))
@@ -138,7 +138,7 @@ var _ = Describe("TCPRoutingTable", func() {
 				Expect(routingEvents.Unregistrations).To(HaveLen(0))
 			})
 
-			XIt("does not log sensitive info", func() {
+			It("does not log sensitive info", func() {
 				desiredLRP := getDesiredLRP("process-guid-10", "log-guid-10", tcpRoutes, modificationTag)
 				routingEvents, _ := routingTable.RemoveRoutes(desiredLRP)
 				Consistently(logger).ShouldNot(gbytes.Say("private_key"))
@@ -146,7 +146,7 @@ var _ = Describe("TCPRoutingTable", func() {
 				Expect(routingEvents.Unregistrations).To(HaveLen(0))
 			})
 
-			XIt("logs required routing info", func() {
+			It("logs required routing info", func() {
 				desiredLRP := getDesiredLRP("process-guid-10", "log-guid-10", tcpRoutes, modificationTag)
 				routingEvents, _ := routingTable.RemoveRoutes(desiredLRP)
 				Eventually(logger, DEFAULT_TIMEOUT, DEFAULT_POLLING_INTERVAL).Should(gbytes.Say("starting.*process-guid-10.*external_port.*61000.*container_port.*5222"))
@@ -172,7 +172,7 @@ var _ = Describe("TCPRoutingTable", func() {
 				Consistently(logger).ShouldNot(gbytes.Say("private_key"))
 			})
 
-			XIt("logs required routing info", func() {
+			It("logs required routing info", func() {
 				actualLRP := getActualLRP("process-guid-1", "instance-guid-1", "some-ip-1", "container-ip-1", 61104, 5222, false, modificationTag)
 				routingEvents, _ := routingTable.AddEndpoint(actualLRP)
 				Expect(routingEvents.Registrations).To(HaveLen(0))
@@ -198,7 +198,7 @@ var _ = Describe("TCPRoutingTable", func() {
 				Consistently(logger).ShouldNot(gbytes.Say("private_key"))
 			})
 
-			XIt("logs required routing info", func() {
+			It("logs required routing info", func() {
 				actualLRP := getActualLRP("process-guid-1", "instance-guid-1", "some-ip-1", "container-ip-1", 61104, 5222, false, modificationTag)
 				routingEvents, _ := routingTable.RemoveEndpoint(actualLRP)
 				Expect(routingEvents.Registrations).To(HaveLen(0))

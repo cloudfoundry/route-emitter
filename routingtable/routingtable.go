@@ -67,10 +67,14 @@ func NewRoutingTable(logger lager.Logger, messageBuilder MessageBuilder) Routing
 }
 
 func (table *routingTable) AddEndpoint(actualLRP *endpoint.ActualLRPRoutingInfo) (TCPRouteMappings, MessagesToEmit) {
+	logger := table.logger.Session("AddEndpoint", lager.Data{"actual_lrp": actualLRP})
+	logger.Debug("starting")
+	defer logger.Debug("completed")
+
 	table.Lock()
 	defer table.Unlock()
 
-	table.logger.Info("handler-add-and-emit", lager.Data{"net_info": actualLRP.ActualLRP.ActualLRPNetInfo})
+	logger.Info("handler-add-and-emit", lager.Data{"net_info": actualLRP.ActualLRP.ActualLRPNetInfo})
 	endpoints, err := EndpointsFromActual(actualLRP)
 	if err != nil {
 		table.logger.Error("failed-to-extract-endpoint-from-actual", err)
@@ -128,6 +132,10 @@ func (table *routingTable) AddEndpoint(actualLRP *endpoint.ActualLRPRoutingInfo)
 }
 
 func (table *routingTable) RemoveEndpoint(actualLRP *endpoint.ActualLRPRoutingInfo) (TCPRouteMappings, MessagesToEmit) {
+	logger := table.logger.Session("RemoveEndpoint", lager.Data{"actual_lrp": actualLRP})
+	logger.Debug("starting")
+	defer logger.Debug("completed")
+
 	table.Lock()
 	defer table.Unlock()
 
