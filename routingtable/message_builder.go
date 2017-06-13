@@ -1,10 +1,6 @@
 package routingtable
 
-import (
-	"fmt"
-
-	"code.cloudfoundry.org/bbs/models"
-)
+import "code.cloudfoundry.org/bbs/models"
 
 type MessageBuilder interface {
 	RegistrationsFor(existingEntry, newEntry *RoutableEndpoints) MessagesToEmit
@@ -199,20 +195,15 @@ func (MessagesToEmitBuilder) RegistrationsFor(existingEntry, newEntry *RoutableE
 
 	// only new entry OR something changed between existing and new entry
 	newRoutes := findNewHostnames(existingEntry, newEntry)
-	fmt.Printf("EXISITING: %#v\n\n\n", existingEntry)
-	fmt.Printf("NEW: %#v\n\n\n", newEntry)
 	if existingEntry == nil || routeServiceUrlHasChanged(existingEntry, newEntry) {
-		fmt.Println("RRRRRRRRRRRRRRRRRRRRRRRRRRR")
 		for _, endpoint := range newEntry.Endpoints {
 			createAndAddMessages(endpoint, newEntry.Routes, &messagesToEmit.RegistrationMessages)
 		}
 	} else if len(newRoutes) != 0 {
-		fmt.Printf("NEW ROUTES: %#v\n\n\n", newRoutes)
 		for _, endpoint := range newEntry.Endpoints {
 			createAndAddMessages(endpoint, newRoutes, &messagesToEmit.RegistrationMessages)
 		}
 	} else {
-		fmt.Println("GGGGGGGGGGGGGGGGGGGGGGGGGGGGGggg")
 		//otherwise only register *new* endpoints
 		for _, endpoint := range newEntry.Endpoints {
 			if !existingEntry.hasEndpoint(endpoint) {
@@ -252,8 +243,6 @@ func (MessagesToEmitBuilder) UnregistrationsFor(existingEntry, newEntry *Routabl
 		}
 	}
 
-	fmt.Println("ROUTES THAT DISAPPEARED:")
-	fmt.Println(routesThatDisappeared)
 	if len(routesThatDisappeared) > 0 {
 		for _, endpoint := range endpointsThatAreStillPresent {
 			// only unregister if domain is fresh or preforming event processing

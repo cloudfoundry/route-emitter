@@ -1,7 +1,6 @@
 package routingtable
 
 import (
-	"fmt"
 	"sync"
 
 	tcpmodels "code.cloudfoundry.org/routing-api/models"
@@ -48,21 +47,21 @@ type RoutingTable interface {
 }
 
 type routingTable struct {
-	httpEntries    map[endpoint.RoutingKey]RoutableEndpoints
-	tcpEntries     map[endpoint.RoutingKey]endpoint.RoutableEndpoints
-	messageBuilder MessageBuilder
-	logger         lager.Logger
-	tcpTTL         int
+	httpEntries         map[endpoint.RoutingKey]RoutableEndpoints
+	tcpEntries          map[endpoint.RoutingKey]endpoint.RoutableEndpoints
+	directInstanceRoute bool
+	logger              lager.Logger
+	tcpTTL              int
 	sync.Locker
 }
 
-func NewRoutingTable(logger lager.Logger, messageBuilder MessageBuilder) RoutingTable {
+func NewRoutingTable(logger lager.Logger, directInstanceRoute bool) RoutingTable {
 	return &routingTable{
-		httpEntries:    make(map[endpoint.RoutingKey]RoutableEndpoints),
-		tcpEntries:     make(map[endpoint.RoutingKey]endpoint.RoutableEndpoints),
-		logger:         logger,
-		messageBuilder: messageBuilder,
-		Locker:         &sync.Mutex{},
+		httpEntries:         make(map[endpoint.RoutingKey]RoutableEndpoints),
+		tcpEntries:          make(map[endpoint.RoutingKey]endpoint.RoutableEndpoints),
+		logger:              logger,
+		directInstanceRoute: directInstanceRoute,
+		Locker:              &sync.Mutex{},
 	}
 }
 
@@ -91,6 +90,10 @@ func (table *routingTable) AddEndpoint(actualLRP *endpoint.ActualLRPRoutingInfo)
 		}
 		currentEntry := table.httpEntries[key]
 		newEntry := currentEntry.copy()
+		currentEndpoint, ok := currentEntry.Endpoints[routingEndpoint.key()]
+		if ok && !currentEndpoint.ModificationTag.SucceededBy(routingEndpoint.ModificationTag) {
+			continue
+		}
 		newEntry.Endpoints[routingEndpoint.key()] = routingEndpoint
 		table.httpEntries[key] = newEntry
 		// address := routingEndpoint.address()
@@ -108,7 +111,7 @@ func (table *routingTable) AddEndpoint(actualLRP *endpoint.ActualLRPRoutingInfo)
 		// }
 
 		// table.addressEntries[address] = routingEndpoint.key()
-		messagesToEmit = messagesToEmit.Merge(table.emitHTTP(key, currentEntry, newEntry, nil))
+		messagesToEmit = messagesToEmit.Merge(table.emitHTTP(key, currentEntry, newEntry))
 	}
 
 	// add tcp endpoints
@@ -172,7 +175,7 @@ func (table *routingTable) RemoveEndpoint(actualLRP *endpoint.ActualLRPRoutingIn
 
 		//delete(table.addressEntries, routingEndpoint.address())
 
-		messagesToEmit = messagesToEmit.Merge(table.emitHTTP(key, currentEntry, newEntry, nil))
+		messagesToEmit = messagesToEmit.Merge(table.emitHTTP(key, currentEntry, newEntry))
 	}
 
 	// remove tcp endpoints
@@ -220,25 +223,20 @@ func (t *routingTable) Swap(other RoutingTable, domains models.DomainSet) (TCPRo
 	for key, endpoints := range otherTable.httpEntries {
 		existingEntry, ok := t.httpEntries[key]
 		if !ok {
-			// entry doesn't exist in current table, emit event
-			messagesToEmit = messagesToEmit.Merge(t.emitHTTP(key, RoutableEndpoints{}, endpoints, domains))
+			// entry doesn't exist in current table, emit registration event
+			messagesToEmit = messagesToEmit.Merge(t.emitHTTP(key, RoutableEndpoints{}, endpoints))
 			continue
 		}
-		// entry exists in both tables, merge the two entries to ensure non-fresh domain endpoints aren't removed then diff them
+		// entry exists in both tables, merge the two entries to ensure non-fresh domain endpoints aren't removed
 		merged := mergeHTTP(existingEntry, endpoints, domains)
 		otherTable.httpEntries[key] = merged
-		fmt.Println("MERGED")
-		fmt.Printf("%#v\n\n\n\n", merged)
-		messagesToEmit = messagesToEmit.Merge(t.emitHTTP(key, existingEntry, merged, domains))
+		messagesToEmit = messagesToEmit.Merge(t.emitHTTP(key, existingEntry, merged))
 	}
 	for key, endpoints := range t.httpEntries {
 		if _, ok := otherTable.httpEntries[key]; ok {
 			continue
 		}
-		// entry exists in old table, merge the two entries to ensure non-fresh domain endpoints aren't removed
-		merged := mergeHTTP(endpoints, RoutableEndpoints{}, domains)
-		// TODO: add merged to otherTable
-		messagesToEmit = messagesToEmit.Merge(t.emitHTTP(key, endpoints, merged, domains))
+		messagesToEmit = messagesToEmit.Merge(t.emitHTTP(key, endpoints, RoutableEndpoints{}))
 	}
 
 	t.httpEntries = otherTable.httpEntries
@@ -272,6 +270,10 @@ func mergeHTTP(before, after RoutableEndpoints, domains models.DomainSet) Routab
 	merged := after.copy()
 
 	for _, endpoint := range before.Endpoints {
+		// if you are wondering why we have to loop through the endpoints instead
+		// of checking the routable endpoint information, that's because the sync
+		// loop gets the scheduling info which doesn't include the domain. ideally,
+		// the routable endpoint should have the domain.
 		if !domains.Contains(endpoint.Domain) {
 			// non-fresh domain, append routes from older endpoint
 			for _, oldRoute := range before.Routes {
@@ -310,7 +312,7 @@ func (t *routingTable) Emit() (TCPRouteMappings, MessagesToEmit) {
 	// http routes
 	var messagesToEmit MessagesToEmit
 	for key, route := range t.httpEntries {
-		messagesToEmit = messagesToEmit.Merge(t.emitHTTP(key, RoutableEndpoints{}, route, nil))
+		messagesToEmit = messagesToEmit.Merge(t.emitHTTP(key, RoutableEndpoints{}, route))
 	}
 	//tcp routes
 	var routingEvents TCPRouteMappings
@@ -396,7 +398,7 @@ func (table *routingTable) SetRoutes(before, after *models.DesiredLRPSchedulingI
 		newEntry.Routes = routes
 		newEntry.ModificationTag = &after.ModificationTag
 		table.httpEntries[key] = newEntry
-		messagesToEmit = messagesToEmit.Merge(table.emitHTTP(key, currentEntry, newEntry, nil))
+		messagesToEmit = messagesToEmit.Merge(table.emitHTTP(key, currentEntry, newEntry))
 	}
 
 	for key := range removedRouteEntries {
@@ -407,7 +409,7 @@ func (table *routingTable) SetRoutes(before, after *models.DesiredLRPSchedulingI
 		}
 		delete(table.httpEntries, key)
 
-		messagesToEmit = messagesToEmit.Merge(table.emitHTTP(key, currentEntry, RoutableEndpoints{}, nil))
+		messagesToEmit = messagesToEmit.Merge(table.emitHTTP(key, currentEntry, RoutableEndpoints{}))
 	}
 
 	// update tcp routes
@@ -474,12 +476,181 @@ func (table *routingTable) SetRoutes(before, after *models.DesiredLRPSchedulingI
 	return routingEvents, messagesToEmit
 }
 
-func (table *routingTable) emitHTTP(key endpoint.RoutingKey, oldEntry, newEntry RoutableEndpoints, domains models.DomainSet) MessagesToEmit {
-	var messagesToEmit MessagesToEmit
-	messagesToEmit = table.messageBuilder.RegistrationsFor(&oldEntry, &newEntry)
-	messagesToEmit = messagesToEmit.Merge(table.messageBuilder.UnregistrationsFor(&oldEntry, &newEntry, domains))
+func (table *routingTable) emitHTTP(key endpoint.RoutingKey, oldEntry, newEntry RoutableEndpoints) MessagesToEmit {
+	routesDiff := diffHTTPRoutes(oldEntry.Routes, newEntry.Routes)
+	endpointsDiff := diffHTTPEndpoints(oldEntry.Endpoints, newEntry.Endpoints)
+	return table.httpNatsMessages(routesDiff, endpointsDiff)
+}
 
-	return messagesToEmit
+type httpRoutesDiff struct {
+	before, after, removed, added []Route
+}
+
+type httpEndpointsDiff struct {
+	before, after, removed, added map[EndpointKey]Endpoint
+}
+
+func diffHTTPRoutes(before, after []Route) httpRoutesDiff {
+	existingRoutes := map[Route]struct{}{}
+	newRoutes := map[Route]struct{}{}
+	newHostnames := map[string]struct{}{}
+	for _, route := range before {
+		existingRoutes[route] = struct{}{}
+	}
+	for _, route := range after {
+		newRoutes[route] = struct{}{}
+		newHostnames[route.Hostname] = struct{}{}
+	}
+
+	diff := httpRoutesDiff{
+		before: before,
+		after:  after,
+	}
+	// generate the diff
+	for route := range existingRoutes {
+		if _, ok := newRoutes[route]; !ok {
+			// routes that changes the service url but don't change the hostname
+			// shouldn't be considered removed. we still add them to the added routes
+			// in order to update the Registration. TODO: can we send an
+			// unregistration+registration instead, this will clean up the
+			// implementation
+			if _, ok := newHostnames[route.Hostname]; !ok {
+				diff.removed = append(diff.removed, route)
+			}
+		}
+	}
+
+	for route := range newRoutes {
+		if _, ok := existingRoutes[route]; !ok {
+			diff.added = append(diff.added, route)
+		}
+	}
+
+	return diff
+}
+
+// http endpoints are different if any field is different other than the following:
+// 1. ModificationTag
+// 2. Evacuating
+func httpEndpointDifferent(before, after Endpoint) bool {
+	modificationTag := before.ModificationTag
+	evacuating := before.Evacuating
+	before.ModificationTag = after.ModificationTag
+	before.Evacuating = after.Evacuating
+	defer func() {
+		before.ModificationTag = modificationTag
+		before.Evacuating = evacuating
+	}()
+	return before != after
+}
+
+func diffHTTPEndpoints(before, after map[EndpointKey]Endpoint) httpEndpointsDiff {
+	diff := httpEndpointsDiff{
+		before:  before,
+		after:   after,
+		removed: make(map[EndpointKey]Endpoint),
+		added:   make(map[EndpointKey]Endpoint),
+	}
+	// generate the diff
+	for key, endpoint := range before {
+		newEndpoint, ok := after[key]
+		if !ok {
+			key.Evacuating = !key.Evacuating
+			newEndpoint, ok = after[key]
+		}
+		// TODO: make sure tcp diff follow the same pattern
+		if !ok || httpEndpointDifferent(newEndpoint, endpoint) {
+			diff.removed[key] = endpoint
+		}
+	}
+	for key, endpoint := range after {
+		oldEndpoint, ok := before[key]
+		if !ok {
+			key.Evacuating = !key.Evacuating
+			oldEndpoint, ok = before[key]
+		}
+		if !ok || httpEndpointDifferent(endpoint, oldEndpoint) {
+			diff.added[key] = endpoint
+		}
+	}
+
+	return diff
+}
+
+func (table *routingTable) httpNatsMessages(routesDiff httpRoutesDiff, endpointDiff httpEndpointsDiff) MessagesToEmit {
+	// remove duplicates
+	unregistrations := map[Route]map[Endpoint]bool{}
+	registrations := map[Route]map[Endpoint]bool{}
+
+	// for removed routes remove endpoints previously registered
+	for _, route := range routesDiff.removed {
+		for _, container := range endpointDiff.before {
+			if unregistrations[route] != nil && unregistrations[route][container] {
+				continue
+			}
+			if unregistrations[route] == nil {
+				unregistrations[route] = map[Endpoint]bool{}
+			}
+			unregistrations[route][container] = true
+		}
+	}
+
+	// for added routes add endpoints newly added
+	for _, route := range routesDiff.added {
+		for _, container := range endpointDiff.after {
+			if registrations[route] != nil && registrations[route][container] {
+				continue
+			}
+			if registrations[route] == nil {
+				registrations[route] = map[Endpoint]bool{}
+			}
+			registrations[route][container] = true
+		}
+	}
+
+	// for removed endpoints remove routes previously registered
+	for _, container := range endpointDiff.removed {
+		for _, route := range routesDiff.before {
+			if unregistrations[route] != nil && unregistrations[route][container] {
+				continue
+			}
+			if unregistrations[route] == nil {
+				unregistrations[route] = map[Endpoint]bool{}
+			}
+			unregistrations[route][container] = true
+		}
+	}
+
+	// for added endpoints register routes that were just added
+	for _, container := range endpointDiff.added {
+		for _, route := range routesDiff.after {
+			if registrations[route] != nil && registrations[route][container] {
+				continue
+			}
+			if registrations[route] == nil {
+				registrations[route] = map[Endpoint]bool{}
+			}
+			registrations[route][container] = true
+		}
+	}
+
+	generator := RegistryMessageFor
+	if table.directInstanceRoute {
+		generator = InternalAddressRegistryMessageFor
+	}
+
+	events := MessagesToEmit{}
+	for r, es := range registrations {
+		for e := range es {
+			events.RegistrationMessages = append(events.RegistrationMessages, generator(e, r))
+		}
+	}
+	for r, es := range unregistrations {
+		for e := range es {
+			events.UnregistrationMessages = append(events.UnregistrationMessages, generator(e, r))
+		}
+	}
+	return events
 }
 
 func (table *routingTable) emitTCP(key endpoint.RoutingKey, oldEntry, newEntry endpoint.RoutableEndpoints) TCPRouteMappings {
