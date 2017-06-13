@@ -44,7 +44,8 @@ func (InternalAddressMessageBuilder) RegistrationsFor(existingEntry, newEntry *R
 	}
 
 	// only new entry OR something changed between existing and new entry
-	if existingEntry == nil || hostnamesHaveChanged(existingEntry, newEntry) || routeServiceUrlHasChanged(existingEntry, newEntry) {
+	newRoutes := findNewHostnames(existingEntry, newEntry)
+	if existingEntry == nil || len(newRoutes) != 0 || routeServiceUrlHasChanged(existingEntry, newEntry) {
 		for _, endpoint := range newEntry.Endpoints {
 			createAndAddInternalAddressMessages(endpoint, newEntry.Routes, &messagesToEmit.RegistrationMessages)
 		}
@@ -197,17 +198,26 @@ func (MessagesToEmitBuilder) RegistrationsFor(existingEntry, newEntry *RoutableE
 	}
 
 	// only new entry OR something changed between existing and new entry
-	if existingEntry == nil || hostnamesHaveChanged(existingEntry, newEntry) || routeServiceUrlHasChanged(existingEntry, newEntry) {
+	newRoutes := findNewHostnames(existingEntry, newEntry)
+	fmt.Printf("EXISITING: %#v\n\n\n", existingEntry)
+	fmt.Printf("NEW: %#v\n\n\n", newEntry)
+	if existingEntry == nil || routeServiceUrlHasChanged(existingEntry, newEntry) {
+		fmt.Println("RRRRRRRRRRRRRRRRRRRRRRRRRRR")
 		for _, endpoint := range newEntry.Endpoints {
 			createAndAddMessages(endpoint, newEntry.Routes, &messagesToEmit.RegistrationMessages)
 		}
-		return messagesToEmit
-	}
-
-	//otherwise only register *new* endpoints
-	for _, endpoint := range newEntry.Endpoints {
-		if !existingEntry.hasEndpoint(endpoint) {
-			createAndAddMessages(endpoint, newEntry.Routes, &messagesToEmit.RegistrationMessages)
+	} else if len(newRoutes) != 0 {
+		fmt.Printf("NEW ROUTES: %#v\n\n\n", newRoutes)
+		for _, endpoint := range newEntry.Endpoints {
+			createAndAddMessages(endpoint, newRoutes, &messagesToEmit.RegistrationMessages)
+		}
+	} else {
+		fmt.Println("GGGGGGGGGGGGGGGGGGGGGGGGGGGGGggg")
+		//otherwise only register *new* endpoints
+		for _, endpoint := range newEntry.Endpoints {
+			if !existingEntry.hasEndpoint(endpoint) {
+				createAndAddMessages(endpoint, newEntry.Routes, &messagesToEmit.RegistrationMessages)
+			}
 		}
 	}
 
@@ -257,28 +267,25 @@ func (MessagesToEmitBuilder) UnregistrationsFor(existingEntry, newEntry *Routabl
 	return messagesToEmit
 }
 
-func hostnamesHaveChanged(existingEntry, newEntry *RoutableEndpoints) bool {
-	if len(newEntry.Routes) != len(existingEntry.Routes) {
-		return true
-	} else {
-		for _, route := range newEntry.Routes {
-			if !existingEntry.hasHostname(route.Hostname) {
-				return true
-			}
+func findNewHostnames(existingEntry, newEntry *RoutableEndpoints) []Route {
+	var routes []Route
+	if existingEntry == nil {
+		return newEntry.Routes
+	}
+
+	for _, route := range newEntry.Routes {
+		if !existingEntry.hasHostname(route.Hostname) {
+			routes = append(routes, route)
 		}
 	}
 
-	return false
+	return routes
 }
 
 func routeServiceUrlHasChanged(existingEntry, newEntry *RoutableEndpoints) bool {
-	if len(newEntry.Routes) != len(existingEntry.Routes) {
-		return true
-	} else {
-		for _, route := range newEntry.Routes {
-			if !existingEntry.hasRouteServiceUrl(route.RouteServiceUrl) {
-				return true
-			}
+	for _, route := range newEntry.Routes {
+		if !existingEntry.hasRouteServiceUrl(route.RouteServiceUrl) {
+			return true
 		}
 	}
 	return false

@@ -303,12 +303,9 @@ var _ = Describe("RoutingTable", func() {
 				_, messagesToEmit = table.Swap(tempTable, domains)
 			})
 
-			XIt("emits all the routes", func() {
+			It("emits only the different routes", func() {
 				expected := routingtable.MessagesToEmit{
 					RegistrationMessages: []routingtable.RegistryMessage{
-						// TODO: why are we emitting hostname1 & hostname2 routes. looks like the http table always register everything on sync ?
-						// routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
-						// routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname2, LogGuid: logGuid}),
 						routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname3, LogGuid: logGuid}),
 					},
 				}
@@ -365,12 +362,8 @@ var _ = Describe("RoutingTable", func() {
 					_, messagesToEmit = table.Swap(tempTable, domains)
 				})
 
-				It("emits two routes and unregisters the old route", func() {
+				It("emits unregisters the old route", func() {
 					expected := routingtable.MessagesToEmit{
-						RegistrationMessages: []routingtable.RegistryMessage{
-							routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
-							routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname3, LogGuid: logGuid}),
-						},
 						UnregistrationMessages: []routingtable.RegistryMessage{
 							routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname2, LogGuid: logGuid}),
 						},
@@ -606,14 +599,10 @@ var _ = Describe("RoutingTable", func() {
 					_, messagesToEmit = table.Swap(tempTable, domains)
 				})
 
-				It("emits all registrations and no unregistration", func() {
+				It("emits only the new route", func() {
 					expected := routingtable.MessagesToEmit{
 						RegistrationMessages: []routingtable.RegistryMessage{
-							routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
-							routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname2, LogGuid: logGuid}),
 							routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname3, LogGuid: logGuid}),
-							routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
-							routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname2, LogGuid: logGuid}),
 							routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname3, LogGuid: logGuid}),
 						},
 					}
@@ -1065,11 +1054,7 @@ var _ = Describe("RoutingTable", func() {
 
 					expected := routingtable.MessagesToEmit{
 						RegistrationMessages: []routingtable.RegistryMessage{
-							routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
-							routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname2, LogGuid: logGuid}),
 							routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname3, LogGuid: logGuid}),
-							routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
-							routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname2, LogGuid: logGuid}),
 							routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname3, LogGuid: logGuid}),
 						},
 					}
@@ -1082,15 +1067,11 @@ var _ = Describe("RoutingTable", func() {
 					Expect(messagesToEmit).To(BeZero())
 				})
 
-				It("emits registrations and unregistrations when a hostname is removed from a route with a newer tag", func() {
+				It("emits unregistrations when a hostname is removed from a route with a newer tag", func() {
 					schedulingInfo := createDesiredLRPSchedulingInfo(key.ProcessGUID, key.ContainerPort, logGuid, *newerTag, hostname1)
 					_, messagesToEmit = table.SetRoutes(beforeLrpInfo, schedulingInfo)
 
 					expected := routingtable.MessagesToEmit{
-						RegistrationMessages: []routingtable.RegistryMessage{
-							routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
-							routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
-						},
 						UnregistrationMessages: []routingtable.RegistryMessage{
 							routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname2, LogGuid: logGuid}),
 							routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname2, LogGuid: logGuid}),
@@ -1111,9 +1092,7 @@ var _ = Describe("RoutingTable", func() {
 
 					expected := routingtable.MessagesToEmit{
 						RegistrationMessages: []routingtable.RegistryMessage{
-							routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
 							routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname3, LogGuid: logGuid}),
-							routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname1, LogGuid: logGuid}),
 							routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname3, LogGuid: logGuid}),
 						},
 						UnregistrationMessages: []routingtable.RegistryMessage{
