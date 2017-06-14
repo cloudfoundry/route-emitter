@@ -38,7 +38,6 @@ var _ = Describe("NatsSyncer", func() {
 		syncerRunner *syncer.NatsSyncer
 		process      ifrit.Process
 		clock        *fakeclock.FakeClock
-		clockStep    time.Duration
 		syncInterval time.Duration
 
 		shutdown chan struct{}
@@ -55,7 +54,6 @@ var _ = Describe("NatsSyncer", func() {
 		natsClient = diegonats.NewFakeClient()
 
 		clock = fakeclock.NewFakeClock(time.Now())
-		clockStep = 1 * time.Second
 		syncInterval = 10 * time.Second
 
 		startMessages := make(chan *nats.Msg)
@@ -208,8 +206,6 @@ var _ = Describe("NatsSyncer", func() {
 				return nil, nil
 			}
 			syncInterval = 500 * time.Millisecond
-
-			clockStep = 250 * time.Millisecond
 		})
 
 		JustBeforeEach(func() {
