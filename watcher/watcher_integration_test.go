@@ -57,15 +57,11 @@ var _ = Describe("Watcher Integration", func() {
 		workPool, err := workpool.NewWorkPool(1)
 		Expect(err).NotTo(HaveOccurred())
 		natsEmitter := emitter.NewNATSEmitter(natsClient, workPool, logger)
-		natsTable := routingtable.NewNATSTable(logger)
-		natsHandler := routehandlers.NewNATSHandler(natsTable, natsEmitter, false)
+		natsTable := routingtable.NewRoutingTable(logger, false)
 
 		uaaClient := uaaclient.NewNoOpUaaClient()
 		routingAPIEmitter := emitter.NewRoutingAPIEmitter(logger, routingApiClient, uaaClient, 100)
-		tcpTable := routingtable.NewTCPTable(logger, nil)
-		routingAPIHandler := routehandlers.NewRoutingAPIHandler(tcpTable, routingAPIEmitter, false)
-
-		handler := routehandlers.NewMultiHandler(natsHandler, routingAPIHandler)
+		handler := routehandlers.NewNATSHandler(natsTable, natsEmitter, routingAPIEmitter, false)
 		clock := fakeclock.NewFakeClock(time.Now())
 		testWatcher = watcher.NewWatcher(
 			cellID,

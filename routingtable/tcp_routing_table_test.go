@@ -249,6 +249,37 @@ var _ = Describe("TCPRoutingTable", func() {
 					},
 				}))
 			})
+
+			Context("when the table is configured to emit direct instance route", func() {
+				BeforeEach(func() {
+					routingTable = routingtable.NewRoutingTable(logger, true)
+				})
+
+				It("emits routing events for new routes", func() {
+					Expect(routingTable.TCPRouteCount()).Should(Equal(0))
+					routingEvents, _ := routingTable.Swap(tempRoutingTable, models.DomainSet{})
+					Expect(routingTable.TCPRouteCount()).Should(Equal(1))
+
+					ttl := 0
+					Expect(routingEvents.Registrations).To(ConsistOf(tcpmodels.TcpRouteMapping{
+						TcpMappingEntity: tcpmodels.TcpMappingEntity{
+							RouterGroupGuid: "router-group-guid",
+							HostPort:        5222,
+							HostIP:          "container-ip-1",
+							ExternalPort:    61000,
+							TTL:             &ttl,
+						},
+					}, tcpmodels.TcpRouteMapping{
+						TcpMappingEntity: tcpmodels.TcpMappingEntity{
+							RouterGroupGuid: "router-group-guid",
+							HostPort:        5222,
+							HostIP:          "container-ip-2",
+							ExternalPort:    61000,
+							TTL:             &ttl,
+						},
+					}))
+				})
+			})
 		})
 
 		Describe("Emit", func() {

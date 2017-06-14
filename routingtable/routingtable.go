@@ -47,21 +47,47 @@ type RoutingTable interface {
 }
 
 type routingTable struct {
-	httpEntries         map[endpoint.RoutingKey]RoutableEndpoints
-	tcpEntries          map[endpoint.RoutingKey]endpoint.RoutableEndpoints
-	directInstanceRoute bool
-	logger              lager.Logger
-	tcpTTL              int
+	httpEntries   map[endpoint.RoutingKey]RoutableEndpoints
+	tcpEntries    map[endpoint.RoutingKey]endpoint.RoutableEndpoints
+	tcpGenerator  func(endpoint.ExternalEndpointInfo, endpoint.Endpoint) tcpmodels.TcpRouteMapping
+	httpGenerator func(endpoint Endpoint, route Route) RegistryMessage
+	logger        lager.Logger
 	sync.Locker
 }
 
 func NewRoutingTable(logger lager.Logger, directInstanceRoute bool) RoutingTable {
+	tcpGenerator := func(r endpoint.ExternalEndpointInfo, e endpoint.Endpoint) tcpmodels.TcpRouteMapping {
+		return tcpmodels.NewTcpRouteMapping(
+			r.RouterGroupGUID,
+			uint16(r.Port),
+			e.Host,
+			uint16(e.Port),
+			0,
+		)
+	}
+
+	httpGenerator := RegistryMessageFor
+
+	if directInstanceRoute {
+		tcpGenerator = func(r endpoint.ExternalEndpointInfo, e endpoint.Endpoint) tcpmodels.TcpRouteMapping {
+			return tcpmodels.NewTcpRouteMapping(
+				r.RouterGroupGUID,
+				uint16(r.Port),
+				e.ContainerIP,
+				uint16(e.ContainerPort),
+				0,
+			)
+		}
+		httpGenerator = InternalAddressRegistryMessageFor
+	}
+
 	return &routingTable{
-		httpEntries:         make(map[endpoint.RoutingKey]RoutableEndpoints),
-		tcpEntries:          make(map[endpoint.RoutingKey]endpoint.RoutableEndpoints),
-		logger:              logger,
-		directInstanceRoute: directInstanceRoute,
-		Locker:              &sync.Mutex{},
+		httpEntries:   make(map[endpoint.RoutingKey]RoutableEndpoints),
+		tcpEntries:    make(map[endpoint.RoutingKey]endpoint.RoutableEndpoints),
+		tcpGenerator:  tcpGenerator,
+		httpGenerator: httpGenerator,
+		logger:        logger,
+		Locker:        &sync.Mutex{},
 	}
 }
 
@@ -289,20 +315,6 @@ func mergeHTTP(before, after RoutableEndpoints, domains models.DomainSet) Routab
 					merged.Routes = append(merged.Routes, oldRoute)
 				}
 			}
-
-			// for _, oldEndpoint := range before.Endpoints {
-			// 	endpointExistInNewLRP := func() bool {
-			// 		for _, newEndpoint := range after.Endpoints {
-			// 			if newEndpoint.key() == oldEndpoint.key() {
-			// 				return true
-			// 			}
-			// 		}
-			// 		return false
-			// 	}
-			// 	if !endpointExistInNewLRP() {
-			// 		merged.Endpoints[oldEndpoint.key()] = oldEndpoint
-			// 	}
-			// }
 		}
 	}
 	return merged
@@ -634,20 +646,15 @@ func (table *routingTable) httpNatsMessages(routesDiff httpRoutesDiff, endpointD
 		}
 	}
 
-	generator := RegistryMessageFor
-	if table.directInstanceRoute {
-		generator = InternalAddressRegistryMessageFor
-	}
-
 	events := MessagesToEmit{}
 	for r, es := range registrations {
 		for e := range es {
-			events.RegistrationMessages = append(events.RegistrationMessages, generator(e, r))
+			events.RegistrationMessages = append(events.RegistrationMessages, table.httpGenerator(e, r))
 		}
 	}
 	for r, es := range unregistrations {
 		for e := range es {
-			events.UnregistrationMessages = append(events.UnregistrationMessages, generator(e, r))
+			events.UnregistrationMessages = append(events.UnregistrationMessages, table.httpGenerator(e, r))
 		}
 	}
 	return events
@@ -788,24 +795,12 @@ func (table *routingTable) routingEvents(routesDiff tcpRoutesDiff, endpointDiff 
 	events := TCPRouteMappings{}
 	for r, es := range registrations {
 		for e := range es {
-			events.Registrations = append(events.Registrations, tcpmodels.NewTcpRouteMapping(
-				r.RouterGroupGUID,
-				uint16(r.Port),
-				e.Host,
-				uint16(e.Port),
-				table.tcpTTL,
-			))
+			events.Registrations = append(events.Registrations, table.tcpGenerator(r, e))
 		}
 	}
 	for r, es := range unregistrations {
 		for e := range es {
-			events.Unregistrations = append(events.Unregistrations, tcpmodels.NewTcpRouteMapping(
-				r.RouterGroupGUID,
-				uint16(r.Port),
-				e.Host,
-				uint16(e.Port),
-				table.tcpTTL,
-			))
+			events.Unregistrations = append(events.Unregistrations, table.tcpGenerator(r, e))
 		}
 	}
 	return events

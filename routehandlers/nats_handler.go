@@ -10,7 +10,6 @@ import (
 	"code.cloudfoundry.org/route-emitter/routingtable/schema/endpoint"
 	"code.cloudfoundry.org/route-emitter/routingtable/util"
 	"code.cloudfoundry.org/route-emitter/watcher"
-	"code.cloudfoundry.org/routing-info/cfroutes"
 	"code.cloudfoundry.org/runtimeschema/metric"
 )
 
@@ -20,22 +19,26 @@ var (
 
 	routesRegistered   = metric.Counter("RoutesRegistered")
 	routesUnregistered = metric.Counter("RoutesUnregistered")
-	httpRouteCount     = metric.Metric("HTTPRouteCount")
+
+	httpRouteCount = metric.Metric("HTTPRouteCount")
+	tcpRouteCount  = metric.Metric("TCPRouteCount")
 )
 
 type NATSHandler struct {
-	routingTable routingtable.NATSRoutingTable
-	emitter      emitter.NATSEmitter
-	localMode    bool
+	routingTable      routingtable.RoutingTable
+	natsEmitter       emitter.NATSEmitter
+	routingAPIEmitter emitter.RoutingAPIEmitter
+	localMode         bool
 }
 
 var _ watcher.RouteHandler = new(NATSHandler)
 
-func NewNATSHandler(routingTable routingtable.NATSRoutingTable, natsEmitter emitter.NATSEmitter, localMode bool) *NATSHandler {
+func NewNATSHandler(routingTable routingtable.RoutingTable, natsEmitter emitter.NATSEmitter, routingAPIEmitter emitter.RoutingAPIEmitter, localMode bool) *NATSHandler {
 	return &NATSHandler{
-		routingTable: routingTable,
-		emitter:      natsEmitter,
-		localMode:    localMode,
+		routingTable:      routingTable,
+		natsEmitter:       natsEmitter,
+		routingAPIEmitter: routingAPIEmitter,
+		localMode:         localMode,
 	}
 }
 
@@ -67,16 +70,26 @@ func (handler *NATSHandler) HandleEvent(logger lager.Logger, event models.Event)
 }
 
 func (handler *NATSHandler) Emit(logger lager.Logger) {
-	messagesToEmit := handler.routingTable.MessagesToEmit()
+	routingEvents, messagesToEmit := handler.routingTable.Emit()
 
-	logger.Info("emitting-messages", lager.Data{"messages": messagesToEmit})
-	err := handler.emitter.Emit(messagesToEmit)
-	if err != nil {
-		logger.Error("failed-to-emit-routes", err)
+	logger.Info("emitting-nats-messages", lager.Data{"messages": messagesToEmit})
+	if handler.natsEmitter != nil {
+		err := handler.natsEmitter.Emit(messagesToEmit)
+		if err != nil {
+			logger.Error("failed-to-emit-nats-routes", err)
+		}
+	}
+
+	logger.Info("emitting-routing-api-messages", lager.Data{"messages": routingEvents})
+	if handler.routingAPIEmitter != nil {
+		err := handler.routingAPIEmitter.Emit(routingEvents)
+		if err != nil {
+			logger.Error("failed-to-emit-tcp-routes", err)
+		}
 	}
 
 	routesSynced.Add(messagesToEmit.RouteRegistrationCount())
-	err = routesTotal.Send(handler.routingTable.RouteCount())
+	err := routesTotal.Send(handler.routingTable.HTTPEndpointCount())
 	if err != nil {
 		logger.Error("failed-to-send-http-route-count-metric", err)
 	}
@@ -93,22 +106,24 @@ func (handler *NATSHandler) Sync(
 	logger.Debug("starting")
 	defer logger.Debug("completed")
 
-	schedInfoMap := make(map[string]*models.DesiredLRPSchedulingInfo)
-	for _, schedInfo := range desired {
-		schedInfoMap[schedInfo.ProcessGuid] = schedInfo
+	newTable := routingtable.NewRoutingTable(logger, false)
+
+	for _, lrp := range desired {
+		newTable.SetRoutes(nil, lrp)
 	}
 
-	newTable := routingtable.NewTempTable(
-		routingtable.RoutesByRoutingKeyFromSchedulingInfos(desired),
-		routingtable.EndpointsByRoutingKeyFromActuals(actuals, schedInfoMap),
-	)
+	for _, lrp := range actuals {
+		newTable.AddEndpoint(lrp)
+	}
 
 	/////////
 
-	emitter := handler.emitter
-	handler.emitter = nil
-
+	natsEmitter := handler.natsEmitter
+	routingAPIEmitter := handler.routingAPIEmitter
 	table := handler.routingTable
+
+	handler.natsEmitter = nil
+	handler.routingAPIEmitter = nil
 	handler.routingTable = newTable
 
 	for _, event := range cachedEvents {
@@ -116,50 +131,51 @@ func (handler *NATSHandler) Sync(
 	}
 
 	handler.routingTable = table
-	handler.emitter = emitter
+	handler.natsEmitter = natsEmitter
+	handler.routingAPIEmitter = routingAPIEmitter
 
 	//////////
 
-	messages := handler.routingTable.Swap(newTable, domains)
+	routeMappings, messages := handler.routingTable.Swap(newTable, domains)
 	logger.Debug("start-emitting-messages", lager.Data{
 		"num-registration-messages":   len(messages.RegistrationMessages),
 		"num-unregistration-messages": len(messages.UnregistrationMessages),
 	})
-	handler.emitMessages(logger, messages)
+	handler.emitMessages(logger, messages, routeMappings)
 	logger.Debug("done-emitting-messages", lager.Data{
 		"num-registration-messages":   len(messages.RegistrationMessages),
 		"num-unregistration-messages": len(messages.UnregistrationMessages),
 	})
 
 	if handler.localMode {
-		err := httpRouteCount.Send(handler.routingTable.RouteCount())
+		err := httpRouteCount.Send(handler.routingTable.HTTPEndpointCount())
 		if err != nil {
 			logger.Error("failed-to-send-routes-total-metric", err)
+		}
+		err = tcpRouteCount.Send(handler.routingTable.TCPRouteCount())
+		if err != nil {
+			logger.Error("failed-to-send-tcp-route-count-metric", err)
 		}
 	}
 }
 
 func (handler *NATSHandler) RefreshDesired(logger lager.Logger, desiredInfo []*models.DesiredLRPSchedulingInfo) {
 	for _, desiredLRP := range desiredInfo {
-		handler.setRoutesForDesired(logger, desiredLRP)
+		routeMappings, messagesToEmit := handler.routingTable.SetRoutes(nil, desiredLRP)
+		handler.emitMessages(logger, messagesToEmit, routeMappings)
 	}
 }
 
 func (handler *NATSHandler) ShouldRefreshDesired(actual *endpoint.ActualLRPRoutingInfo) bool {
-	for _, key := range endpoint.NewRoutingKeysFromActual(actual) {
-		if len(handler.routingTable.GetRoutes(key)) > 0 {
-			return false
-		}
-	}
-
-	return true
+	return !handler.routingTable.HasExternalRoutes(actual)
 }
 
 func (handler *NATSHandler) handleDesiredCreate(logger lager.Logger, desiredLRP *models.DesiredLRPSchedulingInfo) {
 	logger = logger.Session("handle-desired-create", util.DesiredLRPData(desiredLRP))
 	logger.Info("starting")
 	defer logger.Info("complete")
-	handler.setRoutesForDesired(logger, desiredLRP)
+	routeMappings, messagesToEmit := handler.routingTable.SetRoutes(nil, desiredLRP)
+	handler.emitMessages(logger, messagesToEmit, routeMappings)
 }
 
 func (handler *NATSHandler) handleDesiredUpdate(logger lager.Logger, before, after *models.DesiredLRPSchedulingInfo) {
@@ -170,48 +186,16 @@ func (handler *NATSHandler) handleDesiredUpdate(logger lager.Logger, before, aft
 	logger.Info("starting")
 	defer logger.Info("complete")
 
-	afterKeysSet := handler.setRoutesForDesired(logger, after)
-
-	beforeRoutingKeys := routingtable.RoutingKeysFromSchedulingInfo(before)
-	afterRoutes, _ := cfroutes.CFRoutesFromRoutingInfo(after.Routes)
-
-	afterContainerPorts := set{}
-	for _, route := range afterRoutes {
-		afterContainerPorts.add(route.Port)
-	}
-
-	requestedInstances := after.Instances - before.Instances
-
-	for _, key := range beforeRoutingKeys {
-		if !afterKeysSet.contains(key) || !afterContainerPorts.contains(key.ContainerPort) {
-			messagesToEmit := handler.routingTable.RemoveRoutes(key, &after.ModificationTag)
-			handler.emitMessages(logger, messagesToEmit)
-		}
-
-		// in case of scale down, remove endpoints
-		if requestedInstances < 0 {
-			logger.Info("removing-endpoints", lager.Data{"removal_count": -1 * requestedInstances, "routing_key": key})
-
-			for index := before.Instances - 1; index >= after.Instances; index-- {
-				endpoints := handler.routingTable.EndpointsForIndex(key, index)
-
-				for i := range endpoints {
-					messagesToEmit := handler.routingTable.RemoveEndpoint(key, endpoints[i])
-					handler.emitMessages(logger, messagesToEmit)
-				}
-			}
-		}
-	}
+	routeMappings, messagesToEmit := handler.routingTable.SetRoutes(before, after)
+	handler.emitMessages(logger, messagesToEmit, routeMappings)
 }
 
 func (handler *NATSHandler) handleDesiredDelete(logger lager.Logger, schedulingInfo *models.DesiredLRPSchedulingInfo) {
 	logger = logger.Session("handling-desired-delete", util.DesiredLRPData(schedulingInfo))
 	logger.Info("starting")
 	defer logger.Info("complete")
-	for _, key := range routingtable.RoutingKeysFromSchedulingInfo(schedulingInfo) {
-		messagesToEmit := handler.routingTable.RemoveRoutes(key, &schedulingInfo.ModificationTag)
-		handler.emitMessages(logger, messagesToEmit)
-	}
+	routeMappings, messagesToEmit := handler.routingTable.RemoveRoutes(schedulingInfo)
+	handler.emitMessages(logger, messagesToEmit, routeMappings)
 }
 
 func (handler *NATSHandler) handleActualCreate(logger lager.Logger, actualLRPInfo *endpoint.ActualLRPRoutingInfo) {
@@ -219,7 +203,9 @@ func (handler *NATSHandler) handleActualCreate(logger lager.Logger, actualLRPInf
 	logger.Info("starting")
 	defer logger.Info("complete")
 	if actualLRPInfo.ActualLRP.State == models.ActualLRPStateRunning {
-		handler.addAndEmit(logger, actualLRPInfo)
+		logger.Info("handler-adding-endpoint", lager.Data{"net_info": actualLRPInfo.ActualLRP.ActualLRPNetInfo})
+		routeMappings, messagesToEmit := handler.routingTable.AddEndpoint(actualLRPInfo)
+		handler.emitMessages(logger, messagesToEmit, routeMappings)
 	}
 }
 
@@ -231,12 +217,19 @@ func (handler *NATSHandler) handleActualUpdate(logger lager.Logger, before, afte
 	logger.Info("starting")
 	defer logger.Info("complete")
 
+	var (
+		messagesToEmit routingtable.MessagesToEmit
+		routeMappings  routingtable.TCPRouteMappings
+	)
 	switch {
 	case after.ActualLRP.State == models.ActualLRPStateRunning:
-		handler.addAndEmit(logger, after)
+		logger.Info("handler-adding-endpoint", lager.Data{"net_info": after.ActualLRP.ActualLRPNetInfo})
+		routeMappings, messagesToEmit = handler.routingTable.AddEndpoint(after)
 	case after.ActualLRP.State != models.ActualLRPStateRunning && before.ActualLRP.State == models.ActualLRPStateRunning:
-		handler.removeAndEmit(logger, before)
+		logger.Info("handler-removing-endpoint", lager.Data{"net_info": before.ActualLRP.ActualLRPNetInfo})
+		routeMappings, messagesToEmit = handler.routingTable.RemoveEndpoint(before)
 	}
+	handler.emitMessages(logger, messagesToEmit, routeMappings)
 }
 
 func (handler *NATSHandler) handleActualDelete(logger lager.Logger, actualLRPInfo *endpoint.ActualLRPRoutingInfo) {
@@ -244,7 +237,9 @@ func (handler *NATSHandler) handleActualDelete(logger lager.Logger, actualLRPInf
 	logger.Info("starting")
 	defer logger.Info("complete")
 	if actualLRPInfo.ActualLRP.State == models.ActualLRPStateRunning {
-		handler.removeAndEmit(logger, actualLRPInfo)
+		logger.Info("handler-removing-endpoint", lager.Data{"net_info": actualLRPInfo.ActualLRP.ActualLRPNetInfo})
+		routeMappings, messagesToEmit := handler.routingTable.RemoveEndpoint(actualLRPInfo)
+		handler.emitMessages(logger, messagesToEmit, routeMappings)
 	}
 }
 
@@ -259,74 +254,23 @@ func (set set) add(value interface{}) {
 	set[value] = struct{}{}
 }
 
-func (handler *NATSHandler) setRoutesForDesired(logger lager.Logger, schedulingInfo *models.DesiredLRPSchedulingInfo) set {
-	routes, _ := cfroutes.CFRoutesFromRoutingInfo(schedulingInfo.Routes)
-	routingKeySet := set{}
-
-	routeEntries := make(map[endpoint.RoutingKey][]routingtable.Route)
-	for _, route := range routes {
-		key := endpoint.RoutingKey{ProcessGUID: schedulingInfo.ProcessGuid, ContainerPort: route.Port}
-		routingKeySet.add(key)
-
-		routes := []routingtable.Route{}
-		for _, hostname := range route.Hostnames {
-			routes = append(routes, routingtable.Route{
-				Hostname:         hostname,
-				LogGuid:          schedulingInfo.LogGuid,
-				RouteServiceUrl:  route.RouteServiceUrl,
-				IsolationSegment: route.IsolationSegment,
-			})
-		}
-		routeEntries[key] = append(routeEntries[key], routes...)
-	}
-	for key := range routeEntries {
-		messagesToEmit := handler.routingTable.SetRoutes(key, routeEntries[key], nil)
-		handler.emitMessages(logger, messagesToEmit)
-	}
-
-	return routingKeySet
-}
-
-func (handler *NATSHandler) emitMessages(logger lager.Logger, messagesToEmit routingtable.MessagesToEmit) {
-	if handler.emitter != nil {
+func (handler *NATSHandler) emitMessages(logger lager.Logger, messagesToEmit routingtable.MessagesToEmit, routeMappings routingtable.TCPRouteMappings) {
+	if handler.natsEmitter != nil {
 		logger.Debug("emit-messages", lager.Data{"messages": messagesToEmit})
-		handler.emitter.Emit(messagesToEmit)
+		err := handler.natsEmitter.Emit(messagesToEmit)
+		if err != nil {
+			logger.Error("failed-to-emit-http-routes", err)
+		}
 		routesRegistered.Add(messagesToEmit.RouteRegistrationCount())
 		routesUnregistered.Add(messagesToEmit.RouteUnregistrationCount())
 	} else {
 		logger.Info("no-emitter-configured-skipping-emit-messages", lager.Data{"messages": messagesToEmit})
 	}
 
-}
-
-func (handler *NATSHandler) addAndEmit(logger lager.Logger, actualLRPInfo *endpoint.ActualLRPRoutingInfo) {
-	logger.Info("handler-add-and-emit", lager.Data{"net_info": actualLRPInfo.ActualLRP.ActualLRPNetInfo})
-	endpoints, err := routingtable.EndpointsFromActual(actualLRPInfo)
-	if err != nil {
-		logger.Error("failed-to-extract-endpoint-from-actual", err)
-		return
-	}
-	for _, routingEndpoint := range endpoints {
-		key := endpoint.RoutingKey{ProcessGUID: actualLRPInfo.ActualLRP.ProcessGuid, ContainerPort: uint32(routingEndpoint.ContainerPort)}
-		messagesToEmit := handler.routingTable.AddEndpoint(key, routingEndpoint)
-		handler.emitMessages(logger, messagesToEmit)
-	}
-}
-
-func (handler *NATSHandler) removeAndEmit(logger lager.Logger, actualLRPInfo *endpoint.ActualLRPRoutingInfo) {
-	logger.Info("handler-remove-and-emit", lager.Data{"net_info": actualLRPInfo.ActualLRP.ActualLRPNetInfo})
-	endpoints, err := routingtable.EndpointsFromActual(actualLRPInfo)
-	if err != nil {
-		logger.Error("failed-to-extract-endpoint-from-actual", err)
-		return
-	}
-
-	for _, key := range routingtable.RoutingKeysFromActual(actualLRPInfo.ActualLRP) {
-		for _, endpoint := range endpoints {
-			if key.ContainerPort == endpoint.ContainerPort {
-				messagesToEmit := handler.routingTable.RemoveEndpoint(key, endpoint)
-				handler.emitMessages(logger, messagesToEmit)
-			}
+	if handler.routingAPIEmitter != nil {
+		err := handler.routingAPIEmitter.Emit(routeMappings)
+		if err != nil {
+			logger.Error("failed-to-emit-http-routes", err)
 		}
 	}
 }

@@ -4,26 +4,26 @@ package fakeroutingtable
 import (
 	"sync"
 
-	modelsbbs "code.cloudfoundry.org/bbs/models"
+	"code.cloudfoundry.org/bbs/models"
 	"code.cloudfoundry.org/route-emitter/routingtable"
 	"code.cloudfoundry.org/route-emitter/routingtable/schema/endpoint"
 )
 
 type FakeRoutingTable struct {
-	SetRoutesStub        func(beforeLRP, afterLRP *modelsbbs.DesiredLRPSchedulingInfo) (routingtable.TCPRouteMappings, routingtable.MessagesToEmit)
+	SetRoutesStub        func(beforeLRP, afterLRP *models.DesiredLRPSchedulingInfo) (routingtable.TCPRouteMappings, routingtable.MessagesToEmit)
 	setRoutesMutex       sync.RWMutex
 	setRoutesArgsForCall []struct {
-		beforeLRP *modelsbbs.DesiredLRPSchedulingInfo
-		afterLRP  *modelsbbs.DesiredLRPSchedulingInfo
+		beforeLRP *models.DesiredLRPSchedulingInfo
+		afterLRP  *models.DesiredLRPSchedulingInfo
 	}
 	setRoutesReturns struct {
 		result1 routingtable.TCPRouteMappings
 		result2 routingtable.MessagesToEmit
 	}
-	RemoveRoutesStub        func(desiredLRP *modelsbbs.DesiredLRPSchedulingInfo) (routingtable.TCPRouteMappings, routingtable.MessagesToEmit)
+	RemoveRoutesStub        func(desiredLRP *models.DesiredLRPSchedulingInfo) (routingtable.TCPRouteMappings, routingtable.MessagesToEmit)
 	removeRoutesMutex       sync.RWMutex
 	removeRoutesArgsForCall []struct {
-		desiredLRP *modelsbbs.DesiredLRPSchedulingInfo
+		desiredLRP *models.DesiredLRPSchedulingInfo
 	}
 	removeRoutesReturns struct {
 		result1 routingtable.TCPRouteMappings
@@ -47,11 +47,11 @@ type FakeRoutingTable struct {
 		result1 routingtable.TCPRouteMappings
 		result2 routingtable.MessagesToEmit
 	}
-	SwapStub        func(t routingtable.RoutingTable, domains modelsbbs.DomainSet) (routingtable.TCPRouteMappings, routingtable.MessagesToEmit)
+	SwapStub        func(t routingtable.RoutingTable, domains models.DomainSet) (routingtable.TCPRouteMappings, routingtable.MessagesToEmit)
 	swapMutex       sync.RWMutex
 	swapArgsForCall []struct {
 		t       routingtable.RoutingTable
-		domains modelsbbs.DomainSet
+		domains models.DomainSet
 	}
 	swapReturns struct {
 		result1 routingtable.TCPRouteMappings
@@ -88,11 +88,11 @@ type FakeRoutingTable struct {
 	invocationsMutex sync.RWMutex
 }
 
-func (fake *FakeRoutingTable) SetRoutes(beforeLRP *modelsbbs.DesiredLRPSchedulingInfo, afterLRP *modelsbbs.DesiredLRPSchedulingInfo) (routingtable.TCPRouteMappings, routingtable.MessagesToEmit) {
+func (fake *FakeRoutingTable) SetRoutes(beforeLRP *models.DesiredLRPSchedulingInfo, afterLRP *models.DesiredLRPSchedulingInfo) (routingtable.TCPRouteMappings, routingtable.MessagesToEmit) {
 	fake.setRoutesMutex.Lock()
 	fake.setRoutesArgsForCall = append(fake.setRoutesArgsForCall, struct {
-		beforeLRP *modelsbbs.DesiredLRPSchedulingInfo
-		afterLRP  *modelsbbs.DesiredLRPSchedulingInfo
+		beforeLRP *models.DesiredLRPSchedulingInfo
+		afterLRP  *models.DesiredLRPSchedulingInfo
 	}{beforeLRP, afterLRP})
 	fake.recordInvocation("SetRoutes", []interface{}{beforeLRP, afterLRP})
 	fake.setRoutesMutex.Unlock()
@@ -109,7 +109,7 @@ func (fake *FakeRoutingTable) SetRoutesCallCount() int {
 	return len(fake.setRoutesArgsForCall)
 }
 
-func (fake *FakeRoutingTable) SetRoutesArgsForCall(i int) (*modelsbbs.DesiredLRPSchedulingInfo, *modelsbbs.DesiredLRPSchedulingInfo) {
+func (fake *FakeRoutingTable) SetRoutesArgsForCall(i int) (*models.DesiredLRPSchedulingInfo, *models.DesiredLRPSchedulingInfo) {
 	fake.setRoutesMutex.RLock()
 	defer fake.setRoutesMutex.RUnlock()
 	return fake.setRoutesArgsForCall[i].beforeLRP, fake.setRoutesArgsForCall[i].afterLRP
@@ -123,10 +123,10 @@ func (fake *FakeRoutingTable) SetRoutesReturns(result1 routingtable.TCPRouteMapp
 	}{result1, result2}
 }
 
-func (fake *FakeRoutingTable) RemoveRoutes(desiredLRP *modelsbbs.DesiredLRPSchedulingInfo) (routingtable.TCPRouteMappings, routingtable.MessagesToEmit) {
+func (fake *FakeRoutingTable) RemoveRoutes(desiredLRP *models.DesiredLRPSchedulingInfo) (routingtable.TCPRouteMappings, routingtable.MessagesToEmit) {
 	fake.removeRoutesMutex.Lock()
 	fake.removeRoutesArgsForCall = append(fake.removeRoutesArgsForCall, struct {
-		desiredLRP *modelsbbs.DesiredLRPSchedulingInfo
+		desiredLRP *models.DesiredLRPSchedulingInfo
 	}{desiredLRP})
 	fake.recordInvocation("RemoveRoutes", []interface{}{desiredLRP})
 	fake.removeRoutesMutex.Unlock()
@@ -143,7 +143,7 @@ func (fake *FakeRoutingTable) RemoveRoutesCallCount() int {
 	return len(fake.removeRoutesArgsForCall)
 }
 
-func (fake *FakeRoutingTable) RemoveRoutesArgsForCall(i int) *modelsbbs.DesiredLRPSchedulingInfo {
+func (fake *FakeRoutingTable) RemoveRoutesArgsForCall(i int) *models.DesiredLRPSchedulingInfo {
 	fake.removeRoutesMutex.RLock()
 	defer fake.removeRoutesMutex.RUnlock()
 	return fake.removeRoutesArgsForCall[i].desiredLRP
@@ -225,11 +225,11 @@ func (fake *FakeRoutingTable) RemoveEndpointReturns(result1 routingtable.TCPRout
 	}{result1, result2}
 }
 
-func (fake *FakeRoutingTable) Swap(t routingtable.RoutingTable, domains modelsbbs.DomainSet) (routingtable.TCPRouteMappings, routingtable.MessagesToEmit) {
+func (fake *FakeRoutingTable) Swap(t routingtable.RoutingTable, domains models.DomainSet) (routingtable.TCPRouteMappings, routingtable.MessagesToEmit) {
 	fake.swapMutex.Lock()
 	fake.swapArgsForCall = append(fake.swapArgsForCall, struct {
 		t       routingtable.RoutingTable
-		domains modelsbbs.DomainSet
+		domains models.DomainSet
 	}{t, domains})
 	fake.recordInvocation("Swap", []interface{}{t, domains})
 	fake.swapMutex.Unlock()
@@ -246,7 +246,7 @@ func (fake *FakeRoutingTable) SwapCallCount() int {
 	return len(fake.swapArgsForCall)
 }
 
-func (fake *FakeRoutingTable) SwapArgsForCall(i int) (routingtable.RoutingTable, modelsbbs.DomainSet) {
+func (fake *FakeRoutingTable) SwapArgsForCall(i int) (routingtable.RoutingTable, models.DomainSet) {
 	fake.swapMutex.RLock()
 	defer fake.swapMutex.RUnlock()
 	return fake.swapArgsForCall[i].t, fake.swapArgsForCall[i].domains

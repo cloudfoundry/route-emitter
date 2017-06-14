@@ -54,15 +54,15 @@ var (
 
 	routingAPIPath string
 
-	consulRunner         *consulrunner.ClusterRunner
-	gnatsdRunner         ifrit.Process
-	natsClient           diegonats.NATSClient
-	bbsClient            bbs.InternalClient
-	logger               *lagertest.TestLogger
-	syncInterval         time.Duration
-	consulClusterAddress string
-	testMetricsListener  net.PacketConn
-	testMetricsChan      chan *events.Envelope
+	consulRunner               *consulrunner.ClusterRunner
+	gnatsdRunner               ifrit.Process
+	natsClient                 diegonats.NATSClient
+	bbsClient                  bbs.InternalClient
+	logger                     *lagertest.TestLogger
+	emitInterval, syncInterval time.Duration
+	consulClusterAddress       string
+	testMetricsListener        net.PacketConn
+	testMetricsChan            chan *events.Envelope
 
 	sqlProcess ifrit.Process
 	sqlRunner  sqlrunner.SQLRunner
@@ -120,6 +120,7 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 	logger = lagertest.NewTestLogger("test")
 
 	syncInterval = 200 * time.Millisecond
+	emitInterval = time.Second
 
 	bbsPath = string(binaries["bbs"])
 	bbsPort := 13000 + GinkgoParallelNode()*2

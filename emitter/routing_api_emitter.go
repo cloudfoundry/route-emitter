@@ -2,8 +2,7 @@ package emitter
 
 import (
 	"code.cloudfoundry.org/lager"
-	"code.cloudfoundry.org/route-emitter/routingtable/schema/endpoint"
-	"code.cloudfoundry.org/route-emitter/routingtable/schema/event"
+	"code.cloudfoundry.org/route-emitter/routingtable"
 	"code.cloudfoundry.org/routing-api"
 	"code.cloudfoundry.org/routing-api/models"
 	uaaclient "code.cloudfoundry.org/uaa-go-client"
@@ -11,38 +10,38 @@ import (
 
 //go:generate counterfeiter -o fakes/fake_routing_api_emitter.go . RoutingAPIEmitter
 type RoutingAPIEmitter interface {
-	Emit(routingEvents event.RoutingEvents) (int, int, error)
+	Emit(routingEvents routingtable.TCPRouteMappings) error
 }
 
 type routingAPIEmitter struct {
-	logger              lager.Logger
-	routingAPIClient    routing_api.Client
-	ttl                 int
-	uaaClient           uaaclient.Client
-	directInstanceRoute bool
+	logger           lager.Logger
+	routingAPIClient routing_api.Client
+	ttl              int
+	uaaClient        uaaclient.Client
 }
 
-func NewRoutingAPIEmitter(logger lager.Logger, routingAPIClient routing_api.Client, uaaClient uaaclient.Client, routeTTL int, directInstanceRoute bool) RoutingAPIEmitter {
+func NewRoutingAPIEmitter(logger lager.Logger, routingAPIClient routing_api.Client, uaaClient uaaclient.Client, routeTTL int) RoutingAPIEmitter {
 	return &routingAPIEmitter{
-		logger:              logger,
-		routingAPIClient:    routingAPIClient,
-		ttl:                 routeTTL,
-		uaaClient:           uaaClient,
-		directInstanceRoute: directInstanceRoute,
+		logger:           logger,
+		routingAPIClient: routingAPIClient,
+		ttl:              routeTTL,
+		uaaClient:        uaaClient,
 	}
 }
 
-func (t *routingAPIEmitter) Emit(tcpEvents event.RoutingEvents) (int, int, error) {
-	t.logRoutingEvents(tcpEvents)
+func (t *routingAPIEmitter) Emit(tcpEvents routingtable.TCPRouteMappings) error {
 	defer t.logger.Debug("complete-emit")
 
-	registrationMappingRequests, unregistrationMappingRequests := tcpEvents.ToMappingRequests(t.logger, t.ttl, t.directInstanceRoute)
-	err := t.emit(registrationMappingRequests, unregistrationMappingRequests)
-	if err != nil {
-		return 0, 0, err
+	if len(tcpEvents.Registrations) <= 0 && len(tcpEvents.Unregistrations) <= 0 {
+		return nil
 	}
 
-	return len(registrationMappingRequests), len(unregistrationMappingRequests), nil
+	err := t.emit(tcpEvents.Registrations, tcpEvents.Unregistrations)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (t *routingAPIEmitter) emit(registrationMappingRequests, unregistrationMappingRequests []models.TcpRouteMapping) error {
@@ -70,6 +69,13 @@ func (t *routingAPIEmitter) emit(registrationMappingRequests, unregistrationMapp
 }
 
 func (t *routingAPIEmitter) emitRoutingAPI(regMsgs, unregMsgs []models.TcpRouteMapping) error {
+	for i := range regMsgs {
+		regMsgs[i].TTL = &t.ttl
+	}
+	for i := range unregMsgs {
+		unregMsgs[i].TTL = &t.ttl
+	}
+
 	if len(regMsgs) > 0 {
 		if err := t.routingAPIClient.UpsertTcpRouteMappings(regMsgs); err != nil {
 			t.logger.Error("unable-to-upsert", err)
@@ -88,21 +94,4 @@ func (t *routingAPIEmitter) emitRoutingAPI(regMsgs, unregMsgs []models.TcpRouteM
 			lager.Data{"number-of-unregistration-events": len(unregMsgs)})
 	}
 	return nil
-}
-
-func (t *routingAPIEmitter) logRoutingEvents(routingEvents event.RoutingEvents) {
-	for _, event := range routingEvents {
-		endpoints := make([]endpoint.Endpoint, 0)
-		for _, endpoint := range event.Entry.Endpoints {
-			endpoints = append(endpoints, endpoint)
-		}
-
-		ports := make([]uint32, 0)
-		for _, extEndpoint := range event.Entry.ExternalEndpoints {
-			ports = append(ports, extEndpoint.Port)
-		}
-		t.logger.Info("mapped-routes", lager.Data{
-			"external_ports": ports,
-			"backends":       endpoints})
-	}
 }
