@@ -34,7 +34,7 @@ func (e randomEvent) Key() string {
 	return "random"
 }
 
-var _ = Describe("NATSHandler", func() {
+var _ = Describe("Handler", func() {
 	const (
 		expectedDomain                  = "domain"
 		expectedProcessGuid             = "process-guid"
@@ -61,7 +61,7 @@ var _ = Describe("NATSHandler", func() {
 
 		logger *lagertest.TestLogger
 
-		routeHandler *routehandlers.NATSHandler
+		routeHandler *routehandlers.Handler
 
 		emptyTCPRouteMappings routingtable.TCPRouteMappings
 	)
@@ -89,7 +89,7 @@ var _ = Describe("NATSHandler", func() {
 		fakeMetricSender = fake_metrics_sender.NewFakeMetricSender()
 		metrics.Initialize(fakeMetricSender, nil)
 
-		routeHandler = routehandlers.NewNATSHandler(fakeTable, natsEmitter, nil, false)
+		routeHandler = routehandlers.NewHandler(fakeTable, natsEmitter, nil, false)
 	})
 
 	Context("when an unrecognized event is received", func() {
@@ -904,8 +904,33 @@ var _ = Describe("NATSHandler", func() {
 
 				domains = models.NewDomainSet([]string{"domain"})
 
+				routesByRoutingKey := func(schedulingInfos []*models.DesiredLRPSchedulingInfo) map[endpoint.RoutingKey][]routingtable.Route {
+					byRoutingKey := map[endpoint.RoutingKey][]routingtable.Route{}
+					for _, desired := range schedulingInfos {
+						routes, err := cfroutes.CFRoutesFromRoutingInfo(desired.Routes)
+						if err == nil && len(routes) > 0 {
+							for _, cfRoute := range routes {
+								key := endpoint.RoutingKey{ProcessGUID: desired.ProcessGuid, ContainerPort: cfRoute.Port}
+								var routeEntries []routingtable.Route
+								for _, hostname := range cfRoute.Hostnames {
+									routeEntries = append(routeEntries, routingtable.Route{
+										Hostname:         hostname,
+										LogGuid:          desired.LogGuid,
+										RouteServiceUrl:  cfRoute.RouteServiceUrl,
+										IsolationSegment: cfRoute.IsolationSegment,
+									})
+								}
+								byRoutingKey[key] = append(byRoutingKey[key], routeEntries...)
+							}
+						}
+					}
+
+					return byRoutingKey
+				}
+
 				fakeTable.SwapStub = func(t routingtable.RoutingTable, d models.DomainSet) (routingtable.TCPRouteMappings, routingtable.MessagesToEmit) {
-					routes := routingtable.RoutesByRoutingKeyFromSchedulingInfos(desiredInfo)
+
+					routes := routesByRoutingKey(desiredInfo)
 					routesList := make([]routingtable.Route, 3)
 					for _, route := range routes {
 						routesList = append(routesList, route[0])
@@ -933,7 +958,7 @@ var _ = Describe("NATSHandler", func() {
 
 			Context("when emitting metrics in localMode", func() {
 				BeforeEach(func() {
-					routeHandler = routehandlers.NewNATSHandler(fakeTable, natsEmitter, nil, true)
+					routeHandler = routehandlers.NewHandler(fakeTable, natsEmitter, nil, true)
 					fakeTable.HTTPEndpointCountReturns(5)
 				})
 

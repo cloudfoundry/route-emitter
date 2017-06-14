@@ -22,7 +22,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 		logger                lager.Logger
 		fakeRoutingTable      *fakeroutingtable.FakeRoutingTable
 		fakeRoutingAPIEmitter *emitterfakes.FakeRoutingAPIEmitter
-		routeHandler          *routehandlers.NATSHandler
+		routeHandler          *routehandlers.Handler
 		fakeMetricSender      *fake_metrics_sender.FakeMetricSender
 		emptyNatsMessages     routingtable.MessagesToEmit
 	)
@@ -32,7 +32,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 		emptyNatsMessages = routingtable.MessagesToEmit{}
 		fakeRoutingTable = new(fakeroutingtable.FakeRoutingTable)
 		fakeRoutingAPIEmitter = new(emitterfakes.FakeRoutingAPIEmitter)
-		routeHandler = routehandlers.NewNATSHandler(fakeRoutingTable, nil, fakeRoutingAPIEmitter, false)
+		routeHandler = routehandlers.NewHandler(fakeRoutingTable, nil, fakeRoutingAPIEmitter, false)
 
 		fakeMetricSender = fake_metrics_sender.NewFakeMetricSender()
 		metrics.Initialize(fakeMetricSender, nil)
@@ -583,7 +583,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 
 			Context("when emitting metrics in localMode", func() {
 				BeforeEach(func() {
-					routeHandler = routehandlers.NewNATSHandler(fakeRoutingTable, nil, fakeRoutingAPIEmitter, true)
+					routeHandler = routehandlers.NewHandler(fakeRoutingTable, nil, fakeRoutingAPIEmitter, true)
 					fakeRoutingTable.TCPRouteCountReturns(1)
 				})
 

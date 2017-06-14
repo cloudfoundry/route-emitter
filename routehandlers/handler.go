@@ -24,17 +24,17 @@ var (
 	tcpRouteCount  = metric.Metric("TCPRouteCount")
 )
 
-type NATSHandler struct {
+type Handler struct {
 	routingTable      routingtable.RoutingTable
 	natsEmitter       emitter.NATSEmitter
 	routingAPIEmitter emitter.RoutingAPIEmitter
 	localMode         bool
 }
 
-var _ watcher.RouteHandler = new(NATSHandler)
+var _ watcher.RouteHandler = new(Handler)
 
-func NewNATSHandler(routingTable routingtable.RoutingTable, natsEmitter emitter.NATSEmitter, routingAPIEmitter emitter.RoutingAPIEmitter, localMode bool) *NATSHandler {
-	return &NATSHandler{
+func NewHandler(routingTable routingtable.RoutingTable, natsEmitter emitter.NATSEmitter, routingAPIEmitter emitter.RoutingAPIEmitter, localMode bool) *Handler {
+	return &Handler{
 		routingTable:      routingTable,
 		natsEmitter:       natsEmitter,
 		routingAPIEmitter: routingAPIEmitter,
@@ -42,7 +42,7 @@ func NewNATSHandler(routingTable routingtable.RoutingTable, natsEmitter emitter.
 	}
 }
 
-func (handler *NATSHandler) HandleEvent(logger lager.Logger, event models.Event) {
+func (handler *Handler) HandleEvent(logger lager.Logger, event models.Event) {
 	switch event := event.(type) {
 	case *models.DesiredLRPCreatedEvent:
 		desiredInfo := event.DesiredLrp.DesiredLRPSchedulingInfo()
@@ -69,7 +69,7 @@ func (handler *NATSHandler) HandleEvent(logger lager.Logger, event models.Event)
 	}
 }
 
-func (handler *NATSHandler) Emit(logger lager.Logger) {
+func (handler *Handler) Emit(logger lager.Logger) {
 	routingEvents, messagesToEmit := handler.routingTable.Emit()
 
 	logger.Info("emitting-nats-messages", lager.Data{"messages": messagesToEmit})
@@ -95,7 +95,7 @@ func (handler *NATSHandler) Emit(logger lager.Logger) {
 	}
 }
 
-func (handler *NATSHandler) Sync(
+func (handler *Handler) Sync(
 	logger lager.Logger,
 	desired []*models.DesiredLRPSchedulingInfo,
 	actuals []*endpoint.ActualLRPRoutingInfo,
@@ -159,18 +159,18 @@ func (handler *NATSHandler) Sync(
 	}
 }
 
-func (handler *NATSHandler) RefreshDesired(logger lager.Logger, desiredInfo []*models.DesiredLRPSchedulingInfo) {
+func (handler *Handler) RefreshDesired(logger lager.Logger, desiredInfo []*models.DesiredLRPSchedulingInfo) {
 	for _, desiredLRP := range desiredInfo {
 		routeMappings, messagesToEmit := handler.routingTable.SetRoutes(nil, desiredLRP)
 		handler.emitMessages(logger, messagesToEmit, routeMappings)
 	}
 }
 
-func (handler *NATSHandler) ShouldRefreshDesired(actual *endpoint.ActualLRPRoutingInfo) bool {
+func (handler *Handler) ShouldRefreshDesired(actual *endpoint.ActualLRPRoutingInfo) bool {
 	return !handler.routingTable.HasExternalRoutes(actual)
 }
 
-func (handler *NATSHandler) handleDesiredCreate(logger lager.Logger, desiredLRP *models.DesiredLRPSchedulingInfo) {
+func (handler *Handler) handleDesiredCreate(logger lager.Logger, desiredLRP *models.DesiredLRPSchedulingInfo) {
 	logger = logger.Session("handle-desired-create", util.DesiredLRPData(desiredLRP))
 	logger.Info("starting")
 	defer logger.Info("complete")
@@ -178,7 +178,7 @@ func (handler *NATSHandler) handleDesiredCreate(logger lager.Logger, desiredLRP 
 	handler.emitMessages(logger, messagesToEmit, routeMappings)
 }
 
-func (handler *NATSHandler) handleDesiredUpdate(logger lager.Logger, before, after *models.DesiredLRPSchedulingInfo) {
+func (handler *Handler) handleDesiredUpdate(logger lager.Logger, before, after *models.DesiredLRPSchedulingInfo) {
 	logger = logger.Session("handling-desired-update", lager.Data{
 		"before": util.DesiredLRPData(before),
 		"after":  util.DesiredLRPData(after),
@@ -190,7 +190,7 @@ func (handler *NATSHandler) handleDesiredUpdate(logger lager.Logger, before, aft
 	handler.emitMessages(logger, messagesToEmit, routeMappings)
 }
 
-func (handler *NATSHandler) handleDesiredDelete(logger lager.Logger, schedulingInfo *models.DesiredLRPSchedulingInfo) {
+func (handler *Handler) handleDesiredDelete(logger lager.Logger, schedulingInfo *models.DesiredLRPSchedulingInfo) {
 	logger = logger.Session("handling-desired-delete", util.DesiredLRPData(schedulingInfo))
 	logger.Info("starting")
 	defer logger.Info("complete")
@@ -198,7 +198,7 @@ func (handler *NATSHandler) handleDesiredDelete(logger lager.Logger, schedulingI
 	handler.emitMessages(logger, messagesToEmit, routeMappings)
 }
 
-func (handler *NATSHandler) handleActualCreate(logger lager.Logger, actualLRPInfo *endpoint.ActualLRPRoutingInfo) {
+func (handler *Handler) handleActualCreate(logger lager.Logger, actualLRPInfo *endpoint.ActualLRPRoutingInfo) {
 	logger = logger.Session("handling-actual-create", util.ActualLRPData(actualLRPInfo))
 	logger.Info("starting")
 	defer logger.Info("complete")
@@ -209,7 +209,7 @@ func (handler *NATSHandler) handleActualCreate(logger lager.Logger, actualLRPInf
 	}
 }
 
-func (handler *NATSHandler) handleActualUpdate(logger lager.Logger, before, after *endpoint.ActualLRPRoutingInfo) {
+func (handler *Handler) handleActualUpdate(logger lager.Logger, before, after *endpoint.ActualLRPRoutingInfo) {
 	logger = logger.Session("handling-actual-update", lager.Data{
 		"before": util.ActualLRPData(before),
 		"after":  util.ActualLRPData(after),
@@ -232,7 +232,7 @@ func (handler *NATSHandler) handleActualUpdate(logger lager.Logger, before, afte
 	handler.emitMessages(logger, messagesToEmit, routeMappings)
 }
 
-func (handler *NATSHandler) handleActualDelete(logger lager.Logger, actualLRPInfo *endpoint.ActualLRPRoutingInfo) {
+func (handler *Handler) handleActualDelete(logger lager.Logger, actualLRPInfo *endpoint.ActualLRPRoutingInfo) {
 	logger = logger.Session("handling-actual-delete", util.ActualLRPData(actualLRPInfo))
 	logger.Info("starting")
 	defer logger.Info("complete")
@@ -254,7 +254,7 @@ func (set set) add(value interface{}) {
 	set[value] = struct{}{}
 }
 
-func (handler *NATSHandler) emitMessages(logger lager.Logger, messagesToEmit routingtable.MessagesToEmit, routeMappings routingtable.TCPRouteMappings) {
+func (handler *Handler) emitMessages(logger lager.Logger, messagesToEmit routingtable.MessagesToEmit, routeMappings routingtable.TCPRouteMappings) {
 	if handler.natsEmitter != nil {
 		logger.Debug("emit-messages", lager.Data{"messages": messagesToEmit})
 		err := handler.natsEmitter.Emit(messagesToEmit)

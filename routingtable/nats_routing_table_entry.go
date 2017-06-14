@@ -52,34 +52,6 @@ func NewRoutableEndpoints() RoutableEndpoints {
 	}
 }
 
-func (entry RoutableEndpoints) hasEndpoint(endpoint Endpoint) bool {
-	key := endpoint.key()
-	_, found := entry.Endpoints[key]
-	if !found {
-		key.Evacuating = !key.Evacuating
-		_, found = entry.Endpoints[key]
-	}
-	return found
-}
-
-func (entry RoutableEndpoints) hasHostname(hostname string) bool {
-	for _, route := range entry.Routes {
-		if route.Hostname == hostname {
-			return true
-		}
-	}
-	return false
-}
-
-func (entry RoutableEndpoints) hasRouteServiceUrl(routeServiceUrl string) bool {
-	for _, route := range entry.Routes {
-		if route.RouteServiceUrl == routeServiceUrl {
-			return true
-		}
-	}
-	return false
-}
-
 func (entry RoutableEndpoints) copy() RoutableEndpoints {
 	clone := RoutableEndpoints{
 		Endpoints:       map[EndpointKey]Endpoint{},
@@ -94,20 +66,4 @@ func (entry RoutableEndpoints) copy() RoutableEndpoints {
 	}
 
 	return clone
-}
-
-func routesAsMap(routes []string) map[string]struct{} {
-	routesMap := map[string]struct{}{}
-	for _, route := range routes {
-		routesMap[route] = struct{}{}
-	}
-	return routesMap
-}
-
-func EndpointsAsMap(endpoints []Endpoint) map[EndpointKey]Endpoint {
-	endpointsMap := map[EndpointKey]Endpoint{}
-	for _, endpoint := range endpoints {
-		endpointsMap[endpoint.key()] = endpoint
-	}
-	return endpointsMap
 }
