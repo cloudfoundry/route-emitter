@@ -1494,19 +1494,15 @@ var _ = Describe("RoutingTable", func() {
 	// 	})
 	// })
 
-	// Describe("GetRoutes", func() {
-	// 	It("returns routes for routing key ", func() {
-	// 		expectedRoute := routingtable.Route{Hostname: "fake-route-url", LogGuid: logGuid}
-	// 		table.SetRoutes(endpoint.RoutingKey{ProcessGUID: "fake-process-guid"}, []routingtable.Route{
-	// 			routingtable.Route{Hostname: "fake-route-url", LogGuid: logGuid},
-	// 		}, nil)
-	// 		actualRoutes := table.GetRoutes(endpoint.RoutingKey{ProcessGUID: "fake-process-guid"})
-	// 		Expect(actualRoutes).To(HaveLen(1))
-	// 		Expect(actualRoutes[0].Hostname).To(Equal(expectedRoute.Hostname))
-	// 		Expect(actualRoutes[0].LogGuid).To(Equal(expectedRoute.LogGuid))
-	// 		Expect(actualRoutes[0].RouteServiceUrl).To(Equal(expectedRoute.RouteServiceUrl))
-	// 	})
-	// })
+	Describe("HasExternalRoutes", func() {
+		It("returns true if the actual lrp has external routes ", func() {
+			beforeLRPSchedulingInfo := createDesiredLRPSchedulingInfo(key.ProcessGUID, key.ContainerPort, logGuid, *currentTag, hostname1, hostname2)
+			table.SetRoutes(nil, beforeLRPSchedulingInfo)
+			lrp1 := createActualLRP(key, endpoint1)
+			table.AddEndpoint(lrp1)
+			Expect(table.HasExternalRoutes(lrp1)).To(BeTrue())
+		})
+	})
 
 	Describe("RouteCount", func() {
 		It("returns 0 on a new routing table", func() {

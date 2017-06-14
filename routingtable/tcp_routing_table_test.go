@@ -281,15 +281,16 @@ var _ = Describe("TCPRoutingTable", func() {
 			modificationTag = &models.ModificationTag{Epoch: "abc", Index: 1}
 		})
 
-		// Describe("GetRoutes", func() {
-		// 	It("returns the associated desired state", func() {
-		// 		routingTable = routingtable.NewTCPTable(logger, map[endpoint.RoutingKey]endpoint.RoutableEndpoints{
-		// 			key: endpoint.NewRoutableEndpoints(externalEndpoints, endpoints, logGuid, modificationTag),
-		// 		})
-		// 		Expect(routingTable.TCPRouteCount()).To(Equal(1))
-		// 		Expect(routingTable.GetTCPRoutes(key)).To(Equal(externalEndpoints))
-		// 	})
-		// })
+		Describe("HasExternalRoutes", func() {
+			It("returns the associated desired state", func() {
+				routingTable = routingtable.NewRoutingTable(logger, true)
+				beforeLRPSchedulingInfo := getDesiredLRP("process-guid-1", logGuid, tcpRoutes, modificationTag)
+				routingTable.SetRoutes(nil, beforeLRPSchedulingInfo)
+				routingInfo := getActualLRP("process-guid-1", "instance-guid-2", "some-ip-2", "container-ip-2", 62004, 5222, false, modificationTag)
+				routingTable.AddEndpoint(routingInfo)
+				Expect(routingTable.HasExternalRoutes(routingInfo)).To(BeTrue())
+			})
+		})
 
 		Describe("AddRoutes", func() {
 			BeforeEach(func() {
@@ -1008,15 +1009,15 @@ var _ = Describe("TCPRoutingTable", func() {
 							Expect(routingTable.TCPRouteCount()).Should(Equal(1))
 						})
 
-						// Context("with older modification tag", func() {
-						// 	It("emits nothing", func() {
-						// 		afterLRP := getDesiredLRP("process-guid-1", "log-guid-1", newTcpRoutes, modificationTag)
-						// 		routingEvents, _ := routingTable.SetRoutes(beforeLRPSchedulingInfo, afterLRP)
-						// 		Expect(routingEvents.Registrations).To(HaveLen(0))
-						// 		Expect(routingEvents.Unregistrations).To(HaveLen(0))
-						// 		Expect(routingTable.TCPRouteCount()).Should(Equal(2))
-						// 	})
-						// })
+						XContext("with older modification tag", func() {
+							It("emits nothing", func() {
+								afterLRP := getDesiredLRP("process-guid-1", "log-guid-1", newTcpRoutes, modificationTag)
+								routingEvents, _ := routingTable.SetRoutes(beforeLRPSchedulingInfo, afterLRP)
+								Expect(routingEvents.Registrations).To(HaveLen(0))
+								Expect(routingEvents.Unregistrations).To(HaveLen(0))
+								Expect(routingTable.TCPRouteCount()).Should(Equal(2))
+							})
+						})
 					})
 				})
 			})

@@ -10,6 +10,25 @@ import (
 )
 
 type FakeRoutingTable struct {
+	SetRoutesStub        func(beforeLRP, afterLRP *modelsbbs.DesiredLRPSchedulingInfo) (routingtable.TCPRouteMappings, routingtable.MessagesToEmit)
+	setRoutesMutex       sync.RWMutex
+	setRoutesArgsForCall []struct {
+		beforeLRP *modelsbbs.DesiredLRPSchedulingInfo
+		afterLRP  *modelsbbs.DesiredLRPSchedulingInfo
+	}
+	setRoutesReturns struct {
+		result1 routingtable.TCPRouteMappings
+		result2 routingtable.MessagesToEmit
+	}
+	RemoveRoutesStub        func(desiredLRP *modelsbbs.DesiredLRPSchedulingInfo) (routingtable.TCPRouteMappings, routingtable.MessagesToEmit)
+	removeRoutesMutex       sync.RWMutex
+	removeRoutesArgsForCall []struct {
+		desiredLRP *modelsbbs.DesiredLRPSchedulingInfo
+	}
+	removeRoutesReturns struct {
+		result1 routingtable.TCPRouteMappings
+		result2 routingtable.MessagesToEmit
+	}
 	AddEndpointStub        func(actualLRP *endpoint.ActualLRPRoutingInfo) (routingtable.TCPRouteMappings, routingtable.MessagesToEmit)
 	addEndpointMutex       sync.RWMutex
 	addEndpointArgsForCall []struct {
@@ -45,33 +64,13 @@ type FakeRoutingTable struct {
 		result1 routingtable.TCPRouteMappings
 		result2 routingtable.MessagesToEmit
 	}
-	EndpointsForIndexStub        func(key endpoint.RoutingKey, index int32) []routingtable.Endpoint
-	endpointsForIndexMutex       sync.RWMutex
-	endpointsForIndexArgsForCall []struct {
-		key   endpoint.RoutingKey
-		index int32
+	HasExternalRoutesStub        func(actual *endpoint.ActualLRPRoutingInfo) bool
+	hasExternalRoutesMutex       sync.RWMutex
+	hasExternalRoutesArgsForCall []struct {
+		actual *endpoint.ActualLRPRoutingInfo
 	}
-	endpointsForIndexReturns struct {
-		result1 []routingtable.Endpoint
-	}
-	SetRoutesStub        func(beforeLRP, afterLRP *modelsbbs.DesiredLRPSchedulingInfo) (routingtable.TCPRouteMappings, routingtable.MessagesToEmit)
-	setRoutesMutex       sync.RWMutex
-	setRoutesArgsForCall []struct {
-		beforeLRP *modelsbbs.DesiredLRPSchedulingInfo
-		afterLRP  *modelsbbs.DesiredLRPSchedulingInfo
-	}
-	setRoutesReturns struct {
-		result1 routingtable.TCPRouteMappings
-		result2 routingtable.MessagesToEmit
-	}
-	RemoveRoutesStub        func(desiredLRP *modelsbbs.DesiredLRPSchedulingInfo) (routingtable.TCPRouteMappings, routingtable.MessagesToEmit)
-	removeRoutesMutex       sync.RWMutex
-	removeRoutesArgsForCall []struct {
-		desiredLRP *modelsbbs.DesiredLRPSchedulingInfo
-	}
-	removeRoutesReturns struct {
-		result1 routingtable.TCPRouteMappings
-		result2 routingtable.MessagesToEmit
+	hasExternalRoutesReturns struct {
+		result1 bool
 	}
 	HTTPEndpointCountStub        func() int
 	hTTPEndpointCountMutex       sync.RWMutex
@@ -87,6 +86,75 @@ type FakeRoutingTable struct {
 	}
 	invocations      map[string][][]interface{}
 	invocationsMutex sync.RWMutex
+}
+
+func (fake *FakeRoutingTable) SetRoutes(beforeLRP *modelsbbs.DesiredLRPSchedulingInfo, afterLRP *modelsbbs.DesiredLRPSchedulingInfo) (routingtable.TCPRouteMappings, routingtable.MessagesToEmit) {
+	fake.setRoutesMutex.Lock()
+	fake.setRoutesArgsForCall = append(fake.setRoutesArgsForCall, struct {
+		beforeLRP *modelsbbs.DesiredLRPSchedulingInfo
+		afterLRP  *modelsbbs.DesiredLRPSchedulingInfo
+	}{beforeLRP, afterLRP})
+	fake.recordInvocation("SetRoutes", []interface{}{beforeLRP, afterLRP})
+	fake.setRoutesMutex.Unlock()
+	if fake.SetRoutesStub != nil {
+		return fake.SetRoutesStub(beforeLRP, afterLRP)
+	} else {
+		return fake.setRoutesReturns.result1, fake.setRoutesReturns.result2
+	}
+}
+
+func (fake *FakeRoutingTable) SetRoutesCallCount() int {
+	fake.setRoutesMutex.RLock()
+	defer fake.setRoutesMutex.RUnlock()
+	return len(fake.setRoutesArgsForCall)
+}
+
+func (fake *FakeRoutingTable) SetRoutesArgsForCall(i int) (*modelsbbs.DesiredLRPSchedulingInfo, *modelsbbs.DesiredLRPSchedulingInfo) {
+	fake.setRoutesMutex.RLock()
+	defer fake.setRoutesMutex.RUnlock()
+	return fake.setRoutesArgsForCall[i].beforeLRP, fake.setRoutesArgsForCall[i].afterLRP
+}
+
+func (fake *FakeRoutingTable) SetRoutesReturns(result1 routingtable.TCPRouteMappings, result2 routingtable.MessagesToEmit) {
+	fake.SetRoutesStub = nil
+	fake.setRoutesReturns = struct {
+		result1 routingtable.TCPRouteMappings
+		result2 routingtable.MessagesToEmit
+	}{result1, result2}
+}
+
+func (fake *FakeRoutingTable) RemoveRoutes(desiredLRP *modelsbbs.DesiredLRPSchedulingInfo) (routingtable.TCPRouteMappings, routingtable.MessagesToEmit) {
+	fake.removeRoutesMutex.Lock()
+	fake.removeRoutesArgsForCall = append(fake.removeRoutesArgsForCall, struct {
+		desiredLRP *modelsbbs.DesiredLRPSchedulingInfo
+	}{desiredLRP})
+	fake.recordInvocation("RemoveRoutes", []interface{}{desiredLRP})
+	fake.removeRoutesMutex.Unlock()
+	if fake.RemoveRoutesStub != nil {
+		return fake.RemoveRoutesStub(desiredLRP)
+	} else {
+		return fake.removeRoutesReturns.result1, fake.removeRoutesReturns.result2
+	}
+}
+
+func (fake *FakeRoutingTable) RemoveRoutesCallCount() int {
+	fake.removeRoutesMutex.RLock()
+	defer fake.removeRoutesMutex.RUnlock()
+	return len(fake.removeRoutesArgsForCall)
+}
+
+func (fake *FakeRoutingTable) RemoveRoutesArgsForCall(i int) *modelsbbs.DesiredLRPSchedulingInfo {
+	fake.removeRoutesMutex.RLock()
+	defer fake.removeRoutesMutex.RUnlock()
+	return fake.removeRoutesArgsForCall[i].desiredLRP
+}
+
+func (fake *FakeRoutingTable) RemoveRoutesReturns(result1 routingtable.TCPRouteMappings, result2 routingtable.MessagesToEmit) {
+	fake.RemoveRoutesStub = nil
+	fake.removeRoutesReturns = struct {
+		result1 routingtable.TCPRouteMappings
+		result2 routingtable.MessagesToEmit
+	}{result1, result2}
 }
 
 func (fake *FakeRoutingTable) AddEndpoint(actualLRP *endpoint.ActualLRPRoutingInfo) (routingtable.TCPRouteMappings, routingtable.MessagesToEmit) {
@@ -218,107 +286,37 @@ func (fake *FakeRoutingTable) EmitReturns(result1 routingtable.TCPRouteMappings,
 	}{result1, result2}
 }
 
-func (fake *FakeRoutingTable) EndpointsForIndex(key endpoint.RoutingKey, index int32) []routingtable.Endpoint {
-	fake.endpointsForIndexMutex.Lock()
-	fake.endpointsForIndexArgsForCall = append(fake.endpointsForIndexArgsForCall, struct {
-		key   endpoint.RoutingKey
-		index int32
-	}{key, index})
-	fake.recordInvocation("EndpointsForIndex", []interface{}{key, index})
-	fake.endpointsForIndexMutex.Unlock()
-	if fake.EndpointsForIndexStub != nil {
-		return fake.EndpointsForIndexStub(key, index)
+func (fake *FakeRoutingTable) HasExternalRoutes(actual *endpoint.ActualLRPRoutingInfo) bool {
+	fake.hasExternalRoutesMutex.Lock()
+	fake.hasExternalRoutesArgsForCall = append(fake.hasExternalRoutesArgsForCall, struct {
+		actual *endpoint.ActualLRPRoutingInfo
+	}{actual})
+	fake.recordInvocation("HasExternalRoutes", []interface{}{actual})
+	fake.hasExternalRoutesMutex.Unlock()
+	if fake.HasExternalRoutesStub != nil {
+		return fake.HasExternalRoutesStub(actual)
 	} else {
-		return fake.endpointsForIndexReturns.result1
+		return fake.hasExternalRoutesReturns.result1
 	}
 }
 
-func (fake *FakeRoutingTable) EndpointsForIndexCallCount() int {
-	fake.endpointsForIndexMutex.RLock()
-	defer fake.endpointsForIndexMutex.RUnlock()
-	return len(fake.endpointsForIndexArgsForCall)
+func (fake *FakeRoutingTable) HasExternalRoutesCallCount() int {
+	fake.hasExternalRoutesMutex.RLock()
+	defer fake.hasExternalRoutesMutex.RUnlock()
+	return len(fake.hasExternalRoutesArgsForCall)
 }
 
-func (fake *FakeRoutingTable) EndpointsForIndexArgsForCall(i int) (endpoint.RoutingKey, int32) {
-	fake.endpointsForIndexMutex.RLock()
-	defer fake.endpointsForIndexMutex.RUnlock()
-	return fake.endpointsForIndexArgsForCall[i].key, fake.endpointsForIndexArgsForCall[i].index
+func (fake *FakeRoutingTable) HasExternalRoutesArgsForCall(i int) *endpoint.ActualLRPRoutingInfo {
+	fake.hasExternalRoutesMutex.RLock()
+	defer fake.hasExternalRoutesMutex.RUnlock()
+	return fake.hasExternalRoutesArgsForCall[i].actual
 }
 
-func (fake *FakeRoutingTable) EndpointsForIndexReturns(result1 []routingtable.Endpoint) {
-	fake.EndpointsForIndexStub = nil
-	fake.endpointsForIndexReturns = struct {
-		result1 []routingtable.Endpoint
+func (fake *FakeRoutingTable) HasExternalRoutesReturns(result1 bool) {
+	fake.HasExternalRoutesStub = nil
+	fake.hasExternalRoutesReturns = struct {
+		result1 bool
 	}{result1}
-}
-
-func (fake *FakeRoutingTable) SetRoutes(beforeLRP *modelsbbs.DesiredLRPSchedulingInfo, afterLRP *modelsbbs.DesiredLRPSchedulingInfo) (routingtable.TCPRouteMappings, routingtable.MessagesToEmit) {
-	fake.setRoutesMutex.Lock()
-	fake.setRoutesArgsForCall = append(fake.setRoutesArgsForCall, struct {
-		beforeLRP *modelsbbs.DesiredLRPSchedulingInfo
-		afterLRP  *modelsbbs.DesiredLRPSchedulingInfo
-	}{beforeLRP, afterLRP})
-	fake.recordInvocation("SetRoutes", []interface{}{beforeLRP, afterLRP})
-	fake.setRoutesMutex.Unlock()
-	if fake.SetRoutesStub != nil {
-		return fake.SetRoutesStub(beforeLRP, afterLRP)
-	} else {
-		return fake.setRoutesReturns.result1, fake.setRoutesReturns.result2
-	}
-}
-
-func (fake *FakeRoutingTable) SetRoutesCallCount() int {
-	fake.setRoutesMutex.RLock()
-	defer fake.setRoutesMutex.RUnlock()
-	return len(fake.setRoutesArgsForCall)
-}
-
-func (fake *FakeRoutingTable) SetRoutesArgsForCall(i int) (*modelsbbs.DesiredLRPSchedulingInfo, *modelsbbs.DesiredLRPSchedulingInfo) {
-	fake.setRoutesMutex.RLock()
-	defer fake.setRoutesMutex.RUnlock()
-	return fake.setRoutesArgsForCall[i].beforeLRP, fake.setRoutesArgsForCall[i].afterLRP
-}
-
-func (fake *FakeRoutingTable) SetRoutesReturns(result1 routingtable.TCPRouteMappings, result2 routingtable.MessagesToEmit) {
-	fake.SetRoutesStub = nil
-	fake.setRoutesReturns = struct {
-		result1 routingtable.TCPRouteMappings
-		result2 routingtable.MessagesToEmit
-	}{result1, result2}
-}
-
-func (fake *FakeRoutingTable) RemoveRoutes(desiredLRP *modelsbbs.DesiredLRPSchedulingInfo) (routingtable.TCPRouteMappings, routingtable.MessagesToEmit) {
-	fake.removeRoutesMutex.Lock()
-	fake.removeRoutesArgsForCall = append(fake.removeRoutesArgsForCall, struct {
-		desiredLRP *modelsbbs.DesiredLRPSchedulingInfo
-	}{desiredLRP})
-	fake.recordInvocation("RemoveRoutes", []interface{}{desiredLRP})
-	fake.removeRoutesMutex.Unlock()
-	if fake.RemoveRoutesStub != nil {
-		return fake.RemoveRoutesStub(desiredLRP)
-	} else {
-		return fake.removeRoutesReturns.result1, fake.removeRoutesReturns.result2
-	}
-}
-
-func (fake *FakeRoutingTable) RemoveRoutesCallCount() int {
-	fake.removeRoutesMutex.RLock()
-	defer fake.removeRoutesMutex.RUnlock()
-	return len(fake.removeRoutesArgsForCall)
-}
-
-func (fake *FakeRoutingTable) RemoveRoutesArgsForCall(i int) *modelsbbs.DesiredLRPSchedulingInfo {
-	fake.removeRoutesMutex.RLock()
-	defer fake.removeRoutesMutex.RUnlock()
-	return fake.removeRoutesArgsForCall[i].desiredLRP
-}
-
-func (fake *FakeRoutingTable) RemoveRoutesReturns(result1 routingtable.TCPRouteMappings, result2 routingtable.MessagesToEmit) {
-	fake.RemoveRoutesStub = nil
-	fake.removeRoutesReturns = struct {
-		result1 routingtable.TCPRouteMappings
-		result2 routingtable.MessagesToEmit
-	}{result1, result2}
 }
 
 func (fake *FakeRoutingTable) HTTPEndpointCount() int {
@@ -374,6 +372,10 @@ func (fake *FakeRoutingTable) TCPRouteCountReturns(result1 int) {
 func (fake *FakeRoutingTable) Invocations() map[string][][]interface{} {
 	fake.invocationsMutex.RLock()
 	defer fake.invocationsMutex.RUnlock()
+	fake.setRoutesMutex.RLock()
+	defer fake.setRoutesMutex.RUnlock()
+	fake.removeRoutesMutex.RLock()
+	defer fake.removeRoutesMutex.RUnlock()
 	fake.addEndpointMutex.RLock()
 	defer fake.addEndpointMutex.RUnlock()
 	fake.removeEndpointMutex.RLock()
@@ -382,12 +384,8 @@ func (fake *FakeRoutingTable) Invocations() map[string][][]interface{} {
 	defer fake.swapMutex.RUnlock()
 	fake.emitMutex.RLock()
 	defer fake.emitMutex.RUnlock()
-	fake.endpointsForIndexMutex.RLock()
-	defer fake.endpointsForIndexMutex.RUnlock()
-	fake.setRoutesMutex.RLock()
-	defer fake.setRoutesMutex.RUnlock()
-	fake.removeRoutesMutex.RLock()
-	defer fake.removeRoutesMutex.RUnlock()
+	fake.hasExternalRoutesMutex.RLock()
+	defer fake.hasExternalRoutesMutex.RUnlock()
 	fake.hTTPEndpointCountMutex.RLock()
 	defer fake.hTTPEndpointCountMutex.RUnlock()
 	fake.tCPRouteCountMutex.RLock()

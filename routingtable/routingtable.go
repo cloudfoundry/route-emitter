@@ -28,20 +28,20 @@ func (mappings TCPRouteMappings) Merge(other TCPRouteMappings) TCPRouteMappings 
 //go:generate counterfeiter -o fakeroutingtable/fake_routingtable.go . RoutingTable
 
 type RoutingTable interface {
+	// table modification
+	SetRoutes(beforeLRP, afterLRP *models.DesiredLRPSchedulingInfo) (TCPRouteMappings, MessagesToEmit)
+	RemoveRoutes(desiredLRP *models.DesiredLRPSchedulingInfo) (TCPRouteMappings, MessagesToEmit)
 	AddEndpoint(actualLRP *endpoint.ActualLRPRoutingInfo) (TCPRouteMappings, MessagesToEmit)
 	RemoveEndpoint(actualLRP *endpoint.ActualLRPRoutingInfo) (TCPRouteMappings, MessagesToEmit)
 	Swap(t RoutingTable, domains models.DomainSet) (TCPRouteMappings, MessagesToEmit)
 	Emit() (TCPRouteMappings, MessagesToEmit)
 
-	// ???
-	EndpointsForIndex(key endpoint.RoutingKey, index int32) []Endpoint
+	// TODO: this is only used to delete extra instances when the lrp is scaled down. not sure why ? ask #routing
+	// EndpointsForIndex(key endpoint.RoutingKey, index int32) []Endpoint
 
 	// routes
-	SetRoutes(beforeLRP, afterLRP *models.DesiredLRPSchedulingInfo) (TCPRouteMappings, MessagesToEmit)
-	RemoveRoutes(desiredLRP *models.DesiredLRPSchedulingInfo) (TCPRouteMappings, MessagesToEmit)
-	// we only need the following methods to be able to tell if we need to fetch the desired lrp, can we abstract these methods ?
-	// GetHTTPRoutes(key endpoint.RoutingKey) []Route
-	// GetTCPRoutes(key endpoint.RoutingKey) endpoint.ExternalEndpointInfos
+
+	HasExternalRoutes(actual *endpoint.ActualLRPRoutingInfo) bool
 	HTTPEndpointCount() int
 	TCPRouteCount() int
 }
@@ -842,4 +842,18 @@ func (t *routingTable) HTTPEndpointCount() int {
 
 func (t *routingTable) TCPRouteCount() int {
 	return len(t.tcpEntries)
+}
+
+func (t *routingTable) HasExternalRoutes(actual *endpoint.ActualLRPRoutingInfo) bool {
+	for _, key := range endpoint.NewRoutingKeysFromActual(actual) {
+		if len(t.httpEntries[key].Routes) > 0 {
+			return true
+		}
+
+		if len(t.tcpEntries[key].ExternalEndpoints) > 0 {
+			return true
+		}
+	}
+
+	return false
 }
