@@ -599,6 +599,10 @@ func (table *routingTable) messages(routesDiff routesDiff, endpointDiff endpoint
 }
 
 func (table *routingTable) RemoveRoutes(desiredLRP *models.DesiredLRPSchedulingInfo) (TCPRouteMappings, MessagesToEmit) {
+	logger := table.logger.Session("RemoveRoutes", lager.Data{"desired_lrp": DesiredLRPData(desiredLRP)})
+	logger.Debug("starting")
+	defer logger.Debug("completed")
+
 	return table.SetRoutes(desiredLRP, nil)
 }
 
