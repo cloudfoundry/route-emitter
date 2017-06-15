@@ -738,7 +738,7 @@ var _ = Describe("TCPRoutingTable", func() {
 						}
 					})
 
-					FIt("emits unregistration and registration mappings", func() {
+					It("emits unregistration and registration mappings", func() {
 						newModificationTag := &models.ModificationTag{Epoch: "abc", Index: 2}
 						beforeLRP := getDesiredLRP("process-guid-1", "log-guid-1", tcpRoutes, modificationTag)
 						afterLRP := getDesiredLRP("process-guid-1", "log-guid-1", newTcpRoutes, newModificationTag)
@@ -1563,7 +1563,7 @@ var _ = Describe("TCPRoutingTable", func() {
 					Expect(tempRoutingTable.TCPRouteCount()).Should(Equal(1))
 				})
 
-				FIt("emits registration and unregistration events", func() {
+				It("emits registration and unregistration events", func() {
 					routingEvents, _ := routingTable.Swap(tempRoutingTable, models.DomainSet{})
 
 					ttl := 0

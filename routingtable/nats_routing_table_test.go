@@ -523,7 +523,7 @@ var _ = Describe("RoutingTable", func() {
 					_, messagesToEmit = table.SetRoutes(schedulingInfo, afterSchedulingInfo)
 				})
 
-				FIt("emits a registration and unregistration", func() {
+				It("emits a registration and unregistration", func() {
 					expected := routingtable.MessagesToEmit{
 						RegistrationMessages: []routingtable.RegistryMessage{
 							routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGuid: logGuid, IsolationSegment: "isolation-segment-2"}),
@@ -548,7 +548,7 @@ var _ = Describe("RoutingTable", func() {
 					_, messagesToEmit = table.Swap(tempTable, domains)
 				})
 
-				FIt("emits all registrations and no unregistration", func() {
+				It("emits all registrations and no unregistration", func() {
 					expected := routingtable.MessagesToEmit{
 						RegistrationMessages: []routingtable.RegistryMessage{
 							routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGuid: logGuid, IsolationSegment: "isolation-segment-2"}),
@@ -585,7 +585,7 @@ var _ = Describe("RoutingTable", func() {
 					_, messagesToEmit = table.SetRoutes(schedulingInfo, afterSchedulingLRP)
 				})
 
-				FIt("emits all registrations and no unregistration", func() {
+				It("emits all registrations and no unregistration", func() {
 					expected := routingtable.MessagesToEmit{
 						RegistrationMessages: []routingtable.RegistryMessage{
 							routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGuid: logGuid, RouteServiceUrl: "https://rs.new.example.com"}),
@@ -610,7 +610,7 @@ var _ = Describe("RoutingTable", func() {
 					_, messagesToEmit = table.Swap(tempTable, domains)
 				})
 
-				FIt("emits all registrations and no unregistration", func() {
+				It("emits all registrations and no unregistration", func() {
 					expected := routingtable.MessagesToEmit{
 						RegistrationMessages: []routingtable.RegistryMessage{
 							routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGuid: logGuid, RouteServiceUrl: "https://rs.new.example.com"}),

@@ -41,7 +41,7 @@ const (
 	msgReceiveTimeout          = 5 * time.Second
 )
 
-var _ = XDescribe("Route Emitter", func() {
+var _ = Describe("Route Emitter", func() {
 	var (
 		registeredRoutes   <-chan routingtable.RegistryMessage
 		unregisteredRoutes <-chan routingtable.RegistryMessage
