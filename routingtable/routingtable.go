@@ -505,13 +505,11 @@ type httpEndpointsDiff struct {
 func diffHTTPRoutes(before, after []Route) httpRoutesDiff {
 	existingRoutes := map[Route]struct{}{}
 	newRoutes := map[Route]struct{}{}
-	newHostnames := map[string]struct{}{}
 	for _, route := range before {
 		existingRoutes[route] = struct{}{}
 	}
 	for _, route := range after {
 		newRoutes[route] = struct{}{}
-		newHostnames[route.Hostname] = struct{}{}
 	}
 
 	diff := httpRoutesDiff{
@@ -521,13 +519,7 @@ func diffHTTPRoutes(before, after []Route) httpRoutesDiff {
 	// generate the diff
 	for route := range existingRoutes {
 		if _, ok := newRoutes[route]; !ok {
-			// routes that changes the service url but don't change the hostname
-			// shouldn't be considered removed. we still add them to the added routes
-			// in order to update the Registration. TODO: can we send an
-			// unregistration+registration instead and get rid of this code
-			if _, ok := newHostnames[route.Hostname]; !ok {
-				diff.removed = append(diff.removed, route)
-			}
+			diff.removed = append(diff.removed, route)
 		}
 	}
 

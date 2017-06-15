@@ -699,6 +699,7 @@ var _ = Describe("TCPRoutingTable", func() {
 				})
 			})
 		})
+
 		Describe("Updating routes", func() {
 			var (
 				newTcpRoutes            tcp_routes.TCPRoutes
@@ -724,6 +725,45 @@ var _ = Describe("TCPRoutingTable", func() {
 							ContainerPort:   5222,
 						},
 					}
+				})
+
+				Context("existing router group guid changes", func() {
+					BeforeEach(func() {
+						newTcpRoutes = tcp_routes.TCPRoutes{
+							tcp_routes.TCPRoute{
+								RouterGroupGuid: "new-router-group-guid",
+								ExternalPort:    61000,
+								ContainerPort:   5222,
+							},
+						}
+					})
+
+					FIt("emits unregistration and registration mappings", func() {
+						newModificationTag := &models.ModificationTag{Epoch: "abc", Index: 2}
+						beforeLRP := getDesiredLRP("process-guid-1", "log-guid-1", tcpRoutes, modificationTag)
+						afterLRP := getDesiredLRP("process-guid-1", "log-guid-1", newTcpRoutes, newModificationTag)
+						routingEvents, _ := routingTable.SetRoutes(beforeLRP, afterLRP)
+
+						ttl := 0
+						Expect(routingEvents.Registrations).To(ConsistOf(tcpmodels.TcpRouteMapping{
+							TcpMappingEntity: tcpmodels.TcpMappingEntity{
+								RouterGroupGuid: "new-router-group-guid",
+								HostPort:        62004,
+								HostIP:          "some-ip-1",
+								ExternalPort:    61000,
+								TTL:             &ttl,
+							},
+						}))
+						Expect(routingEvents.Unregistrations).To(ConsistOf(tcpmodels.TcpRouteMapping{
+							TcpMappingEntity: tcpmodels.TcpMappingEntity{
+								RouterGroupGuid: "router-group-guid",
+								HostPort:        62004,
+								HostIP:          "some-ip-1",
+								ExternalPort:    61000,
+								TTL:             &ttl,
+							},
+						}))
+					})
 				})
 
 				Context("when there is change in external port", func() {
@@ -1501,6 +1541,66 @@ var _ = Describe("TCPRoutingTable", func() {
 						},
 					}))
 					Expect(routingTable.TCPRouteCount()).Should(Equal(1))
+				})
+			})
+
+			Context("when updating the router group guid", func() {
+				BeforeEach(func() {
+					newModificationTag = &models.ModificationTag{Epoch: "abc", Index: 2}
+					newTcpRoutes := tcp_routes.TCPRoutes{
+						tcp_routes.TCPRoute{
+							RouterGroupGuid: "new-router-group-guid",
+							ExternalPort:    61000,
+							ContainerPort:   5222,
+						},
+					}
+					beforeLRPSchedulingInfo := getDesiredLRP("process-guid-1", existingLogGuid, newTcpRoutes, newModificationTag)
+					tempRoutingTable = routingtable.NewRoutingTable(logger, false)
+					tempRoutingTable.SetRoutes(nil, beforeLRPSchedulingInfo)
+					tempRoutingTable.AddEndpoint(getActualLRP("process-guid-1", "instance-guid-1", "some-ip-1", "container-ip-1", 62004, 5222, false, modificationTag))
+					tempRoutingTable.AddEndpoint(getActualLRP("process-guid-1", "instance-guid-2", "some-ip-2", "container-ip-2", 62004, 5222, false, modificationTag))
+
+					Expect(tempRoutingTable.TCPRouteCount()).Should(Equal(1))
+				})
+
+				FIt("emits registration and unregistration events", func() {
+					routingEvents, _ := routingTable.Swap(tempRoutingTable, models.DomainSet{})
+
+					ttl := 0
+					Expect(routingEvents.Registrations).To(ConsistOf(tcpmodels.TcpRouteMapping{
+						TcpMappingEntity: tcpmodels.TcpMappingEntity{
+							RouterGroupGuid: "new-router-group-guid",
+							HostPort:        62004,
+							HostIP:          "some-ip-1",
+							ExternalPort:    61000,
+							TTL:             &ttl,
+						},
+					}, tcpmodels.TcpRouteMapping{
+						TcpMappingEntity: tcpmodels.TcpMappingEntity{
+							RouterGroupGuid: "new-router-group-guid",
+							HostPort:        62004,
+							HostIP:          "some-ip-2",
+							ExternalPort:    61000,
+							TTL:             &ttl,
+						},
+					}))
+					Expect(routingEvents.Unregistrations).To(ConsistOf(tcpmodels.TcpRouteMapping{
+						TcpMappingEntity: tcpmodels.TcpMappingEntity{
+							RouterGroupGuid: "router-group-guid",
+							HostPort:        62004,
+							HostIP:          "some-ip-1",
+							ExternalPort:    61000,
+							TTL:             &ttl,
+						},
+					}, tcpmodels.TcpRouteMapping{
+						TcpMappingEntity: tcpmodels.TcpMappingEntity{
+							RouterGroupGuid: "router-group-guid",
+							HostPort:        62004,
+							HostIP:          "some-ip-2",
+							ExternalPort:    61000,
+							TTL:             &ttl,
+						},
+					}))
 				})
 			})
 		})

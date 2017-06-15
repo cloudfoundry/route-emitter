@@ -147,6 +147,23 @@ var _ = Describe("RoutingTable", func() {
 		return &info
 	}
 
+	createSchedulingInfoWithIS := func(isolationSegment string) *models.DesiredLRPSchedulingInfo {
+		routingInfo := cfroutes.CFRoutes{
+			{
+				Hostnames:        []string{hostname1, hostname2},
+				Port:             key.ContainerPort,
+				IsolationSegment: isolationSegment,
+			},
+		}.RoutingInfo()
+		routes := models.Routes{}
+		for key, message := range routingInfo {
+			routes[key] = message
+		}
+
+		info := models.NewDesiredLRPSchedulingInfo(models.NewDesiredLRPKey(key.ProcessGUID, "domain", logGuid), "", 1, models.NewDesiredLRPResource(0, 0, 0, ""), routes, *currentTag, nil, nil)
+		return &info
+	}
+
 	createActualLRP := func(
 		key endpoint.RoutingKey,
 		instance routingtable.Endpoint,
@@ -280,12 +297,6 @@ var _ = Describe("RoutingTable", func() {
 					Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
 				})
 			})
-		})
-	})
-
-	XDescribe("isolation segment behavior", func() {
-		Context("when the isolation segment changes on the http route", func() {
-			It("emit both an unregistration of the old isolation segment and registration for the new isolation segment????", func() {})
 		})
 	})
 
@@ -491,35 +502,123 @@ var _ = Describe("RoutingTable", func() {
 			})
 		})
 
-		Context("when there is an existing routing key with a route service url", func() {
+		Context("when there is an existing routing key with an isolation segment", func() {
+			var (
+				schedulingInfo *models.DesiredLRPSchedulingInfo
+			)
+
 			BeforeEach(func() {
 				tempTable := routingtable.NewRoutingTable(logger, false)
-				schedulingInfo := createSchedulingInfo("https://rs.example.com")
+				schedulingInfo = createSchedulingInfoWithIS("isolation-segment-1")
 				tempTable.SetRoutes(nil, schedulingInfo)
 				lrp := createActualLRP(key, endpoint1)
 				tempTable.AddEndpoint(lrp)
 				table.Swap(tempTable, domains)
 			})
 
-			Context("when the route service url changes", func() {
+			Context("when the isolation segment changes in an event", func() {
+				BeforeEach(func() {
+					afterSchedulingInfo := createSchedulingInfoWithIS("isolation-segment-2")
+					afterSchedulingInfo.ModificationTag.Index++
+					_, messagesToEmit = table.SetRoutes(schedulingInfo, afterSchedulingInfo)
+				})
+
+				FIt("emits a registration and unregistration", func() {
+					expected := routingtable.MessagesToEmit{
+						RegistrationMessages: []routingtable.RegistryMessage{
+							routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGuid: logGuid, IsolationSegment: "isolation-segment-2"}),
+							routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname2, LogGuid: logGuid, IsolationSegment: "isolation-segment-2"}),
+						},
+						UnregistrationMessages: []routingtable.RegistryMessage{
+							routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGuid: logGuid, IsolationSegment: "isolation-segment-1"}),
+							routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname2, LogGuid: logGuid, IsolationSegment: "isolation-segment-1"}),
+						},
+					}
+					Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
+				})
+			})
+
+			Context("when the isolation segment changes in sync", func() {
+				BeforeEach(func() {
+					tempTable := routingtable.NewRoutingTable(logger, false)
+					schedulingInfo := createSchedulingInfoWithIS("isolation-segment-2")
+					tempTable.SetRoutes(nil, schedulingInfo)
+					lrp := createActualLRP(key, endpoint1)
+					tempTable.AddEndpoint(lrp)
+					_, messagesToEmit = table.Swap(tempTable, domains)
+				})
+
+				FIt("emits all registrations and no unregistration", func() {
+					expected := routingtable.MessagesToEmit{
+						RegistrationMessages: []routingtable.RegistryMessage{
+							routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGuid: logGuid, IsolationSegment: "isolation-segment-2"}),
+							routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname2, LogGuid: logGuid, IsolationSegment: "isolation-segment-2"}),
+						},
+						UnregistrationMessages: []routingtable.RegistryMessage{
+							routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGuid: logGuid, IsolationSegment: "isolation-segment-1"}),
+							routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname2, LogGuid: logGuid, IsolationSegment: "isolation-segment-1"}),
+						},
+					}
+					Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
+				})
+			})
+		})
+
+		Context("when there is an existing routing key with a route service url", func() {
+			var (
+				schedulingInfo *models.DesiredLRPSchedulingInfo
+			)
+
+			BeforeEach(func() {
+				tempTable := routingtable.NewRoutingTable(logger, false)
+				schedulingInfo = createSchedulingInfo("https://rs.example.com")
+				tempTable.SetRoutes(nil, schedulingInfo)
+				lrp := createActualLRP(key, endpoint1)
+				tempTable.AddEndpoint(lrp)
+				table.Swap(tempTable, domains)
+			})
+
+			Context("when the route service url changes in an event", func() {
+				BeforeEach(func() {
+					afterSchedulingLRP := createSchedulingInfo("https://rs.new.example.com")
+					afterSchedulingLRP.ModificationTag.Index++
+					_, messagesToEmit = table.SetRoutes(schedulingInfo, afterSchedulingLRP)
+				})
+
+				FIt("emits all registrations and no unregistration", func() {
+					expected := routingtable.MessagesToEmit{
+						RegistrationMessages: []routingtable.RegistryMessage{
+							routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGuid: logGuid, RouteServiceUrl: "https://rs.new.example.com"}),
+							routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname2, LogGuid: logGuid, RouteServiceUrl: "https://rs.new.example.com"}),
+						},
+						UnregistrationMessages: []routingtable.RegistryMessage{
+							routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGuid: logGuid, RouteServiceUrl: "https://rs.example.com"}),
+							routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname2, LogGuid: logGuid, RouteServiceUrl: "https://rs.example.com"}),
+						},
+					}
+					Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
+				})
+			})
+
+			Context("when the route service url changes during sync", func() {
 				BeforeEach(func() {
 					tempTable := routingtable.NewRoutingTable(logger, false)
 					schedulingInfo := createSchedulingInfo("https://rs.new.example.com")
 					tempTable.SetRoutes(nil, schedulingInfo)
 					lrp1 := createActualLRP(key, endpoint1)
 					tempTable.AddEndpoint(lrp1)
-					lrp2 := createActualLRP(key, endpoint2)
-					tempTable.AddEndpoint(lrp2)
 					_, messagesToEmit = table.Swap(tempTable, domains)
 				})
 
-				It("emits all registrations and no unregistration", func() {
+				FIt("emits all registrations and no unregistration", func() {
 					expected := routingtable.MessagesToEmit{
 						RegistrationMessages: []routingtable.RegistryMessage{
 							routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGuid: logGuid, RouteServiceUrl: "https://rs.new.example.com"}),
 							routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname2, LogGuid: logGuid, RouteServiceUrl: "https://rs.new.example.com"}),
-							routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname1, LogGuid: logGuid, RouteServiceUrl: "https://rs.new.example.com"}),
-							routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname2, LogGuid: logGuid, RouteServiceUrl: "https://rs.new.example.com"}),
+						},
+						UnregistrationMessages: []routingtable.RegistryMessage{
+							routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGuid: logGuid, RouteServiceUrl: "https://rs.example.com"}),
+							routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname2, LogGuid: logGuid, RouteServiceUrl: "https://rs.example.com"}),
 						},
 					}
 					Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
@@ -713,7 +812,6 @@ var _ = Describe("RoutingTable", func() {
 					_, messagesToEmit = table.Swap(tempTable, domains)
 				})
 
-				// TODO: Send only the diff for Route changes, pending refactor of MessageBuilder interface
 				It("emits the relevant registrations and no unregisration", func() {
 					expected := routingtable.MessagesToEmit{
 						RegistrationMessages: []routingtable.RegistryMessage{
@@ -742,7 +840,6 @@ var _ = Describe("RoutingTable", func() {
 					_, messagesToEmit = table.Swap(tempTable, domains)
 				})
 
-				// TODO: Send only the diff for Route changes, pending refactor of MessageBuilder interface
 				It("emits the relevant unregistrations", func() {
 					expected := routingtable.MessagesToEmit{
 						UnregistrationMessages: []routingtable.RegistryMessage{
@@ -787,7 +884,6 @@ var _ = Describe("RoutingTable", func() {
 					_, messagesToEmit = table.Swap(tempTable, domains)
 				})
 
-				// TODO: Send only the diff for Route changes, pending refactor of MessageBuilder interface
 				It("emits no registrations and the relevant unregisrations", func() {
 					expected := routingtable.MessagesToEmit{
 						UnregistrationMessages: []routingtable.RegistryMessage{
@@ -811,7 +907,6 @@ var _ = Describe("RoutingTable", func() {
 					_, messagesToEmit = table.Swap(tempTable, domains)
 				})
 
-				// TODO: Send only the diff for Route changes, pending refactor of MessageBuilder interface
 				It("emits the relevant registrations and the relevant unregisrations", func() {
 					expected := routingtable.MessagesToEmit{
 						RegistrationMessages: []routingtable.RegistryMessage{
@@ -841,7 +936,6 @@ var _ = Describe("RoutingTable", func() {
 					_, messagesToEmit = table.Swap(tempTable, domains)
 				})
 
-				// TODO: Send only the diff for Route changes, pending refactor of MessageBuilder interface
 				It("emits the relevant registrations and the relevant unregisrations", func() {
 					expected := routingtable.MessagesToEmit{
 						RegistrationMessages: []routingtable.RegistryMessage{
