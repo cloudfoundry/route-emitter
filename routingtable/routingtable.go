@@ -524,8 +524,7 @@ func diffHTTPRoutes(before, after []Route) httpRoutesDiff {
 			// routes that changes the service url but don't change the hostname
 			// shouldn't be considered removed. we still add them to the added routes
 			// in order to update the Registration. TODO: can we send an
-			// unregistration+registration instead, this will clean up the
-			// implementation
+			// unregistration+registration instead and get rid of this code
 			if _, ok := newHostnames[route.Hostname]; !ok {
 				diff.removed = append(diff.removed, route)
 			}
