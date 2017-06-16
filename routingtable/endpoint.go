@@ -145,20 +145,6 @@ type RoutableEndpoints struct {
 	ModificationTag   *models.ModificationTag
 }
 
-func (entry RoutableEndpoints) Copy() RoutableEndpoints {
-	clone := RoutableEndpoints{
-		ExternalEndpoints: entry.ExternalEndpoints,
-		Endpoints:         map[EndpointKey]Endpoint{},
-		ModificationTag:   entry.ModificationTag,
-	}
-
-	for k, v := range entry.Endpoints {
-		clone.Endpoints[k] = v
-	}
-
-	return clone
-}
-
 func NewEndpointsFromActual(actualLRPInfo *ActualLRPRoutingInfo) map[uint32]Endpoint {
 	endpoints := map[uint32]Endpoint{}
 	actual := actualLRPInfo.ActualLRP

@@ -389,6 +389,19 @@ func (table *routingTable) SetRoutes(before, after *models.DesiredLRPSchedulingI
 		newEntry := currentEntry.copy()
 		newEntry.Routes = routes
 		newEntry.ModificationTag = &after.ModificationTag
+
+		// check if scaling down
+		if before != nil && after != nil && before.Instances > after.Instances {
+			newEndpoints := make(map[EndpointKey]Endpoint)
+
+			for endpointKey, endpoint := range newEntry.Endpoints {
+				if endpoint.Index < after.Instances {
+					newEndpoints[endpointKey] = endpoint
+				}
+			}
+			newEntry.Endpoints = newEndpoints
+		}
+
 		table.entries[key] = newEntry
 
 		mapping, message := table.emitDiffMessages(key, currentEntry, newEntry)
