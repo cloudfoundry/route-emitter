@@ -969,7 +969,7 @@ var _ = Describe("Handler", func() {
 
 					actualLRPEvent := models.NewActualLRPCreatedEvent(&models.ActualLRPGroup{
 						Instance: &models.ActualLRP{
-							ActualLRPKey:         models.NewActualLRPKey("pg-4", 1, "domain"),
+							ActualLRPKey:         models.NewActualLRPKey("pg-4", 0, "domain"),
 							ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint4.InstanceGUID, "cell-id"),
 							ActualLRPNetInfo:     models.NewActualLRPNetInfo(endpoint4.Host, "container-ip-4", models.NewPortMapping(endpoint4.Port, endpoint4.ContainerPort)),
 							State:                models.ActualLRPStateRunning,
