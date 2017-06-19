@@ -114,11 +114,14 @@ func (table *routingTable) AddEndpoint(actualLRP *ActualLRPRoutingInfo) (TCPRout
 			ContainerPort: routingEndpoint.ContainerPort,
 		}
 		currentEntry := table.entries[key]
-		newEntry := currentEntry.copy()
+		if currentEntry.DesiredInstances > 0 && routingEndpoint.Index >= currentEntry.DesiredInstances {
+			continue
+		}
 		currentEndpoint, ok := currentEntry.Endpoints[routingEndpoint.key()]
 		if ok && !currentEndpoint.ModificationTag.SucceededBy(routingEndpoint.ModificationTag) {
 			continue
 		}
+		newEntry := currentEntry.copy()
 		newEntry.Endpoints[routingEndpoint.key()] = routingEndpoint
 		table.entries[key] = newEntry
 		mapping, message := table.emitDiffMessages(key, currentEntry, newEntry)
@@ -189,7 +192,7 @@ func (table *routingTable) RemoveEndpoint(actualLRP *ActualLRPRoutingInfo) (TCPR
 }
 
 func (t *routingTable) Swap(other RoutingTable, domains models.DomainSet) (TCPRouteMappings, MessagesToEmit) {
-	logger := t.logger.Session("swap")
+	logger := t.logger.Session("swap", lager.Data{"received-domains": domains})
 	logger.Info("started")
 	defer logger.Info("finished")
 
@@ -389,6 +392,7 @@ func (table *routingTable) SetRoutes(before, after *models.DesiredLRPSchedulingI
 		newEntry := currentEntry.copy()
 		newEntry.Routes = routes
 		newEntry.ModificationTag = &after.ModificationTag
+		newEntry.DesiredInstances = after.Instances
 
 		// check if scaling down
 		if before != nil && after != nil && before.Instances > after.Instances {

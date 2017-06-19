@@ -148,4 +148,35 @@ var _ = Describe("RoutingTable", func() {
 			})
 		})
 	})
+
+	Describe("AddEndpoint", func() {
+		Context("when a desired LRP has instances field less than number of actual LRP instances", func() {
+			BeforeEach(func() {
+				afterDesiredLRP := createDesiredLRPSchedulingInfo(key.ProcessGUID, 1, key.ContainerPort, logGuid, "", *currentTag, hostname1)
+				table.SetRoutes(nil, afterDesiredLRP)
+			})
+
+			It("only registers in the number of instances defined in the desired LRP", func() {
+				actualLRP1 := createActualLRP(key, endpoint1)
+				actualLRP2 := createActualLRP(key, endpoint2)
+				actualLRP3 := createActualLRP(key, endpoint3)
+				tcpRouteMappings, messagesToEmit = table.AddEndpoint(actualLRP1)
+				Expect(tcpRouteMappings).To(BeZero())
+				expected := routingtable.MessagesToEmit{
+					RegistrationMessages: []routingtable.RegistryMessage{
+						routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGUID: logGuid}),
+					},
+				}
+				Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
+
+				tcpRouteMappings, messagesToEmit = table.AddEndpoint(actualLRP2)
+				Expect(tcpRouteMappings).To(BeZero())
+				Expect(messagesToEmit).To(BeZero())
+
+				tcpRouteMappings, messagesToEmit = table.AddEndpoint(actualLRP3)
+				Expect(tcpRouteMappings).To(BeZero())
+				Expect(messagesToEmit).To(BeZero())
+			})
+		})
+	})
 })

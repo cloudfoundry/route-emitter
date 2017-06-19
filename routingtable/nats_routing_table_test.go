@@ -124,7 +124,7 @@ var _ = Describe("RoutingTable", func() {
 			routes[key] = message
 		}
 
-		info := models.NewDesiredLRPSchedulingInfo(models.NewDesiredLRPKey(processGuid, "domain", logGuid), "", 1, models.NewDesiredLRPResource(0, 0, 0, ""), routes, currentTag, nil, nil)
+		info := models.NewDesiredLRPSchedulingInfo(models.NewDesiredLRPKey(processGuid, "domain", logGuid), "", 3, models.NewDesiredLRPResource(0, 0, 0, ""), routes, currentTag, nil, nil)
 		return &info
 	}
 
@@ -141,7 +141,7 @@ var _ = Describe("RoutingTable", func() {
 			routes[key] = message
 		}
 
-		info := models.NewDesiredLRPSchedulingInfo(models.NewDesiredLRPKey(key.ProcessGUID, "domain", logGuid), "", 1, models.NewDesiredLRPResource(0, 0, 0, ""), routes, *currentTag, nil, nil)
+		info := models.NewDesiredLRPSchedulingInfo(models.NewDesiredLRPKey(key.ProcessGUID, "domain", logGuid), "", 3, models.NewDesiredLRPResource(0, 0, 0, ""), routes, *currentTag, nil, nil)
 		return &info
 	}
 
@@ -158,7 +158,7 @@ var _ = Describe("RoutingTable", func() {
 			routes[key] = message
 		}
 
-		info := models.NewDesiredLRPSchedulingInfo(models.NewDesiredLRPKey(key.ProcessGUID, "domain", logGuid), "", 1, models.NewDesiredLRPResource(0, 0, 0, ""), routes, *currentTag, nil, nil)
+		info := models.NewDesiredLRPSchedulingInfo(models.NewDesiredLRPKey(key.ProcessGUID, "domain", logGuid), "", 3, models.NewDesiredLRPResource(0, 0, 0, ""), routes, *currentTag, nil, nil)
 		return &info
 	}
 
@@ -1140,7 +1140,7 @@ var _ = Describe("RoutingTable", func() {
 						routes[key] = message
 					}
 
-					info := models.NewDesiredLRPSchedulingInfo(models.NewDesiredLRPKey(key.ProcessGUID, "domain", logGuid), "", 1, models.NewDesiredLRPResource(0, 0, 0, ""), routes, *newerTag, nil, nil)
+					info := models.NewDesiredLRPSchedulingInfo(models.NewDesiredLRPKey(key.ProcessGUID, "domain", logGuid), "", 3, models.NewDesiredLRPResource(0, 0, 0, ""), routes, *newerTag, nil, nil)
 					return &info
 				}
 

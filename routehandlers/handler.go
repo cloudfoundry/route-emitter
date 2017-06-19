@@ -100,7 +100,7 @@ func (handler *Handler) Sync(
 	domains models.DomainSet,
 	cachedEvents map[string]models.Event,
 ) {
-	logger = logger.Session("nats-sync")
+	logger = logger.Session("sync")
 	logger.Debug("starting")
 	defer logger.Debug("completed")
 

@@ -126,6 +126,7 @@ func (entry RoutableEndpoints) copy() RoutableEndpoints {
 		Endpoints:         map[EndpointKey]Endpoint{},
 		Routes:            make([]externalRoute, len(entry.Routes)),
 		ExternalEndpoints: make([]externalRoute, len(entry.ExternalEndpoints)),
+		DesiredInstances:  entry.DesiredInstances,
 		ModificationTag:   entry.ModificationTag,
 	}
 
@@ -142,6 +143,7 @@ type RoutableEndpoints struct {
 	Routes            []externalRoute
 	ExternalEndpoints []externalRoute
 	Endpoints         map[EndpointKey]Endpoint
+	DesiredInstances  int32
 	ModificationTag   *models.ModificationTag
 }
 

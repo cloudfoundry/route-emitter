@@ -50,6 +50,7 @@ var _ = Describe("TCPRoutingTable", func() {
 		desiredLRP.ProcessGuid = processGuid
 		desiredLRP.Ports = ports
 		desiredLRP.LogGuid = logGuid
+		desiredLRP.Instances = 3
 		desiredLRP.ModificationTag = modificationTag
 		desiredLRP.Routes = tcpRoutes.RoutingInfo()
 
