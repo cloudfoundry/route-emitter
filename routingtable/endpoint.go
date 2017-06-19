@@ -123,11 +123,10 @@ func (r Route) MessageFor(endpoint Endpoint, directInstanceAddress bool) (*Regis
 
 func (entry RoutableEndpoints) copy() RoutableEndpoints {
 	clone := RoutableEndpoints{
-		Endpoints:         map[EndpointKey]Endpoint{},
-		Routes:            make([]externalRoute, len(entry.Routes)),
-		ExternalEndpoints: make([]externalRoute, len(entry.ExternalEndpoints)),
-		DesiredInstances:  entry.DesiredInstances,
-		ModificationTag:   entry.ModificationTag,
+		Endpoints:        map[EndpointKey]Endpoint{},
+		Routes:           make([]externalRoute, len(entry.Routes)),
+		DesiredInstances: entry.DesiredInstances,
+		ModificationTag:  entry.ModificationTag,
 	}
 
 	copy(clone.Routes, entry.Routes)
@@ -140,11 +139,10 @@ func (entry RoutableEndpoints) copy() RoutableEndpoints {
 }
 
 type RoutableEndpoints struct {
-	Routes            []externalRoute
-	ExternalEndpoints []externalRoute
-	Endpoints         map[EndpointKey]Endpoint
-	DesiredInstances  int32
-	ModificationTag   *models.ModificationTag
+	Routes           []externalRoute
+	Endpoints        map[EndpointKey]Endpoint
+	DesiredInstances int32
+	ModificationTag  *models.ModificationTag
 }
 
 func NewEndpointsFromActual(actualLRPInfo *ActualLRPRoutingInfo) map[uint32]Endpoint {
@@ -200,22 +198,6 @@ func (e ExternalEndpointInfos) HasNoExternalPorts(logger lager.Logger) bool {
 	}
 	// This originally checked if Port was 0, I think to see if it was a zero value, check and make sure
 	return false
-}
-
-func NewRoutableEndpoints(
-	externalEndPoint ExternalEndpointInfos,
-	endpoints map[EndpointKey]Endpoint,
-	logGUID string,
-	modificationTag *models.ModificationTag) RoutableEndpoints {
-	externalEndpoints := []externalRoute{}
-	for _, endpoint := range externalEndPoint {
-		externalEndpoints = append(externalEndpoints, endpoint)
-	}
-	return RoutableEndpoints{
-		ExternalEndpoints: externalEndpoints,
-		Endpoints:         endpoints,
-		ModificationTag:   modificationTag,
-	}
 }
 
 type RoutingKeys []RoutingKey

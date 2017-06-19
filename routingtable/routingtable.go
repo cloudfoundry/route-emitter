@@ -222,7 +222,7 @@ func (t *routingTable) Swap(other RoutingTable, domains models.DomainSet) (TCPRo
 			continue
 		}
 		// entry exists in both tables, merge the two entries to ensure non-fresh domain endpoints aren't removed
-		merged := mergeHTTP(existingEntry, endpoints, domains)
+		merged := mergeUnfreshRoutes(existingEntry, endpoints, domains)
 		otherTable.entries[key] = merged
 		mapping, message := t.emitDiffMessages(key, existingEntry, merged)
 		messagesToEmit = messagesToEmit.Merge(message)
@@ -233,7 +233,9 @@ func (t *routingTable) Swap(other RoutingTable, domains models.DomainSet) (TCPRo
 		if _, ok := otherTable.entries[key]; ok {
 			continue
 		}
-		mapping, message := t.emitDiffMessages(key, endpoints, RoutableEndpoints{})
+		merged := mergeUnfreshRoutes(endpoints, RoutableEndpoints{}, domains)
+		otherTable.entries[key] = merged
+		mapping, message := t.emitDiffMessages(key, endpoints, merged)
 		messagesToEmit = messagesToEmit.Merge(message)
 		mappings = mappings.Merge(mapping)
 	}
@@ -244,14 +246,10 @@ func (t *routingTable) Swap(other RoutingTable, domains models.DomainSet) (TCPRo
 }
 
 // merge the routes from both endpoints, ensuring that non-fresh routes aren't removed
-func mergeHTTP(before, after RoutableEndpoints, domains models.DomainSet) RoutableEndpoints {
+func mergeUnfreshRoutes(before, after RoutableEndpoints, domains models.DomainSet) RoutableEndpoints {
 	merged := after.copy()
 
-	for _, endpoint := range before.Endpoints {
-		// if you are wondering why we have to loop through the endpoints instead
-		// of checking the routable endpoint information, that's because the sync
-		// loop gets the scheduling info which doesn't include the domain. ideally,
-		// the routable endpoint should have the domain.
+	appendUnfreshRoutes := func(endpoint Endpoint) {
 		if !domains.Contains(endpoint.Domain) {
 			// non-fresh domain, append routes from older endpoint
 			for _, oldRoute := range before.Routes {
@@ -268,6 +266,22 @@ func mergeHTTP(before, after RoutableEndpoints, domains models.DomainSet) Routab
 				}
 			}
 		}
+	}
+
+	for _, endpoint := range before.Endpoints {
+		// if you are wondering why we have to loop through the endpoints instead
+		// of checking the routable endpoint information, that's because the sync
+		// loop gets the scheduling info which doesn't include the domain. ideally,
+		// the routable endpoint should have the domain.
+		appendUnfreshRoutes(endpoint)
+	}
+
+	for _, endpoint := range after.Endpoints {
+		// if you are wondering why we have to loop through the endpoints instead
+		// of checking the routable endpoint information, that's because the sync
+		// loop gets the scheduling info which doesn't include the domain. ideally,
+		// the routable endpoint should have the domain.
+		appendUnfreshRoutes(endpoint)
 	}
 
 	return merged
@@ -642,10 +656,6 @@ func (t *routingTable) TCPRouteCount() int {
 func (t *routingTable) HasExternalRoutes(actual *ActualLRPRoutingInfo) bool {
 	for _, key := range NewRoutingKeysFromActual(actual) {
 		if len(t.entries[key].Routes) > 0 {
-			return true
-		}
-
-		if len(t.entries[key].ExternalEndpoints) > 0 {
 			return true
 		}
 	}

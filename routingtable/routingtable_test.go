@@ -5,7 +5,9 @@ import (
 	"code.cloudfoundry.org/lager/lagertest"
 	"code.cloudfoundry.org/route-emitter/routingtable"
 	. "code.cloudfoundry.org/route-emitter/routingtable/matchers"
+	tcpmodels "code.cloudfoundry.org/routing-api/models"
 	"code.cloudfoundry.org/routing-info/cfroutes"
+	"code.cloudfoundry.org/routing-info/tcp_routes"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -22,6 +24,8 @@ var _ = Describe("RoutingTable", func() {
 
 	domain := "domain"
 	hostname1 := "foo.example.com"
+
+	noFreshDomains := models.NewDomainSet([]string{})
 
 	currentTag := &models.ModificationTag{Epoch: "abc", Index: 1}
 	newerTag := &models.ModificationTag{Epoch: "def", Index: 0}
@@ -86,6 +90,42 @@ var _ = Describe("RoutingTable", func() {
 		return &info
 	}
 
+	createRoutingInfo := func(port uint32, hostnames []string, rsURL string, externalPorts []uint32, routerGroupGuid string) models.Routes {
+		routingInfo := cfroutes.CFRoutes{
+			{
+				Hostnames:       hostnames,
+				Port:            port,
+				RouteServiceUrl: rsURL,
+			},
+		}.RoutingInfo()
+
+		routes := models.Routes{}
+
+		for key, message := range routingInfo {
+			routes[key] = message
+		}
+
+		for _, e := range externalPorts {
+			tcpRoutes := tcp_routes.TCPRoutes{
+				{
+					RouterGroupGuid: routerGroupGuid,
+					ExternalPort:    e,
+					ContainerPort:   port,
+				},
+			}.RoutingInfo()
+			for key, message := range *tcpRoutes {
+				routes[key] = message
+			}
+		}
+
+		return routes
+	}
+
+	createSchedulingInfoWithRoutes := func(processGuid string, instances int32, routes models.Routes, logGuid string, currentTag models.ModificationTag) *models.DesiredLRPSchedulingInfo {
+		info := models.NewDesiredLRPSchedulingInfo(models.NewDesiredLRPKey(processGuid, "domain", logGuid), "", instances, models.NewDesiredLRPResource(0, 0, 0, ""), routes, currentTag, nil, nil)
+		return &info
+	}
+
 	createActualLRP := func(
 		key routingtable.RoutingKey,
 		instance routingtable.Endpoint,
@@ -145,6 +185,56 @@ var _ = Describe("RoutingTable", func() {
 					},
 				}
 				Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
+			})
+		})
+	})
+
+	Describe("Swap", func() {
+		Context("when the table has a routable endpoint", func() {
+			BeforeEach(func() {
+				routingInfo := createRoutingInfo(key.ContainerPort, []string{hostname1}, "", []uint32{5222}, "router-group-guid")
+				beforeDesiredLRP := createSchedulingInfoWithRoutes(key.ProcessGUID, 3, routingInfo, logGuid, *currentTag)
+				table.SetRoutes(nil, beforeDesiredLRP)
+
+				actualLRP := createActualLRP(key, endpoint1)
+				table.AddEndpoint(actualLRP)
+			})
+
+			Context("when the domain is not fresh", func() {
+				Context("and the new table has nothing in it", func() {
+					BeforeEach(func() {
+						tempTable := routingtable.NewRoutingTable(logger, false)
+						logger.Info("swapping-empty-table")
+						table.Swap(tempTable, noFreshDomains)
+					})
+
+					It("saves the previous tables routes and emits them when an endpoint is added", func() {
+						actualLRP := createActualLRP(key, endpoint1)
+						tempTable := routingtable.NewRoutingTable(logger, false)
+						tempTable.AddEndpoint(actualLRP)
+						table.Swap(tempTable, noFreshDomains)
+						tcpRouteMappings, messagesToEmit = table.GetRoutingEvents()
+
+						expectedHTTP := routingtable.MessagesToEmit{
+							RegistrationMessages: []routingtable.RegistryMessage{
+								routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGUID: logGuid}),
+							},
+						}
+						Expect(messagesToEmit).To(MatchMessagesToEmit(expectedHTTP))
+
+						ttl := 0
+						expectedTCP := tcpmodels.TcpRouteMapping{
+							TcpMappingEntity: tcpmodels.TcpMappingEntity{
+								RouterGroupGuid: "router-group-guid",
+								HostPort:        uint16(endpoint1.Port),
+								HostIP:          endpoint1.Host,
+								ExternalPort:    5222,
+								TTL:             &ttl,
+							},
+						}
+						Expect(tcpRouteMappings.Registrations).To(ConsistOf(expectedTCP))
+					})
+				})
 			})
 		})
 	})
