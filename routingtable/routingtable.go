@@ -248,40 +248,23 @@ func (t *routingTable) Swap(other RoutingTable, domains models.DomainSet) (TCPRo
 // merge the routes from both endpoints, ensuring that non-fresh routes aren't removed
 func mergeUnfreshRoutes(before, after RoutableEndpoints, domains models.DomainSet) RoutableEndpoints {
 	merged := after.copy()
+	merged.Domain = before.Domain
 
-	appendUnfreshRoutes := func(endpoint Endpoint) {
-		if !domains.Contains(endpoint.Domain) {
-			// non-fresh domain, append routes from older endpoint
-			for _, oldRoute := range before.Routes {
-				routeExistInNewLRP := func() bool {
-					for _, newRoute := range after.Routes {
-						if newRoute == oldRoute {
-							return true
-						}
+	if !domains.Contains(before.Domain) {
+		// non-fresh domain, append routes from older endpoint
+		for _, oldRoute := range before.Routes {
+			routeExistInNewLRP := func() bool {
+				for _, newRoute := range after.Routes {
+					if newRoute == oldRoute {
+						return true
 					}
-					return false
 				}
-				if !routeExistInNewLRP() {
-					merged.Routes = append(merged.Routes, oldRoute)
-				}
+				return false
+			}
+			if !routeExistInNewLRP() {
+				merged.Routes = append(merged.Routes, oldRoute)
 			}
 		}
-	}
-
-	for _, endpoint := range before.Endpoints {
-		// if you are wondering why we have to loop through the endpoints instead
-		// of checking the routable endpoint information, that's because the sync
-		// loop gets the scheduling info which doesn't include the domain. ideally,
-		// the routable endpoint should have the domain.
-		appendUnfreshRoutes(endpoint)
-	}
-
-	for _, endpoint := range after.Endpoints {
-		// if you are wondering why we have to loop through the endpoints instead
-		// of checking the routable endpoint information, that's because the sync
-		// loop gets the scheduling info which doesn't include the domain. ideally,
-		// the routable endpoint should have the domain.
-		appendUnfreshRoutes(endpoint)
 	}
 
 	return merged
@@ -404,6 +387,7 @@ func (table *routingTable) SetRoutes(before, after *models.DesiredLRPSchedulingI
 
 		addedKeys[key] = struct{}{}
 		newEntry := currentEntry.copy()
+		newEntry.Domain = after.Domain
 		newEntry.Routes = routes
 		newEntry.ModificationTag = &after.ModificationTag
 		newEntry.DesiredInstances = after.Instances

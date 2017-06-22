@@ -33,8 +33,8 @@ var _ = Describe("LRP Utils", func() {
 				endpoints := routingtable.NewEndpointsFromActual(actualInfo)
 
 				Expect(endpoints).To(ConsistOf([]routingtable.Endpoint{
-					routingtable.NewEndpoint("instance-guid", false, "1.1.1.1", "2.2.2.2", 11, 44, &tag, "domain"),
-					routingtable.NewEndpoint("instance-guid", false, "1.1.1.1", "2.2.2.2", 66, 99, &tag, "domain"),
+					routingtable.NewEndpoint("instance-guid", false, "1.1.1.1", "2.2.2.2", 11, 44, &tag),
+					routingtable.NewEndpoint("instance-guid", false, "1.1.1.1", "2.2.2.2", 66, 99, &tag),
 				}))
 			})
 		})
@@ -62,8 +62,8 @@ var _ = Describe("LRP Utils", func() {
 				endpoints := routingtable.NewEndpointsFromActual(actualInfo)
 
 				Expect(endpoints).To(ConsistOf([]routingtable.Endpoint{
-					routingtable.NewEndpoint("instance-guid", true, "1.1.1.1", "2.2.2.2", 11, 44, &tag, "domain"),
-					routingtable.NewEndpoint("instance-guid", true, "1.1.1.1", "2.2.2.2", 66, 99, &tag, "domain"),
+					routingtable.NewEndpoint("instance-guid", true, "1.1.1.1", "2.2.2.2", 11, 44, &tag),
+					routingtable.NewEndpoint("instance-guid", true, "1.1.1.1", "2.2.2.2", 66, 99, &tag),
 				}))
 			})
 		})
