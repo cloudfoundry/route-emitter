@@ -37,7 +37,6 @@ var _ = Describe("RoutingTable", func() {
 		Host:            "1.1.1.1",
 		ContainerIP:     "1.2.3.4",
 		Index:           0,
-		Domain:          domain,
 		Port:            11,
 		ContainerPort:   8080,
 		Evacuating:      false,
@@ -48,7 +47,6 @@ var _ = Describe("RoutingTable", func() {
 		Host:            "2.2.2.2",
 		ContainerIP:     "2.3.4.5",
 		Index:           1,
-		Domain:          domain,
 		Port:            22,
 		ContainerPort:   8080,
 		Evacuating:      false,
@@ -59,7 +57,6 @@ var _ = Describe("RoutingTable", func() {
 		Host:            "3.3.3.3",
 		ContainerIP:     "3.4.5.6",
 		Index:           2,
-		Domain:          domain,
 		Port:            33,
 		ContainerPort:   8080,
 		Evacuating:      false,
@@ -70,7 +67,6 @@ var _ = Describe("RoutingTable", func() {
 		Host:            "1.1.1.1",
 		ContainerIP:     "1.2.3.4",
 		Index:           3,
-		Domain:          domain,
 		Port:            11,
 		ContainerPort:   8080,
 		Evacuating:      false,
@@ -81,7 +77,6 @@ var _ = Describe("RoutingTable", func() {
 		Host:            "5.5.5.5",
 		ContainerIP:     "4.5.6.7",
 		Index:           0,
-		Domain:          domain,
 		Port:            55,
 		ContainerPort:   8080,
 		Evacuating:      false,
@@ -92,7 +87,6 @@ var _ = Describe("RoutingTable", func() {
 		Host:            "1.1.1.1",
 		ContainerIP:     "1.2.3.4",
 		Index:           0,
-		Domain:          domain,
 		Port:            11,
 		ContainerPort:   8080,
 		Evacuating:      true,
@@ -168,7 +162,7 @@ var _ = Describe("RoutingTable", func() {
 	) *routingtable.ActualLRPRoutingInfo {
 		return &routingtable.ActualLRPRoutingInfo{
 			ActualLRP: &models.ActualLRP{
-				ActualLRPKey:         models.NewActualLRPKey(key.ProcessGUID, instance.Index, instance.Domain),
+				ActualLRPKey:         models.NewActualLRPKey(key.ProcessGUID, instance.Index, domain),
 				ActualLRPInstanceKey: models.NewActualLRPInstanceKey(instance.InstanceGUID, "cell-id"),
 				ActualLRPNetInfo: models.NewActualLRPNetInfo(
 					instance.Host,

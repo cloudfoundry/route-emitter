@@ -53,6 +53,7 @@ var _ = Describe("TCPRoutingTable", func() {
 		desiredLRP.Instances = 3
 		desiredLRP.ModificationTag = modificationTag
 		desiredLRP.Routes = tcpRoutes.RoutingInfo()
+		desiredLRP.Domain = "domain"
 
 		// add 'diego-ssh' data for testing sanitize
 		routingInfo := json.RawMessage([]byte(`{ "private_key": "fake-key" }`))

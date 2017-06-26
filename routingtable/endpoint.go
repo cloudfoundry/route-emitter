@@ -36,7 +36,6 @@ type Endpoint struct {
 	Index            int32
 	Host             string
 	ContainerIP      string
-	Domain           string
 	Port             uint32
 	ContainerPort    uint32
 	Evacuating       bool
@@ -57,13 +56,11 @@ func NewEndpoint(
 	host, containerIP string,
 	port, containerPort uint32,
 	modificationTag *models.ModificationTag,
-	domain string,
 ) Endpoint {
 	return Endpoint{
 		InstanceGUID:    instanceGUID,
 		Evacuating:      evacuating,
 		Host:            host,
-		Domain:          domain,
 		ContainerIP:     containerIP,
 		Port:            port,
 		ContainerPort:   containerPort,
@@ -123,6 +120,7 @@ func (r Route) MessageFor(endpoint Endpoint, directInstanceAddress bool) (*Regis
 
 func (entry RoutableEndpoints) copy() RoutableEndpoints {
 	clone := RoutableEndpoints{
+		Domain:           entry.Domain,
 		Endpoints:        map[EndpointKey]Endpoint{},
 		Routes:           make([]externalRoute, len(entry.Routes)),
 		DesiredInstances: entry.DesiredInstances,
@@ -139,6 +137,7 @@ func (entry RoutableEndpoints) copy() RoutableEndpoints {
 }
 
 type RoutableEndpoints struct {
+	Domain           string
 	Routes           []externalRoute
 	Endpoints        map[EndpointKey]Endpoint
 	DesiredInstances int32
@@ -156,7 +155,6 @@ func NewEndpointsFromActual(actualLRPInfo *ActualLRPRoutingInfo) map[uint32]Endp
 				Index:           actual.Index,
 				Host:            actual.Address,
 				ContainerIP:     actual.InstanceAddress,
-				Domain:          actual.Domain,
 				Port:            portMapping.HostPort,
 				ContainerPort:   portMapping.ContainerPort,
 				Evacuating:      actualLRPInfo.Evacuating,

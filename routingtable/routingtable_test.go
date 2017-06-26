@@ -26,6 +26,7 @@ var _ = Describe("RoutingTable", func() {
 	hostname1 := "foo.example.com"
 
 	noFreshDomains := models.NewDomainSet([]string{})
+	freshDomains := models.NewDomainSet([]string{domain})
 
 	currentTag := &models.ModificationTag{Epoch: "abc", Index: 1}
 	newerTag := &models.ModificationTag{Epoch: "def", Index: 0}
@@ -35,7 +36,6 @@ var _ = Describe("RoutingTable", func() {
 		Host:            "1.1.1.1",
 		ContainerIP:     "1.2.3.4",
 		Index:           0,
-		Domain:          domain,
 		Port:            11,
 		ContainerPort:   8080,
 		Evacuating:      false,
@@ -46,7 +46,6 @@ var _ = Describe("RoutingTable", func() {
 		Host:            "2.2.2.2",
 		ContainerIP:     "2.3.4.5",
 		Index:           1,
-		Domain:          domain,
 		Port:            22,
 		ContainerPort:   8080,
 		Evacuating:      false,
@@ -57,7 +56,6 @@ var _ = Describe("RoutingTable", func() {
 		Host:            "3.3.3.3",
 		ContainerIP:     "3.4.5.6",
 		Index:           2,
-		Domain:          domain,
 		Port:            33,
 		ContainerPort:   8080,
 		Evacuating:      false,
@@ -132,7 +130,7 @@ var _ = Describe("RoutingTable", func() {
 	) *routingtable.ActualLRPRoutingInfo {
 		return &routingtable.ActualLRPRoutingInfo{
 			ActualLRP: &models.ActualLRP{
-				ActualLRPKey:         models.NewActualLRPKey(key.ProcessGUID, instance.Index, instance.Domain),
+				ActualLRPKey:         models.NewActualLRPKey(key.ProcessGUID, instance.Index, domain),
 				ActualLRPInstanceKey: models.NewActualLRPInstanceKey(instance.InstanceGUID, "cell-id"),
 				ActualLRPNetInfo: models.NewActualLRPNetInfo(
 					instance.Host,
@@ -206,6 +204,21 @@ var _ = Describe("RoutingTable", func() {
 						tempTable := routingtable.NewRoutingTable(logger, false)
 						logger.Info("swapping-empty-table")
 						table.Swap(tempTable, noFreshDomains)
+					})
+
+					Context("and the domain is fresh but the still has no routes", func() {
+						BeforeEach(func() {
+							tempTable := routingtable.NewRoutingTable(logger, false)
+							actualLRP := createActualLRP(key, endpoint1)
+							tempTable.AddEndpoint(actualLRP)
+							table.Swap(tempTable, freshDomains)
+						})
+
+						It("does not emit any registrations", func() {
+							tcpRouteMappings, messagesToEmit = table.GetRoutingEvents()
+							Expect(messagesToEmit).To(BeZero())
+							Expect(tcpRouteMappings).To(BeZero())
+						})
 					})
 
 					It("saves the previous tables routes and emits them when an endpoint is added", func() {
