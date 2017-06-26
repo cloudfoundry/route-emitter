@@ -212,30 +212,29 @@ func (t *routingTable) Swap(other RoutingTable, domains models.DomainSet) (TCPRo
 	var messagesToEmit MessagesToEmit
 	var mappings TCPRouteMappings
 
-	for key, endpoints := range otherTable.entries {
+	mergedRoutingKeys := map[RoutingKey]struct{}{}
+	for key, _ := range otherTable.entries {
+		mergedRoutingKeys[key] = struct{}{}
+	}
+	for key, _ := range t.entries {
+		mergedRoutingKeys[key] = struct{}{}
+	}
+
+	for key := range mergedRoutingKeys {
 		existingEntry, ok := t.entries[key]
+		endpoints := otherTable.entries[key]
 		if !ok {
-			// entry doesn't exist in current table, emit registration event
+			// routing key only exist in the new table
 			mapping, message := t.emitDiffMessages(key, RoutableEndpoints{}, endpoints)
 			messagesToEmit = messagesToEmit.Merge(message)
 			mappings = mappings.Merge(mapping)
 			continue
 		}
-		// entry exists in both tables, merge the two entries to ensure non-fresh domain endpoints aren't removed
+
+		// entry exists in both tables or in old table, merge the two entries to ensure non-fresh domain endpoints aren't removed
 		merged := mergeUnfreshRoutes(existingEntry, endpoints, domains)
 		otherTable.entries[key] = merged
 		mapping, message := t.emitDiffMessages(key, existingEntry, merged)
-		messagesToEmit = messagesToEmit.Merge(message)
-		mappings = mappings.Merge(mapping)
-	}
-
-	for key, endpoints := range t.entries {
-		if _, ok := otherTable.entries[key]; ok {
-			continue
-		}
-		merged := mergeUnfreshRoutes(endpoints, RoutableEndpoints{}, domains)
-		otherTable.entries[key] = merged
-		mapping, message := t.emitDiffMessages(key, endpoints, merged)
 		messagesToEmit = messagesToEmit.Merge(message)
 		mappings = mappings.Merge(mapping)
 	}
