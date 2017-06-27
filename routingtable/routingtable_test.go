@@ -188,6 +188,47 @@ var _ = Describe("RoutingTable", func() {
 	})
 
 	Describe("Swap", func() {
+		It("preserves the desired LRP domain", func() {
+			By("creating a routing table with a route and endpoint")
+			routingInfo := createRoutingInfo(key.ContainerPort, []string{hostname1}, "", []uint32{5222}, "router-group-guid")
+			beforeDesiredLRP := createSchedulingInfoWithRoutes(key.ProcessGUID, 3, routingInfo, logGuid, *currentTag)
+			table.SetRoutes(nil, beforeDesiredLRP)
+			actualLRP := createActualLRP(key, endpoint1)
+			table.AddEndpoint(actualLRP)
+
+			By("removing the route and making the domains unfresh")
+			tempTable := routingtable.NewRoutingTable(logger, false)
+			actualLRP = createActualLRP(key, endpoint1)
+			tempTable.AddEndpoint(actualLRP)
+			table.Swap(tempTable, noFreshDomains)
+
+			By("making the domain fresh again")
+			tempTable = routingtable.NewRoutingTable(logger, false)
+			actualLRP = createActualLRP(key, endpoint1)
+			tempTable.AddEndpoint(actualLRP)
+
+			tcpRouteMappings, messagesToEmit = table.Swap(tempTable, freshDomains)
+
+			expectedHTTP := routingtable.MessagesToEmit{
+				UnregistrationMessages: []routingtable.RegistryMessage{
+					routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGUID: logGuid}),
+				},
+			}
+			Expect(messagesToEmit).To(MatchMessagesToEmit(expectedHTTP))
+
+			ttl := 0
+			expectedTCP := tcpmodels.TcpRouteMapping{
+				TcpMappingEntity: tcpmodels.TcpMappingEntity{
+					RouterGroupGuid: "router-group-guid",
+					HostPort:        uint16(endpoint1.Port),
+					HostIP:          endpoint1.Host,
+					ExternalPort:    5222,
+					TTL:             &ttl,
+				},
+			}
+			Expect(tcpRouteMappings.Unregistrations).To(ConsistOf(expectedTCP))
+		})
+
 		Context("when the table has a routable endpoint", func() {
 			BeforeEach(func() {
 				routingInfo := createRoutingInfo(key.ContainerPort, []string{hostname1}, "", []uint32{5222}, "router-group-guid")
@@ -202,23 +243,28 @@ var _ = Describe("RoutingTable", func() {
 				Context("and the new table has nothing in it", func() {
 					BeforeEach(func() {
 						tempTable := routingtable.NewRoutingTable(logger, false)
-						logger.Info("swapping-empty-table")
-						table.Swap(tempTable, noFreshDomains)
+						tcpRouteMappings, messagesToEmit = table.Swap(tempTable, noFreshDomains)
 					})
 
-					Context("and the domain is fresh but the still has no routes", func() {
-						BeforeEach(func() {
-							tempTable := routingtable.NewRoutingTable(logger, false)
-							actualLRP := createActualLRP(key, endpoint1)
-							tempTable.AddEndpoint(actualLRP)
-							table.Swap(tempTable, freshDomains)
-						})
+					It("unregisters non-existent endpoints", func() {
+						expectedHTTP := routingtable.MessagesToEmit{
+							UnregistrationMessages: []routingtable.RegistryMessage{
+								routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGUID: logGuid}),
+							},
+						}
+						Expect(messagesToEmit).To(MatchMessagesToEmit(expectedHTTP))
 
-						It("does not emit any registrations", func() {
-							tcpRouteMappings, messagesToEmit = table.GetRoutingEvents()
-							Expect(messagesToEmit).To(BeZero())
-							Expect(tcpRouteMappings).To(BeZero())
-						})
+						ttl := 0
+						expectedTCP := tcpmodels.TcpRouteMapping{
+							TcpMappingEntity: tcpmodels.TcpMappingEntity{
+								RouterGroupGuid: "router-group-guid",
+								HostPort:        uint16(endpoint1.Port),
+								HostIP:          endpoint1.Host,
+								ExternalPort:    5222,
+								TTL:             &ttl,
+							},
+						}
+						Expect(tcpRouteMappings.Unregistrations).To(ConsistOf(expectedTCP))
 					})
 
 					It("saves the previous tables routes and emits them when an endpoint is added", func() {
