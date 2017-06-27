@@ -205,10 +205,13 @@ var _ = Describe("RoutingTable", func() {
 					BeforeEach(func() {
 						tempTable := routingtable.NewRoutingTable(logger, false)
 						logger.Info("swapping-empty-table")
-						table.Swap(tempTable, noFreshDomains)
+						tcpRouteMappings, messagesToEmit = table.Swap(tempTable, noFreshDomains)
 					})
 
-					It("saves the previous tables routes and emits them when an endpoint is added", func() {
+					FIt("saves the previous tables routes and emits them when an endpoint is added", func() {
+						Expect(messagesToEmit).To(BeZero())
+						Expect(tcpRouteMappings).To(BeZero())
+
 						actualLRP := createActualLRP(key, endpoint1)
 						tempTable := routingtable.NewRoutingTable(logger, false)
 						tempTable.AddEndpoint(actualLRP)
