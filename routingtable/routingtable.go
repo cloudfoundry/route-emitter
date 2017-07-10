@@ -426,9 +426,21 @@ func (table *routingTable) SetRoutes(before, after *models.DesiredLRPSchedulingI
 			continue
 		}
 
-		delete(table.entries, key)
+		newEntry := RoutableEndpoints{}
+		if after != nil {
+			// desired lrp is not deleted, but all its routes are gone
+			newEntry = currentEntry.copy()
+			newEntry.Domain = after.Domain
+			newEntry.Routes = nil
+			newEntry.ModificationTag = &after.ModificationTag
+			newEntry.DesiredInstances = after.Instances
+			table.entries[key] = newEntry
+		} else {
+			// desired lrp is deleted, remove the entry from the table
+			delete(table.entries, key)
+		}
 
-		mapping, message := table.emitDiffMessages(key, currentEntry, RoutableEndpoints{})
+		mapping, message := table.emitDiffMessages(key, currentEntry, newEntry)
 		messagesToEmit = messagesToEmit.Merge(message)
 		mappings = mappings.Merge(mapping)
 	}

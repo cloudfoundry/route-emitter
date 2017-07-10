@@ -145,18 +145,81 @@ var _ = Describe("RoutingTable", func() {
 	}
 
 	Describe("SetRoutes", func() {
+		var (
+			instances        int32
+			beforeDesiredLRP *models.DesiredLRPSchedulingInfo
+		)
+
+		BeforeEach(func() {
+			instances = 1
+		})
+
+		JustBeforeEach(func() {
+			//beforeLRP
+			beforeDesiredLRP = createDesiredLRPSchedulingInfo(key.ProcessGUID, instances, key.ContainerPort, logGuid, "", *currentTag, hostname1)
+			table.SetRoutes(nil, beforeDesiredLRP)
+
+			actualLRP := createActualLRP(key, endpoint1)
+			table.AddEndpoint(actualLRP)
+		})
+
+		Context("when the route is removed", func() {
+			JustBeforeEach(func() {
+				afterDesiredLRP := createDesiredLRPSchedulingInfo(key.ProcessGUID, instances, key.ContainerPort, logGuid, "", *newerTag, "")
+				afterDesiredLRP.Routes = nil
+				tcpRouteMappings, messagesToEmit = table.SetRoutes(beforeDesiredLRP, afterDesiredLRP)
+			})
+
+			It("emits an unregistration", func() {
+				expected := routingtable.MessagesToEmit{
+					UnregistrationMessages: []routingtable.RegistryMessage{
+						routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGUID: logGuid}),
+					},
+				}
+				Expect(messagesToEmit).To(Equal(expected))
+			})
+
+			Context("when the a new route is added", func() {
+				JustBeforeEach(func() {
+					newerTag := &models.ModificationTag{Epoch: "ghi", Index: 0}
+					afterDesiredLRP := createDesiredLRPSchedulingInfo(key.ProcessGUID, instances, key.ContainerPort, logGuid, "", *newerTag, "bar.example.com")
+					tcpRouteMappings, messagesToEmit = table.SetRoutes(beforeDesiredLRP, afterDesiredLRP)
+				})
+
+				It("emits a registration", func() {
+					expected := routingtable.MessagesToEmit{
+						RegistrationMessages: []routingtable.RegistryMessage{
+							routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: "bar.example.com", LogGUID: logGuid}),
+						},
+					}
+					Expect(messagesToEmit).To(Equal(expected))
+				})
+			})
+
+			Context("when an update is received with old modification tag", func() {
+				JustBeforeEach(func() {
+					afterDesiredLRP := createDesiredLRPSchedulingInfo(key.ProcessGUID, instances, key.ContainerPort, logGuid, "", *newerTag, "bar.example.com")
+					tcpRouteMappings, messagesToEmit = table.SetRoutes(beforeDesiredLRP, afterDesiredLRP)
+				})
+
+				It("does not emit anything", func() {
+					Expect(messagesToEmit).To(BeZero())
+				})
+			})
+		})
+
 		Context("when the instances are scaled down", func() {
 			BeforeEach(func() {
-				//beforeLRP
-				beforeDesiredLRP := createDesiredLRPSchedulingInfo(key.ProcessGUID, 3, key.ContainerPort, logGuid, "", *currentTag, hostname1)
-				table.SetRoutes(nil, beforeDesiredLRP)
+				instances = 3
+			})
 
-				actualLRP := createActualLRP(key, endpoint1)
-				table.AddEndpoint(actualLRP)
-				actualLRP = createActualLRP(key, endpoint2)
+			JustBeforeEach(func() {
+				// add 2 more instances
+				actualLRP := createActualLRP(key, endpoint2)
 				table.AddEndpoint(actualLRP)
 				actualLRP = createActualLRP(key, endpoint3)
 				table.AddEndpoint(actualLRP)
+
 				//changedLRP
 				afterDesiredLRP := createDesiredLRPSchedulingInfo(key.ProcessGUID, 1, key.ContainerPort, logGuid, "", *newerTag, hostname1)
 				tcpRouteMappings, messagesToEmit = table.SetRoutes(beforeDesiredLRP, afterDesiredLRP)

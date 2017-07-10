@@ -964,7 +964,6 @@ var _ = Describe("TCPRoutingTable", func() {
 								TTL:             &ttl,
 							},
 						}))
-						Expect(routingTable.TCPRouteCount()).Should(Equal(0))
 					})
 
 					Context("with older modification tag", func() {
@@ -1003,7 +1002,6 @@ var _ = Describe("TCPRoutingTable", func() {
 									TTL:             &ttl,
 								},
 							}))
-							Expect(routingTable.TCPRouteCount()).Should(Equal(1))
 						})
 
 						Context("with older modification tag", func() {
@@ -1054,7 +1052,6 @@ var _ = Describe("TCPRoutingTable", func() {
 									TTL:             &ttl,
 								},
 							}))
-							Expect(routingTable.TCPRouteCount()).Should(Equal(1))
 						})
 					})
 				})
