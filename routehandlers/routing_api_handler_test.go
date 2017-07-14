@@ -625,7 +625,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 
 					actualLRPEvent := models.NewActualLRPCreatedEvent(&models.ActualLRPGroup{
 						Instance: &models.ActualLRP{
-							ActualLRPKey:         models.NewActualLRPKey("process-guid-2", 1, "domain"),
+							ActualLRPKey:         models.NewActualLRPKey("process-guid-2", 0, "domain"),
 							ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid-1", "cell-id"),
 							ActualLRPNetInfo: models.NewActualLRPNetInfo(
 								"some-ip-2",
@@ -664,12 +664,12 @@ var _ = Describe("RoutingAPIHandler", func() {
 		var events routingtable.TCPRouteMappings
 		BeforeEach(func() {
 			events = routingtable.TCPRouteMappings{}
-			fakeRoutingTable.EmitReturns(events, emptyNatsMessages)
+			fakeRoutingTable.GetRoutingEventsReturns(events, emptyNatsMessages)
 		})
 
 		It("emits all valid registration events", func() {
 			routeHandler.Emit(logger)
-			Expect(fakeRoutingTable.EmitCallCount()).To(Equal(1))
+			Expect(fakeRoutingTable.GetRoutingEventsCallCount()).To(Equal(1))
 			Expect(fakeRoutingAPIEmitter.EmitCallCount()).To(Equal(1))
 			Expect(fakeRoutingAPIEmitter.EmitArgsForCall(0)).To(Equal(events))
 		})

@@ -1039,12 +1039,12 @@ var _ = Describe("Handler", func() {
 				},
 			}
 
-			fakeTable.EmitReturns(emptyTCPRouteMappings, registrationMsgs)
+			fakeTable.GetRoutingEventsReturns(emptyTCPRouteMappings, registrationMsgs)
 			fakeTable.HTTPEndpointCountReturns(3)
 		})
 		It("emits all registration events", func() {
 			routeHandler.Emit(logger)
-			Expect(fakeTable.EmitCallCount()).To(Equal(1))
+			Expect(fakeTable.GetRoutingEventsCallCount()).To(Equal(1))
 			Expect(natsEmitter.EmitCallCount()).To(Equal(1))
 			Expect(natsEmitter.EmitArgsForCall(0)).To(Equal(registrationMsgs))
 		})
