@@ -925,7 +925,7 @@ var _ = Describe("Handler", func() {
 				routeHandler.Sync(logger, desiredInfo, actualInfo, domains, nil)
 				Expect(fakeTable.SwapCallCount()).Should(Equal(1))
 				tempRoutingTable, swapDomains := fakeTable.SwapArgsForCall(0)
-				Expect(tempRoutingTable.HTTPEndpointCount()).To(Equal(3))
+				Expect(tempRoutingTable.HTTPAssociationsCount()).To(Equal(3))
 				Expect(swapDomains).To(Equal(domains))
 
 				Expect(natsEmitter.EmitCallCount()).Should(Equal(1))
@@ -992,7 +992,7 @@ var _ = Describe("Handler", func() {
 				It("updates the routing table and emit cached events", func() {
 					Expect(fakeTable.SwapCallCount()).Should(Equal(1))
 					tempRoutingTable, _ := fakeTable.SwapArgsForCall(0)
-					Expect(tempRoutingTable.HTTPEndpointCount()).Should(Equal(4))
+					Expect(tempRoutingTable.HTTPAssociationsCount()).Should(Equal(4))
 					Expect(natsEmitter.EmitCallCount()).Should(Equal(1))
 				})
 			})

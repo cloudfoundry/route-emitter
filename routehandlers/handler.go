@@ -87,7 +87,7 @@ func (handler *Handler) Emit(logger lager.Logger) {
 	}
 
 	routesSynced.Add(messagesToEmit.RouteRegistrationCount())
-	err := routesTotal.Send(handler.routingTable.HTTPEndpointCount())
+	err := routesTotal.Send(handler.routingTable.HTTPAssociationsCount())
 	if err != nil {
 		logger.Error("failed-to-send-http-route-count-metric", err)
 	}
@@ -146,11 +146,11 @@ func (handler *Handler) Sync(
 	})
 
 	if handler.localMode {
-		err := httpRouteCount.Send(handler.routingTable.HTTPEndpointCount())
+		err := httpRouteCount.Send(handler.routingTable.HTTPAssociationsCount())
 		if err != nil {
 			logger.Error("failed-to-send-routes-total-metric", err)
 		}
-		err = tcpRouteCount.Send(handler.routingTable.TCPRouteCount())
+		err = tcpRouteCount.Send(handler.routingTable.TCPAssociationsCount())
 		if err != nil {
 			logger.Error("failed-to-send-tcp-route-count-metric", err)
 		}

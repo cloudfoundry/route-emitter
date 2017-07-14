@@ -592,7 +592,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 				Expect(fakeRoutingTable.SwapCallCount()).Should(Equal(1))
 				tempRoutingTable, actualDomains := fakeRoutingTable.SwapArgsForCall(0)
 				Expect(actualDomains).To(Equal(domains))
-				Expect(tempRoutingTable.TCPRouteCount()).To(Equal(1))
+				Expect(tempRoutingTable.TCPAssociationsCount()).To(Equal(1))
 				routingEvents, _ := tempRoutingTable.GetRoutingEvents()
 				ttl := 0
 				Expect(routingEvents.Registrations).To(ConsistOf(tcpmodels.TcpRouteMapping{
@@ -653,7 +653,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 				It("updates the routing table and emit cached events", func() {
 					Expect(fakeRoutingTable.SwapCallCount()).Should(Equal(1))
 					tempRoutingTable, _ := fakeRoutingTable.SwapArgsForCall(0)
-					Expect(tempRoutingTable.TCPRouteCount()).Should(Equal(2))
+					Expect(tempRoutingTable.TCPAssociationsCount()).Should(Equal(2))
 					Expect(fakeRoutingAPIEmitter.EmitCallCount()).To(Equal(1))
 				})
 			})

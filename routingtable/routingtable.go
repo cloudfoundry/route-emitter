@@ -40,8 +40,8 @@ type RoutingTable interface {
 	// routes
 
 	HasExternalRoutes(actual *ActualLRPRoutingInfo) bool
-	HTTPEndpointCount() int
-	TCPRouteCount() int
+	HTTPAssociationsCount() int // return number of associations desired-lrp-http-routes * actual-lrps
+	TCPAssociationsCount() int  // return number of associations desired-lrp-tcp-routes * actual-lrps
 	TableSize() int
 }
 
@@ -643,7 +643,7 @@ func (table *routingTable) RemoveRoutes(desiredLRP *models.DesiredLRPSchedulingI
 	return table.SetRoutes(desiredLRP, nil)
 }
 
-func (t *routingTable) HTTPEndpointCount() int {
+func (t *routingTable) HTTPAssociationsCount() int {
 	t.Lock()
 	defer t.Unlock()
 
@@ -655,7 +655,7 @@ func (t *routingTable) HTTPEndpointCount() int {
 	return count
 }
 
-func (t *routingTable) TCPRouteCount() int {
+func (t *routingTable) TCPAssociationsCount() int {
 	t.Lock()
 	defer t.Unlock()
 

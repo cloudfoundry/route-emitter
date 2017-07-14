@@ -441,11 +441,11 @@ var _ = Describe("RoutingTable", func() {
 		})
 
 		It("returns the right tcp route count", func() {
-			Expect(table.TCPRouteCount()).To(Equal(1))
+			Expect(table.TCPAssociationsCount()).To(Equal(1))
 		})
 
 		It("returns the right http route count", func() {
-			Expect(table.HTTPEndpointCount()).To(Equal(1))
+			Expect(table.HTTPAssociationsCount()).To(Equal(1))
 		})
 	})
 

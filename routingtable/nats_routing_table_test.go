@@ -1246,7 +1246,7 @@ var _ = Describe("RoutingTable", func() {
 				It("updates routing table with a newer tag", func() {
 					schedulingInfo := createDesiredLRPSchedulingInfo(key.ProcessGUID, key.ContainerPort, logGuid, *newerTag, hostname1, hostname2)
 					_, messagesToEmit = table.RemoveRoutes(schedulingInfo)
-					Expect(table.HTTPEndpointCount()).To(Equal(0))
+					Expect(table.HTTPAssociationsCount()).To(Equal(0))
 				})
 
 				It("emits unregistrations with the same tag", func() {
@@ -1267,7 +1267,7 @@ var _ = Describe("RoutingTable", func() {
 				It("updates routing table with a same tag", func() {
 					schedulingInfo := createDesiredLRPSchedulingInfo(key.ProcessGUID, key.ContainerPort, logGuid, *currentTag, hostname1, hostname2)
 					_, messagesToEmit = table.RemoveRoutes(schedulingInfo)
-					Expect(table.HTTPEndpointCount()).To(Equal(0))
+					Expect(table.HTTPAssociationsCount()).To(Equal(0))
 				})
 
 				It("emits nothing when the tag is older", func() {
@@ -1277,10 +1277,10 @@ var _ = Describe("RoutingTable", func() {
 				})
 
 				It("does NOT update routing table with an older tag", func() {
-					beforeRouteCount := table.HTTPEndpointCount()
+					beforeRouteCount := table.HTTPAssociationsCount()
 					schedulingInfo := createDesiredLRPSchedulingInfo(key.ProcessGUID, key.ContainerPort, logGuid, *olderTag, hostname1, hostname2)
 					_, messagesToEmit = table.RemoveRoutes(schedulingInfo)
-					Expect(table.HTTPEndpointCount()).To(Equal(beforeRouteCount))
+					Expect(table.HTTPAssociationsCount()).To(Equal(beforeRouteCount))
 				})
 			})
 
@@ -1596,7 +1596,7 @@ var _ = Describe("RoutingTable", func() {
 
 	Describe("RouteCount", func() {
 		It("returns 0 on a new routing table", func() {
-			Expect(table.HTTPEndpointCount()).To(Equal(0))
+			Expect(table.HTTPAssociationsCount()).To(Equal(0))
 		})
 
 		It("returns 1 after adding a route to a single process", func() {
@@ -1605,7 +1605,7 @@ var _ = Describe("RoutingTable", func() {
 			lrp := createActualLRP(routingtable.RoutingKey{ProcessGUID: "fake-process-guid"}, routingtable.Endpoint{InstanceGUID: "fake-instance-guid", ModificationTag: currentTag})
 			table.AddEndpoint(lrp)
 
-			Expect(table.HTTPEndpointCount()).To(Equal(1))
+			Expect(table.HTTPAssociationsCount()).To(Equal(1))
 		})
 
 		It("returns 2 after associating 2 urls with a single process", func() {
@@ -1614,7 +1614,7 @@ var _ = Describe("RoutingTable", func() {
 			lrp := createActualLRP(routingtable.RoutingKey{ProcessGUID: "fake-process-guid"}, routingtable.Endpoint{InstanceGUID: "fake-instance-guid-1", ModificationTag: currentTag})
 			table.AddEndpoint(lrp)
 
-			Expect(table.HTTPEndpointCount()).To(Equal(2))
+			Expect(table.HTTPAssociationsCount()).To(Equal(2))
 		})
 
 		It("returns 8 after associating 2 urls with 2 processes with 2 instances each", func() {
@@ -1632,7 +1632,7 @@ var _ = Describe("RoutingTable", func() {
 			lrp = createActualLRP(routingtable.RoutingKey{ProcessGUID: "fake-process-guid-b"}, routingtable.Endpoint{InstanceGUID: "fake-instance-guid-b2", ModificationTag: currentTag})
 			table.AddEndpoint(lrp)
 
-			Expect(table.HTTPEndpointCount()).To(Equal(8))
+			Expect(table.HTTPAssociationsCount()).To(Equal(8))
 		})
 	})
 })
