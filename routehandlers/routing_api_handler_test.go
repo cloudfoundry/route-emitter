@@ -625,7 +625,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 
 					actualLRPEvent := models.NewActualLRPCreatedEvent(&models.ActualLRPGroup{
 						Instance: &models.ActualLRP{
-							ActualLRPKey:         models.NewActualLRPKey("process-guid-2", 1, "domain"),
+							ActualLRPKey:         models.NewActualLRPKey("process-guid-2", 0, "domain"),
 							ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid-1", "cell-id"),
 							ActualLRPNetInfo: models.NewActualLRPNetInfo(
 								"some-ip-2",

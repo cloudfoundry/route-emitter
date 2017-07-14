@@ -361,6 +361,94 @@ var _ = Describe("RoutingTable", func() {
 		})
 	})
 
+	Describe("TableSize", func() {
+		var (
+			desiredLRP *models.DesiredLRPSchedulingInfo
+			actualLRP  *routingtable.ActualLRPRoutingInfo
+		)
+
+		BeforeEach(func() {
+			routes := createRoutingInfo(key.ContainerPort, []string{hostname1}, "", []uint32{5222}, "router-group-guid")
+			desiredLRP = createSchedulingInfoWithRoutes(key.ProcessGUID, 1, routes, logGuid, *currentTag)
+			table.SetRoutes(nil, desiredLRP)
+			actualLRP = createActualLRP(key, endpoint1)
+			table.AddEndpoint(actualLRP)
+
+			Expect(table.TableSize()).To(Equal(1))
+		})
+
+		Context("when routes are deleted", func() {
+			BeforeEach(func() {
+				newDesiredLRP := createSchedulingInfoWithRoutes(key.ProcessGUID, 1, nil, logGuid, *newerTag)
+				table.SetRoutes(desiredLRP, newDesiredLRP)
+			})
+
+			It("doesn't remove the entry from the table", func() {
+				Expect(table.TableSize()).To(Equal(1))
+			})
+
+			Context("and endpoints are deleted", func() {
+				BeforeEach(func() {
+					table.RemoveEndpoint(actualLRP)
+				})
+
+				It("removes the entry", func() {
+					Expect(table.TableSize()).To(Equal(0))
+				})
+			})
+		})
+
+		Context("when all endpoints are deleted", func() {
+			BeforeEach(func() {
+				table.RemoveEndpoint(actualLRP)
+			})
+
+			It("doesn't remove the entry from the table", func() {
+				Expect(table.TableSize()).To(Equal(1))
+			})
+
+			Context("and endpoints are deleted", func() {
+				BeforeEach(func() {
+					newDesiredLRP := createSchedulingInfoWithRoutes(key.ProcessGUID, 1, nil, logGuid, *newerTag)
+					table.SetRoutes(desiredLRP, newDesiredLRP)
+				})
+
+				It("removes the entry", func() {
+					Expect(table.TableSize()).To(Equal(0))
+				})
+			})
+		})
+
+		Context("when the table is swaped and the lrp is deleted", func() {
+			BeforeEach(func() {
+				tempTable := routingtable.NewRoutingTable(logger, false)
+				table.Swap(tempTable, freshDomains)
+			})
+
+			It("removes the entry", func() {
+				Expect(table.TableSize()).To(Equal(0))
+			})
+		})
+	})
+
+	Describe("RouteCounts", func() {
+		BeforeEach(func() {
+			routes := createRoutingInfo(key.ContainerPort, []string{hostname1}, "", []uint32{5222}, "router-group-guid")
+			afterDesiredLRP := createSchedulingInfoWithRoutes(key.ProcessGUID, 1, routes, logGuid, *currentTag)
+			table.SetRoutes(nil, afterDesiredLRP)
+			actualLRP1 := createActualLRP(key, endpoint1)
+			table.AddEndpoint(actualLRP1)
+		})
+
+		It("returns the right tcp route count", func() {
+			Expect(table.TCPRouteCount()).To(Equal(1))
+		})
+
+		It("returns the right http route count", func() {
+			Expect(table.HTTPEndpointCount()).To(Equal(1))
+		})
+	})
+
 	Describe("AddEndpoint", func() {
 		Context("when a desired LRP has instances field less than number of actual LRP instances", func() {
 			BeforeEach(func() {

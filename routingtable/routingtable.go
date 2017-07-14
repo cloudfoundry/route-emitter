@@ -42,6 +42,7 @@ type RoutingTable interface {
 	HasExternalRoutes(actual *ActualLRPRoutingInfo) bool
 	HTTPEndpointCount() int
 	TCPRouteCount() int
+	TableSize() int
 }
 
 type routingTable struct {
@@ -115,6 +116,7 @@ func (table *routingTable) AddEndpoint(actualLRP *ActualLRPRoutingInfo) (TCPRout
 		}
 		currentEntry := table.entries[key]
 		if currentEntry.DesiredInstances > 0 && routingEndpoint.Index >= currentEntry.DesiredInstances {
+			logger.Debug("skipping-undesired-instance")
 			continue
 		}
 		currentEndpoint, ok := currentEntry.Endpoints[routingEndpoint.key()]
@@ -181,7 +183,9 @@ func (table *routingTable) RemoveEndpoint(actualLRP *ActualLRPRoutingInfo) (TCPR
 
 		newEntry := currentEntry.copy()
 		delete(newEntry.Endpoints, endpointKey)
+
 		table.entries[key] = newEntry
+		table.deleteEntryIfEmpty(key)
 
 		mapping, message := table.emitDiffMessages(key, currentEntry, newEntry)
 		messagesToEmit = messagesToEmit.Merge(message)
@@ -222,18 +226,19 @@ func (t *routingTable) Swap(other RoutingTable, domains models.DomainSet) (TCPRo
 
 	for key := range mergedRoutingKeys {
 		existingEntry, ok := t.entries[key]
-		endpoints := otherTable.entries[key]
+		newEntry := otherTable.entries[key]
 		if !ok {
 			// routing key only exist in the new table
-			mapping, message := t.emitDiffMessages(key, RoutableEndpoints{}, endpoints)
+			mapping, message := t.emitDiffMessages(key, RoutableEndpoints{}, newEntry)
 			messagesToEmit = messagesToEmit.Merge(message)
 			mappings = mappings.Merge(mapping)
 			continue
 		}
 
 		// entry exists in both tables or in old table, merge the two entries to ensure non-fresh domain endpoints aren't removed
-		merged := mergeUnfreshRoutes(existingEntry, endpoints, domains)
+		merged := mergeUnfreshRoutes(existingEntry, newEntry, domains)
 		otherTable.entries[key] = merged
+		otherTable.deleteEntryIfEmpty(key)
 		mapping, message := t.emitDiffMessages(key, existingEntry, merged)
 		messagesToEmit = messagesToEmit.Merge(message)
 		mappings = mappings.Merge(mapping)
@@ -426,19 +431,14 @@ func (table *routingTable) SetRoutes(before, after *models.DesiredLRPSchedulingI
 			continue
 		}
 
-		newEntry := RoutableEndpoints{}
-		if after != nil {
-			// desired lrp is not deleted, but all its routes are gone
-			newEntry = currentEntry.copy()
-			newEntry.Domain = after.Domain
-			newEntry.Routes = nil
-			newEntry.ModificationTag = &after.ModificationTag
-			newEntry.DesiredInstances = after.Instances
-			table.entries[key] = newEntry
-		} else {
-			// desired lrp is deleted, remove the entry from the table
-			delete(table.entries, key)
-		}
+		newEntry := currentEntry.copy()
+		newEntry.Domain = after.Domain
+		newEntry.Routes = nil
+		newEntry.ModificationTag = &after.ModificationTag
+		newEntry.DesiredInstances = after.Instances
+		table.entries[key] = newEntry
+
+		table.deleteEntryIfEmpty(key)
 
 		mapping, message := table.emitDiffMessages(key, currentEntry, newEntry)
 		messagesToEmit = messagesToEmit.Merge(message)
@@ -446,6 +446,13 @@ func (table *routingTable) SetRoutes(before, after *models.DesiredLRPSchedulingI
 	}
 
 	return mappings, messagesToEmit
+}
+
+func (table *routingTable) deleteEntryIfEmpty(key RoutingKey) {
+	entry := table.entries[key]
+	if len(entry.Endpoints) == 0 && len(entry.Routes) == 0 {
+		delete(table.entries, key)
+	}
 }
 
 func (table *routingTable) emitDiffMessages(key RoutingKey, oldEntry, newEntry RoutableEndpoints) (TCPRouteMappings, MessagesToEmit) {
@@ -638,14 +645,43 @@ func (t *routingTable) HTTPEndpointCount() int {
 
 	count := 0
 	for _, entry := range t.entries {
-		count += len(entry.Routes) * len(entry.Endpoints)
+		count += numberOfHTTPRoutes(entry) * len(entry.Endpoints)
 	}
 
 	return count
 }
 
 func (t *routingTable) TCPRouteCount() int {
+	t.Lock()
+	defer t.Unlock()
+
+	count := 0
+	for _, entry := range t.entries {
+		count += numberOfTCPRoutes(entry) * len(entry.Endpoints)
+	}
+
+	return count
+}
+
+func (t *routingTable) TableSize() int {
+	t.Lock()
+	defer t.Unlock()
+
 	return len(t.entries)
+}
+
+func numberOfTCPRoutes(routableEndpoints RoutableEndpoints) int {
+	count := 0
+	for _, route := range routableEndpoints.Routes {
+		if _, ok := route.(ExternalEndpointInfo); ok {
+			count++
+		}
+	}
+	return count
+}
+
+func numberOfHTTPRoutes(routableEndpoints RoutableEndpoints) int {
+	return len(routableEndpoints.Routes) - numberOfTCPRoutes(routableEndpoints)
 }
 
 func (t *routingTable) HasExternalRoutes(actual *ActualLRPRoutingInfo) bool {
