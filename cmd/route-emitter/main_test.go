@@ -657,6 +657,13 @@ var _ = Describe("Route Emitter", func() {
 					})
 
 					AfterEach(func() {
+						// ensure the channel is closed
+						select {
+						case <-blkChannel:
+						default:
+							close(blkChannel)
+						}
+
 						fakeBBS.CloseClientConnections()
 						fakeBBS.Close()
 					})
