@@ -42,16 +42,16 @@ func NewHandler(routingTable routingtable.RoutingTable, natsEmitter emitter.NATS
 
 func (handler *Handler) HandleEvent(logger lager.Logger, event models.Event) {
 	switch event := event.(type) {
-	case *models.DesiredLRPCreatedEvent:
-		desiredInfo := event.DesiredLrp.DesiredLRPSchedulingInfo()
-		handler.handleDesiredCreate(logger, &desiredInfo)
-	case *models.DesiredLRPChangedEvent:
-		before := event.Before.DesiredLRPSchedulingInfo()
-		after := event.After.DesiredLRPSchedulingInfo()
-		handler.handleDesiredUpdate(logger, &before, &after)
-	case *models.DesiredLRPRemovedEvent:
-		desiredInfo := event.DesiredLrp.DesiredLRPSchedulingInfo()
-		handler.handleDesiredDelete(logger, &desiredInfo)
+	case *models.LRPDeploymentCreatedEvent:
+		desiredInfo := event.Lrp.LRPDeploymentSchedulingInfo()
+		handler.handleDesiredCreate(logger, desiredInfo)
+	case *models.LRPDeploymentChangedEvent:
+		before := event.Before.LRPDeploymentSchedulingInfo()
+		after := event.After.LRPDeploymentSchedulingInfo()
+		handler.handleDesiredUpdate(logger, before, after)
+	case *models.LRPDeploymentRemovedEvent:
+		desiredInfo := event.Lrp.LRPDeploymentSchedulingInfo()
+		handler.handleDesiredDelete(logger, desiredInfo)
 	case *models.ActualLRPCreatedEvent:
 		routingInfo := routingtable.NewActualLRPRoutingInfo(event.ActualLrpGroup)
 		handler.handleActualCreate(logger, routingInfo)
@@ -95,7 +95,7 @@ func (handler *Handler) Emit(logger lager.Logger) {
 
 func (handler *Handler) Sync(
 	logger lager.Logger,
-	desired []*models.DesiredLRPSchedulingInfo,
+	desired []*models.LRPDeploymentSchedulingInfo,
 	actuals []*routingtable.ActualLRPRoutingInfo,
 	domains models.DomainSet,
 	cachedEvents map[string]models.Event,
@@ -157,7 +157,7 @@ func (handler *Handler) Sync(
 	}
 }
 
-func (handler *Handler) RefreshDesired(logger lager.Logger, desiredInfo []*models.DesiredLRPSchedulingInfo) {
+func (handler *Handler) RefreshDesired(logger lager.Logger, desiredInfo []*models.LRPDeploymentSchedulingInfo) {
 	for _, desiredLRP := range desiredInfo {
 		routeMappings, messagesToEmit := handler.routingTable.SetRoutes(nil, desiredLRP)
 		handler.emitMessages(logger, messagesToEmit, routeMappings)
@@ -168,18 +168,18 @@ func (handler *Handler) ShouldRefreshDesired(actual *routingtable.ActualLRPRouti
 	return !handler.routingTable.HasExternalRoutes(actual)
 }
 
-func (handler *Handler) handleDesiredCreate(logger lager.Logger, desiredLRP *models.DesiredLRPSchedulingInfo) {
-	logger = logger.Session("handle-desired-create", routingtable.DesiredLRPData(desiredLRP))
+func (handler *Handler) handleDesiredCreate(logger lager.Logger, desiredLRP *models.LRPDeploymentSchedulingInfo) {
+	logger = logger.Session("handle-desired-create", routingtable.LRPDeploymentData(desiredLRP))
 	logger.Info("starting")
 	defer logger.Info("complete")
 	routeMappings, messagesToEmit := handler.routingTable.SetRoutes(nil, desiredLRP)
 	handler.emitMessages(logger, messagesToEmit, routeMappings)
 }
 
-func (handler *Handler) handleDesiredUpdate(logger lager.Logger, before, after *models.DesiredLRPSchedulingInfo) {
+func (handler *Handler) handleDesiredUpdate(logger lager.Logger, before, after *models.LRPDeploymentSchedulingInfo) {
 	logger = logger.Session("handling-desired-update", lager.Data{
-		"before": routingtable.DesiredLRPData(before),
-		"after":  routingtable.DesiredLRPData(after),
+		"before": routingtable.LRPDeploymentData(before),
+		"after":  routingtable.LRPDeploymentData(after),
 	})
 	logger.Info("starting")
 	defer logger.Info("complete")
@@ -188,8 +188,8 @@ func (handler *Handler) handleDesiredUpdate(logger lager.Logger, before, after *
 	handler.emitMessages(logger, messagesToEmit, routeMappings)
 }
 
-func (handler *Handler) handleDesiredDelete(logger lager.Logger, schedulingInfo *models.DesiredLRPSchedulingInfo) {
-	logger = logger.Session("handling-desired-delete", routingtable.DesiredLRPData(schedulingInfo))
+func (handler *Handler) handleDesiredDelete(logger lager.Logger, schedulingInfo *models.LRPDeploymentSchedulingInfo) {
+	logger = logger.Session("handling-desired-delete", routingtable.LRPDeploymentData(schedulingInfo))
 	logger.Info("starting")
 	defer logger.Info("complete")
 	routeMappings, messagesToEmit := handler.routingTable.RemoveRoutes(schedulingInfo)

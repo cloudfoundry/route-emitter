@@ -159,7 +159,7 @@ var _ = Describe("Handler", func() {
 					desiredLRP.Routes = &routes
 				})
 
-				It("does not log them", func() {
+				FIt("does not log them", func() {
 					Expect(fakeTable.SetRoutesCallCount()).To(Equal(1))
 					logs := logger.Logs()
 
@@ -766,7 +766,7 @@ var _ = Describe("Handler", func() {
 	Describe("Sync", func() {
 		Context("when bbs server returns desired and actual lrps", func() {
 			var (
-				desiredInfo []*models.DesiredLRPSchedulingInfo
+				desiredInfo []*models.LRPDeploymentSchedulingInfo
 				actualInfo  []*routingtable.ActualLRPRoutingInfo
 				domains     models.DomainSet
 
@@ -807,37 +807,40 @@ var _ = Describe("Handler", func() {
 					ModificationTag: currentTag,
 				}
 
-				schedulingInfo1 := &models.DesiredLRPSchedulingInfo{
-					DesiredLRPKey: models.NewDesiredLRPKey("pg-1", "tests", "lg1"),
-					Routes: cfroutes.CFRoutes{
-						cfroutes.CFRoute{
-							Hostnames:       []string{hostname1},
-							Port:            8080,
-							RouteServiceUrl: "https://rs.example.com",
-						},
-					}.RoutingInfo(),
+				routes1 := cfroutes.CFRoutes{
+					cfroutes.CFRoute{
+						Hostnames:       []string{hostname1},
+						Port:            8080,
+						RouteServiceUrl: "https://rs.example.com",
+					},
+				}.RoutingInfo()
+				schedulingInfo1 := &models.LRPDeploymentSchedulingInfo{
+					// ProcessGuid: models.NewDesiredLRPKey("pg-1", "tests", "lg1"),
+					Routes:    &routes1,
 					Instances: 1,
 				}
 
-				schedulingInfo2 := &models.DesiredLRPSchedulingInfo{
-					DesiredLRPKey: models.NewDesiredLRPKey("pg-2", "tests", "lg2"),
-					Routes: cfroutes.CFRoutes{
-						cfroutes.CFRoute{
-							Hostnames: []string{hostname2},
-							Port:      8080,
-						},
-					}.RoutingInfo(),
+				routes2 := cfroutes.CFRoutes{
+					cfroutes.CFRoute{
+						Hostnames: []string{hostname2},
+						Port:      8080,
+					},
+				}.RoutingInfo()
+				schedulingInfo2 := &models.LRPDeploymentSchedulingInfo{
+					// DesiredLRPKey: models.NewDesiredLRPKey("pg-2", "tests", "lg2"),
+					Routes:    &routes2,
 					Instances: 1,
 				}
 
-				schedulingInfo3 := &models.DesiredLRPSchedulingInfo{
-					DesiredLRPKey: models.NewDesiredLRPKey("pg-3", "tests", "lg3"),
-					Routes: cfroutes.CFRoutes{
-						cfroutes.CFRoute{
-							Hostnames: []string{hostname3},
-							Port:      8080,
-						},
-					}.RoutingInfo(),
+				routes3 := cfroutes.CFRoutes{
+					cfroutes.CFRoute{
+						Hostnames: []string{hostname3},
+						Port:      8080,
+					},
+				}.RoutingInfo()
+				schedulingInfo3 := &models.LRPDeploymentSchedulingInfo{
+					// DesiredLRPKey: models.NewDesiredLRPKey("pg-3", "tests", "lg3"),
+					Routes:    &routes3,
 					Instances: 2,
 				}
 
@@ -868,7 +871,7 @@ var _ = Describe("Handler", func() {
 					},
 				}
 
-				desiredInfo = []*models.DesiredLRPSchedulingInfo{
+				desiredInfo = []*models.LRPDeploymentSchedulingInfo{
 					schedulingInfo1, schedulingInfo2, schedulingInfo3,
 				}
 				actualInfo = []*routingtable.ActualLRPRoutingInfo{
@@ -879,18 +882,18 @@ var _ = Describe("Handler", func() {
 
 				domains = models.NewDomainSet([]string{"domain"})
 
-				routesByRoutingKey := func(schedulingInfos []*models.DesiredLRPSchedulingInfo) map[routingtable.RoutingKey][]routingtable.Route {
+				routesByRoutingKey := func(schedulingInfos []*models.LRPDeploymentSchedulingInfo) map[routingtable.RoutingKey][]routingtable.Route {
 					byRoutingKey := map[routingtable.RoutingKey][]routingtable.Route{}
-					for _, desired := range schedulingInfos {
-						routes, err := cfroutes.CFRoutesFromRoutingInfo(desired.Routes)
+					for _, schedInfo := range schedulingInfos {
+						routes, err := cfroutes.CFRoutesFromRoutingInfo(*schedInfo.Routes)
 						if err == nil && len(routes) > 0 {
 							for _, cfRoute := range routes {
-								key := routingtable.RoutingKey{ProcessGUID: desired.ProcessGuid, ContainerPort: cfRoute.Port}
+								key := routingtable.RoutingKey{ProcessGUID: schedInfo.ProcessGuid, ContainerPort: cfRoute.Port}
 								var routeEntries []routingtable.Route
 								for _, hostname := range cfRoute.Hostnames {
 									routeEntries = append(routeEntries, routingtable.Route{
-										Hostname:         hostname,
-										LogGUID:          desired.LogGuid,
+										Hostname: hostname,
+										// LogGUID:          schedInfo.LogGuid,
 										RouteServiceUrl:  cfRoute.RouteServiceUrl,
 										IsolationSegment: cfRoute.IsolationSegment,
 									})
@@ -934,7 +937,7 @@ var _ = Describe("Handler", func() {
 			Context("when emitting metrics in localMode", func() {
 				BeforeEach(func() {
 					routeHandler = routehandlers.NewHandler(fakeTable, natsEmitter, nil, true)
-					fakeTable.HTTPEndpointCountReturns(5)
+					fakeTable.HTTPAssociationsCountReturns(5)
 				})
 
 				It("emits the HTTPRouteCount", func() {
@@ -1040,7 +1043,7 @@ var _ = Describe("Handler", func() {
 			}
 
 			fakeTable.GetRoutingEventsReturns(emptyTCPRouteMappings, registrationMsgs)
-			fakeTable.HTTPEndpointCountReturns(3)
+			fakeTable.HTTPAssociationsCountReturns(3)
 		})
 		It("emits all registration events", func() {
 			routeHandler.Emit(logger)
@@ -1066,18 +1069,19 @@ var _ = Describe("Handler", func() {
 		})
 
 		It("adds the desired info to the routing table", func() {
-			desiredInfo := &models.DesiredLRPSchedulingInfo{
-				DesiredLRPKey: models.NewDesiredLRPKey("pg-1", "tests", "lg1"),
-				Routes: cfroutes.CFRoutes{
-					cfroutes.CFRoute{
-						Hostnames:       []string{"foo.example.com"},
-						Port:            8080,
-						RouteServiceUrl: "https://rs.example.com",
-					},
-				}.RoutingInfo(),
+			routes := cfroutes.CFRoutes{
+				cfroutes.CFRoute{
+					Hostnames:       []string{"foo.example.com"},
+					Port:            8080,
+					RouteServiceUrl: "https://rs.example.com",
+				},
+			}.RoutingInfo()
+			desiredInfo := &models.LRPDeploymentSchedulingInfo{
+				// DesiredLRPKey: models.NewDesiredLRPKey("pg-1", "tests", "lg1"),
+				Routes:    &routes,
 				Instances: 1,
 			}
-			routeHandler.RefreshDesired(logger, []*models.DesiredLRPSchedulingInfo{desiredInfo})
+			routeHandler.RefreshDesired(logger, []*models.LRPDeploymentSchedulingInfo{desiredInfo})
 
 			Expect(fakeTable.SetRoutesCallCount()).To(Equal(1))
 			before, after := fakeTable.SetRoutesArgsForCall(0)

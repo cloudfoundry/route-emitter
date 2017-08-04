@@ -503,15 +503,15 @@ var _ = Describe("RoutingAPIHandler", func() {
 					ContainerPort:   containerPort,
 				},
 			}
-			desiredInfo := &models.DesiredLRPSchedulingInfo{
-				DesiredLRPKey: models.DesiredLRPKey{
-					ProcessGuid: "process-guid-1",
-					LogGuid:     "log-guid",
-				},
-				Routes:          *tcpRoutes.RoutingInfo(),
+			desiredInfo := &models.LRPDeploymentSchedulingInfo{
+				// DesiredLRPKey: models.DesiredLRPKey{
+				// 	ProcessGuid: "process-guid-1",
+				// 	LogGuid:     "log-guid",
+				// },
+				Routes:          tcpRoutes.RoutingInfo(),
 				ModificationTag: modificationTag,
 			}
-			routeHandler.RefreshDesired(logger, []*models.DesiredLRPSchedulingInfo{desiredInfo})
+			routeHandler.RefreshDesired(logger, []*models.LRPDeploymentSchedulingInfo{desiredInfo})
 
 			Expect(fakeRoutingTable.SetRoutesCallCount()).To(Equal(1))
 			_, after := fakeRoutingTable.SetRoutesArgsForCall(0)
@@ -523,7 +523,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 	Describe("Sync", func() {
 		Context("when bbs server returns desired and actual lrps", func() {
 			var (
-				desiredInfo     []*models.DesiredLRPSchedulingInfo
+				desiredInfo     []*models.LRPDeploymentSchedulingInfo
 				actualInfo      []*routingtable.ActualLRPRoutingInfo
 				modificationTag models.ModificationTag
 			)
@@ -540,13 +540,13 @@ var _ = Describe("RoutingAPIHandler", func() {
 					},
 				}
 
-				desiredInfo = []*models.DesiredLRPSchedulingInfo{
-					&models.DesiredLRPSchedulingInfo{
-						DesiredLRPKey: models.DesiredLRPKey{
-							ProcessGuid: "process-guid-1",
-							LogGuid:     "log-guid",
-						},
-						Routes:          *tcpRoutes.RoutingInfo(),
+				desiredInfo = []*models.LRPDeploymentSchedulingInfo{
+					&models.LRPDeploymentSchedulingInfo{
+						// DesiredLRPKey: models.DesiredLRPKey{
+						// 	ProcessGuid: "process-guid-1",
+						// 	LogGuid:     "log-guid",
+						// },
+						Routes:          tcpRoutes.RoutingInfo(),
 						ModificationTag: modificationTag,
 					},
 				}
@@ -576,7 +576,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 			Context("when emitting metrics in localMode", func() {
 				BeforeEach(func() {
 					routeHandler = routehandlers.NewHandler(fakeRoutingTable, nil, fakeRoutingAPIEmitter, true)
-					fakeRoutingTable.TCPRouteCountReturns(1)
+					fakeRoutingTable.TCPAssociationsCountReturns(1)
 				})
 
 				It("emits the TCPRouteCount", func() {

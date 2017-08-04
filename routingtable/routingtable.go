@@ -30,8 +30,8 @@ var addressCollisions = metric.Counter("AddressCollisions")
 
 type RoutingTable interface {
 	// table modification
-	SetRoutes(beforeLRP, afterLRP *models.DesiredLRPSchedulingInfo) (TCPRouteMappings, MessagesToEmit)
-	RemoveRoutes(desiredLRP *models.DesiredLRPSchedulingInfo) (TCPRouteMappings, MessagesToEmit)
+	SetRoutes(beforeLRP, afterLRP *models.LRPDeploymentSchedulingInfo) (TCPRouteMappings, MessagesToEmit)
+	RemoveRoutes(desiredLRP *models.LRPDeploymentSchedulingInfo) (TCPRouteMappings, MessagesToEmit)
 	AddEndpoint(actualLRP *ActualLRPRoutingInfo) (TCPRouteMappings, MessagesToEmit)
 	RemoveEndpoint(actualLRP *ActualLRPRoutingInfo) (TCPRouteMappings, MessagesToEmit)
 	Swap(t RoutingTable, domains models.DomainSet) (TCPRouteMappings, MessagesToEmit)
@@ -298,12 +298,12 @@ type externalRoute interface {
 	MessageFor(endpoint Endpoint, directInstanceAddress bool) (*RegistryMessage, *tcpmodels.TcpRouteMapping)
 }
 
-func httpRoutesFromSchedulingInfo(lrp *models.DesiredLRPSchedulingInfo) map[RoutingKey][]externalRoute {
+func httpRoutesFromSchedulingInfo(lrp *models.LRPDeploymentSchedulingInfo) map[RoutingKey][]externalRoute {
 	if lrp == nil {
 		return nil
 	}
 
-	routes, _ := cfroutes.CFRoutesFromRoutingInfo(lrp.Routes)
+	routes, _ := cfroutes.CFRoutesFromRoutingInfo(*lrp.Routes)
 	routeEntries := make(map[RoutingKey][]externalRoute)
 	for _, route := range routes {
 		key := RoutingKey{ProcessGUID: lrp.ProcessGuid, ContainerPort: route.Port}
@@ -311,8 +311,9 @@ func httpRoutesFromSchedulingInfo(lrp *models.DesiredLRPSchedulingInfo) map[Rout
 		routes := []externalRoute{}
 		for _, hostname := range route.Hostnames {
 			route := Route{
-				Hostname:         hostname,
-				LogGUID:          lrp.LogGuid,
+				Hostname: hostname,
+				// TODO: determine which definition to get LogGuid from
+				// LogGUID:          lrp.LogGuid,
 				RouteServiceUrl:  route.RouteServiceUrl,
 				IsolationSegment: route.IsolationSegment,
 			}
@@ -323,12 +324,12 @@ func httpRoutesFromSchedulingInfo(lrp *models.DesiredLRPSchedulingInfo) map[Rout
 	return routeEntries
 }
 
-func tcpRoutesFromSchedulingInfo(lrp *models.DesiredLRPSchedulingInfo) map[RoutingKey][]externalRoute {
+func tcpRoutesFromSchedulingInfo(lrp *models.LRPDeploymentSchedulingInfo) map[RoutingKey][]externalRoute {
 	if lrp == nil {
 		return nil
 	}
 
-	routes, _ := tcp_routes.TCPRoutesFromRoutingInfo(&lrp.Routes)
+	routes, _ := tcp_routes.TCPRoutesFromRoutingInfo(lrp.Routes)
 
 	routeEntries := make(map[RoutingKey][]externalRoute)
 	for _, route := range routes {
@@ -342,8 +343,8 @@ func tcpRoutesFromSchedulingInfo(lrp *models.DesiredLRPSchedulingInfo) map[Routi
 	return routeEntries
 }
 
-func (table *routingTable) SetRoutes(before, after *models.DesiredLRPSchedulingInfo) (TCPRouteMappings, MessagesToEmit) {
-	logger := table.logger.Session("set-routes", lager.Data{"before_lrp": DesiredLRPData(before), "after_lrp": DesiredLRPData(after)})
+func (table *routingTable) SetRoutes(before, after *models.LRPDeploymentSchedulingInfo) (TCPRouteMappings, MessagesToEmit) {
+	logger := table.logger.Session("set-routes", lager.Data{"before-lrp-deployment": LRPDeploymentData(before), "after-lrp-deployment": LRPDeploymentData(after)})
 	logger.Info("started")
 	defer logger.Info("finished")
 
@@ -635,12 +636,12 @@ func (table *routingTable) messages(routesDiff routesDiff, endpointDiff endpoint
 	return mappings, messages
 }
 
-func (table *routingTable) RemoveRoutes(desiredLRP *models.DesiredLRPSchedulingInfo) (TCPRouteMappings, MessagesToEmit) {
-	logger := table.logger.Session("RemoveRoutes", lager.Data{"desired_lrp": DesiredLRPData(desiredLRP)})
+func (table *routingTable) RemoveRoutes(lrp *models.LRPDeploymentSchedulingInfo) (TCPRouteMappings, MessagesToEmit) {
+	logger := table.logger.Session("remove-routes", lager.Data{"lrp-deployment": LRPDeploymentData(lrp)})
 	logger.Debug("starting")
 	defer logger.Debug("completed")
 
-	return table.SetRoutes(desiredLRP, nil)
+	return table.SetRoutes(lrp, nil)
 }
 
 func (t *routingTable) HTTPAssociationsCount() int {
