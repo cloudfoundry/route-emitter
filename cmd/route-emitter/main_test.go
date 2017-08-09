@@ -48,12 +48,12 @@ var _ = Describe("Route Emitter", func() {
 
 		processGuid string
 		domain      string
-		desiredLRP  *models.DesiredLRP
 		index       int32
 
-		lrpKey      models.ActualLRPKey
-		instanceKey models.ActualLRPInstanceKey
-		netInfo     models.ActualLRPNetInfo
+		lrpDeployment models.LRPDeploymentCreation
+		lrpKey        models.ActualLRPKey
+		instanceKey   models.ActualLRPInstanceKey
+		netInfo       models.ActualLRPNetInfo
 
 		hostnames     []string
 		containerPort uint32
@@ -137,20 +137,24 @@ var _ = Describe("Route Emitter", func() {
 		containerPort = 8080
 		routes = newRoutes(hostnames, containerPort, "https://awesome.com")
 
-		desiredLRP = &models.DesiredLRP{
-			Domain:      domain,
-			ProcessGuid: processGuid,
-			Ports:       []uint32{containerPort},
-			Routes:      routes,
-			Instances:   5,
-			RootFs:      "some:rootfs",
-			MemoryMb:    1024,
-			DiskMb:      512,
-			LogGuid:     "some-log-guid",
-			Action: models.WrapAction(&models.RunAction{
-				User: "me",
-				Path: "ls",
-			}),
+		lrpDeployment = models.LRPDeploymentCreation{
+			Domain:       domain,
+			ProcessGuid:  processGuid,
+			Routes:       routes,
+			Instances:    5,
+			DefinitionId: processGuid,
+			Definition: &models.LRPDefinition{
+				DefinitionId: processGuid,
+				RootFs:       "some:rootfs",
+				Ports:        []uint32{containerPort},
+				MemoryMb:     1024,
+				DiskMb:       512,
+				LogGuid:      "some-log-guid",
+				Action: models.WrapAction(&models.RunAction{
+					User: "me",
+					Path: "ls",
+				}),
+			},
 		}
 
 		index = 0
@@ -282,6 +286,36 @@ var _ = Describe("Route Emitter", func() {
 			notExpectedTcpRouteMapping.RouterGroupGuid = routerGUID
 			cellID = ""
 		})
+
+		getLRPDeployment := func(processGuid, definitionGuid, routerGroupGuid string, externalPort, containerPort uint32) models.LRPDeploymentCreation {
+			tcpRoutes := tcp_routes.TCPRoutes{
+				tcp_routes.TCPRoute{
+					RouterGroupGuid: routerGroupGuid,
+					ExternalPort:    externalPort,
+					ContainerPort:   containerPort,
+				},
+			}
+
+			return models.LRPDeploymentCreation{
+				Domain:       domain,
+				ProcessGuid:  processGuid,
+				Routes:       tcpRoutes.RoutingInfo(),
+				Instances:    5,
+				DefinitionId: definitionGuid,
+				Definition: &models.LRPDefinition{
+					DefinitionId: definitionGuid,
+					RootFs:       "some:rootfs",
+					Ports:        []uint32{containerPort},
+					MemoryMb:     1024,
+					DiskMb:       512,
+					LogGuid:      "some-log-guid",
+					Action: models.WrapAction(&models.RunAction{
+						User: "me",
+						Path: "ls",
+					}),
+				},
+			}
+		}
 
 		getDesiredLRP := func(processGuid, routerGroupGuid string, externalPort, containerPort uint32) models.DesiredLRP {
 			tcpRoutes := tcp_routes.TCPRoutes{
@@ -436,8 +470,9 @@ var _ = Describe("Route Emitter", func() {
 
 			Context("and an lrp with routes is desired", func() {
 				var (
-					expectedTCPProcessGUID string
-					desiredLRP             models.DesiredLRP
+					expectedTCPProcessGUID, expectedDefinitionGUID string
+					desiredLRP                                     models.DesiredLRP
+					lrpDeployment                                  models.LRPDeploymentCreation
 				)
 
 				BeforeEach(func() {
@@ -448,17 +483,18 @@ var _ = Describe("Route Emitter", func() {
 						cfg.RoutingAPI.Port = routingAPIRunner.Config.Port
 					})
 
-					expectedTCPProcessGUID = "some-guid"
-					desiredLRP = getDesiredLRP(expectedTCPProcessGUID, routerGUID, 5222, 5222)
+					expectedTCPProcessGUID = "some-process-guid"
+					expectedDefinitionGUID = "some-definition-guid"
+					lrpDeployment = getLRPDeployment(expectedTCPProcessGUID, expectedDefinitionGUID, routerGUID, 5222, 5222)
 				})
 
 				JustBeforeEach(func() {
-					Expect(bbsClient.DesireLRP(logger, &desiredLRP)).NotTo(HaveOccurred())
+					Expect(bbsClient.CreateLRPDeployment(logger, &lrpDeployment)).NotTo(HaveOccurred())
 				})
 
 				Context("and an instance is started", func() {
 					BeforeEach(func() {
-						lrpKey = models.NewActualLRPKey(expectedTCPProcessGUID, 0, domain)
+						lrpKey = models.NewActualLRPKey(expectedDefinitionGUID, 0, domain)
 						instanceKey = models.NewActualLRPInstanceKey("instance-guid", "cell-id")
 						netInfo = models.NewActualLRPNetInfo("some-ip", "container-ip", models.NewPortMapping(62003, 5222))
 						Expect(bbsClient.StartActualLRP(logger, &lrpKey, &instanceKey, &netInfo))
@@ -468,7 +504,7 @@ var _ = Describe("Route Emitter", func() {
 						Eventually(func() bool {
 							mappings, _ := routingAPIRunner.GetClient().TcpRouteMappings()
 							return contains(mappings, expectedTcpRouteMapping)
-						}, 5*time.Second).Should(BeTrue())
+						}, 10*time.Second).Should(BeTrue())
 					})
 
 					Context("and the route-emitter is running in direct instance routes mode", func() {
@@ -521,8 +557,8 @@ var _ = Describe("Route Emitter", func() {
 						)
 
 						BeforeEach(func() {
-							routes = desiredLRP.Routes
-							desiredLRP.Routes = &models.Routes{}
+							routes = lrpDeployment.Routes
+							lrpDeployment.Routes = &models.Routes{}
 						})
 
 						JustBeforeEach(func() {
@@ -534,10 +570,10 @@ var _ = Describe("Route Emitter", func() {
 
 						Context("and routes are added", func() {
 							JustBeforeEach(func() {
-								update := &models.DesiredLRPUpdate{
+								update := &models.LRPDeploymentUpdate{
 									Routes: routes,
 								}
-								err := bbsClient.UpdateDesiredLRP(logger, desiredLRP.ProcessGuid, update)
+								err := bbsClient.UpdateLRPDeployment(logger, lrpDeployment.ProcessGuid, update)
 								Expect(err).NotTo(HaveOccurred())
 							})
 
@@ -563,10 +599,10 @@ var _ = Describe("Route Emitter", func() {
 								mappings, _ := routingAPIRunner.GetClient().TcpRouteMappings()
 								return contains(mappings, expectedTcpRouteMapping)
 							}, 5*time.Second).Should(BeTrue())
-							update := &models.DesiredLRPUpdate{
+							update := &models.LRPDeploymentUpdate{
 								Routes: &models.Routes{},
 							}
-							err := bbsClient.UpdateDesiredLRP(logger, desiredLRP.ProcessGuid, update)
+							err := bbsClient.UpdateLRPDeployment(logger, lrpDeployment.ProcessGuid, update)
 							Expect(err).NotTo(HaveOccurred())
 						})
 
@@ -589,7 +625,7 @@ var _ = Describe("Route Emitter", func() {
 
 				Context("and an instance is claimed", func() {
 					JustBeforeEach(func() {
-						err := bbsClient.ClaimActualLRP(logger, expectedTCPProcessGUID, int(index), &instanceKey)
+						err := bbsClient.ClaimActualLRP(logger, expectedDefinitionGUID, int(index), &instanceKey)
 						Expect(err).NotTo(HaveOccurred())
 					})
 
@@ -639,7 +675,7 @@ var _ = Describe("Route Emitter", func() {
 
 					It("should emit a route registration", func() {
 						By("waiting for the sync loop to start")
-						lrpKey = models.NewActualLRPKey(expectedTCPProcessGUID, 0, domain)
+						lrpKey = models.NewActualLRPKey(expectedDefinitionGUID, 0, domain)
 						instanceKey = models.NewActualLRPInstanceKey("instance-guid", "cell-id")
 						netInfo = models.NewActualLRPNetInfo("some-ip", "container-ip", models.NewPortMapping(5222, 5222))
 						Expect(bbsClient.StartActualLRP(logger, &lrpKey, &instanceKey, &netInfo)).To(Succeed())
@@ -787,7 +823,7 @@ var _ = Describe("Route Emitter", func() {
 
 		Context("and an lrp with routes is desired", func() {
 			BeforeEach(func() {
-				err := bbsClient.DesireLRP(logger, desiredLRP)
+				err := bbsClient.CreateLRPDeployment(logger, &lrpDeployment)
 				Expect(err).NotTo(HaveOccurred())
 			})
 
@@ -849,7 +885,7 @@ var _ = Describe("Route Emitter", func() {
 							URIs:                 []string{hostnames[1]},
 							Host:                 netInfo.Address,
 							Port:                 netInfo.Ports[0].HostPort,
-							App:                  desiredLRP.LogGuid,
+							App:                  lrpDeployment.Definition.LogGuid,
 							PrivateInstanceId:    instanceKey.InstanceGuid,
 							PrivateInstanceIndex: "0",
 							RouteServiceUrl:      "https://awesome.com",
@@ -859,7 +895,7 @@ var _ = Describe("Route Emitter", func() {
 							URIs:                 []string{hostnames[0]},
 							Host:                 netInfo.Address,
 							Port:                 netInfo.Ports[0].HostPort,
-							App:                  desiredLRP.LogGuid,
+							App:                  lrpDeployment.Definition.LogGuid,
 							PrivateInstanceId:    instanceKey.InstanceGuid,
 							PrivateInstanceIndex: "0",
 							RouteServiceUrl:      "https://awesome.com",
@@ -885,7 +921,7 @@ var _ = Describe("Route Emitter", func() {
 								URIs:                 []string{hostnames[1]},
 								Host:                 netInfo.InstanceAddress,
 								Port:                 netInfo.Ports[0].ContainerPort,
-								App:                  desiredLRP.LogGuid,
+								App:                  lrpDeployment.Definition.LogGuid,
 								PrivateInstanceId:    instanceKey.InstanceGuid,
 								PrivateInstanceIndex: "0",
 								RouteServiceUrl:      "https://awesome.com",
@@ -895,7 +931,7 @@ var _ = Describe("Route Emitter", func() {
 								URIs:                 []string{hostnames[0]},
 								Host:                 netInfo.InstanceAddress,
 								Port:                 netInfo.Ports[0].ContainerPort,
-								App:                  desiredLRP.LogGuid,
+								App:                  lrpDeployment.Definition.LogGuid,
 								PrivateInstanceId:    instanceKey.InstanceGuid,
 								PrivateInstanceIndex: "0",
 								RouteServiceUrl:      "https://awesome.com",
@@ -931,8 +967,8 @@ var _ = Describe("Route Emitter", func() {
 
 		Context("an actual lrp starts without a routed desired lrp", func() {
 			BeforeEach(func() {
-				desiredLRP.Routes = nil
-				err := bbsClient.DesireLRP(logger, desiredLRP)
+				lrpDeployment.Routes = nil
+				err := bbsClient.CreateLRPDeployment(logger, &lrpDeployment)
 				Expect(err).NotTo(HaveOccurred())
 
 				err = bbsClient.StartActualLRP(logger, &lrpKey, &instanceKey, &netInfo)
@@ -941,10 +977,10 @@ var _ = Describe("Route Emitter", func() {
 
 			Context("and a route is desired", func() {
 				BeforeEach(func() {
-					update := &models.DesiredLRPUpdate{
+					update := &models.LRPDeploymentUpdate{
 						Routes: routes,
 					}
-					err := bbsClient.UpdateDesiredLRP(logger, desiredLRP.ProcessGuid, update)
+					err := bbsClient.UpdateLRPDeployment(logger, lrpDeployment.ProcessGuid, update)
 					Expect(err).NotTo(HaveOccurred())
 				})
 
@@ -958,7 +994,7 @@ var _ = Describe("Route Emitter", func() {
 							URIs:                 []string{hostnames[1]},
 							Host:                 netInfo.Address,
 							Port:                 netInfo.Ports[0].HostPort,
-							App:                  desiredLRP.LogGuid,
+							App:                  lrpDeployment.Definition.LogGuid,
 							PrivateInstanceId:    instanceKey.InstanceGuid,
 							PrivateInstanceIndex: "0",
 							RouteServiceUrl:      "https://awesome.com",
@@ -968,7 +1004,7 @@ var _ = Describe("Route Emitter", func() {
 							URIs:                 []string{hostnames[0]},
 							Host:                 netInfo.Address,
 							Port:                 netInfo.Ports[0].HostPort,
-							App:                  desiredLRP.LogGuid,
+							App:                  lrpDeployment.Definition.LogGuid,
 							PrivateInstanceId:    instanceKey.InstanceGuid,
 							PrivateInstanceIndex: "0",
 							RouteServiceUrl:      "https://awesome.com",
@@ -1148,7 +1184,7 @@ var _ = Describe("Route Emitter", func() {
 			)
 
 			JustBeforeEach(func() {
-				err := bbsClient.DesireLRP(logger, desiredLRP)
+				err := bbsClient.CreateLRPDeployment(logger, &lrpDeployment)
 				Expect(err).NotTo(HaveOccurred())
 
 				err = bbsClient.StartActualLRP(logger, &lrpKey, &instanceKey, &netInfo)
@@ -1229,7 +1265,7 @@ var _ = Describe("Route Emitter", func() {
 		var emitter ifrit.Process
 
 		BeforeEach(func() {
-			err := bbsClient.DesireLRP(logger, desiredLRP)
+			err := bbsClient.CreateLRPDeployment(logger, &lrpDeployment)
 			Expect(err).NotTo(HaveOccurred())
 
 			err = bbsClient.StartActualLRP(logger, &lrpKey, &instanceKey, &netInfo)
@@ -1281,12 +1317,12 @@ var _ = Describe("Route Emitter", func() {
 
 					hostnames = []string{"route-1", "route-2", "route-3"}
 
-					updateRequest := &models.DesiredLRPUpdate{
+					updateRequest := &models.LRPDeploymentUpdate{
 						Routes:     newRoutes(hostnames, containerPort, ""),
-						Instances:  &desiredLRP.Instances,
-						Annotation: &desiredLRP.Annotation,
+						Instances:  &lrpDeployment.Instances,
+						Annotation: &lrpDeployment.Annotation,
 					}
-					err := bbsClient.UpdateDesiredLRP(logger, processGuid, updateRequest)
+					err := bbsClient.UpdateLRPDeployment(logger, processGuid, updateRequest)
 					Expect(err).NotTo(HaveOccurred())
 				})
 
@@ -1318,12 +1354,12 @@ var _ = Describe("Route Emitter", func() {
 
 			Context("and a route is removed", func() {
 				BeforeEach(func() {
-					updateRequest := &models.DesiredLRPUpdate{
+					updateRequest := &models.LRPDeploymentUpdate{
 						Routes:     newRoutes([]string{"route-2"}, containerPort, ""),
-						Instances:  &desiredLRP.Instances,
-						Annotation: &desiredLRP.Annotation,
+						Instances:  &lrpDeployment.Instances,
+						Annotation: &lrpDeployment.Annotation,
 					}
-					err := bbsClient.UpdateDesiredLRP(logger, processGuid, updateRequest)
+					err := bbsClient.UpdateLRPDeployment(logger, processGuid, updateRequest)
 					Expect(err).NotTo(HaveOccurred())
 				})
 
@@ -1391,7 +1427,7 @@ var _ = Describe("Route Emitter", func() {
 			fakeBBS.Start()
 			runner = createEmitterRunner("route-emitter", "cell-id", cfgs...)
 			Expect(bbsClient.UpsertDomain(logger, domain, time.Hour)).To(Succeed())
-			Expect(bbsClient.DesireLRP(logger, desiredLRP)).To(Succeed())
+			Expect(bbsClient.CreateLRPDeployment(logger, &lrpDeployment)).To(Succeed())
 		})
 
 		It("should refresh the desired lrp and emit a route registration", func() {

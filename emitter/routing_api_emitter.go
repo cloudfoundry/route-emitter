@@ -36,6 +36,7 @@ func (t *routingAPIEmitter) Emit(tcpEvents routingtable.TCPRouteMappings) error 
 		return nil
 	}
 
+	defer t.logger.Debug("emitting-routing-api-messages", lager.Data{"messages": tcpEvents})
 	err := t.emit(tcpEvents.Registrations, tcpEvents.Unregistrations)
 	if err != nil {
 		return err

@@ -212,7 +212,7 @@ func (w *Watcher) retrieveDesired(logger lager.Logger, event models.Event) []*mo
 		if w.routeHandler.ShouldRefreshDesired(routingInfo) {
 			logger.Info("refreshing-desired-lrp-info", lager.Data{"process-guid": routingInfo.ActualLRP.ProcessGuid})
 			desiredLRPs, err = w.bbsClient.LRPDeploymentSchedulingInfo(logger, models.LRPDeploymentFilter{
-				Ids: []string{routingInfo.ActualLRP.ProcessGuid},
+				DefinitionIds: []string{routingInfo.ActualLRP.ProcessGuid},
 			})
 			if err != nil {
 				logger.Error("failed-getting-desired-lrps-for-missing-actual-lrp", err)
@@ -258,6 +258,12 @@ func (watcher *Watcher) eventCellIDMatches(logger lager.Logger, event models.Eve
 	}
 
 	switch event := event.(type) {
+	case *models.LRPDeploymentCreatedEvent:
+		return true
+	case *models.LRPDeploymentChangedEvent:
+		return true
+	case *models.LRPDeploymentRemovedEvent:
+		return true
 	case *models.DesiredLRPCreatedEvent:
 		return true
 	case *models.DesiredLRPChangedEvent:
@@ -361,6 +367,7 @@ func (w *Watcher) sync(logger lager.Logger, ch chan<- *syncEventResult) {
 		err = fmt.Errorf("failed to sync: %s, %s, %s", actualErr, desiredErr, domainsErr)
 	}
 
+	logger.Info("emit-desired-scheduling", lager.Data{"desired-info": desiredSchedulingInfo})
 	ch <- &syncEventResult{
 		startTime:     before,
 		desired:       desiredSchedulingInfo,
@@ -404,15 +411,15 @@ func (w *Watcher) checkForEvents(resubscribeChannel chan error, eventChan chan m
 }
 
 func getSchedulingInfos(logger lager.Logger, bbsClient bbs.Client, guids []string) ([]*models.LRPDeploymentSchedulingInfo, error) {
-	logger.Debug("getting-scheduling-infos", lager.Data{"guids-length": len(guids)})
+	logger.Info("getting-scheduling-infos", lager.Data{"guids-length": len(guids)})
 	schedulingInfos, err := bbsClient.LRPDeploymentSchedulingInfo(logger, models.LRPDeploymentFilter{
-		Ids: guids,
+		DefinitionIds: guids,
 	})
 	if err != nil {
 		logger.Error("failed-getting-scheduling-infos", err)
 		return nil, err
 	}
 
-	logger.Debug("succeeded-getting-scheduling-infos", lager.Data{"num-desired-responses": len(schedulingInfos)})
+	logger.Info("succeeded-getting-scheduling-infos", lager.Data{"num-desired-responses": len(schedulingInfos)})
 	return schedulingInfos, nil
 }

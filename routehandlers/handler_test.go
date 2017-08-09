@@ -159,7 +159,7 @@ var _ = Describe("Handler", func() {
 					desiredLRP.Routes = &routes
 				})
 
-				FIt("does not log them", func() {
+				It("does not log them", func() {
 					Expect(fakeTable.SetRoutesCallCount()).To(Equal(1))
 					logs := logger.Logs()
 

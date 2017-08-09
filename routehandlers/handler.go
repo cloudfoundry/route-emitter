@@ -100,7 +100,7 @@ func (handler *Handler) Sync(
 	domains models.DomainSet,
 	cachedEvents map[string]models.Event,
 ) {
-	logger = logger.Session("sync")
+	logger = logger.Session("sync", lager.Data{"desired": desired})
 	logger.Debug("starting")
 	defer logger.Debug("completed")
 
@@ -146,6 +146,7 @@ func (handler *Handler) Sync(
 	})
 
 	if handler.localMode {
+		logger.Info("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
 		err := httpRouteCount.Send(handler.routingTable.HTTPAssociationsCount())
 		if err != nil {
 			logger.Error("failed-to-send-routes-total-metric", err)
@@ -171,6 +172,7 @@ func (handler *Handler) ShouldRefreshDesired(actual *routingtable.ActualLRPRouti
 func (handler *Handler) handleDesiredCreate(logger lager.Logger, desiredLRP *models.LRPDeploymentSchedulingInfo) {
 	logger = logger.Session("handle-desired-create", routingtable.LRPDeploymentData(desiredLRP))
 	logger.Info("starting")
+	logger.Info("BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB")
 	defer logger.Info("complete")
 	routeMappings, messagesToEmit := handler.routingTable.SetRoutes(nil, desiredLRP)
 	handler.emitMessages(logger, messagesToEmit, routeMappings)

@@ -15,11 +15,16 @@ func LRPDeploymentData(lrp *models.LRPDeploymentSchedulingInfo) lager.Data {
 	logRoutes := make(models.Routes)
 	logRoutes[cfroutes.CF_ROUTER] = (*lrp.Routes)[cfroutes.CF_ROUTER]
 	logRoutes[tcp_routes.TCP_ROUTER] = (*lrp.Routes)[tcp_routes.TCP_ROUTER]
+	ids := []string{}
+	for id, _ := range lrp.Definitions {
+		ids = append(ids, id)
+	}
 
 	return lager.Data{
-		"process-guid": lrp.ProcessGuid,
-		"routes":       logRoutes,
-		"instances":    lrp.GetInstances(),
+		"process-guid":   lrp.ProcessGuid,
+		"definition-ids": ids,
+		"routes":         logRoutes,
+		"instances":      lrp.GetInstances(),
 	}
 }
 

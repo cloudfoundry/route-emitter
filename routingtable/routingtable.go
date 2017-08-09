@@ -303,28 +303,29 @@ func httpRoutesFromSchedulingInfo(lrp *models.LRPDeploymentSchedulingInfo) map[R
 		return nil
 	}
 
-	routes, _ := cfroutes.CFRoutesFromRoutingInfo(*lrp.Routes)
+	cfRoutes, _ := cfroutes.CFRoutesFromRoutingInfo(*lrp.Routes)
 	routeEntries := make(map[RoutingKey][]externalRoute)
-	for _, route := range routes {
-		key := RoutingKey{ProcessGUID: lrp.ProcessGuid, ContainerPort: route.Port}
+	for _, definition := range lrp.Definitions {
+		for _, route := range cfRoutes {
+			key := RoutingKey{ProcessGUID: definition.DefinitionId, ContainerPort: route.Port}
 
-		routes := []externalRoute{}
-		for _, hostname := range route.Hostnames {
-			route := Route{
-				Hostname: hostname,
-				// TODO: determine which definition to get LogGuid from
-				// LogGUID:          lrp.LogGuid,
-				RouteServiceUrl:  route.RouteServiceUrl,
-				IsolationSegment: route.IsolationSegment,
+			routes := []externalRoute{}
+			for _, hostname := range route.Hostnames {
+				route := Route{
+					Hostname:         hostname,
+					LogGUID:          definition.LogGuid,
+					RouteServiceUrl:  route.RouteServiceUrl,
+					IsolationSegment: route.IsolationSegment,
+				}
+				routes = append(routes, route)
 			}
-			routes = append(routes, route)
+			routeEntries[key] = append(routeEntries[key], routes...)
 		}
-		routeEntries[key] = append(routeEntries[key], routes...)
 	}
 	return routeEntries
 }
 
-func tcpRoutesFromSchedulingInfo(lrp *models.LRPDeploymentSchedulingInfo) map[RoutingKey][]externalRoute {
+func tcpRoutesFromSchedulingInfo(logger lager.Logger, lrp *models.LRPDeploymentSchedulingInfo) map[RoutingKey][]externalRoute {
 	if lrp == nil {
 		return nil
 	}
@@ -332,14 +333,17 @@ func tcpRoutesFromSchedulingInfo(lrp *models.LRPDeploymentSchedulingInfo) map[Ro
 	routes, _ := tcp_routes.TCPRoutesFromRoutingInfo(lrp.Routes)
 
 	routeEntries := make(map[RoutingKey][]externalRoute)
-	for _, route := range routes {
-		key := RoutingKey{ProcessGUID: lrp.ProcessGuid, ContainerPort: route.ContainerPort}
+	for _, definition := range lrp.Definitions {
+		for _, route := range routes {
+			key := RoutingKey{ProcessGUID: definition.DefinitionId, ContainerPort: route.ContainerPort}
 
-		routeEntries[key] = append(routeEntries[key], ExternalEndpointInfo{
-			RouterGroupGUID: route.RouterGroupGuid,
-			Port:            route.ExternalPort,
-		})
+			routeEntries[key] = append(routeEntries[key], ExternalEndpointInfo{
+				RouterGroupGUID: route.RouterGroupGuid,
+				Port:            route.ExternalPort,
+			})
+		}
 	}
+
 	return routeEntries
 }
 
@@ -354,8 +358,8 @@ func (table *routingTable) SetRoutes(before, after *models.LRPDeploymentScheduli
 	// update routes
 	httpRemovedRouteEntries := httpRoutesFromSchedulingInfo(before)
 	httpRouteEntries := httpRoutesFromSchedulingInfo(after)
-	tcpRemovedRouteEntries := tcpRoutesFromSchedulingInfo(before)
-	tcpRouteEntries := tcpRoutesFromSchedulingInfo(after)
+	tcpRemovedRouteEntries := tcpRoutesFromSchedulingInfo(logger, before)
+	tcpRouteEntries := tcpRoutesFromSchedulingInfo(logger, after)
 
 	var messagesToEmit MessagesToEmit = MessagesToEmit{}
 	var mappings TCPRouteMappings
