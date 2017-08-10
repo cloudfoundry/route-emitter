@@ -72,6 +72,7 @@ func NewRoutingAPIRunner(binPath, consulURL string, sqlConfig SQLConfig, fs ...f
 				Username: sqlConfig.Username,
 				Password: sqlConfig.Password,
 			},
+			UUID: "routing-api-uuid",
 		},
 	}
 
