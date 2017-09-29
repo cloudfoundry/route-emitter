@@ -14,7 +14,9 @@ import (
 	"time"
 
 	"code.cloudfoundry.org/cfhttp"
+	"code.cloudfoundry.org/diego-logging-client/testhelpers"
 	"code.cloudfoundry.org/lager/lagertest"
+	"code.cloudfoundry.org/route-emitter/cmd/route-emitter/config"
 	"code.cloudfoundry.org/route-emitter/diegonats"
 	"code.cloudfoundry.org/route-emitter/diegonats/gnatsdrunner"
 	"github.com/cloudfoundry/sonde-go/events"
@@ -38,6 +40,8 @@ import (
 const heartbeatInterval = 1 * time.Second
 
 var (
+	cfgs []func(*config.RouteEmitterConfig)
+
 	emitterPath        string
 	natsPort           int
 	dropsondePort      int
@@ -62,11 +66,13 @@ var (
 	emitInterval, syncInterval time.Duration
 	consulClusterAddress       string
 	testMetricsListener        net.PacketConn
-	testMetricsChan            chan *events.Envelope
+	testMetricsChan            chan interface{}
 
-	sqlProcess ifrit.Process
-	sqlRunner  sqlrunner.SQLRunner
-	bbsRunning = false
+	sqlProcess        ifrit.Process
+	sqlRunner         sqlrunner.SQLRunner
+	bbsRunning        = false
+	useLoggregatorV2  = false
+	testIngressServer *testhelpers.TestIngressServer
 )
 
 func TestRouteEmitter(t *testing.T) {
@@ -189,6 +195,8 @@ func startOAuthServer() *ghttp.Server {
 }
 
 var _ = BeforeEach(func() {
+	cfgs = nil
+
 	consulRunner.Start()
 	consulRunner.WaitUntilReady()
 	consulClusterAddress = consulRunner.ConsulCluster()
@@ -199,24 +207,8 @@ var _ = BeforeEach(func() {
 
 	gnatsdRunner, natsClient = gnatsdrunner.StartGnatsd(natsPort)
 
-	testMetricsListener, _ = net.ListenPacket("udp", "127.0.0.1:0")
-	testMetricsChan = make(chan *events.Envelope, 1)
-	go func() {
-		defer GinkgoRecover()
-		for {
-			buffer := make([]byte, 1024)
-			n, _, err := testMetricsListener.ReadFrom(buffer)
-			if err != nil {
-				close(testMetricsChan)
-				return
-			}
+	testMetricsChan = make(chan interface{}, 1)
 
-			var envelope events.Envelope
-			err = proto.Unmarshal(buffer[:n], &envelope)
-			Expect(err).NotTo(HaveOccurred())
-			testMetricsChan <- &envelope
-		}
-	}()
 	healthCheckPort = 4500 + GinkgoParallelNode()
 	healthCheckAddress = fmt.Sprintf("127.0.0.1:%d", healthCheckPort)
 
@@ -225,13 +217,70 @@ var _ = BeforeEach(func() {
 	Expect(err).NotTo(HaveOccurred())
 })
 
+var _ = JustBeforeEach(func() {
+	if useLoggregatorV2 {
+		var err error
+		testIngressServer, err = testhelpers.NewTestIngressServer("fixtures/metron/metron.crt", "fixtures/metron/metron.key", "fixtures/metron/CA.crt")
+		Expect(err).NotTo(HaveOccurred())
+		metricsChan := testIngressServer.Receivers()
+		testIngressServer.Start()
+		port, err := strconv.Atoi(strings.TrimPrefix(testIngressServer.Addr(), "127.0.0.1:"))
+		Expect(err).NotTo(HaveOccurred())
+		cfgs = append(cfgs, func(cfg *config.RouteEmitterConfig) {
+			cfg.LoggregatorConfig.UseV2API = true
+			cfg.LoggregatorConfig.APIPort = port
+			cfg.LoggregatorConfig.CACertPath = "fixtures/metron/CA.crt"
+			cfg.LoggregatorConfig.KeyPath = "fixtures/metron/client.key"
+			cfg.LoggregatorConfig.CertPath = "fixtures/metron/client.crt"
+		})
+
+		go func() {
+			for {
+				select {
+				case data := <-metricsChan:
+					batch, err := data.Recv()
+					if err != nil {
+						close(testMetricsChan)
+						return
+					}
+					for _, elem := range batch.Batch {
+						testMetricsChan <- elem
+					}
+				}
+			}
+		}()
+	} else {
+		testMetricsListener, _ = net.ListenPacket("udp", "127.0.0.1:0")
+		go func() {
+			defer GinkgoRecover()
+			for {
+				buffer := make([]byte, 1024)
+				n, _, err := testMetricsListener.ReadFrom(buffer)
+				if err != nil {
+					close(testMetricsChan)
+					return
+				}
+
+				var envelope events.Envelope
+				err = proto.Unmarshal(buffer[:n], &envelope)
+				Expect(err).NotTo(HaveOccurred())
+				testMetricsChan <- &envelope
+			}
+		}()
+	}
+})
+
 var _ = AfterEach(func() {
 	stopBBS()
 	consulRunner.Stop()
 	gnatsdRunner.Signal(os.Kill)
 	Eventually(gnatsdRunner.Wait(), 5).Should(Receive())
 
-	testMetricsListener.Close()
+	if useLoggregatorV2 {
+		testIngressServer.Stop()
+	} else {
+		testMetricsListener.Close()
+	}
 	Eventually(testMetricsChan).Should(BeClosed())
 
 	ginkgomon.Kill(sqlProcess, 5*time.Second)

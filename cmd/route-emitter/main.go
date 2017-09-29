@@ -14,6 +14,8 @@ import (
 	"code.cloudfoundry.org/clock"
 	"code.cloudfoundry.org/consuladapter"
 	"code.cloudfoundry.org/debugserver"
+	loggingclient "code.cloudfoundry.org/diego-logging-client"
+	"code.cloudfoundry.org/go-loggregator/runtimeemitter"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/lager/lagerflags"
 	route_emitter "code.cloudfoundry.org/route-emitter"
@@ -69,7 +71,11 @@ func main() {
 	clock := clock.NewClock()
 	syncer := syncer.NewSyncer(clock, time.Duration(cfg.SyncInterval), natsClient, logger)
 
-	initializeDropsonde(logger, cfg.DropsondePort)
+	metronClient, err := initializeMetron(logger, cfg)
+	if err != nil {
+		logger.Error("failed-to-initialize-metron-client", err)
+		os.Exit(1)
+	}
 
 	natsClientRunner := diegonats.NewClientRunner(cfg.NATSAddresses, cfg.NATSUsername, cfg.NATSPassword, logger, natsClient)
 
@@ -77,7 +83,7 @@ func main() {
 
 	localMode := cfg.CellID != ""
 	table := routingtable.NewRoutingTable(logger, cfg.RegisterDirectInstanceRoutes)
-	natsEmitter := initializeNatsEmitter(logger, natsClient, cfg.RouteEmittingWorkers)
+	natsEmitter := initializeNatsEmitter(logger, natsClient, cfg.RouteEmittingWorkers, metronClient)
 
 	routeTTL := time.Duration(cfg.TCPRouteTTL)
 	if routeTTL.Seconds() > 65535 {
@@ -94,7 +100,7 @@ func main() {
 		routingAPIEmitter = emitter.NewRoutingAPIEmitter(tcpLogger, routingAPIClient, uaaClient, int(routeTTL.Seconds()))
 	}
 
-	handler := routehandlers.NewHandler(table, natsEmitter, routingAPIEmitter, localMode)
+	handler := routehandlers.NewHandler(table, natsEmitter, routingAPIEmitter, localMode, metronClient)
 
 	watcher := watcher.NewWatcher(
 		cfg.CellID,
@@ -103,6 +109,7 @@ func main() {
 		handler,
 		syncer.Events(),
 		logger,
+		metronClient,
 	)
 
 	healthHandler := func(resp http.ResponseWriter, req *http.Request) {
@@ -133,6 +140,7 @@ func main() {
 			0,
 			clock,
 			time.Duration(cfg.ConsulDownModeNotificationInterval),
+			metronClient,
 		)
 
 		// we are running in global mode
@@ -180,6 +188,7 @@ func main() {
 			1,
 			clock,
 			time.Duration(cfg.ConsulDownModeNotificationInterval),
+			metronClient,
 		)
 		// we are running in global mode
 		members = grouper.Members{
@@ -243,17 +252,34 @@ func initializeDropsonde(logger lager.Logger, dropsondePort int) {
 	}
 }
 
+func initializeMetron(logger lager.Logger, locketConfig config.RouteEmitterConfig) (loggingclient.IngressClient, error) {
+	client, err := loggingclient.NewIngressClient(locketConfig.LoggregatorConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	if locketConfig.LoggregatorConfig.UseV2API {
+		emitter := runtimeemitter.NewV1(client)
+		go emitter.Run()
+	} else {
+		initializeDropsonde(logger, locketConfig.DropsondePort)
+	}
+
+	return client, nil
+}
+
 func initializeNatsEmitter(
 	logger lager.Logger,
 	natsClient diegonats.NATSClient,
 	routeEmittingWorkers int,
+	metronClient loggingclient.IngressClient,
 ) emitter.NATSEmitter {
 	workPool, err := workpool.NewWorkPool(routeEmittingWorkers)
 	if err != nil {
 		logger.Fatal("failed-to-construct-nats-emitter-workpool", err, lager.Data{"num-workers": routeEmittingWorkers}) // should never happen
 	}
 
-	return emitter.NewNATSEmitter(natsClient, workPool, logger)
+	return emitter.NewNATSEmitter(natsClient, workPool, logger, metronClient)
 }
 
 func initializeConsulClient(logger lager.Logger, consulCluster string) consuladapter.Client {

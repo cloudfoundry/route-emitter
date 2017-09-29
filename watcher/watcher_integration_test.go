@@ -9,6 +9,7 @@ import (
 	"code.cloudfoundry.org/bbs/fake_bbs"
 	"code.cloudfoundry.org/bbs/models"
 	"code.cloudfoundry.org/clock/fakeclock"
+	mfakes "code.cloudfoundry.org/diego-logging-client/testhelpers"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/lager/lagertest"
 	"code.cloudfoundry.org/route-emitter/diegonats"
@@ -39,6 +40,7 @@ var _ = Describe("Watcher Integration", func() {
 		testWatcher      *watcher.Watcher
 		process          ifrit.Process
 		logger           *lagertest.TestLogger
+		fakeMetronClient *mfakes.FakeIngressClient
 	)
 
 	BeforeEach(func() {
@@ -61,7 +63,7 @@ var _ = Describe("Watcher Integration", func() {
 
 		uaaClient := uaaclient.NewNoOpUaaClient()
 		routingAPIEmitter := emitter.NewRoutingAPIEmitter(logger, routingApiClient, uaaClient, 100)
-		handler := routehandlers.NewHandler(natsTable, natsEmitter, routingAPIEmitter, false)
+		handler := routehandlers.NewHandler(natsTable, natsEmitter, routingAPIEmitter, false, fakeMetronClient)
 		clock := fakeclock.NewFakeClock(time.Now())
 		testWatcher = watcher.NewWatcher(
 			cellID,
@@ -70,6 +72,7 @@ var _ = Describe("Watcher Integration", func() {
 			handler,
 			syncEvents,
 			logger,
+			fakeMetronClient,
 		)
 	})
 

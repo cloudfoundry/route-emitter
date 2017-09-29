@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 
+	mfakes "code.cloudfoundry.org/diego-logging-client/testhelpers"
+
 	"code.cloudfoundry.org/bbs/models"
 	"code.cloudfoundry.org/lager/lagertest"
 	"code.cloudfoundry.org/route-emitter/emitter/fakes"
@@ -11,8 +13,6 @@ import (
 	"code.cloudfoundry.org/route-emitter/routingtable"
 	"code.cloudfoundry.org/route-emitter/routingtable/fakeroutingtable"
 	"code.cloudfoundry.org/routing-info/cfroutes"
-	fake_metrics_sender "github.com/cloudfoundry/dropsonde/metric_sender/fake"
-	"github.com/cloudfoundry/dropsonde/metrics"
 	"github.com/gogo/protobuf/proto"
 
 	. "github.com/onsi/ginkgo"
@@ -34,6 +34,15 @@ func (e randomEvent) Key() string {
 }
 
 var _ = Describe("Handler", func() {
+	type counter struct {
+		name  string
+		delta uint64
+	}
+	type metric struct {
+		name  string
+		value int
+	}
+
 	const (
 		expectedDomain                  = "domain"
 		expectedProcessGuid             = "process-guid"
@@ -56,13 +65,16 @@ var _ = Describe("Handler", func() {
 		expectedCFRoute cfroutes.CFRoute
 
 		dummyMessagesToEmit routingtable.MessagesToEmit
-		fakeMetricSender    *fake_metrics_sender.FakeMetricSender
+		fakeMetronClient    *mfakes.FakeIngressClient
 
 		logger *lagertest.TestLogger
 
 		routeHandler *routehandlers.Handler
 
 		emptyTCPRouteMappings routingtable.TCPRouteMappings
+
+		counterChan chan counter
+		metricChan  chan metric
 	)
 
 	BeforeEach(func() {
@@ -85,10 +97,19 @@ var _ = Describe("Handler", func() {
 		expectedRoutes = []string{"route-1", "route-2"}
 		expectedCFRoute = cfroutes.CFRoute{Hostnames: expectedRoutes, Port: expectedContainerPort, RouteServiceUrl: expectedRouteServiceUrl}
 
-		fakeMetricSender = fake_metrics_sender.NewFakeMetricSender()
-		metrics.Initialize(fakeMetricSender, nil)
+		fakeMetronClient = &mfakes.FakeIngressClient{}
+		counterChan = make(chan counter, 10)
+		fakeMetronClient.IncrementCounterWithDeltaStub = func(name string, delta uint64) error {
+			counterChan <- counter{name: name, delta: delta}
+			return nil
+		}
+		metricChan = make(chan metric, 10)
+		fakeMetronClient.SendMetricStub = func(name string, value int) error {
+			metricChan <- metric{name: name, value: value}
+			return nil
+		}
 
-		routeHandler = routehandlers.NewHandler(fakeTable, natsEmitter, nil, false)
+		routeHandler = routehandlers.NewHandler(fakeTable, natsEmitter, nil, false, fakeMetronClient)
 	})
 
 	Context("when an unrecognized event is received", func() {
@@ -100,7 +121,9 @@ var _ = Describe("Handler", func() {
 
 	Describe("DesiredLRP Event", func() {
 		Context("DesiredLRPCreated Event", func() {
-			var desiredLRP *models.DesiredLRP
+			var (
+				desiredLRP *models.DesiredLRP
+			)
 
 			BeforeEach(func() {
 				routes := cfroutes.CFRoutes{expectedCFRoute}.RoutingInfo()
@@ -115,7 +138,6 @@ var _ = Describe("Handler", func() {
 					Routes:      &routes,
 					LogGuid:     logGuid,
 				}
-
 				fakeTable.SetRoutesReturns(emptyTCPRouteMappings, dummyMessagesToEmit)
 			})
 
@@ -125,18 +147,23 @@ var _ = Describe("Handler", func() {
 
 			It("should set the routes on the table", func() {
 				Expect(fakeTable.SetRoutesCallCount()).To(Equal(1))
-
 				before, after := fakeTable.SetRoutesArgsForCall(0)
 				Expect(before).To(BeNil())
 				Expect(*after).To(Equal(desiredLRP.DesiredLRPSchedulingInfo()))
 			})
 
 			It("sends a 'routes registered' metric", func() {
-				Expect(fakeMetricSender.GetCounter("RoutesRegistered")).To(BeEquivalentTo(2))
+				Eventually(counterChan).Should(Receive(Equal(counter{
+					name:  "RoutesRegistered",
+					delta: 2,
+				})))
 			})
 
 			It("sends a 'routes unregistered' metric", func() {
-				Expect(fakeMetricSender.GetCounter("RoutesUnregistered")).To(BeEquivalentTo(0))
+				Eventually(counterChan).Should(Receive(Equal(counter{
+					name:  "RoutesUnregistered",
+					delta: 0,
+				})))
 			})
 
 			It("should emit whatever the table tells it to emit", func() {
@@ -180,7 +207,15 @@ var _ = Describe("Handler", func() {
 		})
 
 		Context("DesiredLRPChanged Event", func() {
-			var originalDesiredLRP, changedDesiredLRP *models.DesiredLRP
+			type metric struct {
+				name  string
+				delta uint64
+			}
+
+			var (
+				originalDesiredLRP, changedDesiredLRP *models.DesiredLRP
+				metricChan                            chan metric
+			)
 
 			BeforeEach(func() {
 				fakeTable.SetRoutesReturns(emptyTCPRouteMappings, dummyMessagesToEmit)
@@ -209,6 +244,11 @@ var _ = Describe("Handler", func() {
 					ModificationTag: &models.ModificationTag{Epoch: "abcd", Index: 1},
 					Instances:       3,
 				}
+				metricChan = make(chan metric, 10)
+				fakeMetronClient.IncrementCounterWithDeltaStub = func(name string, delta uint64) error {
+					metricChan <- metric{name: name, delta: delta}
+					return nil
+				}
 			})
 
 			JustBeforeEach(func() {
@@ -223,11 +263,17 @@ var _ = Describe("Handler", func() {
 			})
 
 			It("sends a 'routes registered' metric", func() {
-				Expect(fakeMetricSender.GetCounter("RoutesRegistered")).To(BeEquivalentTo(2))
+				Eventually(metricChan).Should(Receive(Equal(metric{
+					name:  "RoutesRegistered",
+					delta: 2,
+				})))
 			})
 
 			It("sends a 'routes unregistered' metric", func() {
-				Expect(fakeMetricSender.GetCounter("RoutesUnregistered")).To(BeEquivalentTo(0))
+				Eventually(metricChan).Should(Receive(Equal(metric{
+					name:  "RoutesUnregistered",
+					delta: 0,
+				})))
 			})
 
 			It("should emit whatever the table tells it to emit", func() {
@@ -409,11 +455,17 @@ var _ = Describe("Handler", func() {
 				})
 
 				It("sends a 'routes registered' metric", func() {
-					Expect(fakeMetricSender.GetCounter("RoutesRegistered")).To(BeEquivalentTo(2))
+					Eventually(counterChan).Should(Receive(Equal(counter{
+						name:  "RoutesRegistered",
+						delta: 2,
+					})))
 				})
 
 				It("sends a 'routes unregistered' metric", func() {
-					Expect(fakeMetricSender.GetCounter("RoutesUnregistered")).To(BeEquivalentTo(0))
+					Eventually(counterChan).Should(Receive(Equal(counter{
+						name:  "RoutesUnregistered",
+						delta: 0,
+					})))
 				})
 			})
 
@@ -534,11 +586,17 @@ var _ = Describe("Handler", func() {
 				})
 
 				It("sends a 'routes registered' metric", func() {
-					Expect(fakeMetricSender.GetCounter("RoutesRegistered")).To(BeEquivalentTo(2))
+					Eventually(counterChan).Should(Receive(Equal(counter{
+						name:  "RoutesRegistered",
+						delta: 2,
+					})))
 				})
 
 				It("sends a 'routes unregistered' metric", func() {
-					Expect(fakeMetricSender.GetCounter("RoutesUnregistered")).To(BeEquivalentTo(0))
+					Eventually(counterChan).Should(Receive(Equal(counter{
+						name:  "RoutesUnregistered",
+						delta: 0,
+					})))
 				})
 			})
 
@@ -933,13 +991,16 @@ var _ = Describe("Handler", func() {
 
 			Context("when emitting metrics in localMode", func() {
 				BeforeEach(func() {
-					routeHandler = routehandlers.NewHandler(fakeTable, natsEmitter, nil, true)
+					routeHandler = routehandlers.NewHandler(fakeTable, natsEmitter, nil, true, fakeMetronClient)
 					fakeTable.HTTPEndpointCountReturns(5)
 				})
 
 				It("emits the HTTPRouteCount", func() {
 					routeHandler.Sync(logger, desiredInfo, actualInfo, domains, nil)
-					Expect(fakeMetricSender.GetValue("HTTPRouteCount").Value).To(BeEquivalentTo(5))
+					Eventually(metricChan).Should(Receive(Equal(metric{
+						name:  "HTTPRouteCount",
+						value: 5,
+					})))
 				})
 			})
 
@@ -1051,12 +1112,18 @@ var _ = Describe("Handler", func() {
 
 		It("sends a 'routes total' metric", func() {
 			routeHandler.Emit(logger)
-			Expect(fakeMetricSender.GetValue("RoutesTotal").Value).To(BeEquivalentTo(3))
+			Eventually(metricChan).Should(Receive(Equal(metric{
+				name:  "RoutesTotal",
+				value: 3,
+			})))
 		})
 
 		It("sends a 'synced routes' metric", func() {
 			routeHandler.Emit(logger)
-			Expect(fakeMetricSender.GetCounter("RoutesSynced")).To(BeEquivalentTo(3))
+			Eventually(counterChan).Should(Receive(Equal(counter{
+				name:  "RoutesSynced",
+				delta: 3,
+			})))
 		})
 	})
 

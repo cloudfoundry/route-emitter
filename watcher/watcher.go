@@ -11,14 +11,14 @@ import (
 	"code.cloudfoundry.org/bbs/events"
 	"code.cloudfoundry.org/bbs/models"
 	"code.cloudfoundry.org/clock"
+	loggingclient "code.cloudfoundry.org/diego-logging-client"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/route-emitter/routingtable"
 	"code.cloudfoundry.org/route-emitter/syncer"
-	"code.cloudfoundry.org/runtimeschema/metric"
 )
 
-var (
-	routeSyncDuration = metric.Duration("RouteEmitterSyncDuration")
+const (
+	routeSyncDuration = "RouteEmitterSyncDuration"
 )
 
 //go:generate counterfeiter -o fakes/fake_routehandler.go . RouteHandler
@@ -43,6 +43,7 @@ type Watcher struct {
 	routeHandler RouteHandler
 	syncEvents   syncer.Events
 	logger       lager.Logger
+	metronClient loggingclient.IngressClient
 }
 
 func NewWatcher(
@@ -52,6 +53,7 @@ func NewWatcher(
 	routeHandler RouteHandler,
 	syncEvents syncer.Events,
 	logger lager.Logger,
+	metronClient loggingclient.IngressClient,
 ) *Watcher {
 	return &Watcher{
 		cellID:       cellID,
@@ -60,6 +62,7 @@ func NewWatcher(
 		routeHandler: routeHandler,
 		syncEvents:   syncEvents,
 		logger:       logger.Session("watcher"),
+		metronClient: metronClient,
 	}
 }
 
@@ -138,7 +141,7 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 			)
 
 			after := watcher.clock.Now()
-			if err := routeSyncDuration.Send(after.Sub(syncEvent.startTime)); err != nil {
+			if err := watcher.metronClient.SendDuration(routeSyncDuration, after.Sub(syncEvent.startTime)); err != nil {
 				watcher.logger.Error("failed-to-send-route-sync-duration-metric", err)
 			}
 

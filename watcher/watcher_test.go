@@ -10,6 +10,7 @@ import (
 	"code.cloudfoundry.org/bbs/fake_bbs"
 	"code.cloudfoundry.org/bbs/models"
 	"code.cloudfoundry.org/clock/fakeclock"
+	mfakes "code.cloudfoundry.org/diego-logging-client/testhelpers"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/lager/lagertest"
 	"code.cloudfoundry.org/route-emitter/routingtable"
@@ -18,8 +19,6 @@ import (
 	"code.cloudfoundry.org/route-emitter/watcher/fakes"
 	"code.cloudfoundry.org/routing-info/cfroutes"
 	"code.cloudfoundry.org/routing-info/tcp_routes"
-	fake_metrics_sender "github.com/cloudfoundry/dropsonde/metric_sender/fake"
-	"github.com/cloudfoundry/dropsonde/metrics"
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/ifrit/ginkgomon"
 	"github.com/vito/go-sse/sse"
@@ -87,15 +86,16 @@ var _ = Describe("Watcher", func() {
 	}
 
 	var (
-		logger       *lagertest.TestLogger
-		eventSource  *eventfakes.FakeEventSource
-		bbsClient    *fake_bbs.FakeClient
-		routeHandler *fakes.FakeRouteHandler
-		testWatcher  *watcher.Watcher
-		clock        *fakeclock.FakeClock
-		process      ifrit.Process
-		cellID       string
-		syncEvents   syncer.Events
+		logger           *lagertest.TestLogger
+		eventSource      *eventfakes.FakeEventSource
+		bbsClient        *fake_bbs.FakeClient
+		routeHandler     *fakes.FakeRouteHandler
+		testWatcher      *watcher.Watcher
+		clock            *fakeclock.FakeClock
+		process          ifrit.Process
+		cellID           string
+		syncEvents       syncer.Events
+		fakeMetronClient *mfakes.FakeIngressClient
 	)
 
 	BeforeEach(func() {
@@ -112,10 +112,11 @@ var _ = Describe("Watcher", func() {
 			Emit: make(chan struct{}),
 		}
 		cellID = ""
+		fakeMetronClient = &mfakes.FakeIngressClient{}
 	})
 
 	JustBeforeEach(func() {
-		testWatcher = watcher.NewWatcher(cellID, bbsClient, clock, routeHandler, syncEvents, logger)
+		testWatcher = watcher.NewWatcher(cellID, bbsClient, clock, routeHandler, syncEvents, logger, fakeMetronClient)
 		process = ifrit.Invoke(testWatcher)
 	})
 
@@ -344,7 +345,7 @@ var _ = Describe("Watcher", func() {
 			)
 
 			bbsClient.SubscribeToEventsByCellIDReturns(fakeEventSource, nil)
-			testWatcher = watcher.NewWatcher(cellID, bbsClient, clock, routeHandler, syncEvents, logger)
+			testWatcher = watcher.NewWatcher(cellID, bbsClient, clock, routeHandler, syncEvents, logger, fakeMetronClient)
 		})
 
 		It("should not close the current connection", func() {
@@ -384,7 +385,7 @@ var _ = Describe("Watcher", func() {
 				return eventSource, nil
 			}
 
-			testWatcher = watcher.NewWatcher(cellID, bbsClient, clock, routeHandler, syncEvents, logger)
+			testWatcher = watcher.NewWatcher(cellID, bbsClient, clock, routeHandler, syncEvents, logger, fakeMetronClient)
 		})
 
 		JustBeforeEach(func() {
@@ -407,9 +408,8 @@ var _ = Describe("Watcher", func() {
 
 	Describe("Sync Events", func() {
 		var (
-			errCh            chan error
-			eventCh          chan EventHolder
-			fakeMetricSender *fake_metrics_sender.FakeMetricSender
+			errCh   chan error
+			eventCh chan EventHolder
 		)
 
 		BeforeEach(func() {
@@ -435,8 +435,6 @@ var _ = Describe("Watcher", func() {
 					return nil, nil
 				}
 			}
-			fakeMetricSender = fake_metrics_sender.NewFakeMetricSender()
-			metrics.Initialize(fakeMetricSender, nil)
 		})
 
 		currentTag := &models.ModificationTag{Epoch: "abc", Index: 1}
@@ -676,9 +674,7 @@ var _ = Describe("Watcher", func() {
 			})
 
 			It("does not emit the sync duration metric", func() {
-				Consistently(func() float64 {
-					return fakeMetricSender.GetValue("RouteEmitterSyncDuration").Value
-				}).Should(BeZero())
+				Consistently(fakeMetronClient.SendDurationCallCount).Should(BeZero())
 			})
 		})
 
@@ -722,9 +718,10 @@ var _ = Describe("Watcher", func() {
 			})
 
 			It("should emit the sync duration, and allow event processing", func() {
-				Eventually(func() float64 {
-					return fakeMetricSender.GetValue("RouteEmitterSyncDuration").Value
-				}).Should(BeNumerically(">=", 100*time.Millisecond))
+				Eventually(fakeMetronClient.SendDurationCallCount).Should(Equal(1))
+				metric, value := fakeMetronClient.SendDurationArgsForCall(0)
+				Expect(metric).To(Equal("RouteEmitterSyncDuration"))
+				Expect(value).To(BeNumerically(">=", 100*time.Millisecond))
 
 				By("completing, events are no longer cached")
 				sendEvent()
@@ -744,7 +741,7 @@ var _ = Describe("Watcher", func() {
 				cellID = "cell-id"
 				actualLRPGroup2.Instance.ActualLRPInstanceKey.CellId = cellID
 
-				testWatcher = watcher.NewWatcher(cellID, bbsClient, clock, routeHandler, syncEvents, logger)
+				testWatcher = watcher.NewWatcher(cellID, bbsClient, clock, routeHandler, syncEvents, logger, fakeMetronClient)
 			})
 
 			Context("when the cell has actual lrps running", func() {

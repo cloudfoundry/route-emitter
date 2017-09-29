@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"code.cloudfoundry.org/debugserver"
+	loggingclient "code.cloudfoundry.org/diego-logging-client"
 	"code.cloudfoundry.org/durationjson"
 	"code.cloudfoundry.org/lager/lagerflags"
 	"code.cloudfoundry.org/locket"
@@ -51,6 +52,7 @@ type RouteEmitterConfig struct {
 	OAuth                              OAuthConfig           `json:"oauth"`
 	RoutingAPI                         RoutingAPIConfig      `json:"routing_api"`
 	EnableTCPEmitter                   bool                  `json:"enable_tcp_emitter"`
+	LoggregatorConfig                  loggingclient.Config  `json:"loggregator"`
 	lagerflags.LagerConfig
 	debugserver.DebugServerConfig
 }

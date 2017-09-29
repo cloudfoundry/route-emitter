@@ -3,13 +3,12 @@ package emitter_test
 import (
 	"errors"
 
+	mfakes "code.cloudfoundry.org/diego-logging-client/testhelpers"
 	"code.cloudfoundry.org/lager/lagertest"
 	"code.cloudfoundry.org/route-emitter/diegonats"
 	"code.cloudfoundry.org/route-emitter/emitter"
 	"code.cloudfoundry.org/route-emitter/routingtable"
 	"code.cloudfoundry.org/workpool"
-	fake_metrics_sender "github.com/cloudfoundry/dropsonde/metric_sender/fake"
-	"github.com/cloudfoundry/dropsonde/metrics"
 	"github.com/nats-io/nats"
 
 	. "github.com/onsi/ginkgo"
@@ -19,7 +18,7 @@ import (
 var _ = Describe("NatsEmitter", func() {
 	var natsEmitter emitter.NATSEmitter
 	var natsClient *diegonats.FakeNATSClient
-	var fakeMetricSender *fake_metrics_sender.FakeMetricSender
+	var fakeMetronClient *mfakes.FakeIngressClient
 
 	messagesToEmit := routingtable.MessagesToEmit{
 		RegistrationMessages: []routingtable.RegistryMessage{
@@ -37,9 +36,8 @@ var _ = Describe("NatsEmitter", func() {
 		logger := lagertest.NewTestLogger("test")
 		workPool, err := workpool.NewWorkPool(1)
 		Expect(err).NotTo(HaveOccurred())
-		natsEmitter = emitter.NewNATSEmitter(natsClient, workPool, logger)
-		fakeMetricSender = fake_metrics_sender.NewFakeMetricSender()
-		metrics.Initialize(fakeMetricSender, nil)
+		fakeMetronClient = &mfakes.FakeIngressClient{}
+		natsEmitter = emitter.NewNATSEmitter(natsClient, workPool, logger, fakeMetronClient)
 	})
 
 	Describe("Emitting", func() {
@@ -92,7 +90,10 @@ var _ = Describe("NatsEmitter", func() {
         }
       `)))
 
-			Expect(fakeMetricSender.GetCounter("MessagesEmitted")).To(BeEquivalentTo(4))
+			Eventually(fakeMetronClient.IncrementCounterWithDeltaCallCount).Should(Equal(1))
+			name, delta := fakeMetronClient.IncrementCounterWithDeltaArgsForCall(0)
+			Expect(name).To(Equal("MessagesEmitted"))
+			Expect(delta).To(BeEquivalentTo(4))
 		})
 
 		Context("when the nats client errors", func() {

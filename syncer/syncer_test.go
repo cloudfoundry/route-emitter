@@ -12,8 +12,6 @@ import (
 	"code.cloudfoundry.org/route-emitter/diegonats"
 	"code.cloudfoundry.org/route-emitter/syncer"
 	"code.cloudfoundry.org/routing-info/cfroutes"
-	fake_metrics_sender "github.com/cloudfoundry/dropsonde/metric_sender/fake"
-	"github.com/cloudfoundry/dropsonde/metrics"
 	"github.com/nats-io/nats"
 	"github.com/tedsuo/ifrit"
 
@@ -46,7 +44,6 @@ var _ = Describe("NatsSyncer", func() {
 		actualResponses        []*models.ActualLRPGroup
 
 		routerStartMessages chan<- *nats.Msg
-		fakeMetricSender    *fake_metrics_sender.FakeMetricSender
 	)
 
 	BeforeEach(func() {
@@ -93,9 +90,6 @@ var _ = Describe("NatsSyncer", func() {
 
 		bbsClient.DesiredLRPSchedulingInfosReturns([]*models.DesiredLRPSchedulingInfo{schedulingInfoResponse}, nil)
 		bbsClient.ActualLRPGroupsReturns(actualResponses, nil)
-
-		fakeMetricSender = fake_metrics_sender.NewFakeMetricSender()
-		metrics.Initialize(fakeMetricSender, nil)
 	})
 
 	JustBeforeEach(func() {

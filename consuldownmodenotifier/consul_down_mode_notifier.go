@@ -5,15 +5,20 @@ import (
 	"time"
 
 	"code.cloudfoundry.org/clock"
+	loggingclient "code.cloudfoundry.org/diego-logging-client"
 	"code.cloudfoundry.org/lager"
-	"code.cloudfoundry.org/runtimeschema/metric"
+)
+
+const (
+	consulDownMetric = "ConsulDownMode"
 )
 
 type ConsulDownModeNotifier struct {
-	logger   lager.Logger
-	value    int
-	clock    clock.Clock
-	interval time.Duration
+	logger       lager.Logger
+	value        int
+	clock        clock.Clock
+	interval     time.Duration
+	metronClient loggingclient.IngressClient
 }
 
 func NewConsulDownModeNotifier(
@@ -21,9 +26,10 @@ func NewConsulDownModeNotifier(
 	value int,
 	clock clock.Clock,
 	interval time.Duration,
+	metronClient loggingclient.IngressClient,
 ) *ConsulDownModeNotifier {
 	return &ConsulDownModeNotifier{
-		logger: logger, value: value, clock: clock, interval: interval,
+		logger: logger, value: value, clock: clock, interval: interval, metronClient: metronClient,
 	}
 }
 
@@ -32,7 +38,6 @@ func (p *ConsulDownModeNotifier) Run(signals <-chan os.Signal, ready chan<- stru
 	logger.Info("starting")
 	defer logger.Info("finished")
 	retryTimer := p.clock.NewTimer(0)
-	var consulDownMetric = metric.Metric("ConsulDownMode")
 
 	close(ready)
 
@@ -42,7 +47,10 @@ func (p *ConsulDownModeNotifier) Run(signals <-chan os.Signal, ready chan<- stru
 			logger.Info("received-signal")
 			return nil
 		case <-retryTimer.C():
-			consulDownMetric.Send(p.value)
+			err := p.metronClient.SendMetric(consulDownMetric, p.value)
+			if err != nil {
+				p.logger.Error("cannot-send-consul-down-metric", err)
+			}
 			retryTimer.Reset(p.interval)
 		}
 	}

@@ -5,17 +5,22 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/http/httputil"
 	"net/url"
 	"os"
 	"os/exec"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
 	"code.cloudfoundry.org/bbs/models"
+	"code.cloudfoundry.org/diego-logging-client/testhelpers"
 	"code.cloudfoundry.org/durationjson"
+	"code.cloudfoundry.org/go-loggregator/rpc/loggregator_v2"
 	"code.cloudfoundry.org/lager/lagerflags"
 	"code.cloudfoundry.org/locket"
 	"code.cloudfoundry.org/route-emitter/cmd/route-emitter/config"
@@ -26,6 +31,7 @@ import (
 	"code.cloudfoundry.org/routing-info/cfroutes"
 	"code.cloudfoundry.org/routing-info/tcp_routes"
 	"github.com/cloudfoundry/sonde-go/events"
+	"github.com/gogo/protobuf/proto"
 	"github.com/nats-io/nats"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -62,7 +68,6 @@ var _ = Describe("Route Emitter", func() {
 		routingApiProcess ifrit.Process
 		routingAPIRunner  *runners.RoutingAPIRunner
 		routerGUID        string
-		cfgs              []func(*config.RouteEmitterConfig)
 	)
 
 	createEmitterRunner := func(sessionName string, cellID string, modifyConfig ...func(*config.RouteEmitterConfig)) *ginkgomon.Runner {
@@ -199,7 +204,6 @@ var _ = Describe("Route Emitter", func() {
 			return nil
 		}).Should(Succeed())
 		logger.Info("started-routing-api-server")
-		cfgs = nil
 		cfgs = append(cfgs, func(cfg *config.RouteEmitterConfig) {
 			cfg.BBSAddress = bbsURL.String()
 			cfg.RoutingAPI.URL = "http://127.0.0.1"
@@ -216,7 +220,7 @@ var _ = Describe("Route Emitter", func() {
 		var runner *ginkgomon.Runner
 		var emitter ifrit.Process
 
-		BeforeEach(func() {
+		JustBeforeEach(func() {
 			runner = createEmitterRunner("emitter1", "", cfgs...)
 			runner.StartCheck = "emitter1.started"
 			emitter = ginkgomon.Invoke(runner)
@@ -384,6 +388,7 @@ var _ = Describe("Route Emitter", func() {
 							}, 5*time.Second).Should(ContainElement("/oauth/token"))
 						})
 					})
+
 				}
 
 				BeforeEach(func() {
@@ -494,11 +499,25 @@ var _ = Describe("Route Emitter", func() {
 							cellID = "cell-id"
 						})
 
-						It("emits the tcp route count", func() {
-							Eventually(func() *events.Envelope {
-								metric := <-testMetricsChan
-								return metric
-							}).Should(matchMetricAndValue(metricAndValue{Name: "TCPRouteCount", Value: int32(1)}))
+						Context("when using loggregator v2 api", func() {
+							type metrics struct {
+								name  string
+								value float64
+							}
+
+							BeforeEach(func() {
+								useLoggregatorV2 = true
+							})
+
+							FIt("emits the tcp route count", func() {
+								Eventually(testMetricsChan).Should(Receive(Equal(metrics{name: "TCPRouteCount", value: float64(1)})))
+							})
+						})
+
+						Context("when using loggregator v1 api", func() {
+							It("emits the tcp route count", func() {
+								Eventually(testMetricsChan).Should(Receive(matchMetricAndValue(metricAndValue{Name: "TCPRouteCount", Value: int32(1)})))
+							})
 						})
 					})
 
@@ -629,7 +648,9 @@ var _ = Describe("Route Emitter", func() {
 							cfg.CommunicationTimeout = durationjson.Duration(5 * time.Second)
 							cfg.SyncInterval = durationjson.Duration(1 * time.Hour)
 						})
+					})
 
+					JustBeforeEach(func() {
 						fakeBBS.Start()
 						runner = createEmitterRunner("route-emitter", "cell-id", cfgs...)
 						runner.StartCheck = "succeeded-getting-actual-lrps"
@@ -803,11 +824,67 @@ var _ = Describe("Route Emitter", func() {
 						consulClusterAddress = ""
 					})
 
-					It("emits the http route count", func() {
-						Eventually(func() *events.Envelope {
-							metric := <-testMetricsChan
-							return metric
-						}, "2s").Should(matchMetricAndValue(metricAndValue{Name: "HTTPRouteCount", Value: int32(2)}))
+					Context("when using loggregator v2 api", func() {
+						type metrics struct {
+							name  string
+							value float64
+						}
+						var (
+							testIngressServer *testhelpers.TestIngressServer
+							testMetricsChan   chan loggregator_v2.Ingress_BatchSenderServer
+							err               error
+							metricChan        chan metrics
+						)
+						BeforeEach(func() {
+							testIngressServer, err = testhelpers.NewTestIngressServer("fixtures/metron/metron.crt", "fixtures/metron/metron.key", "fixtures/metron/CA.crt")
+							Expect(err).NotTo(HaveOccurred())
+							testMetricsChan = testIngressServer.Receivers()
+							testIngressServer.Start()
+							port, err := strconv.Atoi(strings.TrimPrefix(testIngressServer.Addr(), "127.0.0.1:"))
+							Expect(err).NotTo(HaveOccurred())
+							cfgs = append(cfgs, func(cfg *config.RouteEmitterConfig) {
+								cfg.LoggregatorConfig.UseV2API = true
+								cfg.LoggregatorConfig.APIPort = port
+								cfg.LoggregatorConfig.CACertPath = "fixtures/metron/CA.crt"
+								cfg.LoggregatorConfig.KeyPath = "fixtures/metron/client.key"
+								cfg.LoggregatorConfig.CertPath = "fixtures/metron/client.crt"
+							})
+
+							metricChan = make(chan metrics)
+
+							go func() {
+								for {
+									select {
+									case data := <-testMetricsChan:
+										batch, err := data.Recv()
+										if err != nil {
+											continue
+										}
+										for _, elem := range batch.Batch {
+											if gauge := elem.GetGauge(); gauge != nil {
+												for name, m := range gauge.GetMetrics() {
+													metricChan <- metrics{name: name, value: m.GetValue()}
+												}
+											}
+										}
+									}
+								}
+							}()
+						})
+
+						AfterEach(func() {
+							testIngressServer.Stop()
+						})
+
+						It("emits the http route count", func() {
+							Eventually(metricChan).Should(Receive(Equal(metrics{name: "HTTPRouteCount", value: float64(2)})))
+						})
+					})
+
+					Context("when using loggregator v1 api", func() {
+						It("emits the http route count", func() {
+							Eventually(testMetricsChan, "2s").Should(matchMetricAndValue(metricAndValue{Name: "HTTPRouteCount", Value: int32(2)}))
+						})
 					})
 				})
 
@@ -1091,8 +1168,69 @@ var _ = Describe("Route Emitter", func() {
 			})
 		})
 
-		It("emits a metric to say that it is not in consul down mode", func() {
-			Eventually(testMetricsChan).Should(Receive(matchMetricAndValue(metricAndValue{Name: "ConsulDownMode", Value: 0})))
+		Context("not in consul down mode metric", func() {
+			Context("when using loggregator v2 api", func() {
+				type metrics struct {
+					name  string
+					value float64
+				}
+				var (
+					testIngressServer *testhelpers.TestIngressServer
+					testMetricsChan   chan loggregator_v2.Ingress_BatchSenderServer
+					err               error
+					metricChan        chan metrics
+				)
+				BeforeEach(func() {
+					testIngressServer, err = testhelpers.NewTestIngressServer("fixtures/metron/metron.crt", "fixtures/metron/metron.key", "fixtures/metron/CA.crt")
+					Expect(err).NotTo(HaveOccurred())
+					testMetricsChan = testIngressServer.Receivers()
+					testIngressServer.Start()
+					port, err := strconv.Atoi(strings.TrimPrefix(testIngressServer.Addr(), "127.0.0.1:"))
+					Expect(err).NotTo(HaveOccurred())
+					cfgs = append(cfgs, func(cfg *config.RouteEmitterConfig) {
+						cfg.LoggregatorConfig.UseV2API = true
+						cfg.LoggregatorConfig.APIPort = port
+						cfg.LoggregatorConfig.CACertPath = "fixtures/metron/CA.crt"
+						cfg.LoggregatorConfig.KeyPath = "fixtures/metron/client.key"
+						cfg.LoggregatorConfig.CertPath = "fixtures/metron/client.crt"
+					})
+
+					metricChan = make(chan metrics)
+
+					go func() {
+						for {
+							select {
+							case data := <-testMetricsChan:
+								batch, err := data.Recv()
+								if err != nil {
+									continue
+								}
+								for _, elem := range batch.Batch {
+									if gauge := elem.GetGauge(); gauge != nil {
+										for name, m := range gauge.GetMetrics() {
+											metricChan <- metrics{name: name, value: m.GetValue()}
+										}
+									}
+								}
+							}
+						}
+					}()
+				})
+
+				AfterEach(func() {
+					testIngressServer.Stop()
+				})
+
+				It("emits not in consul down mode", func() {
+					Eventually(metricChan).Should(Receive(Equal(metrics{name: "ConsulDownMode", value: float64(0)})))
+				})
+			})
+
+			Context("when using loggregator api v1", func() {
+				It("emits a metric to say that it is not in consul down mode", func() {
+					Eventually(testMetricsChan).Should(Receive(matchMetricAndValue(metricAndValue{Name: "ConsulDownMode", Value: 0})))
+				})
+			})
 		})
 	})
 
@@ -1203,12 +1341,73 @@ var _ = Describe("Route Emitter", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
 
-			It("emits a metric to say that it has entered consul down mode", func() {
-				lockTTL := 5
-				retryInterval := 1
-				Eventually(runner, lockTTL+3*retryInterval+1).Should(gbytes.Say("consul-down-mode.started"))
+			Context("when in consul down mode", func() {
+				Context("when using loggregator v2 api", func() {
+					type metrics struct {
+						name  string
+						value float64
+					}
+					var (
+						testIngressServer *testhelpers.TestIngressServer
+						testMetricsChan   chan loggregator_v2.Ingress_BatchSenderServer
+						err               error
+						metricChan        chan metrics
+					)
+					BeforeEach(func() {
+						testIngressServer, err = testhelpers.NewTestIngressServer("fixtures/metron/metron.crt", "fixtures/metron/metron.key", "fixtures/metron/CA.crt")
+						Expect(err).NotTo(HaveOccurred())
+						testMetricsChan = testIngressServer.Receivers()
+						testIngressServer.Start()
+						port, err := strconv.Atoi(strings.TrimPrefix(testIngressServer.Addr(), "127.0.0.1:"))
+						Expect(err).NotTo(HaveOccurred())
+						cfgs = append(cfgs, func(cfg *config.RouteEmitterConfig) {
+							cfg.LoggregatorConfig.UseV2API = true
+							cfg.LoggregatorConfig.APIPort = port
+							cfg.LoggregatorConfig.CACertPath = "fixtures/metron/CA.crt"
+							cfg.LoggregatorConfig.KeyPath = "fixtures/metron/client.key"
+							cfg.LoggregatorConfig.CertPath = "fixtures/metron/client.crt"
+						})
 
-				Eventually(testMetricsChan, 3*retryInterval+1).Should(Receive(matchMetricAndValue(metricAndValue{Name: "ConsulDownMode", Value: 1})))
+						metricChan = make(chan metrics)
+
+						go func() {
+							for {
+								select {
+								case data := <-testMetricsChan:
+									batch, err := data.Recv()
+									if err != nil {
+										continue
+									}
+									for _, elem := range batch.Batch {
+										if gauge := elem.GetGauge(); gauge != nil {
+											for name, m := range gauge.GetMetrics() {
+												metricChan <- metrics{name: name, value: m.GetValue()}
+											}
+										}
+									}
+								}
+							}
+						}()
+					})
+
+					AfterEach(func() {
+						testIngressServer.Stop()
+					})
+
+					It("emits consul down mode", func() {
+						Eventually(metricChan).Should(Receive(Equal(metrics{name: "ConsulDownMode", value: float64(1)})))
+					})
+				})
+
+				Context("when using lgogregator api v1", func() {
+					It("emits a metric to say that it has entered consul down mode", func() {
+						lockTTL := 5
+						retryInterval := 1
+						Eventually(runner, lockTTL+3*retryInterval+1).Should(gbytes.Say("consul-down-mode.started"))
+
+						Eventually(testMetricsChan, 3*retryInterval+1).Should(Receive(matchMetricAndValue(metricAndValue{Name: "ConsulDownMode", Value: 1})))
+					})
+				})
 			})
 
 			It("repeats the route message at the interval given by the router", func() {
@@ -1237,7 +1436,7 @@ var _ = Describe("Route Emitter", func() {
 		})
 
 		Context("and the emitter is started", func() {
-			BeforeEach(func() {
+			JustBeforeEach(func() {
 				emitter = ginkgomon.Invoke(createEmitterRunner("route-emitter", "", cfgs...))
 			})
 
@@ -1389,6 +1588,9 @@ var _ = Describe("Route Emitter", func() {
 			})
 
 			fakeBBS.Start()
+		})
+
+		JustBeforeEach(func() {
 			runner = createEmitterRunner("route-emitter", "cell-id", cfgs...)
 			Expect(bbsClient.UpsertDomain(logger, domain, time.Hour)).To(Succeed())
 			Expect(bbsClient.DesireLRP(logger, desiredLRP)).To(Succeed())
@@ -1413,6 +1615,74 @@ var _ = Describe("Route Emitter", func() {
 		AfterEach(func() {
 			ginkgomon.Kill(emitter, emitterInterruptTimeout)
 			fakeBBS.Close()
+		})
+	})
+
+	Context("metrics", func() {
+		var (
+			testIngressServer *testhelpers.TestIngressServer
+			testMetricsChan   chan loggregator_v2.Ingress_BatchSenderServer
+			err               error
+		)
+
+		Context("when using the v2 api", func() {
+			BeforeEach(func() {
+				testIngressServer, err = testhelpers.NewTestIngressServer("fixtures/metron/metron.crt", "fixtures/metron/metron.key", "fixtures/metron/CA.crt")
+				Expect(err).NotTo(HaveOccurred())
+				testMetricsChan = testIngressServer.Receivers()
+				testIngressServer.Start()
+				port, err := strconv.Atoi(strings.TrimPrefix(testIngressServer.Addr(), "127.0.0.1:"))
+				Expect(err).NotTo(HaveOccurred())
+				cfgs = append(cfgs, func(cfg *config.RouteEmitterConfig) {
+					cfg.LoggregatorConfig.UseV2API = true
+					cfg.LoggregatorConfig.APIPort = port
+					cfg.LoggregatorConfig.CACertPath = "fixtures/metron/CA.crt"
+					cfg.LoggregatorConfig.KeyPath = "fixtures/metron/client.key"
+					cfg.LoggregatorConfig.CertPath = "fixtures/metron/client.crt"
+				})
+			})
+
+			AfterEach(func() {
+				testIngressServer.Stop()
+			})
+		})
+
+		Context("when using the v1 api", func() {
+			var (
+				testMetricsListener net.PacketConn
+				testMetricsChan     chan *events.Envelope
+			)
+
+			BeforeEach(func() {
+				testMetricsListener, _ = net.ListenPacket("udp", "127.0.0.1:0")
+				testMetricsChan = make(chan *events.Envelope, 1)
+				go func() {
+					defer GinkgoRecover()
+					for {
+						buffer := make([]byte, 1024)
+						n, _, err := testMetricsListener.ReadFrom(buffer)
+						if err != nil {
+							close(testMetricsChan)
+							return
+						}
+
+						var envelope events.Envelope
+						err = proto.Unmarshal(buffer[:n], &envelope)
+						Expect(err).NotTo(HaveOccurred())
+						testMetricsChan <- &envelope
+					}
+				}()
+				port, err := strconv.Atoi(strings.TrimPrefix(testMetricsListener.LocalAddr().String(), "127.0.0.1:"))
+				Expect(err).NotTo(HaveOccurred())
+
+				cfgs = append(cfgs, func(cfg *config.RouteEmitterConfig) {
+					cfg.DropsondePort = port
+					cfg.LoggregatorConfig.UseV2API = false
+					cfg.LoggregatorConfig.CACertPath = "fixtures/metron/CA.crt"
+					cfg.LoggregatorConfig.KeyPath = "fixtures/metron/client.key"
+					cfg.LoggregatorConfig.CertPath = "fixtures/metron/client.crt"
+				})
+			})
 		})
 	})
 })
