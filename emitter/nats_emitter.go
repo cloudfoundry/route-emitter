@@ -4,14 +4,16 @@ import (
 	"encoding/json"
 	"sync"
 
+	loggingclient "code.cloudfoundry.org/diego-logging-client"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/route-emitter/diegonats"
 	"code.cloudfoundry.org/route-emitter/routingtable"
-	"code.cloudfoundry.org/runtimeschema/metric"
 	"code.cloudfoundry.org/workpool"
 )
 
-var messagesEmitted = metric.Counter("MessagesEmitted")
+const (
+	messagesEmitted = "MessagesEmitted"
+)
 
 //go:generate counterfeiter -o fakes/fake_nats_emitter.go . NATSEmitter
 type NATSEmitter interface {
@@ -19,16 +21,18 @@ type NATSEmitter interface {
 }
 
 type natsEmitter struct {
-	natsClient diegonats.NATSClient
-	workPool   *workpool.WorkPool
-	logger     lager.Logger
+	natsClient   diegonats.NATSClient
+	workPool     *workpool.WorkPool
+	logger       lager.Logger
+	metronClient loggingclient.IngressClient
 }
 
-func NewNATSEmitter(natsClient diegonats.NATSClient, workPool *workpool.WorkPool, logger lager.Logger) NATSEmitter {
+func NewNATSEmitter(natsClient diegonats.NATSClient, workPool *workpool.WorkPool, logger lager.Logger, metronClient loggingclient.IngressClient) NATSEmitter {
 	return &natsEmitter{
-		natsClient: natsClient,
-		workPool:   workPool,
-		logger:     logger.Session("nats-emitter"),
+		natsClient:   natsClient,
+		workPool:     workPool,
+		logger:       logger.Session("nats-emitter"),
+		metronClient: metronClient,
 	}
 }
 
@@ -54,7 +58,10 @@ func (n *natsEmitter) Emit(messagesToEmit routingtable.MessagesToEmit) error {
 	}
 
 	numberOfMessages := uint64(len(messagesToEmit.RegistrationMessages) + len(messagesToEmit.UnregistrationMessages))
-	messagesEmitted.Add(numberOfMessages)
+	err := n.metronClient.IncrementCounterWithDelta(messagesEmitted, numberOfMessages)
+	if err != nil {
+		n.logger.Error("cannot-emit-number-of-messages", err)
+	}
 
 	return nil
 }

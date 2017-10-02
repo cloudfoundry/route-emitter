@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"code.cloudfoundry.org/debugserver"
+	loggingclient "code.cloudfoundry.org/diego-logging-client"
 	"code.cloudfoundry.org/durationjson"
 	"code.cloudfoundry.org/lager/lagerflags"
 	"code.cloudfoundry.org/locket"
@@ -50,8 +51,20 @@ var _ = Describe("Config", func() {
 				"client_secret": "somesecret",
 				"ca_certs": "some-cert",
 				"skip_cert_verify": true
-			}
-		}`
+			},
+			"loggregator": {
+			  "loggregator_use_v2_api": true,
+			  "loggregator_api_port": 1234,
+			  "loggregator_ca_path": "/var/ca_cert",
+			  "loggregator_cert_path": "/var/cert_path",
+			  "loggregator_key_path": "/var/key_path",
+				"loggregator_job_deployment": "job1",
+				"loggregator_job_name": "myjob",
+				"loggregator_job_index": "1",
+				"loggregator_job_ip": "1.1.1.1",
+				"loggregator_job_origin": "Earth"
+		}
+	}`
 	})
 
 	JustBeforeEach(func() {
@@ -112,6 +125,18 @@ var _ = Describe("Config", func() {
 				ClientSecret:   "somesecret",
 				CACerts:        "some-cert",
 				SkipCertVerify: true,
+			},
+			LoggregatorConfig: loggingclient.Config{
+				UseV2API:      true,
+				APIPort:       1234,
+				CACertPath:    "/var/ca_cert",
+				CertPath:      "/var/cert_path",
+				KeyPath:       "/var/key_path",
+				JobDeployment: "job1",
+				JobName:       "myjob",
+				JobIndex:      "1",
+				JobIP:         "1.1.1.1",
+				JobOrigin:     "Earth",
 			},
 		}
 

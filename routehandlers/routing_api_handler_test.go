@@ -2,6 +2,7 @@ package routehandlers_test
 
 import (
 	"code.cloudfoundry.org/bbs/models"
+	mfakes "code.cloudfoundry.org/diego-logging-client/testhelpers"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/lager/lagertest"
 	emitterfakes "code.cloudfoundry.org/route-emitter/emitter/fakes"
@@ -10,8 +11,6 @@ import (
 	"code.cloudfoundry.org/route-emitter/routingtable/fakeroutingtable"
 	tcpmodels "code.cloudfoundry.org/routing-api/models"
 	"code.cloudfoundry.org/routing-info/tcp_routes"
-	fake_metrics_sender "github.com/cloudfoundry/dropsonde/metric_sender/fake"
-	"github.com/cloudfoundry/dropsonde/metrics"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -22,8 +21,8 @@ var _ = Describe("RoutingAPIHandler", func() {
 		fakeRoutingTable      *fakeroutingtable.FakeRoutingTable
 		fakeRoutingAPIEmitter *emitterfakes.FakeRoutingAPIEmitter
 		routeHandler          *routehandlers.Handler
-		fakeMetricSender      *fake_metrics_sender.FakeMetricSender
 		emptyNatsMessages     routingtable.MessagesToEmit
+		fakeMetronClient      *mfakes.FakeIngressClient
 	)
 
 	BeforeEach(func() {
@@ -31,10 +30,8 @@ var _ = Describe("RoutingAPIHandler", func() {
 		emptyNatsMessages = routingtable.MessagesToEmit{}
 		fakeRoutingTable = new(fakeroutingtable.FakeRoutingTable)
 		fakeRoutingAPIEmitter = new(emitterfakes.FakeRoutingAPIEmitter)
-		routeHandler = routehandlers.NewHandler(fakeRoutingTable, nil, fakeRoutingAPIEmitter, false)
-
-		fakeMetricSender = fake_metrics_sender.NewFakeMetricSender()
-		metrics.Initialize(fakeMetricSender, nil)
+		fakeMetronClient = &mfakes.FakeIngressClient{}
+		routeHandler = routehandlers.NewHandler(fakeRoutingTable, nil, fakeRoutingAPIEmitter, false, fakeMetronClient)
 	})
 
 	Describe("DesiredLRP Event", func() {
@@ -574,14 +571,34 @@ var _ = Describe("RoutingAPIHandler", func() {
 			})
 
 			Context("when emitting metrics in localMode", func() {
+				type metric struct {
+					name  string
+					value int
+				}
+
+				var (
+					metricsChan chan metric
+				)
+
 				BeforeEach(func() {
-					routeHandler = routehandlers.NewHandler(fakeRoutingTable, nil, fakeRoutingAPIEmitter, true)
+					metricsChan = make(chan metric, 10)
+					fakeMetronClient.SendMetricStub = func(name string, value int) error {
+						metricsChan <- metric{
+							name:  name,
+							value: value,
+						}
+						return nil
+					}
+					routeHandler = routehandlers.NewHandler(fakeRoutingTable, nil, fakeRoutingAPIEmitter, true, fakeMetronClient)
 					fakeRoutingTable.TCPRouteCountReturns(1)
 				})
 
 				It("emits the TCPRouteCount", func() {
 					routeHandler.Sync(logger, desiredInfo, actualInfo, nil, nil)
-					Expect(fakeMetricSender.GetValue("TCPRouteCount").Value).To(BeEquivalentTo(1))
+					Eventually(metricsChan).Should(Receive(Equal(metric{
+						name:  "TCPRouteCount",
+						value: 1,
+					})))
 				})
 			})
 

@@ -4,22 +4,20 @@ import (
 	"errors"
 
 	"code.cloudfoundry.org/bbs/models"
+	loggingclient "code.cloudfoundry.org/diego-logging-client"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/route-emitter/emitter"
 	"code.cloudfoundry.org/route-emitter/routingtable"
 	"code.cloudfoundry.org/route-emitter/watcher"
-	"code.cloudfoundry.org/runtimeschema/metric"
 )
 
-var (
-	routesTotal  = metric.Metric("RoutesTotal")
-	routesSynced = metric.Counter("RoutesSynced")
-
-	routesRegistered   = metric.Counter("RoutesRegistered")
-	routesUnregistered = metric.Counter("RoutesUnregistered")
-
-	httpRouteCount = metric.Metric("HTTPRouteCount")
-	tcpRouteCount  = metric.Metric("TCPRouteCount")
+const (
+	routesTotal        = "RoutesTotal"
+	routesSynced       = "RoutesSynced"
+	routesRegistered   = "RoutesRegistered"
+	routesUnregistered = "RoutesUnregistered"
+	httpRouteCount     = "HTTPRouteCount"
+	tcpRouteCount      = "TCPRouteCount"
 )
 
 type Handler struct {
@@ -27,16 +25,18 @@ type Handler struct {
 	natsEmitter       emitter.NATSEmitter
 	routingAPIEmitter emitter.RoutingAPIEmitter
 	localMode         bool
+	metronClient      loggingclient.IngressClient
 }
 
 var _ watcher.RouteHandler = new(Handler)
 
-func NewHandler(routingTable routingtable.RoutingTable, natsEmitter emitter.NATSEmitter, routingAPIEmitter emitter.RoutingAPIEmitter, localMode bool) *Handler {
+func NewHandler(routingTable routingtable.RoutingTable, natsEmitter emitter.NATSEmitter, routingAPIEmitter emitter.RoutingAPIEmitter, localMode bool, metronClient loggingclient.IngressClient) *Handler {
 	return &Handler{
 		routingTable:      routingTable,
 		natsEmitter:       natsEmitter,
 		routingAPIEmitter: routingAPIEmitter,
 		localMode:         localMode,
+		metronClient:      metronClient,
 	}
 }
 
@@ -86,10 +86,13 @@ func (handler *Handler) Emit(logger lager.Logger) {
 		}
 	}
 
-	routesSynced.Add(messagesToEmit.RouteRegistrationCount())
-	err := routesTotal.Send(handler.routingTable.HTTPAssociationsCount())
+	err := handler.metronClient.IncrementCounterWithDelta(routesSynced, messagesToEmit.RouteRegistrationCount())
 	if err != nil {
-		logger.Error("failed-to-send-http-route-count-metric", err)
+		logger.Error("failed-send-routes-synced-count-metric", err)
+	}
+	err = handler.metronClient.SendMetric(routesTotal, handler.routingTable.HTTPAssociationsCount())
+	if err != nil {
+		logger.Error("failed-to-send-total-route-count-metric", err)
 	}
 }
 
@@ -146,11 +149,11 @@ func (handler *Handler) Sync(
 	})
 
 	if handler.localMode {
-		err := httpRouteCount.Send(handler.routingTable.HTTPAssociationsCount())
+		err := handler.metronClient.SendMetric(httpRouteCount, handler.routingTable.HTTPAssociationsCount())
 		if err != nil {
-			logger.Error("failed-to-send-routes-total-metric", err)
+			logger.Error("failed-to-send-http-routes-count-metric", err)
 		}
-		err = tcpRouteCount.Send(handler.routingTable.TCPAssociationsCount())
+		err = handler.metronClient.SendMetric(tcpRouteCount, handler.routingTable.TCPAssociationsCount())
 		if err != nil {
 			logger.Error("failed-to-send-tcp-route-count-metric", err)
 		}
@@ -259,8 +262,14 @@ func (handler *Handler) emitMessages(logger lager.Logger, messagesToEmit routing
 		if err != nil {
 			logger.Error("failed-to-emit-http-routes", err)
 		}
-		routesRegistered.Add(messagesToEmit.RouteRegistrationCount())
-		routesUnregistered.Add(messagesToEmit.RouteUnregistrationCount())
+		err = handler.metronClient.IncrementCounterWithDelta(routesRegistered, messagesToEmit.RouteRegistrationCount())
+		if err != nil {
+			logger.Error("failed-to-emit-registration-message-count", err)
+		}
+		err = handler.metronClient.IncrementCounterWithDelta(routesUnregistered, messagesToEmit.RouteUnregistrationCount())
+		if err != nil {
+			logger.Error("failed-to-emit-unregistration-message-count", err)
+		}
 	} else {
 		logger.Info("no-emitter-configured-skipping-emit-messages", lager.Data{"messages": messagesToEmit})
 	}

@@ -16,6 +16,7 @@ import (
 
 	"code.cloudfoundry.org/bbs/models"
 	"code.cloudfoundry.org/durationjson"
+	"code.cloudfoundry.org/go-loggregator/rpc/loggregator_v2"
 	"code.cloudfoundry.org/lager/lagerflags"
 	"code.cloudfoundry.org/locket"
 	"code.cloudfoundry.org/route-emitter/cmd/route-emitter/config"
@@ -62,14 +63,12 @@ var _ = Describe("Route Emitter", func() {
 		routingApiProcess ifrit.Process
 		routingAPIRunner  *runners.RoutingAPIRunner
 		routerGUID        string
-		cfgs              []func(*config.RouteEmitterConfig)
 	)
 
 	createEmitterRunner := func(sessionName string, cellID string, modifyConfig ...func(*config.RouteEmitterConfig)) *ginkgomon.Runner {
 		cfg := config.RouteEmitterConfig{
 			CellID:               cellID,
 			ConsulSessionName:    sessionName,
-			DropsondePort:        dropsondePort,
 			HealthCheckAddress:   healthCheckAddress,
 			NATSAddresses:        fmt.Sprintf("127.0.0.1:%d", natsPort),
 			BBSAddress:           bbsURL.String(),
@@ -199,7 +198,6 @@ var _ = Describe("Route Emitter", func() {
 			return nil
 		}).Should(Succeed())
 		logger.Info("started-routing-api-server")
-		cfgs = nil
 		cfgs = append(cfgs, func(cfg *config.RouteEmitterConfig) {
 			cfg.BBSAddress = bbsURL.String()
 			cfg.RoutingAPI.URL = "http://127.0.0.1"
@@ -216,7 +214,7 @@ var _ = Describe("Route Emitter", func() {
 		var runner *ginkgomon.Runner
 		var emitter ifrit.Process
 
-		BeforeEach(func() {
+		JustBeforeEach(func() {
 			runner = createEmitterRunner("emitter1", "", cfgs...)
 			runner.StartCheck = "emitter1.started"
 			emitter = ginkgomon.Invoke(runner)
@@ -384,6 +382,7 @@ var _ = Describe("Route Emitter", func() {
 							}, 5*time.Second).Should(ContainElement("/oauth/token"))
 						})
 					})
+
 				}
 
 				BeforeEach(func() {
@@ -414,7 +413,12 @@ var _ = Describe("Route Emitter", func() {
 		})
 
 		Context("when UAA auth is disabled", func() {
+			var (
+				startCheck string
+			)
+
 			BeforeEach(func() {
+				startCheck = "emitter1.started"
 				cfgs = append(cfgs, func(cfg *config.RouteEmitterConfig) {
 					cfg.RoutingAPI.AuthEnabled = false
 				})
@@ -422,7 +426,7 @@ var _ = Describe("Route Emitter", func() {
 
 			JustBeforeEach(func() {
 				runner = createEmitterRunner("emitter1", cellID, cfgs...)
-				runner.StartCheck = "emitter1.started"
+				runner.StartCheck = startCheck
 				emitter = ginkgomon.Invoke(runner)
 			})
 
@@ -494,11 +498,20 @@ var _ = Describe("Route Emitter", func() {
 							cellID = "cell-id"
 						})
 
-						It("emits the tcp route count", func() {
-							Eventually(func() *events.Envelope {
-								metric := <-testMetricsChan
-								return metric
-							}).Should(matchMetricAndValue(metricAndValue{Name: "TCPRouteCount", Value: int32(1)}))
+						Context("when using loggregator v2 api", func() {
+							BeforeEach(func() {
+								useLoggregatorV2 = true
+							})
+
+							It("emits the tcp route count", func() {
+								Eventually(testMetricsChan).Should(Receive(matchV2MetricAndValue(metricAndValue{Name: "TCPRouteCount", Value: int32(1)})))
+							})
+						})
+
+						Context("when using loggregator v1 api", func() {
+							It("emits the tcp route count", func() {
+								Eventually(testMetricsChan).Should(Receive(matchMetricAndValue(metricAndValue{Name: "TCPRouteCount", Value: int32(1)})))
+							})
 						})
 					})
 
@@ -622,6 +635,7 @@ var _ = Describe("Route Emitter", func() {
 							}),
 						)
 
+						fakeBBS.Start()
 						cfgs = append(cfgs, func(cfg *config.RouteEmitterConfig) {
 							cfg.BBSAddress = fakeBBS.URL
 							cfg.RoutingAPI.URL = "http://127.0.0.1"
@@ -630,10 +644,12 @@ var _ = Describe("Route Emitter", func() {
 							cfg.SyncInterval = durationjson.Duration(1 * time.Hour)
 						})
 
-						fakeBBS.Start()
-						runner = createEmitterRunner("route-emitter", "cell-id", cfgs...)
-						runner.StartCheck = "succeeded-getting-actual-lrps"
 						desiredLRP.Instances = 1
+
+						startCheck = "succeeded-getting-actual-lrps"
+					})
+
+					JustBeforeEach(func() {
 						Expect(bbsClient.UpsertDomain(logger, domain, time.Hour)).To(Succeed())
 					})
 
@@ -803,11 +819,20 @@ var _ = Describe("Route Emitter", func() {
 						consulClusterAddress = ""
 					})
 
-					It("emits the http route count", func() {
-						Eventually(func() *events.Envelope {
-							metric := <-testMetricsChan
-							return metric
-						}, "2s").Should(matchMetricAndValue(metricAndValue{Name: "HTTPRouteCount", Value: int32(2)}))
+					Context("when using loggregator v2 api", func() {
+						BeforeEach(func() {
+							useLoggregatorV2 = true
+						})
+
+						It("emits the http route count", func() {
+							Eventually(testMetricsChan, "2s").Should(Receive(matchV2MetricAndValue(metricAndValue{Name: "HTTPRouteCount", Value: int32(2)})))
+						})
+					})
+
+					Context("when using loggregator v1 api", func() {
+						It("emits the http route count", func() {
+							Eventually(testMetricsChan, "2s").Should(Receive(matchMetricAndValue(metricAndValue{Name: "HTTPRouteCount", Value: int32(2)})))
+						})
 					})
 				})
 
@@ -1091,8 +1116,22 @@ var _ = Describe("Route Emitter", func() {
 			})
 		})
 
-		It("emits a metric to say that it is not in consul down mode", func() {
-			Eventually(testMetricsChan).Should(Receive(matchMetricAndValue(metricAndValue{Name: "ConsulDownMode", Value: 0})))
+		Context("not in consul down mode metric", func() {
+			Context("when using loggregator v2 api", func() {
+				BeforeEach(func() {
+					useLoggregatorV2 = true
+				})
+
+				It("emits not in consul down mode", func() {
+					Eventually(testMetricsChan).Should(Receive(matchV2MetricAndValue(metricAndValue{Name: "ConsulDownMode", Value: 0})))
+				})
+			})
+
+			Context("when using loggregator api v1", func() {
+				It("emits a metric to say that it is not in consul down mode", func() {
+					Eventually(testMetricsChan).Should(Receive(matchMetricAndValue(metricAndValue{Name: "ConsulDownMode", Value: 0})))
+				})
+			})
 		})
 	})
 
@@ -1203,12 +1242,31 @@ var _ = Describe("Route Emitter", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
 
-			It("emits a metric to say that it has entered consul down mode", func() {
-				lockTTL := 5
-				retryInterval := 1
-				Eventually(runner, lockTTL+3*retryInterval+1).Should(gbytes.Say("consul-down-mode.started"))
+			Context("when in consul down mode", func() {
+				const (
+					lockTTL       = 5
+					retryInterval = 1
+				)
 
-				Eventually(testMetricsChan, 3*retryInterval+1).Should(Receive(matchMetricAndValue(metricAndValue{Name: "ConsulDownMode", Value: 1})))
+				JustBeforeEach(func() {
+					Eventually(runner, lockTTL+3*retryInterval+1).Should(gbytes.Say("consul-down-mode.started"))
+				})
+
+				Context("when using loggregator v2 api", func() {
+					BeforeEach(func() {
+						useLoggregatorV2 = true
+					})
+
+					It("emits consul down mode", func() {
+						Eventually(testMetricsChan, 3*retryInterval+1, time.Millisecond).Should(Receive(matchV2MetricAndValue(metricAndValue{Name: "ConsulDownMode", Value: 1})))
+					})
+				})
+
+				Context("when using lgogregator api v1", func() {
+					It("emits a metric to say that it has entered consul down mode", func() {
+						Eventually(testMetricsChan, 3*retryInterval+1).Should(Receive(matchMetricAndValue(metricAndValue{Name: "ConsulDownMode", Value: 1})))
+					})
+				})
 			})
 
 			It("repeats the route message at the interval given by the router", func() {
@@ -1237,7 +1295,7 @@ var _ = Describe("Route Emitter", func() {
 		})
 
 		Context("and the emitter is started", func() {
-			BeforeEach(func() {
+			JustBeforeEach(func() {
 				emitter = ginkgomon.Invoke(createEmitterRunner("route-emitter", "", cfgs...))
 			})
 
@@ -1275,7 +1333,7 @@ var _ = Describe("Route Emitter", func() {
 			})
 
 			Context("and a route is added", func() {
-				BeforeEach(func() {
+				JustBeforeEach(func() {
 					Eventually(registeredRoutes).Should(Receive())
 					Eventually(registeredRoutes).Should(Receive())
 
@@ -1317,7 +1375,7 @@ var _ = Describe("Route Emitter", func() {
 			})
 
 			Context("and a route is removed", func() {
-				BeforeEach(func() {
+				JustBeforeEach(func() {
 					updateRequest := &models.DesiredLRPUpdate{
 						Routes:     newRoutes([]string{"route-2"}, containerPort, ""),
 						Instances:  &desiredLRP.Instances,
@@ -1389,6 +1447,9 @@ var _ = Describe("Route Emitter", func() {
 			})
 
 			fakeBBS.Start()
+		})
+
+		JustBeforeEach(func() {
 			runner = createEmitterRunner("route-emitter", "cell-id", cfgs...)
 			Expect(bbsClient.UpsertDomain(logger, domain, time.Hour)).To(Succeed())
 			Expect(bbsClient.DesireLRP(logger, desiredLRP)).To(Succeed())
@@ -1446,6 +1507,20 @@ func matchMetricAndValue(target metricAndValue) types.GomegaMatcher {
 		}, Equal(target.Name)),
 		WithTransform(func(source *events.Envelope) int32 {
 			return int32(*source.ValueMetric.Value)
+		}, Equal(target.Value)),
+	)
+}
+
+func matchV2MetricAndValue(target metricAndValue) types.GomegaMatcher {
+	return SatisfyAll(
+		WithTransform(func(source *loggregator_v2.Envelope) *loggregator_v2.Gauge {
+			return source.GetGauge()
+		}, Not(BeNil())),
+		WithTransform(func(source *loggregator_v2.Envelope) map[string]*loggregator_v2.GaugeValue {
+			return source.GetGauge().GetMetrics()
+		}, HaveKey(target.Name)),
+		WithTransform(func(source *loggregator_v2.Envelope) int32 {
+			return int32(source.GetGauge().GetMetrics()[target.Name].Value)
 		}, Equal(target.Value)),
 	)
 }
