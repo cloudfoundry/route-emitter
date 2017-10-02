@@ -232,6 +232,7 @@ var _ = JustBeforeEach(func() {
 			cfg.LoggregatorConfig.CertPath = "fixtures/metron/client.crt"
 		})
 
+		ch := testMetricsChan
 		go func() {
 			for {
 				receiver := <-receiversChan
@@ -242,7 +243,7 @@ var _ = JustBeforeEach(func() {
 							return
 						}
 						for _, elem := range batch.Batch {
-							testMetricsChan <- elem
+							ch <- elem
 						}
 					}
 				}()
