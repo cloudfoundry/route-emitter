@@ -21,18 +21,20 @@ type NATSEmitter interface {
 }
 
 type natsEmitter struct {
-	natsClient   diegonats.NATSClient
-	workPool     *workpool.WorkPool
-	logger       lager.Logger
-	metronClient loggingclient.IngressClient
+	natsClient         diegonats.NATSClient
+	workPool           *workpool.WorkPool
+	logger             lager.Logger
+	metronClient       loggingclient.IngressClient
+	emitInternalRoutes bool
 }
 
-func NewNATSEmitter(natsClient diegonats.NATSClient, workPool *workpool.WorkPool, logger lager.Logger, metronClient loggingclient.IngressClient) NATSEmitter {
+func NewNATSEmitter(natsClient diegonats.NATSClient, workPool *workpool.WorkPool, logger lager.Logger, metronClient loggingclient.IngressClient, emitInternalRoutes bool) NATSEmitter {
 	return &natsEmitter{
-		natsClient:   natsClient,
-		workPool:     workPool,
-		logger:       logger.Session("nats-emitter"),
-		metronClient: metronClient,
+		natsClient:         natsClient,
+		workPool:           workPool,
+		logger:             logger.Session("nats-emitter"),
+		metronClient:       metronClient,
+		emitInternalRoutes: emitInternalRoutes,
 	}
 }
 
@@ -49,6 +51,21 @@ func (n *natsEmitter) Emit(messagesToEmit routingtable.MessagesToEmit) error {
 		n.emit("router.unregister", message, &wg, errors)
 	}
 
+	numberOfMessages := uint64(len(messagesToEmit.RegistrationMessages) + len(messagesToEmit.UnregistrationMessages))
+	if n.emitInternalRoutes {
+		wg.Add(len(messagesToEmit.InternalRegistrationMessages))
+		for _, message := range messagesToEmit.InternalRegistrationMessages {
+			n.emit("service-discovery.register", message, &wg, errors)
+		}
+
+		wg.Add(len(messagesToEmit.InternalUnregistrationMessages))
+		for _, message := range messagesToEmit.InternalUnregistrationMessages {
+			n.emit("service-discovery.unregister", message, &wg, errors)
+		}
+
+		numberOfMessages += uint64(len(messagesToEmit.InternalRegistrationMessages) + len(messagesToEmit.InternalUnregistrationMessages))
+	}
+
 	wg.Wait()
 
 	select {
@@ -57,7 +74,6 @@ func (n *natsEmitter) Emit(messagesToEmit routingtable.MessagesToEmit) error {
 	default:
 	}
 
-	numberOfMessages := uint64(len(messagesToEmit.RegistrationMessages) + len(messagesToEmit.UnregistrationMessages))
 	err := n.metronClient.IncrementCounterWithDelta(messagesEmitted, numberOfMessages)
 	if err != nil {
 		n.logger.Error("cannot-emit-number-of-messages", err)

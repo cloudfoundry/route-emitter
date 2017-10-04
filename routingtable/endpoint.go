@@ -73,7 +73,7 @@ type ExternalEndpointInfo struct {
 	Port            uint32
 }
 
-func (info ExternalEndpointInfo) MessageFor(e Endpoint, directInstanceRoute bool) (*RegistryMessage, *tcpmodels.TcpRouteMapping) {
+func (info ExternalEndpointInfo) MessageFor(e Endpoint, directInstanceRoute bool) (*RegistryMessage, *tcpmodels.TcpRouteMapping, *RegistryMessage) {
 	mapping := tcpmodels.NewTcpRouteMapping(
 		info.RouterGroupGUID,
 		uint16(info.Port),
@@ -90,7 +90,7 @@ func (info ExternalEndpointInfo) MessageFor(e Endpoint, directInstanceRoute bool
 			0,
 		)
 	}
-	return nil, &mapping
+	return nil, &mapping, nil
 }
 
 type ExternalEndpointInfos []ExternalEndpointInfo
@@ -109,20 +109,33 @@ type Route struct {
 	LogGUID          string
 }
 
-func (r Route) MessageFor(endpoint Endpoint, directInstanceAddress bool) (*RegistryMessage, *tcpmodels.TcpRouteMapping) {
+func (r Route) MessageFor(endpoint Endpoint, directInstanceAddress bool) (*RegistryMessage, *tcpmodels.TcpRouteMapping, *RegistryMessage) {
 	generator := RegistryMessageFor
 	if directInstanceAddress {
 		generator = InternalAddressRegistryMessageFor
 	}
 	msg := generator(endpoint, r)
-	return &msg, nil
+	return &msg, nil, nil
+}
+
+type InternalRoute struct {
+	Hostname    string
+	ContainerIP string
+	LogGUID     string
+}
+
+func (r InternalRoute) MessageFor(endpoint Endpoint, _ bool) (*RegistryMessage, *tcpmodels.TcpRouteMapping, *RegistryMessage) {
+	generator := InternalEndpointRegistryMessageFor
+	msg := generator(endpoint, r)
+	return nil, nil, &msg
 }
 
 func (entry RoutableEndpoints) copy() RoutableEndpoints {
+
 	clone := RoutableEndpoints{
 		Domain:           entry.Domain,
 		Endpoints:        map[EndpointKey]Endpoint{},
-		Routes:           make([]externalRoute, len(entry.Routes)),
+		Routes:           make([]routeMapping, len(entry.Routes)),
 		DesiredInstances: entry.DesiredInstances,
 		ModificationTag:  entry.ModificationTag,
 	}
@@ -138,10 +151,34 @@ func (entry RoutableEndpoints) copy() RoutableEndpoints {
 
 type RoutableEndpoints struct {
 	Domain           string
-	Routes           []externalRoute
+	Routes           []routeMapping
 	Endpoints        map[EndpointKey]Endpoint
 	DesiredInstances int32
 	ModificationTag  *models.ModificationTag
+}
+
+type InternalRoutableEndpoints struct {
+	Routes           []InternalRoute
+	Endpoints        map[EndpointKey]Endpoint
+	DesiredInstances int32
+	ModificationTag  *models.ModificationTag
+}
+
+func (entry InternalRoutableEndpoints) copy() InternalRoutableEndpoints {
+	clone := InternalRoutableEndpoints{
+		Endpoints:        map[EndpointKey]Endpoint{},
+		Routes:           make([]InternalRoute, len(entry.Routes)),
+		DesiredInstances: entry.DesiredInstances,
+		ModificationTag:  entry.ModificationTag,
+	}
+
+	copy(clone.Routes, entry.Routes)
+
+	for k, v := range entry.Endpoints {
+		clone.Endpoints[k] = v
+	}
+
+	return clone
 }
 
 func NewEndpointsFromActual(actualLRPInfo *ActualLRPRoutingInfo) map[uint32]Endpoint {

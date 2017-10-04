@@ -992,7 +992,7 @@ var _ = Describe("Handler", func() {
 			Context("when emitting metrics in localMode", func() {
 				BeforeEach(func() {
 					routeHandler = routehandlers.NewHandler(fakeTable, natsEmitter, nil, true, fakeMetronClient)
-					fakeTable.HTTPEndpointCountReturns(5)
+					fakeTable.HTTPAssociationsCountReturns(5)
 				})
 
 				It("emits the HTTPRouteCount", func() {
@@ -1101,7 +1101,7 @@ var _ = Describe("Handler", func() {
 			}
 
 			fakeTable.GetRoutingEventsReturns(emptyTCPRouteMappings, registrationMsgs)
-			fakeTable.HTTPEndpointCountReturns(3)
+			fakeTable.HTTPAssociationsCountReturns(3)
 		})
 		It("emits all registration events", func() {
 			routeHandler.Emit(logger)

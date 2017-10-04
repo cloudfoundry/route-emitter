@@ -28,7 +28,9 @@ func (m *messagesToEmitMatcher) Match(a interface{}) (success bool, err error) {
 
 	registrationsMatch := m.matchArrs(actual.RegistrationMessages, m.expected.RegistrationMessages)
 	unregistrationsMatch := m.matchArrs(actual.UnregistrationMessages, m.expected.UnregistrationMessages)
-	return registrationsMatch && unregistrationsMatch, nil
+	internalRegistrationsMatch := m.matchArrs(actual.InternalRegistrationMessages, m.expected.InternalRegistrationMessages)
+	internalUnregistrationsMatch := m.matchArrs(actual.InternalUnregistrationMessages, m.expected.InternalUnregistrationMessages)
+	return registrationsMatch && unregistrationsMatch && internalRegistrationsMatch && internalUnregistrationsMatch, nil
 }
 
 func (m *messagesToEmitMatcher) FailureMessage(actual interface{}) (message string) {

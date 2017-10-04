@@ -25,6 +25,7 @@ import (
 	. "code.cloudfoundry.org/route-emitter/routingtable/matchers"
 	apimodels "code.cloudfoundry.org/routing-api/models"
 	"code.cloudfoundry.org/routing-info/cfroutes"
+	"code.cloudfoundry.org/routing-info/internalroutes"
 	"code.cloudfoundry.org/routing-info/tcp_routes"
 	"github.com/cloudfoundry/sonde-go/events"
 	"github.com/nats-io/nats"
@@ -46,6 +47,9 @@ var _ = Describe("Route Emitter", func() {
 	var (
 		registeredRoutes   <-chan routingtable.RegistryMessage
 		unregisteredRoutes <-chan routingtable.RegistryMessage
+
+		internalRegisteredRoutes   <-chan routingtable.RegistryMessage
+		internalUnregisteredRoutes <-chan routingtable.RegistryMessage
 
 		processGuid string
 		domain      string
@@ -159,6 +163,9 @@ var _ = Describe("Route Emitter", func() {
 		netInfo = models.NewActualLRPNetInfo("1.2.3.4", "2.2.2.2", models.NewPortMapping(65100, 8080))
 		registeredRoutes = listenForRoutes("router.register")
 		unregisteredRoutes = listenForRoutes("router.unregister")
+
+		internalRegisteredRoutes = listenForRoutes("service-discovery.register")
+		internalUnregisteredRoutes = listenForRoutes("service-discovery.unregister")
 
 		natsClient.Subscribe("router.greet", func(msg *nats.Msg) {
 			defer GinkgoRecover()
@@ -774,6 +781,7 @@ var _ = Describe("Route Emitter", func() {
 		JustBeforeEach(func() {
 			cfgs = append(cfgs, func(cfg *config.RouteEmitterConfig) {
 				cfg.EnableTCPEmitter = false
+				cfg.EnableInternalEmitter = false
 			})
 			runner = createEmitterRunner("emitter1", cellID, cfgs...)
 			runner.StartCheck = "emitter1.started"
@@ -1133,6 +1141,244 @@ var _ = Describe("Route Emitter", func() {
 				})
 			})
 		})
+
+		Context("when an lrp with internal routes is desired and an instance starts", func() {
+			BeforeEach(func() {
+				desiredLRP.Routes = newInternalRoutes([]string{"foo1.bar", "foo2.bar"})
+				err := bbsClient.DesireLRP(logger, desiredLRP)
+				Expect(err).NotTo(HaveOccurred())
+
+				err = bbsClient.StartActualLRP(logger, &lrpKey, &instanceKey, &netInfo)
+				Expect(err).NotTo(HaveOccurred())
+			})
+			It("does not emit any internal routes", func() {
+				Consistently(internalRegisteredRoutes, 5).ShouldNot(Receive())
+			})
+		})
+	})
+
+	Context("when internal route emitter is enabled", func() {
+		var (
+			emitter           ifrit.Process
+			runner            *ginkgomon.Runner
+			cellID            string
+			internalHostnames []string
+		)
+
+		BeforeEach(func() {
+			cellID = ""
+
+			internalHostnames = []string{"foo1.bar", "foo2.bar"}
+			routes = newInternalRoutes(internalHostnames)
+			desiredLRP.Routes = routes
+
+		})
+
+		JustBeforeEach(func() {
+			cfgs = append(cfgs, func(cfg *config.RouteEmitterConfig) {
+				cfg.EnableInternalEmitter = true
+			})
+			runner = createEmitterRunner("emitter1", cellID, cfgs...)
+			runner.StartCheck = "emitter1.started"
+			emitter = ginkgomon.Invoke(runner)
+		})
+
+		AfterEach(func() {
+			By("killing the route-emitter")
+			ginkgomon.Kill(emitter, emitterInterruptTimeout)
+		})
+
+		Context("and an lrp with routes is desired", func() {
+			BeforeEach(func() {
+				err := bbsClient.DesireLRP(logger, desiredLRP)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			Context("and an instance starts", func() {
+				BeforeEach(func() {
+					err := bbsClient.StartActualLRP(logger, &lrpKey, &instanceKey, &netInfo)
+					Expect(err).NotTo(HaveOccurred())
+				})
+
+				XContext("when running in local mode", func() {
+					BeforeEach(func() {
+						cellID = "cell-id"
+						consulClusterAddress = ""
+					})
+
+					It("emits the internal route count", func() {
+						Eventually(testMetricsChan, "2s").Should(Receive(matchMetricAndValue(metricAndValue{Name: "HTTPRouteCount", Value: int32(1)})))
+					})
+				})
+
+				Context("when backing store loses its data", func() {
+					var msg1 routingtable.RegistryMessage
+					var msg2 routingtable.RegistryMessage
+
+					JustBeforeEach(func() {
+						// ensure it's seen the route at least once
+						Eventually(internalRegisteredRoutes).Should(Receive(&msg1))
+						Eventually(internalRegisteredRoutes).Should(Receive(&msg2))
+
+						sqlRunner.Reset()
+
+						// Only start actual LRP, do not repopulate Desired
+						err := bbsClient.StartActualLRP(logger, &lrpKey, &instanceKey, &netInfo)
+						Expect(err).NotTo(HaveOccurred())
+					})
+
+					It("stops broadcasting those routes", func() {
+						Consistently(internalRegisteredRoutes, 5).ShouldNot(Receive())
+					})
+				})
+
+				It("emits its routes immediately", func() {
+					var msg1, msg2 routingtable.RegistryMessage
+					Eventually(internalRegisteredRoutes).Should(Receive(&msg1))
+					Eventually(internalRegisteredRoutes).Should(Receive(&msg2))
+
+					Expect([]routingtable.RegistryMessage{msg1, msg2}).To(ConsistOf(
+						MatchRegistryMessage(routingtable.RegistryMessage{
+							URIs:                 []string{internalHostnames[1], fmt.Sprintf("%d.%s", 0, internalHostnames[1])},
+							Host:                 netInfo.InstanceAddress,
+							PrivateInstanceIndex: "0",
+							App:                  desiredLRP.LogGuid,
+							Tags:                 map[string]string{"component": "route-emitter"},
+						}),
+						MatchRegistryMessage(routingtable.RegistryMessage{
+							URIs:                 []string{internalHostnames[0], fmt.Sprintf("%d.%s", 0, internalHostnames[0])},
+							Host:                 netInfo.InstanceAddress,
+							PrivateInstanceIndex: "0",
+							App:                  desiredLRP.LogGuid,
+							Tags:                 map[string]string{"component": "route-emitter"},
+						}),
+					))
+				})
+
+				Context("and the route-emitter cell id doesn't match the actual lrp cell", func() {
+					BeforeEach(func() {
+						cellID = "some-random-cell-id"
+					})
+
+					It("does not emit the route", func() {
+						Consistently(internalRegisteredRoutes).ShouldNot(Receive())
+					})
+				})
+			})
+
+			Context("and an instance is claimed", func() {
+				BeforeEach(func() {
+					err := bbsClient.ClaimActualLRP(logger, processGuid, int(index), &instanceKey)
+					Expect(err).NotTo(HaveOccurred())
+				})
+
+				It("does not emit routes", func() {
+					Consistently(internalRegisteredRoutes).ShouldNot(Receive())
+				})
+			})
+		})
+
+		Context("an actual lrp starts without a routed desired lrp", func() {
+			BeforeEach(func() {
+				desiredLRP.Routes = nil
+				err := bbsClient.DesireLRP(logger, desiredLRP)
+				Expect(err).NotTo(HaveOccurred())
+
+				err = bbsClient.StartActualLRP(logger, &lrpKey, &instanceKey, &netInfo)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			Context("and a route is desired", func() {
+				BeforeEach(func() {
+					update := &models.DesiredLRPUpdate{
+						Routes: routes,
+					}
+					err := bbsClient.UpdateDesiredLRP(logger, desiredLRP.ProcessGuid, update)
+					Expect(err).NotTo(HaveOccurred())
+				})
+
+				It("emits its routes immediately", func() {
+					var msg1, msg2 routingtable.RegistryMessage
+					Eventually(internalRegisteredRoutes).Should(Receive(&msg1))
+					Eventually(internalRegisteredRoutes).Should(Receive(&msg2))
+
+					Expect([]routingtable.RegistryMessage{msg1, msg2}).To(ConsistOf(
+						MatchRegistryMessage(routingtable.RegistryMessage{
+							URIs:                 []string{internalHostnames[1], fmt.Sprintf("0.%s", internalHostnames[1])},
+							Host:                 netInfo.InstanceAddress,
+							PrivateInstanceIndex: "0",
+							App:                  desiredLRP.LogGuid,
+							Tags:                 map[string]string{"component": "route-emitter"},
+						}),
+						MatchRegistryMessage(routingtable.RegistryMessage{
+							URIs:                 []string{internalHostnames[0], fmt.Sprintf("0.%s", internalHostnames[0])},
+							Host:                 netInfo.InstanceAddress,
+							PrivateInstanceIndex: "0",
+							App:                  desiredLRP.LogGuid,
+							Tags:                 map[string]string{"component": "route-emitter"},
+						}),
+					))
+				})
+
+				It("repeats the route message at the interval given by the router", func() {
+					var msg1 routingtable.RegistryMessage
+					var msg2 routingtable.RegistryMessage
+					Eventually(internalRegisteredRoutes).Should(Receive(&msg1))
+					Eventually(internalRegisteredRoutes).Should(Receive(&msg2))
+					t1 := time.Now()
+
+					var msg3 routingtable.RegistryMessage
+					var msg4 routingtable.RegistryMessage
+					Eventually(internalRegisteredRoutes, 5).Should(Receive(&msg3))
+					Eventually(internalRegisteredRoutes, 5).Should(Receive(&msg4))
+					t2 := time.Now()
+
+					Expect([]routingtable.RegistryMessage{msg3, msg4}).To(ConsistOf(
+						MatchRegistryMessage(msg1),
+						MatchRegistryMessage(msg2),
+					))
+					Expect(t2.Sub(t1)).To(BeNumerically("~", emitInterval, 100*time.Millisecond))
+				})
+
+				Context("when the BBS is stopped", func() {
+					var msg1 routingtable.RegistryMessage
+					var msg2 routingtable.RegistryMessage
+					var msg3 routingtable.RegistryMessage
+					var msg4 routingtable.RegistryMessage
+
+					JustBeforeEach(func() {
+						// ensure it's seen the route at least once
+						Eventually(internalRegisteredRoutes).Should(Receive(&msg1))
+						Eventually(internalRegisteredRoutes).Should(Receive(&msg2))
+
+						stopBBS()
+					})
+
+					It("continues to broadcast routes", func() {
+						Eventually(internalRegisteredRoutes, 10).Should(Receive(&msg3))
+						Eventually(internalRegisteredRoutes, 10).Should(Receive(&msg4))
+						Expect([]routingtable.RegistryMessage{msg3, msg4}).To(ConsistOf(
+							MatchRegistryMessage(msg1),
+							MatchRegistryMessage(msg2),
+						))
+					})
+				})
+			})
+		})
+
+		Context("when the BBS is stopped", func() {
+			BeforeEach(func() {
+				stopBBS()
+			})
+
+			It("does not explode", func() {
+				Consistently(emitter.Wait(), 5).ShouldNot(Receive())
+			})
+		})
+
+		It("emits a metric to say that it is not in consul down mode", func() {
+			Eventually(testMetricsChan).Should(Receive(matchMetricAndValue(metricAndValue{Name: "ConsulDownMode", Value: 0})))
+		})
 	})
 
 	Describe("consul down mode", func() {
@@ -1482,6 +1728,23 @@ func newRoutes(hosts []string, port uint32, routeServiceUrl string) *models.Rout
 	routingInfo := cfroutes.CFRoutes{
 		{Hostnames: hosts, Port: port, RouteServiceUrl: routeServiceUrl},
 	}.RoutingInfo()
+
+	routes := models.Routes{}
+
+	for key, message := range routingInfo {
+		routes[key] = message
+	}
+
+	return &routes
+}
+
+func newInternalRoutes(hosts []string) *models.Routes {
+	internalRoutes := internalroutes.InternalRoutes{}
+	for _, host := range hosts {
+		internalRoutes = append(internalRoutes, internalroutes.InternalRoute{Hostname: host})
+	}
+
+	routingInfo := internalRoutes.RoutingInfo()
 
 	routes := models.Routes{}
 

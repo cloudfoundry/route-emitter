@@ -52,6 +52,22 @@ func InternalAddressRegistryMessageFor(endpoint Endpoint, route Route) RegistryM
 	}
 }
 
+// This is used to generate registry messages for Internal routes
+func InternalEndpointRegistryMessageFor(endpoint Endpoint, route InternalRoute) RegistryMessage {
+	var index string
+	if endpoint.InstanceGUID != "" {
+		index = fmt.Sprintf("%d", endpoint.Index)
+	}
+	return RegistryMessage{
+		URIs: []string{route.Hostname, fmt.Sprintf("%s.%s", index, route.Hostname)},
+		Host: endpoint.ContainerIP,
+		App:  route.LogGUID,
+		Tags: map[string]string{"component": "route-emitter"},
+
+		PrivateInstanceIndex: index,
+	}
+}
+
 type RouterGreetingMessage struct {
 	MinimumRegisterInterval int `json:"minimumRegisterIntervalInSeconds"`
 	PruneThresholdInSeconds int `json:"pruneThresholdInSeconds"`

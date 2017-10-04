@@ -83,7 +83,7 @@ func main() {
 
 	localMode := cfg.CellID != ""
 	table := routingtable.NewRoutingTable(logger, cfg.RegisterDirectInstanceRoutes)
-	natsEmitter := initializeNatsEmitter(logger, natsClient, cfg.RouteEmittingWorkers, metronClient)
+	natsEmitter := initializeNatsEmitter(logger, natsClient, cfg.RouteEmittingWorkers, metronClient, cfg.EnableInternalEmitter)
 
 	routeTTL := time.Duration(cfg.TCPRouteTTL)
 	if routeTTL.Seconds() > 65535 {
@@ -273,13 +273,14 @@ func initializeNatsEmitter(
 	natsClient diegonats.NATSClient,
 	routeEmittingWorkers int,
 	metronClient loggingclient.IngressClient,
+	emitInternalRoutes bool,
 ) emitter.NATSEmitter {
 	workPool, err := workpool.NewWorkPool(routeEmittingWorkers)
 	if err != nil {
 		logger.Fatal("failed-to-construct-nats-emitter-workpool", err, lager.Data{"num-workers": routeEmittingWorkers}) // should never happen
 	}
 
-	return emitter.NewNATSEmitter(natsClient, workPool, logger, metronClient)
+	return emitter.NewNATSEmitter(natsClient, workPool, logger, metronClient, emitInternalRoutes)
 }
 
 func initializeConsulClient(logger lager.Logger, consulCluster string) consuladapter.Client {

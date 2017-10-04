@@ -590,7 +590,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 						return nil
 					}
 					routeHandler = routehandlers.NewHandler(fakeRoutingTable, nil, fakeRoutingAPIEmitter, true, fakeMetronClient)
-					fakeRoutingTable.TCPRouteCountReturns(1)
+					fakeRoutingTable.TCPAssociationsCountReturns(1)
 				})
 
 				It("emits the TCPRouteCount", func() {

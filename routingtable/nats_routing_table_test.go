@@ -26,6 +26,9 @@ var _ = Describe("RoutingTable", func() {
 	hostname2 := "bar.example.com"
 	hostname3 := "baz.example.com"
 
+	internalHostname1 := "internal-1"
+	internalHostname2 := "internal-2"
+
 	domain := "domain"
 
 	olderTag := &models.ModificationTag{Epoch: "abc", Index: 0}
@@ -103,25 +106,6 @@ var _ = Describe("RoutingTable", func() {
 		table = routingtable.NewRoutingTable(logger, false)
 	})
 
-	createDesiredLRPSchedulingInfo := func(processGuid string, port uint32, logGuid string, currentTag models.ModificationTag, hostnames ...string) *models.DesiredLRPSchedulingInfo {
-		routingInfo := cfroutes.CFRoutes{
-			{
-				Hostnames:       hostnames,
-				Port:            port,
-				RouteServiceUrl: "",
-			},
-		}.RoutingInfo()
-
-		routes := models.Routes{}
-
-		for key, message := range routingInfo {
-			routes[key] = message
-		}
-
-		info := models.NewDesiredLRPSchedulingInfo(models.NewDesiredLRPKey(processGuid, "domain", logGuid), "", 3, models.NewDesiredLRPResource(0, 0, 0, ""), routes, currentTag, nil, nil)
-		return &info
-	}
-
 	createSchedulingInfo := func(serviceURL string) *models.DesiredLRPSchedulingInfo {
 		routingInfo := cfroutes.CFRoutes{
 			{
@@ -156,33 +140,13 @@ var _ = Describe("RoutingTable", func() {
 		return &info
 	}
 
-	createActualLRP := func(
-		key routingtable.RoutingKey,
-		instance routingtable.Endpoint,
-	) *routingtable.ActualLRPRoutingInfo {
-		return &routingtable.ActualLRPRoutingInfo{
-			ActualLRP: &models.ActualLRP{
-				ActualLRPKey:         models.NewActualLRPKey(key.ProcessGUID, instance.Index, domain),
-				ActualLRPInstanceKey: models.NewActualLRPInstanceKey(instance.InstanceGUID, "cell-id"),
-				ActualLRPNetInfo: models.NewActualLRPNetInfo(
-					instance.Host,
-					instance.ContainerIP,
-					models.NewPortMapping(instance.Port, instance.ContainerPort),
-				),
-				State:           models.ActualLRPStateRunning,
-				ModificationTag: *instance.ModificationTag,
-			},
-			Evacuating: instance.Evacuating,
-		}
-	}
-
 	Describe("Evacuating endpoints", func() {
 		BeforeEach(func() {
-			schedulingInfo := createDesiredLRPSchedulingInfo(key.ProcessGUID, key.ContainerPort, logGuid, *currentTag, hostname1)
+			schedulingInfo := createDesiredLRPSchedulingInfo(key.ProcessGUID, int32(3), key.ContainerPort, logGuid, "", *currentTag, hostname1)
 			_, messagesToEmit = table.SetRoutes(nil, schedulingInfo)
 			Expect(messagesToEmit).To(BeZero())
 
-			actualLRP := createActualLRP(key, endpoint1)
+			actualLRP := createActualLRP(key, endpoint1, domain)
 			_, messagesToEmit = table.AddEndpoint(actualLRP)
 			expected := routingtable.MessagesToEmit{
 				RegistrationMessages: []routingtable.RegistryMessage{
@@ -191,11 +155,11 @@ var _ = Describe("RoutingTable", func() {
 			}
 			Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
 
-			actualLRP = createActualLRP(key, evacuating1)
+			actualLRP = createActualLRP(key, evacuating1, domain)
 			_, messagesToEmit = table.AddEndpoint(actualLRP)
 			Expect(messagesToEmit).To(BeZero())
 
-			actualLRP = createActualLRP(key, endpoint1)
+			actualLRP = createActualLRP(key, endpoint1, domain)
 			_, messagesToEmit = table.RemoveEndpoint(actualLRP)
 			Expect(messagesToEmit).To(BeZero())
 		})
@@ -206,7 +170,7 @@ var _ = Describe("RoutingTable", func() {
 
 		Context("when we have an evacuating endpoint and an instance for that added", func() {
 			It("emits a registration for the instance and a unregister for the evacuating", func() {
-				evacuatingActualLRP := createActualLRP(key, newInstanceEndpointAfterEvacuation)
+				evacuatingActualLRP := createActualLRP(key, newInstanceEndpointAfterEvacuation, domain)
 				_, messagesToEmit = table.AddEndpoint(evacuatingActualLRP)
 				expected := routingtable.MessagesToEmit{
 					RegistrationMessages: []routingtable.RegistryMessage{
@@ -215,7 +179,7 @@ var _ = Describe("RoutingTable", func() {
 				}
 				Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
 
-				actualLRP := createActualLRP(key, evacuating1)
+				actualLRP := createActualLRP(key, evacuating1, domain)
 				_, messagesToEmit = table.RemoveEndpoint(actualLRP)
 				expected = routingtable.MessagesToEmit{
 					UnregistrationMessages: []routingtable.RegistryMessage{
@@ -230,7 +194,7 @@ var _ = Describe("RoutingTable", func() {
 	Context("when internal address message builder is used", func() {
 		BeforeEach(func() {
 			table = routingtable.NewRoutingTable(logger, true)
-			desiredLRP := createDesiredLRPSchedulingInfo(key.ProcessGUID, key.ContainerPort, logGuid, *currentTag, hostname1)
+			desiredLRP := createDesiredLRPSchedulingInfo(key.ProcessGUID, int32(3), key.ContainerPort, logGuid, "", *currentTag, hostname1)
 			table.SetRoutes(nil, desiredLRP)
 		})
 
@@ -240,7 +204,7 @@ var _ = Describe("RoutingTable", func() {
 			)
 
 			BeforeEach(func() {
-				actualLRP = createActualLRP(key, endpoint1)
+				actualLRP = createActualLRP(key, endpoint1, domain)
 				_, messagesToEmit = table.AddEndpoint(actualLRP)
 			})
 
@@ -296,15 +260,18 @@ var _ = Describe("RoutingTable", func() {
 		Context("when we have existing stuff in the table", func() {
 			BeforeEach(func() {
 				tempTable := routingtable.NewRoutingTable(logger, false)
-				schedulingInfo := createDesiredLRPSchedulingInfo(key.ProcessGUID, key.ContainerPort, logGuid, *currentTag, hostname1, hostname2)
-				lrp := createActualLRP(key, endpoint1)
+
+				routes := createRoutingInfo(key.ContainerPort, []string{hostname1, hostname2}, []string{internalHostname1}, "", []uint32{}, "")
+				schedulingInfo := createSchedulingInfoWithRoutes(key.ProcessGUID, 3, routes, logGuid, *currentTag)
+				lrp := createActualLRP(key, endpoint1, domain)
 				tempTable.SetRoutes(nil, schedulingInfo)
 				tempTable.AddEndpoint(lrp)
 
 				table.Swap(tempTable, domains)
 
 				tempTable = routingtable.NewRoutingTable(logger, false)
-				schedulingInfo = createDesiredLRPSchedulingInfo(key.ProcessGUID, key.ContainerPort, logGuid, *currentTag, hostname1, hostname3)
+				routes = createRoutingInfo(key.ContainerPort, []string{hostname1, hostname3}, []string{internalHostname2}, "", []uint32{}, "")
+				schedulingInfo = createSchedulingInfoWithRoutes(key.ProcessGUID, 3, routes, logGuid, *currentTag)
 				tempTable = routingtable.NewRoutingTable(logger, false)
 				tempTable.SetRoutes(nil, schedulingInfo)
 				tempTable.AddEndpoint(lrp)
@@ -317,31 +284,37 @@ var _ = Describe("RoutingTable", func() {
 					RegistrationMessages: []routingtable.RegistryMessage{
 						routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname3, LogGUID: logGuid}),
 					},
+					InternalUnregistrationMessages: []routingtable.RegistryMessage{
+						{
+							Host: endpoint1.ContainerIP,
+							URIs: []string{internalHostname1, fmt.Sprintf("%d.%s", 0, internalHostname1)},
+							Tags: map[string]string{
+								"component": "route-emitter",
+							},
+							PrivateInstanceIndex: "0",
+							App:                  logGuid,
+						},
+					},
+					InternalRegistrationMessages: []routingtable.RegistryMessage{
+						{
+							Host: endpoint1.ContainerIP,
+							URIs: []string{internalHostname2, fmt.Sprintf("%d.%s", 0, internalHostname2)},
+							Tags: map[string]string{
+								"component": "route-emitter",
+							},
+							PrivateInstanceIndex: "0",
+							App:                  logGuid,
+						},
+					},
 				}
 				Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
-			})
-
-			Context("when an endpoint is added that is a collision", func() {
-				It("logs the collision", func() {
-					lrp := createActualLRP(key, collisionEndpoint)
-					table.AddEndpoint(lrp)
-					Eventually(logger).Should(Say(
-						fmt.Sprintf(
-							`\{"Address":\{"Host":"%s","Port":%d\},"instance_guid_a":"%s","instance_guid_b":"%s"\}`,
-							endpoint1.Host,
-							endpoint1.Port,
-							endpoint1.InstanceGUID,
-							collisionEndpoint.InstanceGUID,
-						),
-					))
-				})
 			})
 
 			Context("subsequent swaps with still not fresh", func() {
 				BeforeEach(func() {
 					tempTable := routingtable.NewRoutingTable(logger, false)
-					schedulingInfo := createDesiredLRPSchedulingInfo(key.ProcessGUID, key.ContainerPort, logGuid, *currentTag, hostname1, hostname3)
-					lrp := createActualLRP(key, endpoint1)
+					schedulingInfo := createDesiredLRPSchedulingInfo(key.ProcessGUID, int32(3), key.ContainerPort, logGuid, "", *currentTag, hostname1, hostname3)
+					lrp := createActualLRP(key, endpoint1, domain)
 					tempTable.SetRoutes(nil, schedulingInfo)
 					tempTable.AddEndpoint(lrp)
 
@@ -349,27 +322,28 @@ var _ = Describe("RoutingTable", func() {
 				})
 
 				It("emits nothing", func() {
-					Expect(messagesToEmit).To(BeZero())
+					Expect(messagesToEmit.RegistrationMessages).To(BeEmpty())
+					Expect(messagesToEmit.UnregistrationMessages).To(BeEmpty())
 				})
 			})
 
 			Context("subsequent swaps with fresh", func() {
 				BeforeEach(func() {
 					tempTable := routingtable.NewRoutingTable(logger, false)
-					schedulingInfo := createDesiredLRPSchedulingInfo(key.ProcessGUID, key.ContainerPort, logGuid, *currentTag, hostname1, hostname3)
-					lrp := createActualLRP(key, endpoint1)
+					schedulingInfo := createDesiredLRPSchedulingInfo(key.ProcessGUID, int32(3), key.ContainerPort, logGuid, "", *currentTag, hostname1, hostname3)
+					lrp := createActualLRP(key, endpoint1, domain)
 					tempTable.SetRoutes(nil, schedulingInfo)
 					tempTable.AddEndpoint(lrp)
 					_, messagesToEmit = table.Swap(tempTable, domains)
 				})
 
 				It("emits unregisters the old route", func() {
-					expected := routingtable.MessagesToEmit{
-						UnregistrationMessages: []routingtable.RegistryMessage{
-							routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname2, LogGUID: logGuid}),
-						},
+					expected := []routingtable.RegistryMessage{
+						routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname2, LogGUID: logGuid}),
 					}
-					Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
+
+					Expect(messagesToEmit.UnregistrationMessages).To(Equal(expected))
+					Expect(messagesToEmit.RegistrationMessages).To(BeEmpty())
 				})
 			})
 		})
@@ -378,9 +352,11 @@ var _ = Describe("RoutingTable", func() {
 			Context("when the routing key has both routes and endpoints", func() {
 				BeforeEach(func() {
 					tempTable := routingtable.NewRoutingTable(logger, false)
-					schedulingInfo := createDesiredLRPSchedulingInfo(key.ProcessGUID, key.ContainerPort, logGuid, *currentTag, hostname1, hostname2)
-					lrp1 := createActualLRP(key, endpoint1)
-					lrp2 := createActualLRP(key, endpoint2)
+
+					routes := createRoutingInfo(key.ContainerPort, []string{hostname1, hostname2}, []string{internalHostname1}, "", []uint32{}, "")
+					schedulingInfo := createSchedulingInfoWithRoutes(key.ProcessGUID, 3, routes, logGuid, *currentTag)
+					lrp1 := createActualLRP(key, endpoint1, domain)
+					lrp2 := createActualLRP(key, endpoint2, domain)
 					tempTable.SetRoutes(nil, schedulingInfo)
 					tempTable.AddEndpoint(lrp1)
 					tempTable.AddEndpoint(lrp2)
@@ -396,15 +372,37 @@ var _ = Describe("RoutingTable", func() {
 							routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname1, LogGUID: logGuid}),
 							routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname2, LogGUID: logGuid}),
 						},
+						InternalRegistrationMessages: []routingtable.RegistryMessage{
+							{
+								Host:                 endpoint1.ContainerIP,
+								URIs:                 []string{internalHostname1, fmt.Sprintf("%d.%s", 0, internalHostname1)},
+								PrivateInstanceIndex: "0",
+								App:                  logGuid,
+								Tags: map[string]string{
+									"component": "route-emitter",
+								},
+							},
+							{
+								Host:                 endpoint2.ContainerIP,
+								URIs:                 []string{internalHostname1, fmt.Sprintf("%d.%s", 1, internalHostname1)},
+								PrivateInstanceIndex: "1",
+								App:                  logGuid,
+								Tags: map[string]string{
+									"component": "route-emitter",
+								},
+							},
+						},
 					}
 					Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
 				})
 			})
 
 			Context("when the process only has routes", func() {
+				var schedulingInfo *models.DesiredLRPSchedulingInfo
 				BeforeEach(func() {
 					tempTable := routingtable.NewRoutingTable(logger, false)
-					schedulingInfo := createDesiredLRPSchedulingInfo(key.ProcessGUID, key.ContainerPort, logGuid, *currentTag, hostname1)
+					routes := createRoutingInfo(key.ContainerPort, []string{hostname1}, []string{internalHostname1}, "", []uint32{}, "")
+					schedulingInfo = createSchedulingInfoWithRoutes(key.ProcessGUID, 3, routes, logGuid, *currentTag)
 					tempTable.SetRoutes(nil, schedulingInfo)
 
 					_, messagesToEmit = table.Swap(tempTable, domains)
@@ -417,8 +415,7 @@ var _ = Describe("RoutingTable", func() {
 				Context("when the endpoints subsequently arrive", func() {
 					BeforeEach(func() {
 						tempTable := routingtable.NewRoutingTable(logger, false)
-						schedulingInfo := createDesiredLRPSchedulingInfo(key.ProcessGUID, key.ContainerPort, logGuid, *currentTag, hostname1)
-						lrp := createActualLRP(key, endpoint1)
+						lrp := createActualLRP(key, endpoint1, domain)
 						tempTable.SetRoutes(nil, schedulingInfo)
 						tempTable.AddEndpoint(lrp)
 
@@ -429,6 +426,17 @@ var _ = Describe("RoutingTable", func() {
 						expected := routingtable.MessagesToEmit{
 							RegistrationMessages: []routingtable.RegistryMessage{
 								routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGUID: logGuid}),
+							},
+							InternalRegistrationMessages: []routingtable.RegistryMessage{
+								{
+									Host:                 endpoint1.ContainerIP,
+									URIs:                 []string{internalHostname1, fmt.Sprintf("%d.%s", 0, internalHostname1)},
+									PrivateInstanceIndex: "0",
+									App:                  logGuid,
+									Tags: map[string]string{
+										"component": "route-emitter",
+									},
+								},
 							},
 						}
 						Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
@@ -450,7 +458,7 @@ var _ = Describe("RoutingTable", func() {
 			Context("when the process only has endpoints", func() {
 				BeforeEach(func() {
 					tempTable := routingtable.NewRoutingTable(logger, false)
-					lrp := createActualLRP(key, endpoint1)
+					lrp := createActualLRP(key, endpoint1, domain)
 					tempTable.AddEndpoint(lrp)
 
 					_, messagesToEmit = table.Swap(tempTable, domains)
@@ -463,8 +471,9 @@ var _ = Describe("RoutingTable", func() {
 				Context("when the routes subsequently arrive", func() {
 					BeforeEach(func() {
 						tempTable := routingtable.NewRoutingTable(logger, false)
-						schedulingInfo := createDesiredLRPSchedulingInfo(key.ProcessGUID, key.ContainerPort, logGuid, *currentTag, hostname1)
-						lrp := createActualLRP(key, endpoint1)
+						routes := createRoutingInfo(key.ContainerPort, []string{hostname1}, []string{internalHostname1}, "", []uint32{}, "")
+						schedulingInfo := createSchedulingInfoWithRoutes(key.ProcessGUID, 3, routes, logGuid, *currentTag)
+						lrp := createActualLRP(key, endpoint1, domain)
 						tempTable.SetRoutes(nil, schedulingInfo)
 						tempTable.AddEndpoint(lrp)
 
@@ -475,6 +484,17 @@ var _ = Describe("RoutingTable", func() {
 						expected := routingtable.MessagesToEmit{
 							RegistrationMessages: []routingtable.RegistryMessage{
 								routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGUID: logGuid}),
+							},
+							InternalRegistrationMessages: []routingtable.RegistryMessage{
+								{
+									Host:                 endpoint1.ContainerIP,
+									URIs:                 []string{internalHostname1, fmt.Sprintf("%d.%s", 0, internalHostname1)},
+									PrivateInstanceIndex: "0",
+									App:                  logGuid,
+									Tags: map[string]string{
+										"component": "route-emitter",
+									},
+								},
 							},
 						}
 						Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
@@ -503,7 +523,7 @@ var _ = Describe("RoutingTable", func() {
 				tempTable := routingtable.NewRoutingTable(logger, false)
 				schedulingInfo = createSchedulingInfoWithIS("isolation-segment-1")
 				tempTable.SetRoutes(nil, schedulingInfo)
-				lrp := createActualLRP(key, endpoint1)
+				lrp := createActualLRP(key, endpoint1, domain)
 				tempTable.AddEndpoint(lrp)
 				table.Swap(tempTable, domains)
 			})
@@ -535,7 +555,7 @@ var _ = Describe("RoutingTable", func() {
 					tempTable := routingtable.NewRoutingTable(logger, false)
 					schedulingInfo := createSchedulingInfoWithIS("isolation-segment-2")
 					tempTable.SetRoutes(nil, schedulingInfo)
-					lrp := createActualLRP(key, endpoint1)
+					lrp := createActualLRP(key, endpoint1, domain)
 					tempTable.AddEndpoint(lrp)
 					_, messagesToEmit = table.Swap(tempTable, domains)
 				})
@@ -565,7 +585,7 @@ var _ = Describe("RoutingTable", func() {
 				tempTable := routingtable.NewRoutingTable(logger, false)
 				schedulingInfo = createSchedulingInfo("https://rs.example.com")
 				tempTable.SetRoutes(nil, schedulingInfo)
-				lrp := createActualLRP(key, endpoint1)
+				lrp := createActualLRP(key, endpoint1, domain)
 				tempTable.AddEndpoint(lrp)
 				table.Swap(tempTable, domains)
 			})
@@ -597,7 +617,7 @@ var _ = Describe("RoutingTable", func() {
 					tempTable := routingtable.NewRoutingTable(logger, false)
 					schedulingInfo := createSchedulingInfo("https://rs.new.example.com")
 					tempTable.SetRoutes(nil, schedulingInfo)
-					lrp1 := createActualLRP(key, endpoint1)
+					lrp1 := createActualLRP(key, endpoint1, domain)
 					tempTable.AddEndpoint(lrp1)
 					_, messagesToEmit = table.Swap(tempTable, domains)
 				})
@@ -621,11 +641,12 @@ var _ = Describe("RoutingTable", func() {
 		Context("when the routing key has an evacuating and instance endpoint", func() {
 			BeforeEach(func() {
 				tempTable := routingtable.NewRoutingTable(logger, false)
-				schedulingInfo := createDesiredLRPSchedulingInfo(key.ProcessGUID, key.ContainerPort, logGuid, *currentTag, hostname1, hostname2)
+				routes := createRoutingInfo(key.ContainerPort, []string{hostname1, hostname2}, []string{internalHostname1}, "", []uint32{}, "")
+				schedulingInfo := createSchedulingInfoWithRoutes(key.ProcessGUID, 3, routes, logGuid, *currentTag)
 				tempTable.SetRoutes(nil, schedulingInfo)
-				evacuating := createActualLRP(key, evacuating1)
+				evacuating := createActualLRP(key, evacuating1, domain)
 				tempTable.AddEndpoint(evacuating)
-				lrp2 := createActualLRP(key, endpoint2)
+				lrp2 := createActualLRP(key, endpoint2, domain)
 				tempTable.AddEndpoint(lrp2)
 
 				_, messagesToEmit = table.Swap(tempTable, domains)
@@ -639,6 +660,26 @@ var _ = Describe("RoutingTable", func() {
 						routingtable.RegistryMessageFor(evacuating1, routingtable.Route{Hostname: hostname1, LogGUID: logGuid}),
 						routingtable.RegistryMessageFor(evacuating1, routingtable.Route{Hostname: hostname2, LogGUID: logGuid}),
 					},
+					InternalRegistrationMessages: []routingtable.RegistryMessage{
+						{
+							Host:                 endpoint2.ContainerIP,
+							URIs:                 []string{internalHostname1, fmt.Sprintf("%d.%s", 1, internalHostname1)},
+							PrivateInstanceIndex: "1",
+							App:                  logGuid,
+							Tags: map[string]string{
+								"component": "route-emitter",
+							},
+						},
+						{
+							Host:                 evacuating1.ContainerIP,
+							URIs:                 []string{internalHostname1, fmt.Sprintf("%d.%s", 0, internalHostname1)},
+							PrivateInstanceIndex: "0",
+							App:                  logGuid,
+							Tags: map[string]string{
+								"component": "route-emitter",
+							},
+						},
+					},
 				}
 				Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
 			})
@@ -647,11 +688,12 @@ var _ = Describe("RoutingTable", func() {
 		Context("when there is an existing routing key", func() {
 			BeforeEach(func() {
 				tempTable := routingtable.NewRoutingTable(logger, false)
-				schedulingInfo := createDesiredLRPSchedulingInfo(key.ProcessGUID, key.ContainerPort, logGuid, *currentTag, hostname1, hostname2)
+				routes := createRoutingInfo(key.ContainerPort, []string{hostname1, hostname2}, []string{internalHostname1}, "", []uint32{}, "")
+				schedulingInfo := createSchedulingInfoWithRoutes(key.ProcessGUID, 3, routes, logGuid, *currentTag)
 				tempTable.SetRoutes(nil, schedulingInfo)
-				lrp1 := createActualLRP(key, endpoint1)
+				lrp1 := createActualLRP(key, endpoint1, domain)
 				tempTable.AddEndpoint(lrp1)
-				lrp2 := createActualLRP(key, endpoint2)
+				lrp2 := createActualLRP(key, endpoint2, domain)
 				tempTable.AddEndpoint(lrp2)
 
 				table.Swap(tempTable, domains)
@@ -660,11 +702,12 @@ var _ = Describe("RoutingTable", func() {
 			Context("when nothing changes", func() {
 				BeforeEach(func() {
 					tempTable := routingtable.NewRoutingTable(logger, false)
-					schedulingInfo := createDesiredLRPSchedulingInfo(key.ProcessGUID, key.ContainerPort, logGuid, *currentTag, hostname1, hostname2)
+					routes := createRoutingInfo(key.ContainerPort, []string{hostname1, hostname2}, []string{internalHostname1}, "", []uint32{}, "")
+					schedulingInfo := createSchedulingInfoWithRoutes(key.ProcessGUID, 3, routes, logGuid, *currentTag)
 					tempTable.SetRoutes(nil, schedulingInfo)
-					lrp1 := createActualLRP(key, endpoint1)
+					lrp1 := createActualLRP(key, endpoint1, domain)
 					tempTable.AddEndpoint(lrp1)
-					lrp2 := createActualLRP(key, endpoint2)
+					lrp2 := createActualLRP(key, endpoint2, domain)
 					tempTable.AddEndpoint(lrp2)
 
 					_, messagesToEmit = table.Swap(tempTable, domains)
@@ -678,11 +721,12 @@ var _ = Describe("RoutingTable", func() {
 			Context("when the routing key gets new routes", func() {
 				BeforeEach(func() {
 					tempTable := routingtable.NewRoutingTable(logger, false)
-					schedulingInfo := createDesiredLRPSchedulingInfo(key.ProcessGUID, key.ContainerPort, logGuid, *currentTag, hostname1, hostname2, hostname3)
+					routes := createRoutingInfo(key.ContainerPort, []string{hostname1, hostname2, hostname3}, []string{internalHostname1, internalHostname2}, "", []uint32{}, "")
+					schedulingInfo := createSchedulingInfoWithRoutes(key.ProcessGUID, 3, routes, logGuid, *currentTag)
 					tempTable.SetRoutes(nil, schedulingInfo)
-					lrp1 := createActualLRP(key, endpoint1)
+					lrp1 := createActualLRP(key, endpoint1, domain)
 					tempTable.AddEndpoint(lrp1)
-					lrp2 := createActualLRP(key, endpoint2)
+					lrp2 := createActualLRP(key, endpoint2, domain)
 					tempTable.AddEndpoint(lrp2)
 
 					_, messagesToEmit = table.Swap(tempTable, domains)
@@ -694,6 +738,26 @@ var _ = Describe("RoutingTable", func() {
 							routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname3, LogGUID: logGuid}),
 							routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname3, LogGUID: logGuid}),
 						},
+						InternalRegistrationMessages: []routingtable.RegistryMessage{
+							{
+								Host:                 endpoint2.ContainerIP,
+								URIs:                 []string{internalHostname2, fmt.Sprintf("%d.%s", 1, internalHostname2)},
+								PrivateInstanceIndex: "1",
+								App:                  logGuid,
+								Tags: map[string]string{
+									"component": "route-emitter",
+								},
+							},
+							{
+								Host:                 endpoint1.ContainerIP,
+								URIs:                 []string{internalHostname2, fmt.Sprintf("%d.%s", 0, internalHostname2)},
+								PrivateInstanceIndex: "0",
+								App:                  logGuid,
+								Tags: map[string]string{
+									"component": "route-emitter",
+								},
+							},
+						},
 					}
 					Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
 				})
@@ -702,11 +766,12 @@ var _ = Describe("RoutingTable", func() {
 			Context("when the routing key without any route service url gets routes with a new route service url", func() {
 				BeforeEach(func() {
 					tempTable := routingtable.NewRoutingTable(logger, false)
-					schedulingInfo := createSchedulingInfo("https://rs.example.com")
+					routes := createRoutingInfo(key.ContainerPort, []string{hostname1, hostname2}, []string{internalHostname1}, "https://rs.example.com", []uint32{}, "")
+					schedulingInfo := createSchedulingInfoWithRoutes(key.ProcessGUID, 3, routes, logGuid, *currentTag)
 					tempTable.SetRoutes(nil, schedulingInfo)
-					lrp1 := createActualLRP(key, endpoint1)
+					lrp1 := createActualLRP(key, endpoint1, domain)
 					tempTable.AddEndpoint(lrp1)
-					lrp2 := createActualLRP(key, endpoint2)
+					lrp2 := createActualLRP(key, endpoint2, domain)
 					tempTable.AddEndpoint(lrp2)
 
 					_, messagesToEmit = table.Swap(tempTable, domains)
@@ -734,13 +799,14 @@ var _ = Describe("RoutingTable", func() {
 			Context("when the routing key gets new endpoints", func() {
 				BeforeEach(func() {
 					tempTable := routingtable.NewRoutingTable(logger, false)
-					schedulingInfo := createDesiredLRPSchedulingInfo(key.ProcessGUID, key.ContainerPort, logGuid, *currentTag, hostname1, hostname2)
+					routes := createRoutingInfo(key.ContainerPort, []string{hostname1, hostname2}, []string{internalHostname1}, "", []uint32{}, "")
+					schedulingInfo := createSchedulingInfoWithRoutes(key.ProcessGUID, 3, routes, logGuid, *currentTag)
 					tempTable.SetRoutes(nil, schedulingInfo)
-					lrp1 := createActualLRP(key, endpoint1)
+					lrp1 := createActualLRP(key, endpoint1, domain)
 					tempTable.AddEndpoint(lrp1)
-					lrp2 := createActualLRP(key, endpoint2)
+					lrp2 := createActualLRP(key, endpoint2, domain)
 					tempTable.AddEndpoint(lrp2)
-					lrp3 := createActualLRP(key, endpoint3)
+					lrp3 := createActualLRP(key, endpoint3, domain)
 					tempTable.AddEndpoint(lrp3)
 
 					_, messagesToEmit = table.Swap(tempTable, domains)
@@ -752,6 +818,17 @@ var _ = Describe("RoutingTable", func() {
 							routingtable.RegistryMessageFor(endpoint3, routingtable.Route{Hostname: hostname1, LogGUID: logGuid}),
 							routingtable.RegistryMessageFor(endpoint3, routingtable.Route{Hostname: hostname2, LogGUID: logGuid}),
 						},
+						InternalRegistrationMessages: []routingtable.RegistryMessage{
+							{
+								Host:                 endpoint3.ContainerIP,
+								URIs:                 []string{internalHostname1, fmt.Sprintf("%d.%s", 2, internalHostname1)},
+								PrivateInstanceIndex: "2",
+								App:                  logGuid,
+								Tags: map[string]string{
+									"component": "route-emitter",
+								},
+							},
+						},
 					}
 					Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
 				})
@@ -760,13 +837,14 @@ var _ = Describe("RoutingTable", func() {
 			Context("when the routing key gets a new evacuating endpoint", func() {
 				BeforeEach(func() {
 					tempTable := routingtable.NewRoutingTable(logger, false)
-					schedulingInfo := createDesiredLRPSchedulingInfo(key.ProcessGUID, key.ContainerPort, logGuid, *currentTag, hostname1, hostname2)
+					routes := createRoutingInfo(key.ContainerPort, []string{hostname1, hostname2}, []string{internalHostname1}, "", []uint32{}, "")
+					schedulingInfo := createSchedulingInfoWithRoutes(key.ProcessGUID, 3, routes, logGuid, *currentTag)
 					tempTable.SetRoutes(nil, schedulingInfo)
-					lrp1 := createActualLRP(key, endpoint1)
+					lrp1 := createActualLRP(key, endpoint1, domain)
 					tempTable.AddEndpoint(lrp1)
-					lrp2 := createActualLRP(key, endpoint2)
+					lrp2 := createActualLRP(key, endpoint2, domain)
 					tempTable.AddEndpoint(lrp2)
-					evacuating := createActualLRP(key, evacuating1)
+					evacuating := createActualLRP(key, evacuating1, domain)
 					tempTable.AddEndpoint(evacuating)
 
 					_, messagesToEmit = table.Swap(tempTable, domains)
@@ -779,11 +857,12 @@ var _ = Describe("RoutingTable", func() {
 				Context("when running instance is removed", func() {
 					BeforeEach(func() {
 						tempTable := routingtable.NewRoutingTable(logger, false)
-						schedulingInfo := createDesiredLRPSchedulingInfo(key.ProcessGUID, key.ContainerPort, logGuid, *currentTag, hostname1, hostname2)
+						routes := createRoutingInfo(key.ContainerPort, []string{hostname1, hostname2}, []string{internalHostname1}, "", []uint32{}, "")
+						schedulingInfo := createSchedulingInfoWithRoutes(key.ProcessGUID, 3, routes, logGuid, *currentTag)
 						tempTable.SetRoutes(nil, schedulingInfo)
-						lrp2 := createActualLRP(key, endpoint2)
+						lrp2 := createActualLRP(key, endpoint2, domain)
 						tempTable.AddEndpoint(lrp2)
-						evacuating := createActualLRP(key, evacuating1)
+						evacuating := createActualLRP(key, evacuating1, domain)
 						tempTable.AddEndpoint(evacuating)
 
 						_, messagesToEmit = table.Swap(tempTable, domains)
@@ -798,13 +877,14 @@ var _ = Describe("RoutingTable", func() {
 			Context("when the routing key gets new routes and endpoints", func() {
 				BeforeEach(func() {
 					tempTable := routingtable.NewRoutingTable(logger, false)
-					schedulingInfo := createDesiredLRPSchedulingInfo(key.ProcessGUID, key.ContainerPort, logGuid, *currentTag, hostname1, hostname2, hostname3)
+					routes := createRoutingInfo(key.ContainerPort, []string{hostname1, hostname2, hostname3}, []string{internalHostname1, internalHostname2}, "", []uint32{}, "")
+					schedulingInfo := createSchedulingInfoWithRoutes(key.ProcessGUID, 3, routes, logGuid, *currentTag)
 					tempTable.SetRoutes(nil, schedulingInfo)
-					lrp1 := createActualLRP(key, endpoint1)
+					lrp1 := createActualLRP(key, endpoint1, domain)
 					tempTable.AddEndpoint(lrp1)
-					lrp2 := createActualLRP(key, endpoint2)
+					lrp2 := createActualLRP(key, endpoint2, domain)
 					tempTable.AddEndpoint(lrp2)
-					lrp3 := createActualLRP(key, endpoint3)
+					lrp3 := createActualLRP(key, endpoint3, domain)
 					tempTable.AddEndpoint(lrp3)
 
 					_, messagesToEmit = table.Swap(tempTable, domains)
@@ -816,9 +896,46 @@ var _ = Describe("RoutingTable", func() {
 							routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname3, LogGUID: logGuid}),
 							routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname3, LogGUID: logGuid}),
 							routingtable.RegistryMessageFor(endpoint3, routingtable.Route{Hostname: hostname3, LogGUID: logGuid}),
-
 							routingtable.RegistryMessageFor(endpoint3, routingtable.Route{Hostname: hostname1, LogGUID: logGuid}),
 							routingtable.RegistryMessageFor(endpoint3, routingtable.Route{Hostname: hostname2, LogGUID: logGuid}),
+						},
+						InternalRegistrationMessages: []routingtable.RegistryMessage{
+							{
+								Host:                 endpoint3.ContainerIP,
+								URIs:                 []string{internalHostname1, fmt.Sprintf("%d.%s", 2, internalHostname1)},
+								PrivateInstanceIndex: "2",
+								App:                  logGuid,
+								Tags: map[string]string{
+									"component": "route-emitter",
+								},
+							},
+							{
+								Host:                 endpoint3.ContainerIP,
+								URIs:                 []string{internalHostname2, fmt.Sprintf("%d.%s", 2, internalHostname2)},
+								PrivateInstanceIndex: "2",
+								App:                  logGuid,
+								Tags: map[string]string{
+									"component": "route-emitter",
+								},
+							},
+							{
+								Host:                 endpoint2.ContainerIP,
+								URIs:                 []string{internalHostname2, fmt.Sprintf("%d.%s", 1, internalHostname2)},
+								PrivateInstanceIndex: "1",
+								App:                  logGuid,
+								Tags: map[string]string{
+									"component": "route-emitter",
+								},
+							},
+							{
+								Host:                 endpoint1.ContainerIP,
+								URIs:                 []string{internalHostname2, fmt.Sprintf("%d.%s", 0, internalHostname2)},
+								PrivateInstanceIndex: "0",
+								App:                  logGuid,
+								Tags: map[string]string{
+									"component": "route-emitter",
+								},
+							},
 						},
 					}
 					Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
@@ -828,11 +945,12 @@ var _ = Describe("RoutingTable", func() {
 			Context("when the routing key loses routes", func() {
 				BeforeEach(func() {
 					tempTable := routingtable.NewRoutingTable(logger, false)
-					schedulingInfo := createDesiredLRPSchedulingInfo(key.ProcessGUID, key.ContainerPort, logGuid, *currentTag, hostname1)
+					routes := createRoutingInfo(key.ContainerPort, []string{hostname1}, []string{}, "", []uint32{}, "")
+					schedulingInfo := createSchedulingInfoWithRoutes(key.ProcessGUID, 3, routes, logGuid, *currentTag)
 					tempTable.SetRoutes(nil, schedulingInfo)
-					lrp1 := createActualLRP(key, endpoint1)
+					lrp1 := createActualLRP(key, endpoint1, domain)
 					tempTable.AddEndpoint(lrp1)
-					lrp2 := createActualLRP(key, endpoint2)
+					lrp2 := createActualLRP(key, endpoint2, domain)
 					tempTable.AddEndpoint(lrp2)
 
 					_, messagesToEmit = table.Swap(tempTable, domains)
@@ -844,6 +962,26 @@ var _ = Describe("RoutingTable", func() {
 							routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname2, LogGUID: logGuid}),
 							routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname2, LogGUID: logGuid}),
 						},
+						InternalUnregistrationMessages: []routingtable.RegistryMessage{
+							{
+								Host:                 endpoint1.ContainerIP,
+								URIs:                 []string{internalHostname1, fmt.Sprintf("%d.%s", 0, internalHostname1)},
+								PrivateInstanceIndex: "0",
+								App:                  logGuid,
+								Tags: map[string]string{
+									"component": "route-emitter",
+								},
+							},
+							{
+								Host:                 endpoint2.ContainerIP,
+								URIs:                 []string{internalHostname1, fmt.Sprintf("%d.%s", 1, internalHostname1)},
+								PrivateInstanceIndex: "1",
+								App:                  logGuid,
+								Tags: map[string]string{
+									"component": "route-emitter",
+								},
+							},
+						},
 					}
 					Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
 				})
@@ -852,9 +990,10 @@ var _ = Describe("RoutingTable", func() {
 			Context("when the routing key loses endpoints", func() {
 				BeforeEach(func() {
 					tempTable := routingtable.NewRoutingTable(logger, false)
-					schedulingInfo := createDesiredLRPSchedulingInfo(key.ProcessGUID, key.ContainerPort, logGuid, *currentTag, hostname1, hostname2)
+					routes := createRoutingInfo(key.ContainerPort, []string{hostname1, hostname2}, []string{internalHostname1}, "", []uint32{}, "")
+					schedulingInfo := createSchedulingInfoWithRoutes(key.ProcessGUID, 3, routes, logGuid, *currentTag)
 					tempTable.SetRoutes(nil, schedulingInfo)
-					lrp1 := createActualLRP(key, endpoint1)
+					lrp1 := createActualLRP(key, endpoint1, domain)
 					tempTable.AddEndpoint(lrp1)
 
 					_, messagesToEmit = table.Swap(tempTable, domains)
@@ -866,17 +1005,29 @@ var _ = Describe("RoutingTable", func() {
 							routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname1, LogGUID: logGuid}),
 							routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname2, LogGUID: logGuid}),
 						},
+						InternalUnregistrationMessages: []routingtable.RegistryMessage{
+							{
+								Host:                 endpoint2.ContainerIP,
+								URIs:                 []string{internalHostname1, fmt.Sprintf("%d.%s", 1, internalHostname1)},
+								PrivateInstanceIndex: "1",
+								App:                  logGuid,
+								Tags: map[string]string{
+									"component": "route-emitter",
+								},
+							},
+						},
 					}
 					Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
 				})
 			})
 
-			Context("when the routing key loses both routes and endpoints", func() {
+			Context("when the routing key loses http/internal routes and endpoints", func() {
 				BeforeEach(func() {
 					tempTable := routingtable.NewRoutingTable(logger, false)
-					schedulingInfo := createDesiredLRPSchedulingInfo(key.ProcessGUID, key.ContainerPort, logGuid, *currentTag, hostname1)
+					routes := createRoutingInfo(key.ContainerPort, []string{hostname1}, []string{}, "", []uint32{}, "")
+					schedulingInfo := createSchedulingInfoWithRoutes(key.ProcessGUID, 3, routes, logGuid, *currentTag)
 					tempTable.SetRoutes(nil, schedulingInfo)
-					lrp1 := createActualLRP(key, endpoint1)
+					lrp1 := createActualLRP(key, endpoint1, domain)
 					tempTable.AddEndpoint(lrp1)
 
 					_, messagesToEmit = table.Swap(tempTable, domains)
@@ -889,6 +1040,26 @@ var _ = Describe("RoutingTable", func() {
 							routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname1, LogGUID: logGuid}),
 							routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname2, LogGUID: logGuid}),
 						},
+						InternalUnregistrationMessages: []routingtable.RegistryMessage{
+							{
+								Host:                 endpoint1.ContainerIP,
+								URIs:                 []string{internalHostname1, fmt.Sprintf("%d.%s", 0, internalHostname1)},
+								PrivateInstanceIndex: "0",
+								App:                  logGuid,
+								Tags: map[string]string{
+									"component": "route-emitter",
+								},
+							},
+							{
+								Host:                 endpoint2.ContainerIP,
+								URIs:                 []string{internalHostname1, fmt.Sprintf("%d.%s", 1, internalHostname1)},
+								PrivateInstanceIndex: "1",
+								App:                  logGuid,
+								Tags: map[string]string{
+									"component": "route-emitter",
+								},
+							},
+						},
 					}
 					Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
 				})
@@ -897,9 +1068,10 @@ var _ = Describe("RoutingTable", func() {
 			Context("when the routing key gains routes but loses endpoints", func() {
 				BeforeEach(func() {
 					tempTable := routingtable.NewRoutingTable(logger, false)
-					schedulingInfo := createDesiredLRPSchedulingInfo(key.ProcessGUID, key.ContainerPort, logGuid, *currentTag, hostname1, hostname2, hostname3)
+					routes := createRoutingInfo(key.ContainerPort, []string{hostname1, hostname2, hostname3}, []string{internalHostname1, internalHostname2}, "", []uint32{}, "")
+					schedulingInfo := createSchedulingInfoWithRoutes(key.ProcessGUID, 3, routes, logGuid, *currentTag)
 					tempTable.SetRoutes(nil, schedulingInfo)
-					lrp1 := createActualLRP(key, endpoint1)
+					lrp1 := createActualLRP(key, endpoint1, domain)
 					tempTable.AddEndpoint(lrp1)
 
 					_, messagesToEmit = table.Swap(tempTable, domains)
@@ -914,6 +1086,28 @@ var _ = Describe("RoutingTable", func() {
 							routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname1, LogGUID: logGuid}),
 							routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname2, LogGUID: logGuid}),
 						},
+						InternalRegistrationMessages: []routingtable.RegistryMessage{
+							{
+								Host:                 endpoint1.ContainerIP,
+								URIs:                 []string{internalHostname2, fmt.Sprintf("%d.%s", 0, internalHostname2)},
+								PrivateInstanceIndex: "0",
+								App:                  logGuid,
+								Tags: map[string]string{
+									"component": "route-emitter",
+								},
+							},
+						},
+						InternalUnregistrationMessages: []routingtable.RegistryMessage{
+							{
+								Host:                 endpoint2.ContainerIP,
+								URIs:                 []string{internalHostname1, fmt.Sprintf("%d.%s", 1, internalHostname1)},
+								PrivateInstanceIndex: "1",
+								App:                  logGuid,
+								Tags: map[string]string{
+									"component": "route-emitter",
+								},
+							},
+						},
 					}
 					Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
 				})
@@ -922,13 +1116,14 @@ var _ = Describe("RoutingTable", func() {
 			Context("when the routing key loses routes but gains endpoints", func() {
 				BeforeEach(func() {
 					tempTable := routingtable.NewRoutingTable(logger, false)
-					schedulingInfo := createDesiredLRPSchedulingInfo(key.ProcessGUID, key.ContainerPort, logGuid, *currentTag, hostname1)
+					routes := createRoutingInfo(key.ContainerPort, []string{hostname1}, []string{}, "", []uint32{}, "")
+					schedulingInfo := createSchedulingInfoWithRoutes(key.ProcessGUID, 3, routes, logGuid, *currentTag)
 					tempTable.SetRoutes(nil, schedulingInfo)
-					lrp1 := createActualLRP(key, endpoint1)
+					lrp1 := createActualLRP(key, endpoint1, domain)
 					tempTable.AddEndpoint(lrp1)
-					lrp2 := createActualLRP(key, endpoint2)
+					lrp2 := createActualLRP(key, endpoint2, domain)
 					tempTable.AddEndpoint(lrp2)
-					lrp3 := createActualLRP(key, endpoint3)
+					lrp3 := createActualLRP(key, endpoint3, domain)
 					tempTable.AddEndpoint(lrp3)
 
 					_, messagesToEmit = table.Swap(tempTable, domains)
@@ -942,6 +1137,26 @@ var _ = Describe("RoutingTable", func() {
 						UnregistrationMessages: []routingtable.RegistryMessage{
 							routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname2, LogGUID: logGuid}),
 							routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname2, LogGUID: logGuid}),
+						},
+						InternalUnregistrationMessages: []routingtable.RegistryMessage{
+							{
+								Host:                 endpoint2.ContainerIP,
+								URIs:                 []string{internalHostname1, fmt.Sprintf("%d.%s", 1, internalHostname1)},
+								PrivateInstanceIndex: "1",
+								App:                  logGuid,
+								Tags: map[string]string{
+									"component": "route-emitter",
+								},
+							},
+							{
+								Host:                 endpoint1.ContainerIP,
+								URIs:                 []string{internalHostname1, fmt.Sprintf("%d.%s", 0, internalHostname1)},
+								PrivateInstanceIndex: "0",
+								App:                  logGuid,
+								Tags: map[string]string{
+									"component": "route-emitter",
+								},
+							},
 						},
 					}
 					Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
@@ -973,6 +1188,26 @@ var _ = Describe("RoutingTable", func() {
 								routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname2, LogGUID: logGuid}),
 								routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname2, LogGUID: logGuid}),
 							},
+							InternalUnregistrationMessages: []routingtable.RegistryMessage{
+								{
+									Host:                 endpoint2.ContainerIP,
+									URIs:                 []string{internalHostname1, fmt.Sprintf("%d.%s", 1, internalHostname1)},
+									PrivateInstanceIndex: "1",
+									App:                  logGuid,
+									Tags: map[string]string{
+										"component": "route-emitter",
+									},
+								},
+								{
+									Host:                 endpoint1.ContainerIP,
+									URIs:                 []string{internalHostname1, fmt.Sprintf("%d.%s", 0, internalHostname1)},
+									PrivateInstanceIndex: "0",
+									App:                  logGuid,
+									Tags: map[string]string{
+										"component": "route-emitter",
+									},
+								},
+							},
 						}
 						Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
 					})
@@ -991,6 +1226,26 @@ var _ = Describe("RoutingTable", func() {
 								routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname2, LogGUID: logGuid}),
 								routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname2, LogGUID: logGuid}),
 							},
+							InternalUnregistrationMessages: []routingtable.RegistryMessage{
+								{
+									Host:                 endpoint2.ContainerIP,
+									URIs:                 []string{internalHostname1, fmt.Sprintf("%d.%s", 1, internalHostname1)},
+									PrivateInstanceIndex: "1",
+									App:                  logGuid,
+									Tags: map[string]string{
+										"component": "route-emitter",
+									},
+								},
+								{
+									Host:                 endpoint1.ContainerIP,
+									URIs:                 []string{internalHostname1, fmt.Sprintf("%d.%s", 0, internalHostname1)},
+									PrivateInstanceIndex: "0",
+									App:                  logGuid,
+									Tags: map[string]string{
+										"component": "route-emitter",
+									},
+								},
+							},
 						}
 						Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
 					})
@@ -998,9 +1253,9 @@ var _ = Describe("RoutingTable", func() {
 
 				Context("when the table is repeatedly swapped", func() {
 					JustBeforeEach(func() {
-						lrp1 := createActualLRP(key, endpoint1)
+						lrp1 := createActualLRP(key, endpoint1, domain)
 						tempTable.AddEndpoint(lrp1)
-						lrp2 := createActualLRP(key, endpoint2)
+						lrp2 := createActualLRP(key, endpoint2, domain)
 						tempTable.AddEndpoint(lrp2)
 						// doing another swap to make sure the old table is still good
 						table.Swap(tempTable, domainSet)
@@ -1008,7 +1263,7 @@ var _ = Describe("RoutingTable", func() {
 					})
 
 					It("logs the collision", func() {
-						lrp := createActualLRP(key, collisionEndpoint)
+						lrp := createActualLRP(key, collisionEndpoint, domain)
 						table.AddEndpoint(lrp)
 						Eventually(logger).Should(Say(
 							fmt.Sprintf(
@@ -1032,14 +1287,14 @@ var _ = Describe("RoutingTable", func() {
 					BeforeEach(func() {
 						//override previous set up
 						tempTable := routingtable.NewRoutingTable(logger, false)
-						lrp1 := createActualLRP(key, endpoint1)
+						lrp1 := createActualLRP(key, endpoint1, domain)
 						tempTable.AddEndpoint(lrp1)
-						lrp2 := createActualLRP(key, endpoint2)
+						lrp2 := createActualLRP(key, endpoint2, domain)
 						tempTable.AddEndpoint(lrp2)
 						table.Swap(tempTable, domains)
 
 						tempTable = routingtable.NewRoutingTable(logger, false)
-						lrp1 = createActualLRP(key, endpoint1)
+						lrp1 = createActualLRP(key, endpoint1, domain)
 						tempTable.AddEndpoint(lrp1)
 						_, messagesToEmit = table.Swap(tempTable, domains)
 					})
@@ -1053,12 +1308,12 @@ var _ = Describe("RoutingTable", func() {
 					BeforeEach(func() {
 						//override previous set up
 						tempTable := routingtable.NewRoutingTable(logger, false)
-						schedulingInfo := createDesiredLRPSchedulingInfo(key.ProcessGUID, key.ContainerPort, logGuid, *currentTag, hostname1, hostname2)
+						schedulingInfo := createDesiredLRPSchedulingInfo(key.ProcessGUID, int32(3), key.ContainerPort, logGuid, "", *currentTag, hostname1, hostname2)
 						tempTable.SetRoutes(nil, schedulingInfo)
 						table.Swap(tempTable, domains)
 
 						tempTable = routingtable.NewRoutingTable(logger, false)
-						schedulingInfo = createDesiredLRPSchedulingInfo(key.ProcessGUID, key.ContainerPort, logGuid, *currentTag, hostname1)
+						schedulingInfo = createDesiredLRPSchedulingInfo(key.ProcessGUID, int32(3), key.ContainerPort, logGuid, "", *currentTag, hostname1)
 						tempTable.SetRoutes(nil, schedulingInfo)
 						_, messagesToEmit = table.Swap(tempTable, domains)
 					})
@@ -1075,7 +1330,7 @@ var _ = Describe("RoutingTable", func() {
 		Context("when the table is empty", func() {
 			Context("When setting routes", func() {
 				It("emits nothing", func() {
-					schedulingInfo := createDesiredLRPSchedulingInfo(key.ProcessGUID, key.ContainerPort, logGuid, *currentTag, hostname1, hostname2)
+					schedulingInfo := createDesiredLRPSchedulingInfo(key.ProcessGUID, int32(3), key.ContainerPort, logGuid, "", *currentTag, hostname1, hostname2)
 					_, messagesToEmit = table.SetRoutes(nil, schedulingInfo)
 					Expect(messagesToEmit).To(BeZero())
 				})
@@ -1083,7 +1338,7 @@ var _ = Describe("RoutingTable", func() {
 
 			Context("when removing routes", func() {
 				It("emits nothing", func() {
-					schedulingInfo := createDesiredLRPSchedulingInfo(key.ProcessGUID, key.ContainerPort, logGuid, *currentTag, hostname1, hostname2)
+					schedulingInfo := createDesiredLRPSchedulingInfo(key.ProcessGUID, int32(3), key.ContainerPort, logGuid, "", *currentTag, hostname1, hostname2)
 					_, messagesToEmit = table.RemoveRoutes(schedulingInfo)
 					Expect(messagesToEmit).To(BeZero())
 				})
@@ -1091,7 +1346,7 @@ var _ = Describe("RoutingTable", func() {
 
 			Context("when adding/updating endpoints", func() {
 				It("emits nothing", func() {
-					lrp1 := createActualLRP(key, endpoint1)
+					lrp1 := createActualLRP(key, endpoint1, domain)
 					_, messagesToEmit := table.AddEndpoint(lrp1)
 					Expect(messagesToEmit).To(BeZero())
 				})
@@ -1099,7 +1354,7 @@ var _ = Describe("RoutingTable", func() {
 
 			Context("when removing endpoints", func() {
 				It("emits nothing", func() {
-					lrp1 := createActualLRP(key, endpoint1)
+					lrp1 := createActualLRP(key, endpoint1, domain)
 					_, messagesToEmit := table.RemoveEndpoint(lrp1)
 					Expect(messagesToEmit).To(BeZero())
 				})
@@ -1110,42 +1365,29 @@ var _ = Describe("RoutingTable", func() {
 			var beforeLrpInfo *models.DesiredLRPSchedulingInfo
 			BeforeEach(func() {
 				tempTable := routingtable.NewRoutingTable(logger, false)
-				beforeLrpInfo = createDesiredLRPSchedulingInfo(key.ProcessGUID, key.ContainerPort, logGuid, *currentTag, hostname1, hostname2)
+				routes := createRoutingInfo(key.ContainerPort, []string{hostname1, hostname2}, []string{internalHostname1}, "", []uint32{}, "")
+
+				beforeLrpInfo = createSchedulingInfoWithRoutes(key.ProcessGUID, 3, routes, logGuid, *currentTag)
 				tempTable.SetRoutes(nil, beforeLrpInfo)
-				lrp1 := createActualLRP(key, endpoint1)
+				lrp1 := createActualLRP(key, endpoint1, domain)
 				tempTable.AddEndpoint(lrp1)
-				lrp2 := createActualLRP(key, endpoint2)
+				lrp2 := createActualLRP(key, endpoint2, domain)
 				tempTable.AddEndpoint(lrp2)
 
 				table.Swap(tempTable, domains)
 			})
 
 			Describe("SetRoutes", func() {
-				createNewerSchedulingInfo := func(serviceURL string) *models.DesiredLRPSchedulingInfo {
-					routingInfo := cfroutes.CFRoutes{
-						{
-							Hostnames:       []string{hostname1, hostname2},
-							Port:            key.ContainerPort,
-							RouteServiceUrl: serviceURL,
-						},
-					}.RoutingInfo()
-					routes := models.Routes{}
-					for key, message := range routingInfo {
-						routes[key] = message
-					}
-
-					info := models.NewDesiredLRPSchedulingInfo(models.NewDesiredLRPKey(key.ProcessGUID, "domain", logGuid), "", 3, models.NewDesiredLRPResource(0, 0, 0, ""), routes, *newerTag, nil, nil)
-					return &info
-				}
-
 				It("emits nothing when the route's hostnames do not change", func() {
-					schedulingInfo := createDesiredLRPSchedulingInfo(key.ProcessGUID, key.ContainerPort, logGuid, *newerTag, hostname1, hostname2)
+					routes := createRoutingInfo(key.ContainerPort, []string{hostname1, hostname2}, []string{internalHostname1}, "", []uint32{}, "")
+					schedulingInfo := createSchedulingInfoWithRoutes(key.ProcessGUID, 3, routes, logGuid, *currentTag)
 					_, messagesToEmit = table.SetRoutes(beforeLrpInfo, schedulingInfo)
 					Expect(messagesToEmit).To(BeZero())
 				})
 
 				It("emits unregistration and registration when the route service url changes", func() {
-					schedulingInfo := createNewerSchedulingInfo("https://rs.example.com")
+					routes := createRoutingInfo(key.ContainerPort, []string{hostname1, hostname2}, []string{internalHostname1}, "https://rs.example.com", []uint32{}, "")
+					schedulingInfo := createSchedulingInfoWithRoutes(key.ProcessGUID, 3, routes, logGuid, *newerTag)
 					_, messagesToEmit = table.SetRoutes(beforeLrpInfo, schedulingInfo)
 
 					expected := routingtable.MessagesToEmit{
@@ -1166,13 +1408,15 @@ var _ = Describe("RoutingTable", func() {
 				})
 
 				It("emits nothing when a hostname is added to a route with an older tag", func() {
-					schedulingInfo := createDesiredLRPSchedulingInfo(key.ProcessGUID, key.ContainerPort, logGuid, *olderTag, hostname1, hostname2)
+					routes := createRoutingInfo(key.ContainerPort, []string{hostname1, hostname2}, []string{internalHostname1}, "https://rs.example.com", []uint32{}, "")
+					schedulingInfo := createSchedulingInfoWithRoutes(key.ProcessGUID, 3, routes, logGuid, *olderTag)
 					_, messagesToEmit = table.SetRoutes(beforeLrpInfo, schedulingInfo)
 					Expect(messagesToEmit).To(BeZero())
 				})
 
 				It("emits registrations when a hostname is added to a route with a newer tag", func() {
-					schedulingInfo := createDesiredLRPSchedulingInfo(key.ProcessGUID, key.ContainerPort, logGuid, *newerTag, hostname1, hostname2, hostname3)
+					routes := createRoutingInfo(key.ContainerPort, []string{hostname1, hostname2, hostname3}, []string{internalHostname1}, "", []uint32{}, "")
+					schedulingInfo := createSchedulingInfoWithRoutes(key.ProcessGUID, 3, routes, logGuid, *newerTag)
 					_, messagesToEmit = table.SetRoutes(beforeLrpInfo, schedulingInfo)
 
 					expected := routingtable.MessagesToEmit{
@@ -1185,13 +1429,14 @@ var _ = Describe("RoutingTable", func() {
 				})
 
 				It("emits nothing when a hostname is removed from a route with an older tag", func() {
-					schedulingInfo := createDesiredLRPSchedulingInfo(key.ProcessGUID, key.ContainerPort, logGuid, *olderTag, hostname1)
+					schedulingInfo := createDesiredLRPSchedulingInfo(key.ProcessGUID, int32(3), key.ContainerPort, logGuid, "", *olderTag, hostname1)
 					_, messagesToEmit = table.SetRoutes(beforeLrpInfo, schedulingInfo)
 					Expect(messagesToEmit).To(BeZero())
 				})
 
 				It("emits unregistrations when a hostname is removed from a route with a newer tag", func() {
-					schedulingInfo := createDesiredLRPSchedulingInfo(key.ProcessGUID, key.ContainerPort, logGuid, *newerTag, hostname1)
+					routes := createRoutingInfo(key.ContainerPort, []string{hostname1}, []string{}, "", []uint32{}, "")
+					schedulingInfo := createSchedulingInfoWithRoutes(key.ProcessGUID, 3, routes, logGuid, *newerTag)
 					_, messagesToEmit = table.SetRoutes(beforeLrpInfo, schedulingInfo)
 
 					expected := routingtable.MessagesToEmit{
@@ -1199,18 +1444,39 @@ var _ = Describe("RoutingTable", func() {
 							routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname2, LogGUID: logGuid}),
 							routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname2, LogGUID: logGuid}),
 						},
+						InternalUnregistrationMessages: []routingtable.RegistryMessage{
+							{
+								Host:                 endpoint2.ContainerIP,
+								URIs:                 []string{internalHostname1, fmt.Sprintf("%d.%s", 1, internalHostname1)},
+								PrivateInstanceIndex: "1",
+								App:                  logGuid,
+								Tags: map[string]string{
+									"component": "route-emitter",
+								},
+							},
+							{
+								Host:                 endpoint1.ContainerIP,
+								URIs:                 []string{internalHostname1, fmt.Sprintf("%d.%s", 0, internalHostname1)},
+								PrivateInstanceIndex: "0",
+								App:                  logGuid,
+								Tags: map[string]string{
+									"component": "route-emitter",
+								},
+							},
+						},
 					}
 					Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
 				})
 
 				It("emits nothing when hostnames are added and removed from a route with an older tag", func() {
-					schedulingInfo := createDesiredLRPSchedulingInfo(key.ProcessGUID, key.ContainerPort, logGuid, *olderTag, hostname1, hostname3)
+					schedulingInfo := createDesiredLRPSchedulingInfo(key.ProcessGUID, int32(3), key.ContainerPort, logGuid, "", *olderTag, hostname1, hostname3)
 					_, messagesToEmit = table.SetRoutes(beforeLrpInfo, schedulingInfo)
 					Expect(messagesToEmit).To(BeZero())
 				})
 
 				It("emits registrations and unregistrations when hostnames are added and removed from a route with a newer tag", func() {
-					schedulingInfo := createDesiredLRPSchedulingInfo(key.ProcessGUID, key.ContainerPort, logGuid, *newerTag, hostname1, hostname3)
+					routes := createRoutingInfo(key.ContainerPort, []string{hostname1, hostname3}, []string{internalHostname2}, "", []uint32{}, "")
+					schedulingInfo := createSchedulingInfoWithRoutes(key.ProcessGUID, 3, routes, logGuid, *newerTag)
 					_, messagesToEmit = table.SetRoutes(beforeLrpInfo, schedulingInfo)
 
 					expected := routingtable.MessagesToEmit{
@@ -1222,6 +1488,46 @@ var _ = Describe("RoutingTable", func() {
 							routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname2, LogGUID: logGuid}),
 							routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname2, LogGUID: logGuid}),
 						},
+						InternalRegistrationMessages: []routingtable.RegistryMessage{
+							{
+								Host:                 endpoint2.ContainerIP,
+								URIs:                 []string{internalHostname2, fmt.Sprintf("%d.%s", 1, internalHostname2)},
+								PrivateInstanceIndex: "1",
+								App:                  logGuid,
+								Tags: map[string]string{
+									"component": "route-emitter",
+								},
+							},
+							{
+								Host:                 endpoint1.ContainerIP,
+								URIs:                 []string{internalHostname2, fmt.Sprintf("%d.%s", 0, internalHostname2)},
+								PrivateInstanceIndex: "0",
+								App:                  logGuid,
+								Tags: map[string]string{
+									"component": "route-emitter",
+								},
+							},
+						},
+						InternalUnregistrationMessages: []routingtable.RegistryMessage{
+							{
+								Host:                 endpoint2.ContainerIP,
+								URIs:                 []string{internalHostname1, fmt.Sprintf("%d.%s", 1, internalHostname1)},
+								PrivateInstanceIndex: "1",
+								App:                  logGuid,
+								Tags: map[string]string{
+									"component": "route-emitter",
+								},
+							},
+							{
+								Host:                 endpoint1.ContainerIP,
+								URIs:                 []string{internalHostname1, fmt.Sprintf("%d.%s", 0, internalHostname1)},
+								PrivateInstanceIndex: "0",
+								App:                  logGuid,
+								Tags: map[string]string{
+									"component": "route-emitter",
+								},
+							},
+						},
 					}
 					Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
 				})
@@ -1229,7 +1535,8 @@ var _ = Describe("RoutingTable", func() {
 
 			Context("RemoveRoutes", func() {
 				It("emits unregistrations with a newer tag", func() {
-					schedulingInfo := createDesiredLRPSchedulingInfo(key.ProcessGUID, key.ContainerPort, logGuid, *newerTag, hostname1, hostname2)
+					routes := createRoutingInfo(key.ContainerPort, []string{hostname1, hostname2}, []string{internalHostname1}, "", []uint32{}, "")
+					schedulingInfo := createSchedulingInfoWithRoutes(key.ProcessGUID, 3, routes, logGuid, *newerTag)
 					_, messagesToEmit = table.RemoveRoutes(schedulingInfo)
 
 					expected := routingtable.MessagesToEmit{
@@ -1238,19 +1545,42 @@ var _ = Describe("RoutingTable", func() {
 							routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname2, LogGUID: logGuid}),
 							routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname1, LogGUID: logGuid}),
 							routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname2, LogGUID: logGuid}),
+						},
+						InternalUnregistrationMessages: []routingtable.RegistryMessage{
+							{
+								Host:                 endpoint2.ContainerIP,
+								URIs:                 []string{internalHostname1, fmt.Sprintf("%d.%s", 1, internalHostname1)},
+								PrivateInstanceIndex: "1",
+								App:                  logGuid,
+								Tags: map[string]string{
+									"component": "route-emitter",
+								},
+							},
+							{
+								Host:                 endpoint1.ContainerIP,
+								URIs:                 []string{internalHostname1, fmt.Sprintf("%d.%s", 0, internalHostname1)},
+								PrivateInstanceIndex: "0",
+								App:                  logGuid,
+								Tags: map[string]string{
+									"component": "route-emitter",
+								},
+							},
 						},
 					}
 					Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
 				})
 
 				It("updates routing table with a newer tag", func() {
-					schedulingInfo := createDesiredLRPSchedulingInfo(key.ProcessGUID, key.ContainerPort, logGuid, *newerTag, hostname1, hostname2)
+					routes := createRoutingInfo(key.ContainerPort, []string{hostname1, hostname2}, []string{internalHostname1}, "", []uint32{}, "")
+					schedulingInfo := createSchedulingInfoWithRoutes(key.ProcessGUID, 3, routes, logGuid, *newerTag)
 					_, messagesToEmit = table.RemoveRoutes(schedulingInfo)
 					Expect(table.HTTPAssociationsCount()).To(Equal(0))
+					Expect(table.InternalAssociationsCount()).To(Equal(0))
 				})
 
 				It("emits unregistrations with the same tag", func() {
-					schedulingInfo := createDesiredLRPSchedulingInfo(key.ProcessGUID, key.ContainerPort, logGuid, *currentTag, hostname1, hostname2)
+					routes := createRoutingInfo(key.ContainerPort, []string{hostname1, hostname2}, []string{internalHostname1}, "", []uint32{}, "")
+					schedulingInfo := createSchedulingInfoWithRoutes(key.ProcessGUID, 3, routes, logGuid, *currentTag)
 					_, messagesToEmit = table.RemoveRoutes(schedulingInfo)
 
 					expected := routingtable.MessagesToEmit{
@@ -1260,33 +1590,58 @@ var _ = Describe("RoutingTable", func() {
 							routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname1, LogGUID: logGuid}),
 							routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname2, LogGUID: logGuid}),
 						},
+						InternalUnregistrationMessages: []routingtable.RegistryMessage{
+							{
+								Host:                 endpoint2.ContainerIP,
+								URIs:                 []string{internalHostname1, fmt.Sprintf("%d.%s", 1, internalHostname1)},
+								PrivateInstanceIndex: "1",
+								App:                  logGuid,
+								Tags: map[string]string{
+									"component": "route-emitter",
+								},
+							},
+							{
+								Host:                 endpoint1.ContainerIP,
+								URIs:                 []string{internalHostname1, fmt.Sprintf("%d.%s", 0, internalHostname1)},
+								PrivateInstanceIndex: "0",
+								App:                  logGuid,
+								Tags: map[string]string{
+									"component": "route-emitter",
+								},
+							},
+						},
 					}
 					Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
 				})
 
 				It("updates routing table with a same tag", func() {
-					schedulingInfo := createDesiredLRPSchedulingInfo(key.ProcessGUID, key.ContainerPort, logGuid, *currentTag, hostname1, hostname2)
+					routes := createRoutingInfo(key.ContainerPort, []string{hostname1, hostname2}, []string{internalHostname1}, "", []uint32{}, "")
+					schedulingInfo := createSchedulingInfoWithRoutes(key.ProcessGUID, 3, routes, logGuid, *currentTag)
 					_, messagesToEmit = table.RemoveRoutes(schedulingInfo)
 					Expect(table.HTTPAssociationsCount()).To(Equal(0))
+					Expect(table.InternalAssociationsCount()).To(Equal(0))
 				})
 
 				It("emits nothing when the tag is older", func() {
-					schedulingInfo := createDesiredLRPSchedulingInfo(key.ProcessGUID, key.ContainerPort, logGuid, *olderTag, hostname1, hostname2)
+					routes := createRoutingInfo(key.ContainerPort, []string{hostname1, hostname2}, []string{}, "", []uint32{}, "")
+					schedulingInfo := createSchedulingInfoWithRoutes(key.ProcessGUID, 3, routes, logGuid, *olderTag)
 					_, messagesToEmit = table.RemoveRoutes(schedulingInfo)
 					Expect(messagesToEmit).To(BeZero())
 				})
 
 				It("does NOT update routing table with an older tag", func() {
 					beforeRouteCount := table.HTTPAssociationsCount()
-					schedulingInfo := createDesiredLRPSchedulingInfo(key.ProcessGUID, key.ContainerPort, logGuid, *olderTag, hostname1, hostname2)
+					beforeInternalRouteCount := table.InternalAssociationsCount()
+					schedulingInfo := createDesiredLRPSchedulingInfo(key.ProcessGUID, int32(3), key.ContainerPort, logGuid, "", *olderTag, hostname1, hostname2)
 					_, messagesToEmit = table.RemoveRoutes(schedulingInfo)
 					Expect(table.HTTPAssociationsCount()).To(Equal(beforeRouteCount))
+					Expect(table.InternalAssociationsCount()).To(Equal(beforeInternalRouteCount))
 				})
 			})
 
 			Context("AddEndpoint", func() {
 				It("emits nothing when the tag is the same", func() {
-					lrp1 := createActualLRP(key, endpoint1)
+					lrp1 := createActualLRP(key, endpoint1, domain)
 					_, messagesToEmit := table.AddEndpoint(lrp1)
 					Expect(messagesToEmit).To(BeZero())
 				})
@@ -1294,7 +1649,7 @@ var _ = Describe("RoutingTable", func() {
 				It("emits nothing when updating an endpoint with an older tag", func() {
 					updatedEndpoint := endpoint1
 					updatedEndpoint.ModificationTag = olderTag
-					lrp1 := createActualLRP(key, updatedEndpoint)
+					lrp1 := createActualLRP(key, updatedEndpoint, domain)
 					_, messagesToEmit := table.AddEndpoint(lrp1)
 
 					Expect(messagesToEmit).To(BeZero())
@@ -1303,13 +1658,13 @@ var _ = Describe("RoutingTable", func() {
 				It("emits nothing when updating an endpoint with a newer tag", func() {
 					updatedEndpoint := endpoint1
 					updatedEndpoint.ModificationTag = newerTag
-					lrp1 := createActualLRP(key, updatedEndpoint)
+					lrp1 := createActualLRP(key, updatedEndpoint, domain)
 					_, messagesToEmit := table.AddEndpoint(lrp1)
 					Expect(messagesToEmit).To(BeZero())
 				})
 
 				It("emits registrations when adding an endpoint", func() {
-					lrp1 := createActualLRP(key, endpoint3)
+					lrp1 := createActualLRP(key, endpoint3, domain)
 					_, messagesToEmit = table.AddEndpoint(lrp1)
 
 					expected := routingtable.MessagesToEmit{
@@ -1317,19 +1672,30 @@ var _ = Describe("RoutingTable", func() {
 							routingtable.RegistryMessageFor(endpoint3, routingtable.Route{Hostname: hostname1, LogGUID: logGuid}),
 							routingtable.RegistryMessageFor(endpoint3, routingtable.Route{Hostname: hostname2, LogGUID: logGuid}),
 						},
+						InternalRegistrationMessages: []routingtable.RegistryMessage{
+							{
+								Host:                 endpoint3.ContainerIP,
+								URIs:                 []string{internalHostname1, fmt.Sprintf("%d.%s", 2, internalHostname1)},
+								PrivateInstanceIndex: "2",
+								App:                  logGuid,
+								Tags: map[string]string{
+									"component": "route-emitter",
+								},
+							},
+						},
 					}
 					Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
 				})
 
 				It("does not log a collision", func() {
-					lrp := createActualLRP(key, endpoint3)
+					lrp := createActualLRP(key, endpoint3, domain)
 					table.AddEndpoint(lrp)
 					Consistently(logger).ShouldNot(Say("collision-detected-with-endpoint"))
 				})
 
 				Context("when adding an endpoint with IP and port that collide with existing endpoint", func() {
 					It("logs the collision", func() {
-						lrp := createActualLRP(key, collisionEndpoint)
+						lrp := createActualLRP(key, collisionEndpoint, domain)
 						table.AddEndpoint(lrp)
 						Eventually(logger).Should(Say(
 							fmt.Sprintf(
@@ -1345,7 +1711,7 @@ var _ = Describe("RoutingTable", func() {
 
 				Context("when an evacuating endpoint is added for an instance that already exists", func() {
 					It("emits nothing", func() {
-						lrp1 := createActualLRP(key, evacuating1)
+						lrp1 := createActualLRP(key, evacuating1, domain)
 						_, messagesToEmit = table.AddEndpoint(lrp1)
 						Expect(messagesToEmit).To(BeZero())
 					})
@@ -1353,28 +1719,132 @@ var _ = Describe("RoutingTable", func() {
 
 				Context("when an instance endpoint is updated for an evacuating that already exists", func() {
 					BeforeEach(func() {
-						lrp1 := createActualLRP(key, evacuating1)
+						lrp1 := createActualLRP(key, evacuating1, domain)
 						_, messagesToEmit = table.AddEndpoint(lrp1)
 						table.AddEndpoint(lrp1)
 					})
 
 					It("emits nothing", func() {
-						lrp2 := createActualLRP(key, endpoint1)
+						lrp2 := createActualLRP(key, endpoint1, domain)
 						_, messagesToEmit = table.AddEndpoint(lrp2)
 						Expect(messagesToEmit).To(BeZero())
+					})
+				})
+
+				Context("when there are internal routes", func() {
+					var internalHostname string
+					BeforeEach(func() {
+						tempTable := routingtable.NewRoutingTable(logger, false)
+						internalHostname = "internal"
+						routes := createRoutingInfo(key.ContainerPort, []string{hostname1}, []string{internalHostname}, "", []uint32{}, "")
+
+						beforeLrpInfo = createSchedulingInfoWithRoutes(key.ProcessGUID, 3, routes, logGuid, *currentTag)
+						tempTable.SetRoutes(nil, beforeLrpInfo)
+						lrp1 := createActualLRP(key, endpoint1, domain)
+						tempTable.AddEndpoint(lrp1)
+						lrp2 := createActualLRP(key, endpoint2, domain)
+						tempTable.AddEndpoint(lrp2)
+
+						table.Swap(tempTable, domains)
+					})
+
+					It("emits registrations when adding an endpoint", func() {
+						lrp3 := createActualLRP(key, endpoint3, domain)
+						_, messagesToEmit = table.AddEndpoint(lrp3)
+
+						expected := []routingtable.RegistryMessage{
+							{
+								Host:                 endpoint3.ContainerIP,
+								URIs:                 []string{internalHostname, fmt.Sprintf("%d.%s", 2, internalHostname)},
+								PrivateInstanceIndex: "2",
+								App:                  logGuid,
+								Tags: map[string]string{
+									"component": "route-emitter",
+								},
+							},
+						}
+
+						Expect(messagesToEmit.InternalRegistrationMessages).To(Equal(expected))
+					})
+
+					Context("when the instance container port changes", func() {
+						var changedEndpoint routingtable.Endpoint
+						BeforeEach(func() {
+							changedEndpoint = endpoint2
+							changedEndpoint.ContainerPort = 1234
+							changedEndpoint.ModificationTag = newerTag
+						})
+
+						It("emits nothing", func() {
+							lrp := createActualLRP(key, changedEndpoint, domain)
+							_, messagesToEmit := table.AddEndpoint(lrp)
+
+							Expect(messagesToEmit.InternalRegistrationMessages).To(BeEmpty())
+							Expect(messagesToEmit.InternalUnregistrationMessages).To(BeEmpty())
+						})
+					})
+
+					Context("when the instance host port changes", func() {
+						var changedEndpoint routingtable.Endpoint
+						BeforeEach(func() {
+							changedEndpoint = endpoint2
+							changedEndpoint.Port = 1234
+							changedEndpoint.ModificationTag = newerTag
+						})
+
+						It("emits nothing", func() {
+							lrp := createActualLRP(key, changedEndpoint, domain)
+							_, messagesToEmit := table.AddEndpoint(lrp)
+
+							Expect(messagesToEmit.InternalRegistrationMessages).To(BeEmpty())
+							Expect(messagesToEmit.InternalUnregistrationMessages).To(BeEmpty())
+						})
+					})
+
+					Context("when an evacuating endpoint is added for an instance that already exists", func() {
+						It("emits nothing", func() {
+							lrp1 := createActualLRP(key, evacuating1, domain)
+							_, messagesToEmit = table.AddEndpoint(lrp1)
+							Expect(messagesToEmit).To(BeZero())
+						})
+					})
+
+					Context("when an instance endpoint is updated for an evacuating that already exists", func() {
+						BeforeEach(func() {
+							lrp1 := createActualLRP(key, evacuating1, domain)
+							_, messagesToEmit = table.AddEndpoint(lrp1)
+							table.AddEndpoint(lrp1)
+						})
+
+						It("emits nothing", func() {
+							lrp2 := createActualLRP(key, endpoint1, domain)
+							_, messagesToEmit = table.AddEndpoint(lrp2)
+							Expect(messagesToEmit).To(BeZero())
+						})
 					})
 				})
 			})
 
 			Context("RemoveEndpoint", func() {
 				It("emits unregistrations with the same tag", func() {
-					lrp1 := createActualLRP(key, endpoint2)
+					lrp1 := createActualLRP(key, endpoint2, domain)
 					_, messagesToEmit = table.RemoveEndpoint(lrp1)
 
 					expected := routingtable.MessagesToEmit{
 						UnregistrationMessages: []routingtable.RegistryMessage{
 							routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname1, LogGUID: logGuid}),
 							routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname2, LogGUID: logGuid}),
+						},
+						InternalUnregistrationMessages: []routingtable.RegistryMessage{
+							{
+								Host:                 endpoint2.ContainerIP,
+								URIs:                 []string{internalHostname1, fmt.Sprintf("%d.%s", 1, internalHostname1)},
+								PrivateInstanceIndex: "1",
+								App:                  logGuid,
+								Tags: map[string]string{
+									"component": "route-emitter",
+								},
+							},
 						},
 					}
 					Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
@@ -1383,13 +1853,24 @@ var _ = Describe("RoutingTable", func() {
 				It("emits unregistrations when the tag is newer", func() {
 					newerEndpoint := endpoint2
 					newerEndpoint.ModificationTag = newerTag
-					lrp1 := createActualLRP(key, newerEndpoint)
+					lrp1 := createActualLRP(key, newerEndpoint, domain)
 					_, messagesToEmit = table.RemoveEndpoint(lrp1)
 
 					expected := routingtable.MessagesToEmit{
 						UnregistrationMessages: []routingtable.RegistryMessage{
 							routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname1, LogGUID: logGuid}),
 							routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname2, LogGUID: logGuid}),
+						},
+						InternalUnregistrationMessages: []routingtable.RegistryMessage{
+							{
+								Host:                 endpoint2.ContainerIP,
+								URIs:                 []string{internalHostname1, fmt.Sprintf("%d.%s", 1, internalHostname1)},
+								PrivateInstanceIndex: "1",
+								App:                  logGuid,
+								Tags: map[string]string{
+									"component": "route-emitter",
+								},
+							},
 						},
 					}
 					Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
@@ -1398,19 +1879,20 @@ var _ = Describe("RoutingTable", func() {
 				It("emits nothing when the tag is older", func() {
 					olderEndpoint := endpoint2
 					olderEndpoint.ModificationTag = olderTag
-					lrp1 := createActualLRP(key, olderEndpoint)
+					lrp1 := createActualLRP(key, olderEndpoint, domain)
 					_, messagesToEmit = table.RemoveEndpoint(lrp1)
 					Expect(messagesToEmit).To(BeZero())
 				})
 
 				Context("when an instance endpoint is removed for an instance that already exists", func() {
 					BeforeEach(func() {
-						lrp1 := createActualLRP(key, evacuating1)
-						table.AddEndpoint(lrp1)
+						lrp1 := createActualLRP(key, evacuating1, domain)
+						_, messagesToEmit := table.AddEndpoint(lrp1)
+						Expect(messagesToEmit).To(BeZero())
 					})
 
 					It("emits nothing", func() {
-						lrp2 := createActualLRP(key, endpoint1)
+						lrp2 := createActualLRP(key, endpoint1, domain)
 						_, messagesToEmit = table.RemoveEndpoint(lrp2)
 						Expect(messagesToEmit).To(BeZero())
 					})
@@ -1418,9 +1900,9 @@ var _ = Describe("RoutingTable", func() {
 
 				Context("when a collision is avoided because the endpoint has already been removed", func() {
 					It("does not log the collision", func() {
-						lrp := createActualLRP(key, endpoint1)
+						lrp := createActualLRP(key, endpoint1, domain)
 						table.RemoveEndpoint(lrp)
-						lrp = createActualLRP(key, collisionEndpoint)
+						lrp = createActualLRP(key, collisionEndpoint, domain)
 						table.AddEndpoint(lrp)
 						Consistently(logger).ShouldNot(Say("collision-detected-with-endpoint"))
 					})
@@ -1438,7 +1920,7 @@ var _ = Describe("RoutingTable", func() {
 
 			Context("When setting routes", func() {
 				It("emits nothing", func() {
-					after := createDesiredLRPSchedulingInfo(key.ProcessGUID, key.ContainerPort, logGuid, *currentTag, hostname1, hostname3)
+					after := createDesiredLRPSchedulingInfo(key.ProcessGUID, int32(3), key.ContainerPort, logGuid, "", *currentTag, hostname1, hostname3)
 					table.SetRoutes(nil, beforeLRPSchedulingInfo)
 					_, messagesToEmit = table.SetRoutes(beforeLRPSchedulingInfo, after)
 					Expect(messagesToEmit).To(BeZero())
@@ -1454,7 +1936,7 @@ var _ = Describe("RoutingTable", func() {
 
 			Context("when adding/updating endpoints", func() {
 				It("emits registrations", func() {
-					lrp1 := createActualLRP(key, endpoint1)
+					lrp1 := createActualLRP(key, endpoint1, domain)
 					_, messagesToEmit = table.AddEndpoint(lrp1)
 
 					expected := routingtable.MessagesToEmit{
@@ -1472,8 +1954,8 @@ var _ = Describe("RoutingTable", func() {
 			var beforeLRPSchedulingInfo *models.DesiredLRPSchedulingInfo
 			var lrp1, lrp2 *routingtable.ActualLRPRoutingInfo
 			BeforeEach(func() {
-				lrp1 = createActualLRP(key, endpoint1)
-				lrp2 = createActualLRP(key, endpoint2)
+				lrp1 = createActualLRP(key, endpoint1, domain)
+				lrp2 = createActualLRP(key, endpoint2, domain)
 				table.AddEndpoint(lrp1)
 				table.AddEndpoint(lrp2)
 				beforeLRPSchedulingInfo = createSchedulingInfo("https://rs.example.com")
@@ -1529,7 +2011,8 @@ var _ = Describe("RoutingTable", func() {
 		Context("when the table has routes but no endpoints", func() {
 			var beforeLRPSchedulingInfo *models.DesiredLRPSchedulingInfo
 			BeforeEach(func() {
-				beforeLRPSchedulingInfo = createSchedulingInfo("https://rs.example.com")
+				routes := createRoutingInfo(key.ContainerPort, []string{}, []string{}, "https://rs.example.com", []uint32{}, "")
+				beforeLRPSchedulingInfo = createSchedulingInfoWithRoutes(key.ProcessGUID, 3, routes, logGuid, *currentTag)
 				table.SetRoutes(nil, beforeLRPSchedulingInfo)
 			})
 
@@ -1543,8 +2026,8 @@ var _ = Describe("RoutingTable", func() {
 			var lrp1, lrp2 *routingtable.ActualLRPRoutingInfo
 
 			BeforeEach(func() {
-				lrp1 = createActualLRP(key, endpoint1)
-				lrp2 = createActualLRP(key, endpoint2)
+				lrp1 = createActualLRP(key, endpoint1, domain)
+				lrp2 = createActualLRP(key, endpoint2, domain)
 				table.AddEndpoint(lrp1)
 				table.AddEndpoint(lrp2)
 			})
@@ -1560,10 +2043,11 @@ var _ = Describe("RoutingTable", func() {
 			var lrp1, lrp2 *routingtable.ActualLRPRoutingInfo
 
 			BeforeEach(func() {
-				beforeLRPSchedulingInfo = createDesiredLRPSchedulingInfo(key.ProcessGUID, key.ContainerPort, logGuid, *currentTag, hostname1, hostname2)
+				routes := createRoutingInfo(key.ContainerPort, []string{hostname1, hostname2}, []string{internalHostname1}, "", []uint32{}, "")
+				beforeLRPSchedulingInfo = createSchedulingInfoWithRoutes(key.ProcessGUID, 3, routes, logGuid, *currentTag)
 				table.SetRoutes(nil, beforeLRPSchedulingInfo)
-				lrp1 = createActualLRP(key, endpoint1)
-				lrp2 = createActualLRP(key, endpoint2)
+				lrp1 = createActualLRP(key, endpoint1, domain)
+				lrp2 = createActualLRP(key, endpoint2, domain)
 				table.AddEndpoint(lrp1)
 				table.AddEndpoint(lrp2)
 			})
@@ -1578,6 +2062,26 @@ var _ = Describe("RoutingTable", func() {
 						routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname1, LogGUID: logGuid}),
 						routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname2, LogGUID: logGuid}),
 					},
+					InternalRegistrationMessages: []routingtable.RegistryMessage{
+						{
+							Host:                 endpoint2.ContainerIP,
+							URIs:                 []string{internalHostname1, fmt.Sprintf("%d.%s", 1, internalHostname1)},
+							PrivateInstanceIndex: "1",
+							App:                  logGuid,
+							Tags: map[string]string{
+								"component": "route-emitter",
+							},
+						},
+						{
+							Host:                 endpoint1.ContainerIP,
+							URIs:                 []string{internalHostname1, fmt.Sprintf("%d.%s", 0, internalHostname1)},
+							PrivateInstanceIndex: "0",
+							App:                  logGuid,
+							Tags: map[string]string{
+								"component": "route-emitter",
+							},
+						},
+					},
 				}
 				Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
 			})
@@ -1586,9 +2090,9 @@ var _ = Describe("RoutingTable", func() {
 
 	Describe("HasExternalRoutes", func() {
 		It("returns true if the actual lrp has external routes ", func() {
-			beforeLRPSchedulingInfo := createDesiredLRPSchedulingInfo(key.ProcessGUID, key.ContainerPort, logGuid, *currentTag, hostname1, hostname2)
+			beforeLRPSchedulingInfo := createDesiredLRPSchedulingInfo(key.ProcessGUID, int32(3), key.ContainerPort, logGuid, "", *currentTag, hostname1, hostname2)
 			table.SetRoutes(nil, beforeLRPSchedulingInfo)
-			lrp1 := createActualLRP(key, endpoint1)
+			lrp1 := createActualLRP(key, endpoint1, domain)
 			table.AddEndpoint(lrp1)
 			Expect(table.HasExternalRoutes(lrp1)).To(BeTrue())
 		})
@@ -1600,36 +2104,36 @@ var _ = Describe("RoutingTable", func() {
 		})
 
 		It("returns 1 after adding a route to a single process", func() {
-			schedulingInfo := createDesiredLRPSchedulingInfo("fake-process-guid", 0, logGuid, *currentTag, "fake-route-url")
+			schedulingInfo := createDesiredLRPSchedulingInfo("fake-process-guid", int32(3), 0, logGuid, "", *currentTag, "fake-route-url")
 			table.SetRoutes(nil, schedulingInfo)
-			lrp := createActualLRP(routingtable.RoutingKey{ProcessGUID: "fake-process-guid"}, routingtable.Endpoint{InstanceGUID: "fake-instance-guid", ModificationTag: currentTag})
+			lrp := createActualLRP(routingtable.RoutingKey{ProcessGUID: "fake-process-guid"}, routingtable.Endpoint{InstanceGUID: "fake-instance-guid", ModificationTag: currentTag}, domain)
 			table.AddEndpoint(lrp)
 
 			Expect(table.HTTPAssociationsCount()).To(Equal(1))
 		})
 
 		It("returns 2 after associating 2 urls with a single process", func() {
-			schedulingInfo := createDesiredLRPSchedulingInfo("fake-process-guid", 0, logGuid, *currentTag, "fake-route-url-1", "fake-route-url-2")
+			schedulingInfo := createDesiredLRPSchedulingInfo("fake-process-guid", int32(3), 0, logGuid, "", *currentTag, "fake-route-url-1", "fake-route-url-2")
 			table.SetRoutes(nil, schedulingInfo)
-			lrp := createActualLRP(routingtable.RoutingKey{ProcessGUID: "fake-process-guid"}, routingtable.Endpoint{InstanceGUID: "fake-instance-guid-1", ModificationTag: currentTag})
+			lrp := createActualLRP(routingtable.RoutingKey{ProcessGUID: "fake-process-guid"}, routingtable.Endpoint{InstanceGUID: "fake-instance-guid-1", ModificationTag: currentTag}, domain)
 			table.AddEndpoint(lrp)
 
 			Expect(table.HTTPAssociationsCount()).To(Equal(2))
 		})
 
 		It("returns 8 after associating 2 urls with 2 processes with 2 instances each", func() {
-			schedulingInfo := createDesiredLRPSchedulingInfo("fake-process-guid-a", 0, logGuid, *currentTag, "fake-route-url-a1", "fake-route-url-a2")
+			schedulingInfo := createDesiredLRPSchedulingInfo("fake-process-guid-a", int32(3), 0, logGuid, "", *currentTag, "fake-route-url-a1", "fake-route-url-a2")
 			table.SetRoutes(nil, schedulingInfo)
-			lrp := createActualLRP(routingtable.RoutingKey{ProcessGUID: "fake-process-guid-a"}, routingtable.Endpoint{InstanceGUID: "fake-instance-guid-a1", ModificationTag: currentTag})
+			lrp := createActualLRP(routingtable.RoutingKey{ProcessGUID: "fake-process-guid-a"}, routingtable.Endpoint{InstanceGUID: "fake-instance-guid-a1", ModificationTag: currentTag}, domain)
 			table.AddEndpoint(lrp)
-			lrp = createActualLRP(routingtable.RoutingKey{ProcessGUID: "fake-process-guid-a"}, routingtable.Endpoint{InstanceGUID: "fake-instance-guid-a2", ModificationTag: currentTag})
+			lrp = createActualLRP(routingtable.RoutingKey{ProcessGUID: "fake-process-guid-a"}, routingtable.Endpoint{InstanceGUID: "fake-instance-guid-a2", ModificationTag: currentTag}, domain)
 			table.AddEndpoint(lrp)
 
-			schedulingInfo = createDesiredLRPSchedulingInfo("fake-process-guid-b", 0, logGuid, *currentTag, "fake-route-url-b1", "fake-route-url-b2")
+			schedulingInfo = createDesiredLRPSchedulingInfo("fake-process-guid-b", int32(3), 0, logGuid, "", *currentTag, "fake-route-url-b1", "fake-route-url-b2")
 			table.SetRoutes(nil, schedulingInfo)
-			lrp = createActualLRP(routingtable.RoutingKey{ProcessGUID: "fake-process-guid-b"}, routingtable.Endpoint{InstanceGUID: "fake-instance-guid-b1", ModificationTag: currentTag})
+			lrp = createActualLRP(routingtable.RoutingKey{ProcessGUID: "fake-process-guid-b"}, routingtable.Endpoint{InstanceGUID: "fake-instance-guid-b1", ModificationTag: currentTag}, domain)
 			table.AddEndpoint(lrp)
-			lrp = createActualLRP(routingtable.RoutingKey{ProcessGUID: "fake-process-guid-b"}, routingtable.Endpoint{InstanceGUID: "fake-instance-guid-b2", ModificationTag: currentTag})
+			lrp = createActualLRP(routingtable.RoutingKey{ProcessGUID: "fake-process-guid-b"}, routingtable.Endpoint{InstanceGUID: "fake-instance-guid-b2", ModificationTag: currentTag}, domain)
 			table.AddEndpoint(lrp)
 
 			Expect(table.HTTPAssociationsCount()).To(Equal(8))

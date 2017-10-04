@@ -44,6 +44,7 @@ var _ = Describe("Config", func() {
 			"log_level": "debug",
 			"debug_address": "127.0.0.1:9999",
 			"enable_tcp_emitter": true,
+			"enable_internal_emitter": true,
 			"register_direct_instance_routes": true,
 			"oauth": {
 				"uaa_url": "https://uaa.cf.service.internal:8443",
@@ -112,6 +113,7 @@ var _ = Describe("Config", func() {
 			RouteEmittingWorkers:               18,
 			TCPRouteTTL:                        durationjson.Duration(2 * time.Minute),
 			EnableTCPEmitter:                   true,
+			EnableInternalEmitter:              true,
 			RegisterDirectInstanceRoutes:       true,
 			DebugServerConfig: debugserver.DebugServerConfig{
 				DebugAddress: "127.0.0.1:9999",
@@ -184,6 +186,7 @@ var _ = Describe("Config", func() {
 				SyncInterval:                       durationjson.Duration(time.Minute),
 				TCPRouteTTL:                        durationjson.Duration(2 * time.Minute),
 				EnableTCPEmitter:                   false,
+				EnableInternalEmitter:              false,
 				RegisterDirectInstanceRoutes:       false,
 				LagerConfig: lagerflags.LagerConfig{
 					LogLevel: "info",

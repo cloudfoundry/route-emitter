@@ -53,6 +53,7 @@ type RouteEmitterConfig struct {
 	RoutingAPI                         RoutingAPIConfig      `json:"routing_api"`
 	EnableTCPEmitter                   bool                  `json:"enable_tcp_emitter"`
 	LoggregatorConfig                  loggingclient.Config  `json:"loggregator"`
+	EnableInternalEmitter              bool                  `json:"enable_internal_emitter"`
 	lagerflags.LagerConfig
 	debugserver.DebugServerConfig
 }
@@ -73,6 +74,7 @@ func DefaultRouteEmitterConfig() RouteEmitterConfig {
 		TCPRouteTTL:                        durationjson.Duration(2 * time.Minute),
 		LagerConfig:                        lagerflags.DefaultLagerConfig(),
 		EnableTCPEmitter:                   false,
+		EnableInternalEmitter:              false,
 		RegisterDirectInstanceRoutes:       false,
 	}
 }

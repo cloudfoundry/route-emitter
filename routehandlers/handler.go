@@ -139,13 +139,17 @@ func (handler *Handler) Sync(
 
 	routeMappings, messages := handler.routingTable.Swap(newTable, domains)
 	logger.Debug("start-emitting-messages", lager.Data{
-		"num-registration-messages":   len(messages.RegistrationMessages),
-		"num-unregistration-messages": len(messages.UnregistrationMessages),
+		"num-registration-messages":            len(messages.RegistrationMessages),
+		"num-unregistration-messages":          len(messages.UnregistrationMessages),
+		"num-internal-registration-messages":   len(messages.InternalRegistrationMessages),
+		"num-internal-unregistration-messages": len(messages.InternalUnregistrationMessages),
 	})
 	handler.emitMessages(logger, messages, routeMappings)
 	logger.Debug("done-emitting-messages", lager.Data{
-		"num-registration-messages":   len(messages.RegistrationMessages),
-		"num-unregistration-messages": len(messages.UnregistrationMessages),
+		"num-registration-messages":            len(messages.RegistrationMessages),
+		"num-unregistration-messages":          len(messages.UnregistrationMessages),
+		"num-internal-registration-messages":   len(messages.InternalRegistrationMessages),
+		"num-internal-unregistration-messages": len(messages.InternalUnregistrationMessages),
 	})
 
 	if handler.localMode {

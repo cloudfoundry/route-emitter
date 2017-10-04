@@ -29,6 +29,14 @@ var _ = Describe("NatsEmitter", func() {
 			{URIs: []string{"wibble.com"}, Host: "1.1.1.1", Port: 11},
 			{URIs: []string{"baz.com"}, Host: "3.3.3.3", Port: 33},
 		},
+		InternalRegistrationMessages: []routingtable.RegistryMessage{
+			{URIs: []string{"internal-foo.com", "internal-bar.com"}, Host: "1.2.1.1", Port: 11},
+			{URIs: []string{"internal-baz.com"}, Host: "2.2.2.2", Port: 22},
+		},
+		InternalUnregistrationMessages: []routingtable.RegistryMessage{
+			{URIs: []string{"internal-wibble.com"}, Host: "1.2.1.1", Port: 11},
+			{URIs: []string{"internal-baz.com"}, Host: "3.2.3.3", Port: 33},
+		},
 	}
 
 	BeforeEach(func() {
@@ -37,7 +45,7 @@ var _ = Describe("NatsEmitter", func() {
 		workPool, err := workpool.NewWorkPool(1)
 		Expect(err).NotTo(HaveOccurred())
 		fakeMetronClient = &mfakes.FakeIngressClient{}
-		natsEmitter = emitter.NewNATSEmitter(natsClient, workPool, logger, fakeMetronClient)
+		natsEmitter = emitter.NewNATSEmitter(natsClient, workPool, logger, fakeMetronClient, true)
 	})
 
 	Describe("Emitting", func() {
@@ -48,6 +56,9 @@ var _ = Describe("NatsEmitter", func() {
 			Expect(natsClient.PublishedMessages("router.register")).To(HaveLen(2))
 			Expect(natsClient.PublishedMessages("router.unregister")).To(HaveLen(2))
 
+			Expect(natsClient.PublishedMessages("service-discovery.register")).To(HaveLen(2))
+			Expect(natsClient.PublishedMessages("service-discovery.unregister")).To(HaveLen(2))
+
 			registeredPayloads := [][]byte{
 				natsClient.PublishedMessages("router.register")[0].Data,
 				natsClient.PublishedMessages("router.register")[1].Data,
@@ -56,6 +67,16 @@ var _ = Describe("NatsEmitter", func() {
 			unregisteredPayloads := [][]byte{
 				natsClient.PublishedMessages("router.unregister")[0].Data,
 				natsClient.PublishedMessages("router.unregister")[1].Data,
+			}
+
+			internalRegisteredPayloads := [][]byte{
+				natsClient.PublishedMessages("service-discovery.register")[0].Data,
+				natsClient.PublishedMessages("service-discovery.register")[1].Data,
+			}
+
+			internalUnregisteredPayloads := [][]byte{
+				natsClient.PublishedMessages("service-discovery.unregister")[0].Data,
+				natsClient.PublishedMessages("service-discovery.unregister")[1].Data,
 			}
 
 			Expect(registeredPayloads).To(ContainElement(MatchJSON(`
@@ -90,10 +111,109 @@ var _ = Describe("NatsEmitter", func() {
         }
       `)))
 
+			Expect(internalRegisteredPayloads).To(ContainElement(MatchJSON(`
+        {
+          "uris":["internal-foo.com", "internal-bar.com"],
+          "host":"1.2.1.1",
+          "port":11
+        }
+      `)))
+
+			Expect(internalRegisteredPayloads).To(ContainElement(MatchJSON(`
+        {
+          "uris":["internal-baz.com"],
+          "host":"2.2.2.2",
+          "port":22
+        }
+      `)))
+
+			Expect(internalUnregisteredPayloads).To(ContainElement(MatchJSON(`
+        {
+          "uris":["internal-wibble.com"],
+          "host":"1.2.1.1",
+          "port":11
+        }
+      `)))
+
+			Expect(internalUnregisteredPayloads).To(ContainElement(MatchJSON(`
+        {
+          "uris":["internal-baz.com"],
+          "host":"3.2.3.3",
+          "port":33
+        }
+      `)))
+
 			Eventually(fakeMetronClient.IncrementCounterWithDeltaCallCount).Should(Equal(1))
 			name, delta := fakeMetronClient.IncrementCounterWithDeltaArgsForCall(0)
 			Expect(name).To(Equal("MessagesEmitted"))
-			Expect(delta).To(BeEquivalentTo(4))
+			Expect(delta).To(BeEquivalentTo(8))
+		})
+
+		Context("when the nats emitter is configured to not emit internal routes", func() {
+			BeforeEach(func() {
+				logger := lagertest.NewTestLogger("test")
+				workPool, err := workpool.NewWorkPool(1)
+				Expect(err).NotTo(HaveOccurred())
+				natsEmitter = emitter.NewNATSEmitter(natsClient, workPool, logger, fakeMetronClient, false)
+			})
+
+			It("only emits http routes", func() {
+				err := natsEmitter.Emit(messagesToEmit)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(natsClient.PublishedMessages("router.register")).To(HaveLen(2))
+				Expect(natsClient.PublishedMessages("router.unregister")).To(HaveLen(2))
+
+				Expect(natsClient.PublishedMessages("service-discovery.register")).To(HaveLen(0))
+				Expect(natsClient.PublishedMessages("service-discovery.unregister")).To(HaveLen(0))
+
+				registeredPayloads := [][]byte{
+					natsClient.PublishedMessages("router.register")[0].Data,
+					natsClient.PublishedMessages("router.register")[1].Data,
+				}
+
+				unregisteredPayloads := [][]byte{
+					natsClient.PublishedMessages("router.unregister")[0].Data,
+					natsClient.PublishedMessages("router.unregister")[1].Data,
+				}
+
+				Expect(registeredPayloads).To(ContainElement(MatchJSON(`
+        {
+          "uris":["foo.com", "bar.com"],
+          "host":"1.1.1.1",
+          "port":11
+        }
+      `)))
+
+				Expect(registeredPayloads).To(ContainElement(MatchJSON(`
+        {
+          "uris":["baz.com"],
+          "host":"2.2.2.2",
+          "port":22
+        }
+      `)))
+
+				Expect(unregisteredPayloads).To(ContainElement(MatchJSON(`
+        {
+          "uris":["wibble.com"],
+          "host":"1.1.1.1",
+          "port":11
+        }
+      `)))
+
+				Expect(unregisteredPayloads).To(ContainElement(MatchJSON(`
+        {
+          "uris":["baz.com"],
+          "host":"3.3.3.3",
+          "port":33
+        }
+      `)))
+
+				Eventually(fakeMetronClient.IncrementCounterWithDeltaCallCount).Should(Equal(1))
+				name, delta := fakeMetronClient.IncrementCounterWithDeltaArgsForCall(0)
+				Expect(name).To(Equal("MessagesEmitted"))
+				Expect(delta).To(BeEquivalentTo(4))
+			})
 		})
 
 		Context("when the nats client errors", func() {
