@@ -127,7 +127,12 @@ var _ = Describe("RoutingTable", func() {
 	createActualLRP := func(
 		key routingtable.RoutingKey,
 		instance routingtable.Endpoint,
+		portMappings ...*models.PortMapping,
 	) *routingtable.ActualLRPRoutingInfo {
+		if len(portMappings) == 0 {
+
+			portMappings = append(portMappings, models.NewPortMapping(instance.Port, instance.ContainerPort))
+		}
 		return &routingtable.ActualLRPRoutingInfo{
 			ActualLRP: &models.ActualLRP{
 				ActualLRPKey:         models.NewActualLRPKey(key.ProcessGUID, instance.Index, domain),
@@ -135,7 +140,7 @@ var _ = Describe("RoutingTable", func() {
 				ActualLRPNetInfo: models.NewActualLRPNetInfo(
 					instance.Host,
 					instance.ContainerIP,
-					models.NewPortMapping(instance.Port, instance.ContainerPort),
+					portMappings...,
 				),
 				State:           models.ActualLRPStateRunning,
 				ModificationTag: *instance.ModificationTag,
@@ -204,6 +209,18 @@ var _ = Describe("RoutingTable", func() {
 
 				It("does not emit anything", func() {
 					Expect(messagesToEmit).To(BeZero())
+				})
+			})
+			Context("when TLS container proxy is turned on", func() {
+				JustBeforeEach(func() {
+					actualLRP := createActualLRP(
+						key,
+						endpoint1,
+						models.NewPortMappingWithTLSProxy(
+							endpoint1.Port,
+							endpoint1.ContainerPort,
+						),
+					)
 				})
 			})
 		})
