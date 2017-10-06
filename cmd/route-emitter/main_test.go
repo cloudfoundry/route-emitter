@@ -816,7 +816,7 @@ var _ = Describe("Route Emitter", func() {
 			})
 
 			Context("and an instance starts", func() {
-				BeforeEach(func() {
+				JustBeforeEach(func() {
 					err := bbsClient.StartActualLRP(logger, &lrpKey, &instanceKey, &netInfo)
 					Expect(err).NotTo(HaveOccurred())
 				})
@@ -901,6 +901,43 @@ var _ = Describe("Route Emitter", func() {
 					))
 				})
 
+				Context("and the TLS proxy port is set on the Actual LRP", func() {
+					BeforeEach(func() {
+						netInfo = models.NewActualLRPNetInfo("1.2.3.4", "2.2.2.2", models.NewPortMappingWithTLSProxy(65100, 8080, 61006, 61007))
+					})
+
+					It("emits a route with the TLS proxy port set", func() {
+						var msg1, msg2 routingtable.RegistryMessage
+						Eventually(registeredRoutes).Should(Receive(&msg1))
+						Eventually(registeredRoutes).Should(Receive(&msg2))
+
+						Expect([]routingtable.RegistryMessage{msg1, msg2}).To(ConsistOf(
+							MatchRegistryMessage(routingtable.RegistryMessage{
+								URIs:                 []string{hostnames[1]},
+								Host:                 netInfo.Address,
+								Port:                 netInfo.Ports[0].HostPort,
+								TlsPort:              netInfo.Ports[0].HostTlsProxyPort,
+								App:                  desiredLRP.LogGuid,
+								PrivateInstanceId:    instanceKey.InstanceGuid,
+								PrivateInstanceIndex: "0",
+								RouteServiceUrl:      "https://awesome.com",
+								Tags:                 map[string]string{"component": "route-emitter"},
+							}),
+							MatchRegistryMessage(routingtable.RegistryMessage{
+								URIs:                 []string{hostnames[0]},
+								Host:                 netInfo.Address,
+								Port:                 netInfo.Ports[0].HostPort,
+								TlsPort:              netInfo.Ports[0].HostTlsProxyPort,
+								App:                  desiredLRP.LogGuid,
+								PrivateInstanceId:    instanceKey.InstanceGuid,
+								PrivateInstanceIndex: "0",
+								RouteServiceUrl:      "https://awesome.com",
+								Tags:                 map[string]string{"component": "route-emitter"},
+							}),
+						))
+					})
+				})
+
 				Context("and the route-emitter is running in direct instance routes mode", func() {
 					BeforeEach(func() {
 						cfgs = append(cfgs, func(cfg *config.RouteEmitterConfig) {
@@ -937,6 +974,42 @@ var _ = Describe("Route Emitter", func() {
 						))
 					})
 
+					Context("and the TLS proxy port is set on the Actual LRP", func() {
+						BeforeEach(func() {
+							netInfo = models.NewActualLRPNetInfo("1.2.3.4", "2.2.2.2", models.NewPortMappingWithTLSProxy(65100, 8080, 61006, 61007))
+						})
+
+						It("emits a route with the container TLS proxy port set", func() {
+							var msg1, msg2 routingtable.RegistryMessage
+							Eventually(registeredRoutes).Should(Receive(&msg1))
+							Eventually(registeredRoutes).Should(Receive(&msg2))
+
+							Expect([]routingtable.RegistryMessage{msg1, msg2}).To(ConsistOf(
+								MatchRegistryMessage(routingtable.RegistryMessage{
+									URIs:                 []string{hostnames[1]},
+									Host:                 netInfo.InstanceAddress,
+									Port:                 netInfo.Ports[0].ContainerPort,
+									TlsPort:              netInfo.Ports[0].ContainerTlsProxyPort,
+									App:                  desiredLRP.LogGuid,
+									PrivateInstanceId:    instanceKey.InstanceGuid,
+									PrivateInstanceIndex: "0",
+									RouteServiceUrl:      "https://awesome.com",
+									Tags:                 map[string]string{"component": "route-emitter"},
+								}),
+								MatchRegistryMessage(routingtable.RegistryMessage{
+									URIs:                 []string{hostnames[0]},
+									Host:                 netInfo.InstanceAddress,
+									Port:                 netInfo.Ports[0].ContainerPort,
+									TlsPort:              netInfo.Ports[0].ContainerTlsProxyPort,
+									App:                  desiredLRP.LogGuid,
+									PrivateInstanceId:    instanceKey.InstanceGuid,
+									PrivateInstanceIndex: "0",
+									RouteServiceUrl:      "https://awesome.com",
+									Tags:                 map[string]string{"component": "route-emitter"},
+								}),
+							))
+						})
+					})
 				})
 
 				Context("and the route-emitter cell id doesn't match the actual lrp cell", func() {
@@ -1195,7 +1268,7 @@ var _ = Describe("Route Emitter", func() {
 			})
 
 			Context("and an instance starts", func() {
-				BeforeEach(func() {
+				JustBeforeEach(func() {
 					err := bbsClient.StartActualLRP(logger, &lrpKey, &instanceKey, &netInfo)
 					Expect(err).NotTo(HaveOccurred())
 				})

@@ -87,6 +87,15 @@ func createActualLRP(
 	instance routingtable.Endpoint,
 	domain string,
 ) *routingtable.ActualLRPRoutingInfo {
+
+	var portMapping *models.PortMapping
+
+	if instance.TlsProxyPort == 0 && instance.ContainerTlsProxyPort == 0 {
+		portMapping = models.NewPortMapping(instance.Port, instance.ContainerPort)
+	} else {
+		portMapping = models.NewPortMappingWithTLSProxy(instance.Port, instance.ContainerPort, instance.TlsProxyPort, instance.ContainerTlsProxyPort)
+	}
+
 	return &routingtable.ActualLRPRoutingInfo{
 		ActualLRP: &models.ActualLRP{
 			ActualLRPKey:         models.NewActualLRPKey(key.ProcessGUID, instance.Index, domain),
@@ -94,7 +103,7 @@ func createActualLRP(
 			ActualLRPNetInfo: models.NewActualLRPNetInfo(
 				instance.Host,
 				instance.ContainerIP,
-				models.NewPortMapping(instance.Port, instance.ContainerPort),
+				portMapping,
 			),
 			State:           models.ActualLRPStateRunning,
 			ModificationTag: *instance.ModificationTag,
@@ -105,13 +114,13 @@ func createActualLRP(
 
 var _ = Describe("RoutingTable", func() {
 	var (
-		table            routingtable.RoutingTable
-		messagesToEmit   routingtable.MessagesToEmit
-		tcpRouteMappings routingtable.TCPRouteMappings
-		logger           *lagertest.TestLogger
+		table                           routingtable.RoutingTable
+		messagesToEmit                  routingtable.MessagesToEmit
+		tcpRouteMappings                routingtable.TCPRouteMappings
+		logger                          *lagertest.TestLogger
+		endpoint1, endpoint2, endpoint3 routingtable.Endpoint
+		key                             routingtable.RoutingKey
 	)
-
-	key := routingtable.RoutingKey{ProcessGUID: "some-process-guid", ContainerPort: 8080}
 
 	domain := "domain"
 	hostname1 := "foo.example.com"
@@ -122,42 +131,44 @@ var _ = Describe("RoutingTable", func() {
 	currentTag := &models.ModificationTag{Epoch: "abc", Index: 1}
 	newerTag := &models.ModificationTag{Epoch: "def", Index: 0}
 
-	endpoint1 := routingtable.Endpoint{
-		InstanceGUID:    "ig-1",
-		Host:            "1.1.1.1",
-		ContainerIP:     "1.2.3.4",
-		Index:           0,
-		Port:            11,
-		ContainerPort:   8080,
-		Evacuating:      false,
-		ModificationTag: currentTag,
-	}
-	endpoint2 := routingtable.Endpoint{
-		InstanceGUID:    "ig-2",
-		Host:            "2.2.2.2",
-		ContainerIP:     "2.3.4.5",
-		Index:           1,
-		Port:            22,
-		ContainerPort:   8080,
-		Evacuating:      false,
-		ModificationTag: currentTag,
-	}
-	endpoint3 := routingtable.Endpoint{
-		InstanceGUID:    "ig-3",
-		Host:            "3.3.3.3",
-		ContainerIP:     "3.4.5.6",
-		Index:           2,
-		Port:            33,
-		ContainerPort:   8080,
-		Evacuating:      false,
-		ModificationTag: currentTag,
-	}
-
 	logGuid := "some-log-guid"
 
 	BeforeEach(func() {
 		logger = lagertest.NewTestLogger("test-route-emitter")
 		table = routingtable.NewRoutingTable(logger, false)
+
+		endpoint1 = routingtable.Endpoint{
+			InstanceGUID:    "ig-1",
+			Host:            "1.1.1.1",
+			ContainerIP:     "1.2.3.4",
+			Index:           0,
+			Port:            11,
+			ContainerPort:   8080,
+			Evacuating:      false,
+			ModificationTag: currentTag,
+		}
+		endpoint2 = routingtable.Endpoint{
+			InstanceGUID:    "ig-2",
+			Host:            "2.2.2.2",
+			ContainerIP:     "2.3.4.5",
+			Index:           1,
+			Port:            22,
+			ContainerPort:   8080,
+			Evacuating:      false,
+			ModificationTag: currentTag,
+		}
+		endpoint3 = routingtable.Endpoint{
+			InstanceGUID:    "ig-3",
+			Host:            "3.3.3.3",
+			ContainerIP:     "3.4.5.6",
+			Index:           2,
+			Port:            33,
+			ContainerPort:   8080,
+			Evacuating:      false,
+			ModificationTag: currentTag,
+		}
+
+		key = routingtable.RoutingKey{ProcessGUID: "some-process-guid", ContainerPort: 8080}
 	})
 
 	Describe("SetRoutes", func() {
@@ -213,6 +224,22 @@ var _ = Describe("RoutingTable", func() {
 						},
 					}
 					Expect(messagesToEmit).To(Equal(expected))
+				})
+
+				Context("when the endpoint has a tls proxy port", func() {
+					BeforeEach(func() {
+						endpoint1.TlsProxyPort = 61001
+						endpoint1.ContainerTlsProxyPort = 61002
+					})
+
+					It("emits a registration", func() {
+						expected := routingtable.MessagesToEmit{
+							RegistrationMessages: []routingtable.RegistryMessage{
+								routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: "bar.example.com", LogGUID: logGuid}),
+							},
+						}
+						Expect(messagesToEmit).To(Equal(expected))
+					})
 				})
 			})
 
