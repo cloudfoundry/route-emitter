@@ -185,20 +185,20 @@ var _ = Describe("RegistryMessage", func() {
 
 		BeforeEach(func() {
 			expectedMessage = routingtable.RegistryMessage{
-				Host: "1.2.3.4",
-				URIs: []string{"host-1.example.com", "0.host-1.example.com"},
-				App:  "app-guid",
-				Tags: map[string]string{"component": "route-emitter"},
+				Host:                 "1.2.3.4",
+				URIs:                 []string{"host-1.example.com", "0.host-1.example.com"},
+				App:                  "app-guid",
+				Tags:                 map[string]string{"component": "route-emitter"},
+				PrivateInstanceIndex: "0",
 			}
 
 			endpoint = routingtable.Endpoint{
-				InstanceGUID:         "instance-guid",
-				Index:                0,
-				PrivateInstanceIndex: "0",
-				Host:                 "1.1.1.1",
-				ContainerIP:          "1.2.3.4",
-				Port:                 61001,
-				ContainerPort:        11,
+				InstanceGUID:  "instance-guid",
+				Index:         0,
+				Host:          "1.1.1.1",
+				ContainerIP:   "1.2.3.4",
+				Port:          61001,
+				ContainerPort: 11,
 			}
 
 			route = routingtable.InternalRoute{
@@ -208,24 +208,9 @@ var _ = Describe("RegistryMessage", func() {
 			}
 		})
 
-		FIt("creates a valid message from an endpoint and routes", func() {
+		It("creates a valid message from an endpoint and routes", func() {
 			message := routingtable.InternalEndpointRegistryMessageFor(endpoint, route)
 			Expect(message).To(Equal(expectedMessage))
 		})
-		// It("sets the TLS port in the message if the container TLS proxy port is set", func() {
-		// 	expectedMessage.TlsPort = 61007
-		// 	endpoint.ContainerTlsProxyPort = 61007
-
-		// 	message := routingtable.InternalAddressRegistryMessageFor(endpoint, route)
-		// 	Expect(message).To(Equal(expectedMessage))
-		// })
-
-		// It("creates a valid message when instance index is greater than 0", func() {
-		// 	expectedMessage.PrivateInstanceIndex = "2"
-		// 	endpoint.Index = 2
-
-		// 	message := routingtable.InternalAddressRegistryMessageFor(endpoint, route)
-		// 	Expect(message).To(Equal(expectedMessage))
-		// })
 	})
 })

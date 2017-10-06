@@ -1272,7 +1272,7 @@ var _ = Describe("Route Emitter", func() {
 								PrivateInstanceIndex: "0",
 								App:                  desiredLRP.LogGuid,
 								Tags:                 map[string]string{"component": "route-emitter"},
-								TlsPort:              61007,
+								TlsPort:              61006,
 							}),
 							MatchRegistryMessage(routingtable.RegistryMessage{
 								URIs:                 []string{internalHostnames[0], fmt.Sprintf("%d.%s", 0, internalHostnames[0])},
@@ -1280,7 +1280,7 @@ var _ = Describe("Route Emitter", func() {
 								PrivateInstanceIndex: "0",
 								App:                  desiredLRP.LogGuid,
 								Tags:                 map[string]string{"component": "route-emitter"},
-								TlsPort:              61007,
+								TlsPort:              61006,
 							}),
 						))
 					})
