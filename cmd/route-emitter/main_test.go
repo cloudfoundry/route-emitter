@@ -1255,6 +1255,37 @@ var _ = Describe("Route Emitter", func() {
 					))
 				})
 
+				FContext("when the LRP sets TLS proxy ports", func() {
+					BeforeEach(func() {
+						netInfo = models.NewActualLRPNetInfo("1.2.3.4", "2.2.2.2", models.NewPortMappingWithTLSProxy(65100, 8080, 61006, 61007))
+					})
+
+					It("emits messages with the TLS port set", func() {
+						var msg1, msg2 routingtable.RegistryMessage
+						Eventually(internalRegisteredRoutes).Should(Receive(&msg1))
+						Eventually(internalRegisteredRoutes).Should(Receive(&msg2))
+
+						Expect([]routingtable.RegistryMessage{msg1, msg2}).To(ConsistOf(
+							MatchRegistryMessage(routingtable.RegistryMessage{
+								URIs:                 []string{internalHostnames[1], fmt.Sprintf("%d.%s", 0, internalHostnames[1])},
+								Host:                 netInfo.InstanceAddress,
+								PrivateInstanceIndex: "0",
+								App:                  desiredLRP.LogGuid,
+								Tags:                 map[string]string{"component": "route-emitter"},
+								TlsPort:              61007,
+							}),
+							MatchRegistryMessage(routingtable.RegistryMessage{
+								URIs:                 []string{internalHostnames[0], fmt.Sprintf("%d.%s", 0, internalHostnames[0])},
+								Host:                 netInfo.InstanceAddress,
+								PrivateInstanceIndex: "0",
+								App:                  desiredLRP.LogGuid,
+								Tags:                 map[string]string{"component": "route-emitter"},
+								TlsPort:              61007,
+							}),
+						))
+					})
+				})
+
 				Context("and the route-emitter cell id doesn't match the actual lrp cell", func() {
 					BeforeEach(func() {
 						cellID = "some-random-cell-id"
