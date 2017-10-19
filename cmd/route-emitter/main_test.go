@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"code.cloudfoundry.org/bbs/models"
@@ -67,6 +68,8 @@ var _ = Describe("Route Emitter", func() {
 		routingApiProcess ifrit.Process
 		routingAPIRunner  *runners.RoutingAPIRunner
 		routerGUID        string
+
+		emitInterval uint64
 	)
 
 	createEmitterRunner := func(sessionName string, cellID string, modifyConfig ...func(*config.RouteEmitterConfig)) *ginkgomon.Runner {
@@ -140,6 +143,8 @@ var _ = Describe("Route Emitter", func() {
 		containerPort = 8080
 		routes = newRoutes(hostnames, containerPort, "https://awesome.com")
 
+		atomic.StoreUint64(&emitInterval, uint64(time.Second))
+
 		desiredLRP = &models.DesiredLRP{
 			Domain:      domain,
 			ProcessGuid: processGuid,
@@ -171,7 +176,7 @@ var _ = Describe("Route Emitter", func() {
 			defer GinkgoRecover()
 
 			greeting := routingtable.RouterGreetingMessage{
-				MinimumRegisterInterval: int(emitInterval / time.Second),
+				MinimumRegisterInterval: int(atomic.LoadUint64(&emitInterval)) / int(time.Second),
 				PruneThresholdInSeconds: 6,
 			}
 
@@ -1100,7 +1105,7 @@ var _ = Describe("Route Emitter", func() {
 						MatchRegistryMessage(msg1),
 						MatchRegistryMessage(msg2),
 					))
-					Expect(t2.Sub(t1)).To(BeNumerically("~", emitInterval, 100*time.Millisecond))
+					Expect(t2.Sub(t1)).To(BeNumerically("~", atomic.LoadUint64(&emitInterval), 100*time.Millisecond))
 				})
 
 				Context("when backing store goes away", func() {
@@ -1281,7 +1286,7 @@ var _ = Describe("Route Emitter", func() {
 					)
 
 					BeforeEach(func() {
-						emitInterval = time.Hour
+						atomic.StoreUint64(&emitInterval, uint64(time.Hour))
 						blkChannel = make(chan struct{}, 1)
 
 						proxy := httputil.NewSingleHostReverseProxy(bbsURL)
@@ -1430,7 +1435,7 @@ var _ = Describe("Route Emitter", func() {
 						MatchRegistryMessage(msg1),
 						MatchRegistryMessage(msg2),
 					))
-					Expect(t2.Sub(t1)).To(BeNumerically("~", emitInterval, 100*time.Millisecond))
+					Expect(t2.Sub(t1)).To(BeNumerically("~", atomic.LoadUint64(&emitInterval), 100*time.Millisecond))
 				})
 
 				Context("when the BBS is stopped", func() {
