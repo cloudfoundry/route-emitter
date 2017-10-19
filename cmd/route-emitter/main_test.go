@@ -49,13 +49,11 @@ var _ = Describe("Route Emitter", func() {
 		registeredRoutes   <-chan routingtable.RegistryMessage
 		unregisteredRoutes <-chan routingtable.RegistryMessage
 
-		internalRegisteredRoutes   <-chan routingtable.RegistryMessage
-		internalUnregisteredRoutes <-chan routingtable.RegistryMessage
-
-		processGuid string
-		domain      string
-		desiredLRP  *models.DesiredLRP
-		index       int32
+		internalRegisteredRoutes <-chan routingtable.RegistryMessage
+		processGuid              string
+		domain                   string
+		desiredLRP               *models.DesiredLRP
+		index                    int32
 
 		lrpKey      models.ActualLRPKey
 		instanceKey models.ActualLRPInstanceKey
@@ -170,7 +168,6 @@ var _ = Describe("Route Emitter", func() {
 		unregisteredRoutes = listenForRoutes("router.unregister")
 
 		internalRegisteredRoutes = listenForRoutes("service-discovery.register")
-		internalUnregisteredRoutes = listenForRoutes("service-discovery.unregister")
 
 		natsClient.Subscribe("router.greet", func(msg *nats.Msg) {
 			defer GinkgoRecover()
