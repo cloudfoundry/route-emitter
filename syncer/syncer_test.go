@@ -132,10 +132,10 @@ var _ = Describe("NatsSyncer", func() {
 				It("should emit routes with the frequency of the passed-in-interval", func() {
 					Eventually(syncerRunner.Events().Sync).Should(Receive())
 
-					clock.WaitForWatcherAndIncrement(time.Second)
+					clock.WaitForNWatchersAndIncrement(time.Second, 2)
 					Eventually(syncerRunner.Events().Emit).Should(Receive())
 
-					clock.WaitForWatcherAndIncrement(time.Second)
+					clock.WaitForNWatchersAndIncrement(time.Second, 2)
 					Eventually(syncerRunner.Events().Emit).Should(Receive())
 				})
 

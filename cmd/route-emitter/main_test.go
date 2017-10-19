@@ -1285,15 +1285,46 @@ var _ = Describe("Route Emitter", func() {
 				})
 
 				Context("when backing store loses its data", func() {
-					var msg1 routingtable.RegistryMessage
-					var msg2 routingtable.RegistryMessage
+					var (
+						msg1, msg2 routingtable.RegistryMessage
+						fakeBBS    *httptest.Server
+						blkChannel chan struct{}
+					)
+
+					BeforeEach(func() {
+						emitInterval = time.Hour
+						blkChannel = make(chan struct{}, 1)
+
+						proxy := httputil.NewSingleHostReverseProxy(bbsURL)
+						proxy.FlushInterval = 100 * time.Millisecond
+						fakeBBS = httptest.NewUnstartedServer(
+							http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+								if r.URL.Path == "/v1/desired_lrp_scheduling_infos/list" {
+									By("blocking the sync loop")
+									<-blkChannel
+								}
+								proxy.ServeHTTP(w, r)
+							}),
+						)
+
+						cfgs = append(cfgs, func(cfg *config.RouteEmitterConfig) {
+							cfg.BBSAddress = fakeBBS.URL
+							cfg.RoutingAPI.URL = "http://127.0.0.1"
+						})
+
+						fakeBBS.Start()
+					})
 
 					JustBeforeEach(func() {
 						// ensure it's seen the route at least once
+						blkChannel <- struct{}{}
+						Eventually(runner).Should(gbytes.Say("succeeded-getting-scheduling-infos"))
 						Eventually(internalRegisteredRoutes).Should(Receive(&msg1))
 						Eventually(internalRegisteredRoutes).Should(Receive(&msg2))
 
 						sqlRunner.Reset()
+						close(blkChannel)
+						Eventually(runner).Should(gbytes.Say("succeeded-getting-scheduling-infos"))
 
 						// Only start actual LRP, do not repopulate Desired
 						err := bbsClient.StartActualLRP(logger, &lrpKey, &instanceKey, &netInfo)
