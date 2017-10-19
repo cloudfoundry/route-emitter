@@ -1273,17 +1273,6 @@ var _ = Describe("Route Emitter", func() {
 					Expect(err).NotTo(HaveOccurred())
 				})
 
-				XContext("when running in local mode", func() {
-					BeforeEach(func() {
-						cellID = "cell-id"
-						consulClusterAddress = ""
-					})
-
-					It("emits the internal route count", func() {
-						Eventually(testMetricsChan, "2s").Should(Receive(matchMetricAndValue(metricAndValue{Name: "HTTPRouteCount", Value: int32(1)})))
-					})
-				})
-
 				Context("when backing store loses its data", func() {
 					var (
 						msg1, msg2 routingtable.RegistryMessage
