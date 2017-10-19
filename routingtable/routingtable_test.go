@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"code.cloudfoundry.org/bbs/models"
+	mfakes "code.cloudfoundry.org/diego-logging-client/testhelpers"
 	"code.cloudfoundry.org/lager/lagertest"
 	"code.cloudfoundry.org/route-emitter/routingtable"
 	. "code.cloudfoundry.org/route-emitter/routingtable/matchers"
@@ -120,6 +121,7 @@ var _ = Describe("RoutingTable", func() {
 		logger                          *lagertest.TestLogger
 		endpoint1, endpoint2, endpoint3 routingtable.Endpoint
 		key                             routingtable.RoutingKey
+		fakeMetronClient                *mfakes.FakeIngressClient
 	)
 
 	domain := "domain"
@@ -135,7 +137,8 @@ var _ = Describe("RoutingTable", func() {
 
 	BeforeEach(func() {
 		logger = lagertest.NewTestLogger("test-route-emitter")
-		table = routingtable.NewRoutingTable(logger, false)
+		fakeMetronClient = &mfakes.FakeIngressClient{}
+		table = routingtable.NewRoutingTable(logger, false, fakeMetronClient)
 
 		endpoint1 = routingtable.Endpoint{
 			InstanceGUID:    "ig-1",
@@ -397,13 +400,13 @@ var _ = Describe("RoutingTable", func() {
 			table.AddEndpoint(actualLRP)
 
 			By("removing the route and making the domains unfresh")
-			tempTable := routingtable.NewRoutingTable(logger, false)
+			tempTable := routingtable.NewRoutingTable(logger, false, fakeMetronClient)
 			actualLRP = createActualLRP(key, endpoint1, domain)
 			tempTable.AddEndpoint(actualLRP)
 			table.Swap(tempTable, noFreshDomains)
 
 			By("making the domain fresh again")
-			tempTable = routingtable.NewRoutingTable(logger, false)
+			tempTable = routingtable.NewRoutingTable(logger, false, fakeMetronClient)
 			actualLRP = createActualLRP(key, endpoint1, domain)
 			tempTable.AddEndpoint(actualLRP)
 
@@ -442,7 +445,7 @@ var _ = Describe("RoutingTable", func() {
 			Context("when the domain is not fresh", func() {
 				Context("and the new table has nothing in it", func() {
 					BeforeEach(func() {
-						tempTable := routingtable.NewRoutingTable(logger, false)
+						tempTable := routingtable.NewRoutingTable(logger, false, fakeMetronClient)
 						tcpRouteMappings, messagesToEmit = table.Swap(tempTable, noFreshDomains)
 					})
 
@@ -469,7 +472,7 @@ var _ = Describe("RoutingTable", func() {
 
 					It("saves the previous tables routes and emits them when an endpoint is added", func() {
 						actualLRP := createActualLRP(key, endpoint1, domain)
-						tempTable := routingtable.NewRoutingTable(logger, false)
+						tempTable := routingtable.NewRoutingTable(logger, false, fakeMetronClient)
 						tempTable.AddEndpoint(actualLRP)
 						table.Swap(tempTable, noFreshDomains)
 						tcpRouteMappings, messagesToEmit = table.GetRoutingEvents()
@@ -558,7 +561,7 @@ var _ = Describe("RoutingTable", func() {
 
 		Context("when the table is swaped and the lrp is deleted", func() {
 			BeforeEach(func() {
-				tempTable := routingtable.NewRoutingTable(logger, false)
+				tempTable := routingtable.NewRoutingTable(logger, false, fakeMetronClient)
 				table.Swap(tempTable, freshDomains)
 			})
 

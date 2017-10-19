@@ -107,7 +107,7 @@ func (handler *Handler) Sync(
 	logger.Debug("starting")
 	defer logger.Debug("completed")
 
-	newTable := routingtable.NewRoutingTable(logger, false)
+	newTable := routingtable.NewRoutingTable(logger, false, handler.metronClient)
 
 	for _, lrp := range desired {
 		newTable.SetRoutes(nil, lrp)
@@ -116,8 +116,6 @@ func (handler *Handler) Sync(
 	for _, lrp := range actuals {
 		newTable.AddEndpoint(lrp)
 	}
-
-	/////////
 
 	natsEmitter := handler.natsEmitter
 	routingAPIEmitter := handler.routingAPIEmitter
@@ -134,8 +132,6 @@ func (handler *Handler) Sync(
 	handler.routingTable = table
 	handler.natsEmitter = natsEmitter
 	handler.routingAPIEmitter = routingAPIEmitter
-
-	//////////
 
 	routeMappings, messages := handler.routingTable.Swap(newTable, domains)
 	logger.Debug("start-emitting-messages", lager.Data{

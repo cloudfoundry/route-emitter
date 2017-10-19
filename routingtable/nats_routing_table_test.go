@@ -3,6 +3,8 @@ package routingtable_test
 import (
 	"fmt"
 
+	mfakes "code.cloudfoundry.org/diego-logging-client/testhelpers"
+
 	"code.cloudfoundry.org/bbs/models"
 	"code.cloudfoundry.org/lager/lagertest"
 	"code.cloudfoundry.org/route-emitter/routingtable"
@@ -15,9 +17,10 @@ import (
 
 var _ = Describe("RoutingTable", func() {
 	var (
-		table          routingtable.RoutingTable
-		messagesToEmit routingtable.MessagesToEmit
-		logger         *lagertest.TestLogger
+		table            routingtable.RoutingTable
+		messagesToEmit   routingtable.MessagesToEmit
+		logger           *lagertest.TestLogger
+		fakeMetronClient *mfakes.FakeIngressClient
 	)
 
 	key := routingtable.RoutingKey{ProcessGUID: "some-process-guid", ContainerPort: 8080}
@@ -103,7 +106,9 @@ var _ = Describe("RoutingTable", func() {
 
 	BeforeEach(func() {
 		logger = lagertest.NewTestLogger("test-route-emitter")
-		table = routingtable.NewRoutingTable(logger, false)
+
+		fakeMetronClient = &mfakes.FakeIngressClient{}
+		table = routingtable.NewRoutingTable(logger, false, fakeMetronClient)
 	})
 
 	createSchedulingInfo := func(serviceURL string) *models.DesiredLRPSchedulingInfo {
@@ -193,7 +198,7 @@ var _ = Describe("RoutingTable", func() {
 
 	Context("when internal address message builder is used", func() {
 		BeforeEach(func() {
-			table = routingtable.NewRoutingTable(logger, true)
+			table = routingtable.NewRoutingTable(logger, true, fakeMetronClient)
 			desiredLRP := createDesiredLRPSchedulingInfo(key.ProcessGUID, int32(3), key.ContainerPort, logGuid, "", *currentTag, hostname1)
 			table.SetRoutes(nil, desiredLRP)
 		})
@@ -259,7 +264,7 @@ var _ = Describe("RoutingTable", func() {
 	Describe("Swap", func() {
 		Context("when we have existing stuff in the table", func() {
 			BeforeEach(func() {
-				tempTable := routingtable.NewRoutingTable(logger, false)
+				tempTable := routingtable.NewRoutingTable(logger, false, fakeMetronClient)
 
 				routes := createRoutingInfo(key.ContainerPort, []string{hostname1, hostname2}, []string{internalHostname1}, "", []uint32{}, "")
 				schedulingInfo := createSchedulingInfoWithRoutes(key.ProcessGUID, 3, routes, logGuid, *currentTag)
@@ -269,10 +274,10 @@ var _ = Describe("RoutingTable", func() {
 
 				table.Swap(tempTable, domains)
 
-				tempTable = routingtable.NewRoutingTable(logger, false)
+				tempTable = routingtable.NewRoutingTable(logger, false, fakeMetronClient)
 				routes = createRoutingInfo(key.ContainerPort, []string{hostname1, hostname3}, []string{internalHostname2}, "", []uint32{}, "")
 				schedulingInfo = createSchedulingInfoWithRoutes(key.ProcessGUID, 3, routes, logGuid, *currentTag)
-				tempTable = routingtable.NewRoutingTable(logger, false)
+				tempTable = routingtable.NewRoutingTable(logger, false, fakeMetronClient)
 				tempTable.SetRoutes(nil, schedulingInfo)
 				tempTable.AddEndpoint(lrp)
 
@@ -312,7 +317,7 @@ var _ = Describe("RoutingTable", func() {
 
 			Context("subsequent swaps with still not fresh", func() {
 				BeforeEach(func() {
-					tempTable := routingtable.NewRoutingTable(logger, false)
+					tempTable := routingtable.NewRoutingTable(logger, false, fakeMetronClient)
 					schedulingInfo := createDesiredLRPSchedulingInfo(key.ProcessGUID, int32(3), key.ContainerPort, logGuid, "", *currentTag, hostname1, hostname3)
 					lrp := createActualLRP(key, endpoint1, domain)
 					tempTable.SetRoutes(nil, schedulingInfo)
@@ -329,7 +334,7 @@ var _ = Describe("RoutingTable", func() {
 
 			Context("subsequent swaps with fresh", func() {
 				BeforeEach(func() {
-					tempTable := routingtable.NewRoutingTable(logger, false)
+					tempTable := routingtable.NewRoutingTable(logger, false, fakeMetronClient)
 					schedulingInfo := createDesiredLRPSchedulingInfo(key.ProcessGUID, int32(3), key.ContainerPort, logGuid, "", *currentTag, hostname1, hostname3)
 					lrp := createActualLRP(key, endpoint1, domain)
 					tempTable.SetRoutes(nil, schedulingInfo)
@@ -351,7 +356,7 @@ var _ = Describe("RoutingTable", func() {
 		Context("when a new routing key arrives", func() {
 			Context("when the routing key has both routes and endpoints", func() {
 				BeforeEach(func() {
-					tempTable := routingtable.NewRoutingTable(logger, false)
+					tempTable := routingtable.NewRoutingTable(logger, false, fakeMetronClient)
 
 					routes := createRoutingInfo(key.ContainerPort, []string{hostname1, hostname2}, []string{internalHostname1}, "", []uint32{}, "")
 					schedulingInfo := createSchedulingInfoWithRoutes(key.ProcessGUID, 3, routes, logGuid, *currentTag)
@@ -400,7 +405,7 @@ var _ = Describe("RoutingTable", func() {
 			Context("when the process only has routes", func() {
 				var schedulingInfo *models.DesiredLRPSchedulingInfo
 				BeforeEach(func() {
-					tempTable := routingtable.NewRoutingTable(logger, false)
+					tempTable := routingtable.NewRoutingTable(logger, false, fakeMetronClient)
 					routes := createRoutingInfo(key.ContainerPort, []string{hostname1}, []string{internalHostname1}, "", []uint32{}, "")
 					schedulingInfo = createSchedulingInfoWithRoutes(key.ProcessGUID, 3, routes, logGuid, *currentTag)
 					tempTable.SetRoutes(nil, schedulingInfo)
@@ -414,7 +419,7 @@ var _ = Describe("RoutingTable", func() {
 
 				Context("when the endpoints subsequently arrive", func() {
 					BeforeEach(func() {
-						tempTable := routingtable.NewRoutingTable(logger, false)
+						tempTable := routingtable.NewRoutingTable(logger, false, fakeMetronClient)
 						lrp := createActualLRP(key, endpoint1, domain)
 						tempTable.SetRoutes(nil, schedulingInfo)
 						tempTable.AddEndpoint(lrp)
@@ -445,7 +450,7 @@ var _ = Describe("RoutingTable", func() {
 
 				Context("when the routing key subsequently disappears", func() {
 					BeforeEach(func() {
-						tempTable := routingtable.NewRoutingTable(logger, false)
+						tempTable := routingtable.NewRoutingTable(logger, false, fakeMetronClient)
 						_, messagesToEmit = table.Swap(tempTable, domains)
 					})
 
@@ -457,7 +462,7 @@ var _ = Describe("RoutingTable", func() {
 
 			Context("when the process only has endpoints", func() {
 				BeforeEach(func() {
-					tempTable := routingtable.NewRoutingTable(logger, false)
+					tempTable := routingtable.NewRoutingTable(logger, false, fakeMetronClient)
 					lrp := createActualLRP(key, endpoint1, domain)
 					tempTable.AddEndpoint(lrp)
 
@@ -470,7 +475,7 @@ var _ = Describe("RoutingTable", func() {
 
 				Context("when the routes subsequently arrive", func() {
 					BeforeEach(func() {
-						tempTable := routingtable.NewRoutingTable(logger, false)
+						tempTable := routingtable.NewRoutingTable(logger, false, fakeMetronClient)
 						routes := createRoutingInfo(key.ContainerPort, []string{hostname1}, []string{internalHostname1}, "", []uint32{}, "")
 						schedulingInfo := createSchedulingInfoWithRoutes(key.ProcessGUID, 3, routes, logGuid, *currentTag)
 						lrp := createActualLRP(key, endpoint1, domain)
@@ -503,7 +508,7 @@ var _ = Describe("RoutingTable", func() {
 
 				Context("when the endpoint subsequently disappears", func() {
 					BeforeEach(func() {
-						tempTable := routingtable.NewRoutingTable(logger, false)
+						tempTable := routingtable.NewRoutingTable(logger, false, fakeMetronClient)
 						_, messagesToEmit = table.Swap(tempTable, domains)
 					})
 
@@ -520,7 +525,7 @@ var _ = Describe("RoutingTable", func() {
 			)
 
 			BeforeEach(func() {
-				tempTable := routingtable.NewRoutingTable(logger, false)
+				tempTable := routingtable.NewRoutingTable(logger, false, fakeMetronClient)
 				schedulingInfo = createSchedulingInfoWithIS("isolation-segment-1")
 				tempTable.SetRoutes(nil, schedulingInfo)
 				lrp := createActualLRP(key, endpoint1, domain)
@@ -552,7 +557,7 @@ var _ = Describe("RoutingTable", func() {
 
 			Context("when the isolation segment changes in sync", func() {
 				BeforeEach(func() {
-					tempTable := routingtable.NewRoutingTable(logger, false)
+					tempTable := routingtable.NewRoutingTable(logger, false, fakeMetronClient)
 					schedulingInfo := createSchedulingInfoWithIS("isolation-segment-2")
 					tempTable.SetRoutes(nil, schedulingInfo)
 					lrp := createActualLRP(key, endpoint1, domain)
@@ -582,7 +587,7 @@ var _ = Describe("RoutingTable", func() {
 			)
 
 			BeforeEach(func() {
-				tempTable := routingtable.NewRoutingTable(logger, false)
+				tempTable := routingtable.NewRoutingTable(logger, false, fakeMetronClient)
 				schedulingInfo = createSchedulingInfo("https://rs.example.com")
 				tempTable.SetRoutes(nil, schedulingInfo)
 				lrp := createActualLRP(key, endpoint1, domain)
@@ -614,7 +619,7 @@ var _ = Describe("RoutingTable", func() {
 
 			Context("when the route service url changes during sync", func() {
 				BeforeEach(func() {
-					tempTable := routingtable.NewRoutingTable(logger, false)
+					tempTable := routingtable.NewRoutingTable(logger, false, fakeMetronClient)
 					schedulingInfo := createSchedulingInfo("https://rs.new.example.com")
 					tempTable.SetRoutes(nil, schedulingInfo)
 					lrp1 := createActualLRP(key, endpoint1, domain)
@@ -640,7 +645,7 @@ var _ = Describe("RoutingTable", func() {
 
 		Context("when the routing key has an evacuating and instance endpoint", func() {
 			BeforeEach(func() {
-				tempTable := routingtable.NewRoutingTable(logger, false)
+				tempTable := routingtable.NewRoutingTable(logger, false, fakeMetronClient)
 				routes := createRoutingInfo(key.ContainerPort, []string{hostname1, hostname2}, []string{internalHostname1}, "", []uint32{}, "")
 				schedulingInfo := createSchedulingInfoWithRoutes(key.ProcessGUID, 3, routes, logGuid, *currentTag)
 				tempTable.SetRoutes(nil, schedulingInfo)
@@ -687,7 +692,7 @@ var _ = Describe("RoutingTable", func() {
 
 		Context("when there is an existing routing key", func() {
 			BeforeEach(func() {
-				tempTable := routingtable.NewRoutingTable(logger, false)
+				tempTable := routingtable.NewRoutingTable(logger, false, fakeMetronClient)
 				routes := createRoutingInfo(key.ContainerPort, []string{hostname1, hostname2}, []string{internalHostname1}, "", []uint32{}, "")
 				schedulingInfo := createSchedulingInfoWithRoutes(key.ProcessGUID, 3, routes, logGuid, *currentTag)
 				tempTable.SetRoutes(nil, schedulingInfo)
@@ -701,7 +706,7 @@ var _ = Describe("RoutingTable", func() {
 
 			Context("when nothing changes", func() {
 				BeforeEach(func() {
-					tempTable := routingtable.NewRoutingTable(logger, false)
+					tempTable := routingtable.NewRoutingTable(logger, false, fakeMetronClient)
 					routes := createRoutingInfo(key.ContainerPort, []string{hostname1, hostname2}, []string{internalHostname1}, "", []uint32{}, "")
 					schedulingInfo := createSchedulingInfoWithRoutes(key.ProcessGUID, 3, routes, logGuid, *currentTag)
 					tempTable.SetRoutes(nil, schedulingInfo)
@@ -720,7 +725,7 @@ var _ = Describe("RoutingTable", func() {
 
 			Context("when the routing key gets new routes", func() {
 				BeforeEach(func() {
-					tempTable := routingtable.NewRoutingTable(logger, false)
+					tempTable := routingtable.NewRoutingTable(logger, false, fakeMetronClient)
 					routes := createRoutingInfo(key.ContainerPort, []string{hostname1, hostname2, hostname3}, []string{internalHostname1, internalHostname2}, "", []uint32{}, "")
 					schedulingInfo := createSchedulingInfoWithRoutes(key.ProcessGUID, 3, routes, logGuid, *currentTag)
 					tempTable.SetRoutes(nil, schedulingInfo)
@@ -765,7 +770,7 @@ var _ = Describe("RoutingTable", func() {
 
 			Context("when the routing key without any route service url gets routes with a new route service url", func() {
 				BeforeEach(func() {
-					tempTable := routingtable.NewRoutingTable(logger, false)
+					tempTable := routingtable.NewRoutingTable(logger, false, fakeMetronClient)
 					routes := createRoutingInfo(key.ContainerPort, []string{hostname1, hostname2}, []string{internalHostname1}, "https://rs.example.com", []uint32{}, "")
 					schedulingInfo := createSchedulingInfoWithRoutes(key.ProcessGUID, 3, routes, logGuid, *currentTag)
 					tempTable.SetRoutes(nil, schedulingInfo)
@@ -798,7 +803,7 @@ var _ = Describe("RoutingTable", func() {
 
 			Context("when the routing key gets new endpoints", func() {
 				BeforeEach(func() {
-					tempTable := routingtable.NewRoutingTable(logger, false)
+					tempTable := routingtable.NewRoutingTable(logger, false, fakeMetronClient)
 					routes := createRoutingInfo(key.ContainerPort, []string{hostname1, hostname2}, []string{internalHostname1}, "", []uint32{}, "")
 					schedulingInfo := createSchedulingInfoWithRoutes(key.ProcessGUID, 3, routes, logGuid, *currentTag)
 					tempTable.SetRoutes(nil, schedulingInfo)
@@ -836,7 +841,7 @@ var _ = Describe("RoutingTable", func() {
 
 			Context("when the routing key gets a new evacuating endpoint", func() {
 				BeforeEach(func() {
-					tempTable := routingtable.NewRoutingTable(logger, false)
+					tempTable := routingtable.NewRoutingTable(logger, false, fakeMetronClient)
 					routes := createRoutingInfo(key.ContainerPort, []string{hostname1, hostname2}, []string{internalHostname1}, "", []uint32{}, "")
 					schedulingInfo := createSchedulingInfoWithRoutes(key.ProcessGUID, 3, routes, logGuid, *currentTag)
 					tempTable.SetRoutes(nil, schedulingInfo)
@@ -856,7 +861,7 @@ var _ = Describe("RoutingTable", func() {
 
 				Context("when running instance is removed", func() {
 					BeforeEach(func() {
-						tempTable := routingtable.NewRoutingTable(logger, false)
+						tempTable := routingtable.NewRoutingTable(logger, false, fakeMetronClient)
 						routes := createRoutingInfo(key.ContainerPort, []string{hostname1, hostname2}, []string{internalHostname1}, "", []uint32{}, "")
 						schedulingInfo := createSchedulingInfoWithRoutes(key.ProcessGUID, 3, routes, logGuid, *currentTag)
 						tempTable.SetRoutes(nil, schedulingInfo)
@@ -876,7 +881,7 @@ var _ = Describe("RoutingTable", func() {
 
 			Context("when the routing key gets new routes and endpoints", func() {
 				BeforeEach(func() {
-					tempTable := routingtable.NewRoutingTable(logger, false)
+					tempTable := routingtable.NewRoutingTable(logger, false, fakeMetronClient)
 					routes := createRoutingInfo(key.ContainerPort, []string{hostname1, hostname2, hostname3}, []string{internalHostname1, internalHostname2}, "", []uint32{}, "")
 					schedulingInfo := createSchedulingInfoWithRoutes(key.ProcessGUID, 3, routes, logGuid, *currentTag)
 					tempTable.SetRoutes(nil, schedulingInfo)
@@ -944,7 +949,7 @@ var _ = Describe("RoutingTable", func() {
 
 			Context("when the routing key loses routes", func() {
 				BeforeEach(func() {
-					tempTable := routingtable.NewRoutingTable(logger, false)
+					tempTable := routingtable.NewRoutingTable(logger, false, fakeMetronClient)
 					routes := createRoutingInfo(key.ContainerPort, []string{hostname1}, []string{}, "", []uint32{}, "")
 					schedulingInfo := createSchedulingInfoWithRoutes(key.ProcessGUID, 3, routes, logGuid, *currentTag)
 					tempTable.SetRoutes(nil, schedulingInfo)
@@ -989,7 +994,7 @@ var _ = Describe("RoutingTable", func() {
 
 			Context("when the routing key loses endpoints", func() {
 				BeforeEach(func() {
-					tempTable := routingtable.NewRoutingTable(logger, false)
+					tempTable := routingtable.NewRoutingTable(logger, false, fakeMetronClient)
 					routes := createRoutingInfo(key.ContainerPort, []string{hostname1, hostname2}, []string{internalHostname1}, "", []uint32{}, "")
 					schedulingInfo := createSchedulingInfoWithRoutes(key.ProcessGUID, 3, routes, logGuid, *currentTag)
 					tempTable.SetRoutes(nil, schedulingInfo)
@@ -1023,7 +1028,7 @@ var _ = Describe("RoutingTable", func() {
 
 			Context("when the routing key loses http/internal routes and endpoints", func() {
 				BeforeEach(func() {
-					tempTable := routingtable.NewRoutingTable(logger, false)
+					tempTable := routingtable.NewRoutingTable(logger, false, fakeMetronClient)
 					routes := createRoutingInfo(key.ContainerPort, []string{hostname1}, []string{}, "", []uint32{}, "")
 					schedulingInfo := createSchedulingInfoWithRoutes(key.ProcessGUID, 3, routes, logGuid, *currentTag)
 					tempTable.SetRoutes(nil, schedulingInfo)
@@ -1067,7 +1072,7 @@ var _ = Describe("RoutingTable", func() {
 
 			Context("when the routing key gains routes but loses endpoints", func() {
 				BeforeEach(func() {
-					tempTable := routingtable.NewRoutingTable(logger, false)
+					tempTable := routingtable.NewRoutingTable(logger, false, fakeMetronClient)
 					routes := createRoutingInfo(key.ContainerPort, []string{hostname1, hostname2, hostname3}, []string{internalHostname1, internalHostname2}, "", []uint32{}, "")
 					schedulingInfo := createSchedulingInfoWithRoutes(key.ProcessGUID, 3, routes, logGuid, *currentTag)
 					tempTable.SetRoutes(nil, schedulingInfo)
@@ -1115,7 +1120,7 @@ var _ = Describe("RoutingTable", func() {
 
 			Context("when the routing key loses routes but gains endpoints", func() {
 				BeforeEach(func() {
-					tempTable := routingtable.NewRoutingTable(logger, false)
+					tempTable := routingtable.NewRoutingTable(logger, false, fakeMetronClient)
 					routes := createRoutingInfo(key.ContainerPort, []string{hostname1}, []string{}, "", []uint32{}, "")
 					schedulingInfo := createSchedulingInfoWithRoutes(key.ProcessGUID, 3, routes, logGuid, *currentTag)
 					tempTable.SetRoutes(nil, schedulingInfo)
@@ -1168,7 +1173,7 @@ var _ = Describe("RoutingTable", func() {
 				var domainSet models.DomainSet
 
 				BeforeEach(func() {
-					tempTable = routingtable.NewRoutingTable(logger, false)
+					tempTable = routingtable.NewRoutingTable(logger, false, fakeMetronClient)
 				})
 
 				JustBeforeEach(func() {
@@ -1286,14 +1291,14 @@ var _ = Describe("RoutingTable", func() {
 				Context("when the original registration had no routes, and then the routing key loses endpoints", func() {
 					BeforeEach(func() {
 						//override previous set up
-						tempTable := routingtable.NewRoutingTable(logger, false)
+						tempTable := routingtable.NewRoutingTable(logger, false, fakeMetronClient)
 						lrp1 := createActualLRP(key, endpoint1, domain)
 						tempTable.AddEndpoint(lrp1)
 						lrp2 := createActualLRP(key, endpoint2, domain)
 						tempTable.AddEndpoint(lrp2)
 						table.Swap(tempTable, domains)
 
-						tempTable = routingtable.NewRoutingTable(logger, false)
+						tempTable = routingtable.NewRoutingTable(logger, false, fakeMetronClient)
 						lrp1 = createActualLRP(key, endpoint1, domain)
 						tempTable.AddEndpoint(lrp1)
 						_, messagesToEmit = table.Swap(tempTable, domains)
@@ -1307,12 +1312,12 @@ var _ = Describe("RoutingTable", func() {
 				Context("when the original registration had no endpoints, and then the routing key loses a route", func() {
 					BeforeEach(func() {
 						//override previous set up
-						tempTable := routingtable.NewRoutingTable(logger, false)
+						tempTable := routingtable.NewRoutingTable(logger, false, fakeMetronClient)
 						schedulingInfo := createDesiredLRPSchedulingInfo(key.ProcessGUID, int32(3), key.ContainerPort, logGuid, "", *currentTag, hostname1, hostname2)
 						tempTable.SetRoutes(nil, schedulingInfo)
 						table.Swap(tempTable, domains)
 
-						tempTable = routingtable.NewRoutingTable(logger, false)
+						tempTable = routingtable.NewRoutingTable(logger, false, fakeMetronClient)
 						schedulingInfo = createDesiredLRPSchedulingInfo(key.ProcessGUID, int32(3), key.ContainerPort, logGuid, "", *currentTag, hostname1)
 						tempTable.SetRoutes(nil, schedulingInfo)
 						_, messagesToEmit = table.Swap(tempTable, domains)
@@ -1364,7 +1369,7 @@ var _ = Describe("RoutingTable", func() {
 		Context("when there are both endpoints and routes in the table", func() {
 			var beforeLrpInfo *models.DesiredLRPSchedulingInfo
 			BeforeEach(func() {
-				tempTable := routingtable.NewRoutingTable(logger, false)
+				tempTable := routingtable.NewRoutingTable(logger, false, fakeMetronClient)
 				routes := createRoutingInfo(key.ContainerPort, []string{hostname1, hostname2}, []string{internalHostname1}, "", []uint32{}, "")
 
 				beforeLrpInfo = createSchedulingInfoWithRoutes(key.ProcessGUID, 3, routes, logGuid, *currentTag)
@@ -1694,9 +1699,19 @@ var _ = Describe("RoutingTable", func() {
 				})
 
 				Context("when adding an endpoint with IP and port that collide with existing endpoint", func() {
-					It("logs the collision", func() {
+					var counterChan chan string
+					BeforeEach(func() {
+						counterChan = make(chan string, 1)
+						fakeMetronClient.IncrementCounterStub = func(name string) error {
+							counterChan <- name
+							return nil
+						}
+
 						lrp := createActualLRP(key, collisionEndpoint, domain)
 						table.AddEndpoint(lrp)
+					})
+
+					It("logs the collision", func() {
 						Eventually(logger).Should(Say(
 							fmt.Sprintf(
 								`\{"Address":\{"Host":"%s","Port":%d\},"instance_guid_a":"%s","instance_guid_b":"%s"\}`,
@@ -1706,6 +1721,10 @@ var _ = Describe("RoutingTable", func() {
 								collisionEndpoint.InstanceGUID,
 							),
 						))
+					})
+
+					It("emits metrics about the address collisions", func() {
+						Eventually(counterChan).Should(Receive(Equal("AddressCollisions")))
 					})
 				})
 
@@ -1734,7 +1753,7 @@ var _ = Describe("RoutingTable", func() {
 				Context("when there are internal routes", func() {
 					var internalHostname string
 					BeforeEach(func() {
-						tempTable := routingtable.NewRoutingTable(logger, false)
+						tempTable := routingtable.NewRoutingTable(logger, false, fakeMetronClient)
 						internalHostname = "internal"
 						routes := createRoutingInfo(key.ContainerPort, []string{hostname1}, []string{internalHostname}, "", []uint32{}, "")
 
@@ -1905,6 +1924,14 @@ var _ = Describe("RoutingTable", func() {
 						lrp = createActualLRP(key, collisionEndpoint, domain)
 						table.AddEndpoint(lrp)
 						Consistently(logger).ShouldNot(Say("collision-detected-with-endpoint"))
+					})
+				})
+
+				Context("when removing an endpoint that has a collision", func() {
+					It("does logs the collision", func() {
+						lrp := createActualLRP(key, collisionEndpoint, domain)
+						table.RemoveEndpoint(lrp)
+						Eventually(logger).Should(Say("collision-detected-with-endpoint"))
 					})
 				})
 			})

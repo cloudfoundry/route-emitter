@@ -4,9 +4,9 @@ import (
 	"sync"
 
 	tcpmodels "code.cloudfoundry.org/routing-api/models"
-	"code.cloudfoundry.org/runtimeschema/metric"
 
 	"code.cloudfoundry.org/bbs/models"
+	loggingclient "code.cloudfoundry.org/diego-logging-client"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/routing-info/cfroutes"
 	"code.cloudfoundry.org/routing-info/internalroutes"
@@ -25,7 +25,7 @@ func (mappings TCPRouteMappings) Merge(other TCPRouteMappings) TCPRouteMappings 
 	return result
 }
 
-var addressCollisions = metric.Counter("AddressCollisions")
+const addressCollisions = "AddressCollisions"
 
 //go:generate counterfeiter -o fakeroutingtable/fake_routingtable.go . RoutingTable
 
@@ -54,10 +54,11 @@ type routingTable struct {
 	addressGenerator    func(endpoint Endpoint) Address
 	directInstanceRoute bool
 	logger              lager.Logger
+	metronClient        loggingclient.IngressClient
 	sync.Locker
 }
 
-func NewRoutingTable(logger lager.Logger, directInstanceRoute bool) RoutingTable {
+func NewRoutingTable(logger lager.Logger, directInstanceRoute bool, metronClient loggingclient.IngressClient) RoutingTable {
 	addressGenerator := func(endpoint Endpoint) Address {
 		return Address{Host: endpoint.Host, Port: endpoint.Port}
 	}
@@ -75,6 +76,7 @@ func NewRoutingTable(logger lager.Logger, directInstanceRoute bool) RoutingTable
 		directInstanceRoute: directInstanceRoute,
 		addressGenerator:    addressGenerator,
 		logger:              logger,
+		metronClient:        metronClient,
 		Locker:              &sync.Mutex{},
 	}
 }
@@ -96,7 +98,7 @@ func (table *routingTable) AddEndpoint(actualLRP *ActualLRPRoutingInfo) (TCPRout
 		address := table.addressGenerator(endpoint)
 		// if the address exists and the instance guid doesn't match then we have a collision
 		if existingEndpointKey, ok := table.addressEntries[address]; ok && existingEndpointKey.InstanceGUID != endpoint.InstanceGUID {
-			addressCollisions.Add(1)
+			table.metronClient.IncrementCounter(addressCollisions)
 			existingInstanceGuid := existingEndpointKey.InstanceGUID
 			table.logger.Info("collision-detected-with-endpoint", lager.Data{
 				"instance_guid_a": existingInstanceGuid,

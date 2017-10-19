@@ -5,6 +5,7 @@ import (
 
 	"code.cloudfoundry.org/clock"
 	"code.cloudfoundry.org/consuladapter"
+	loggingclient "code.cloudfoundry.org/diego-logging-client"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/locket"
 	"github.com/tedsuo/ifrit"
@@ -17,7 +18,7 @@ func RouteEmitterLockSchemaPath() string {
 }
 
 type ServiceClient interface {
-	NewRouteEmitterLockRunner(logger lager.Logger, bulkerID string, retryInterval, lockTTL time.Duration) ifrit.Runner
+	NewRouteEmitterLockRunner(logger lager.Logger, bulkerID string, retryInterval, lockTTL time.Duration, metronClient loggingclient.IngressClient) ifrit.Runner
 }
 
 type serviceClient struct {
@@ -32,6 +33,6 @@ func NewServiceClient(consulClient consuladapter.Client, clock clock.Clock) Serv
 	}
 }
 
-func (c serviceClient) NewRouteEmitterLockRunner(logger lager.Logger, emitterID string, retryInterval, lockTTL time.Duration) ifrit.Runner {
-	return locket.NewLock(logger, c.consulClient, RouteEmitterLockSchemaPath(), []byte(emitterID), c.clock, retryInterval, lockTTL)
+func (c serviceClient) NewRouteEmitterLockRunner(logger lager.Logger, emitterID string, retryInterval, lockTTL time.Duration, metronClient loggingclient.IngressClient) ifrit.Runner {
+	return locket.NewLock(logger, c.consulClient, RouteEmitterLockSchemaPath(), []byte(emitterID), c.clock, retryInterval, lockTTL, locket.WithMetronClient(metronClient))
 }

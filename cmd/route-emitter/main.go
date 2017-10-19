@@ -82,7 +82,7 @@ func main() {
 	bbsClient := initializeBBSClient(logger, cfg)
 
 	localMode := cfg.CellID != ""
-	table := routingtable.NewRoutingTable(logger, cfg.RegisterDirectInstanceRoutes)
+	table := routingtable.NewRoutingTable(logger, cfg.RegisterDirectInstanceRoutes, metronClient)
 	natsEmitter := initializeNatsEmitter(logger, natsClient, cfg.RouteEmittingWorkers, metronClient, cfg.EnableInternalEmitter)
 
 	routeTTL := time.Duration(cfg.TCPRouteTTL)
@@ -133,6 +133,7 @@ func main() {
 			time.Duration(cfg.LockTTL),
 			time.Duration(cfg.LockRetryInterval),
 			clock,
+			metronClient,
 		)
 
 		consulDownModeNotifier = consuldownmodenotifier.NewConsulDownModeNotifier(
@@ -297,6 +298,7 @@ func initializeLockMaintainer(
 	sessionName string,
 	lockTTL, lockRetryInterval time.Duration,
 	clock clock.Clock,
+	metronClient loggingclient.IngressClient,
 ) ifrit.Runner {
 	uuid, err := uuid.NewV4()
 	if err != nil {
@@ -305,7 +307,7 @@ func initializeLockMaintainer(
 
 	serviceClient := route_emitter.NewServiceClient(consulClient, clock)
 
-	return serviceClient.NewRouteEmitterLockRunner(logger, uuid.String(), lockRetryInterval, lockTTL)
+	return serviceClient.NewRouteEmitterLockRunner(logger, uuid.String(), lockRetryInterval, lockTTL, metronClient)
 }
 
 func initializeBBSClient(
