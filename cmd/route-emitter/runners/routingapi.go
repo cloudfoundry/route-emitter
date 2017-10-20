@@ -14,6 +14,7 @@ import (
 	"code.cloudfoundry.org/routing-api"
 	apiconfig "code.cloudfoundry.org/routing-api/config"
 	"code.cloudfoundry.org/routing-api/models"
+	. "github.com/onsi/gomega"
 	"github.com/tedsuo/ifrit/ginkgomon"
 )
 
@@ -43,10 +44,18 @@ func NewRoutingAPIRunner(binPath, consulURL string, sqlConfig SQLConfig, fs ...f
 		return nil, err
 	}
 
+	tmpfile, err := ioutil.TempFile("", "admin.sock")
+	Expect(err).ToNot(HaveOccurred())
+	defer Expect(os.Remove(tmpfile.Name())).To(Succeed())
+
+	err = tmpfile.Close()
+	Expect(err).ToNot(HaveOccurred())
+
 	cfg := Config{
 		Port:    int(port),
 		DevMode: true,
 		Config: apiconfig.Config{
+			AdminSocket: tmpfile.Name(),
 			// required fields
 			MetricsReportingIntervalString:  "500ms",
 			StatsdClientFlushIntervalString: "10ms",
@@ -117,6 +126,9 @@ func (runner *RoutingAPIRunner) Run(signals <-chan os.Signal, ready chan<- struc
 		Command:           exec.Command(runner.binPath, args...),
 		StartCheck:        "routing-api.started",
 		StartCheckTimeout: 20 * time.Second,
+		Cleanup: func() {
+			os.Remove(runner.Config.AdminSocket)
+		},
 	})
 	return r.Run(signals, ready)
 }
