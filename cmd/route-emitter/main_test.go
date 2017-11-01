@@ -191,7 +191,8 @@ var _ = Describe("Route Emitter", func() {
 			Username:   sqlRunner.Username(),
 			Password:   sqlRunner.Password(),
 		}
-		routingAPIRunner, err = runners.NewRoutingAPIRunner(routingAPIPath, consulRunner.URL(), sqlConfig, func(cfg *runners.Config) {
+		adminPort := 10000 + GinkgoParallelNode()
+		routingAPIRunner, err = runners.NewRoutingAPIRunner(routingAPIPath, consulRunner.URL(), adminPort, sqlConfig, func(cfg *runners.Config) {
 			cfg.ConsulCluster.LockTTL = 5 * time.Second
 		})
 
