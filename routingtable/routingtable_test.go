@@ -432,6 +432,37 @@ var _ = Describe("RoutingTable", func() {
 			Expect(tcpRouteMappings.Unregistrations).To(ConsistOf(expectedTCP))
 		})
 
+		Context("when there is internal routable endpoint", func() {
+			BeforeEach(func() {
+				// table = routingtable.NewRoutingTable(logger, false, fakeMetronClient)
+				routingInfo := createRoutingInfo(key.ContainerPort, []string{}, []string{"internal"}, "", []uint32{5222}, "")
+				beforeDesiredLRP := createSchedulingInfoWithRoutes(key.ProcessGUID, 3, routingInfo, logGuid, *currentTag)
+				table.SetRoutes(nil, beforeDesiredLRP)
+
+				actualLRP := createActualLRP(key, endpoint1, domain)
+				table.AddEndpoint(actualLRP)
+			})
+
+			Context("and the domain is not fresh", func() {
+				It("saves the previous tables routes and emits them when an endpoint is added", func() {
+					actualLRP := createActualLRP(key, endpoint1, domain)
+					tempTable := routingtable.NewRoutingTable(logger, false, fakeMetronClient)
+					tempTable.AddEndpoint(actualLRP)
+					table.Swap(tempTable, noFreshDomains)
+					tcpRouteMappings, messagesToEmit = table.GetRoutingEvents()
+
+					Expect(messagesToEmit.InternalUnregistrationMessages).To(BeEmpty())
+					Expect(messagesToEmit.InternalRegistrationMessages).To(ConsistOf(routingtable.RegistryMessage{
+						URIs:                 []string{"internal", "0.internal"},
+						Host:                 endpoint1.ContainerIP,
+						Tags:                 map[string]string{"component": "route-emitter"},
+						App:                  logGuid,
+						PrivateInstanceIndex: "0",
+					}))
+				})
+			})
+		})
+
 		Context("when the table has a routable endpoint", func() {
 			BeforeEach(func() {
 				routingInfo := createRoutingInfo(key.ContainerPort, []string{hostname1}, []string{}, "", []uint32{5222}, "router-group-guid")
