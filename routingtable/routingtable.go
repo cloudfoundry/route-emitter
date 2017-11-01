@@ -292,8 +292,17 @@ func (t *routingTable) Swap(other RoutingTable, domains models.DomainSet) (TCPRo
 		mergedInternalRoutingKeys[key] = struct{}{}
 	}
 	for internalKey := range mergedInternalRoutingKeys {
-		existingInternalEntry := t.internalEntries[internalKey]
+		existingInternalEntry, ok := t.internalEntries[internalKey]
 		newInternalEntry := otherTable.internalEntries[internalKey]
+		if !ok {
+			// routing key only exist in the new table
+			_, message := t.emitDiffMessages(internalKey, RoutableEndpoints{}, newInternalEntry)
+			messagesToEmit = messagesToEmit.Merge(message)
+			continue
+		}
+		merged := mergeUnfreshRoutes(existingInternalEntry, newInternalEntry, domains)
+		otherTable.internalEntries[internalKey] = merged
+		otherTable.deleteInternalEntryIfEmpty(internalKey)
 		_, message := t.emitDiffMessages(internalKey, existingInternalEntry, newInternalEntry)
 		messagesToEmit = messagesToEmit.Merge(message)
 	}
@@ -503,6 +512,7 @@ func (table *routingTable) SetRoutes(before, after *models.DesiredLRPSchedulingI
 		}
 
 		newEntry := currentEntry.copy()
+		newEntry.Domain = after.Domain
 		newEntry.Routes = routes
 		newEntry.ModificationTag = &after.ModificationTag
 		newEntry.DesiredInstances = after.Instances
@@ -577,6 +587,7 @@ func (table *routingTable) SetRoutes(before, after *models.DesiredLRPSchedulingI
 		newEntry := currentEntry.copy()
 		newEntry.Routes = nil
 		if after != nil {
+			newEntry.Domain = after.Domain
 			newEntry.ModificationTag = &after.ModificationTag
 			newEntry.DesiredInstances = after.Instances
 		}

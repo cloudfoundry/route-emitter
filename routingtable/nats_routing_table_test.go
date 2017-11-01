@@ -1298,7 +1298,8 @@ var _ = Describe("RoutingTable", func() {
 						tempTable.AddEndpoint(lrp1)
 						lrp2 := createActualLRP(key, endpoint2, domain)
 						tempTable.AddEndpoint(lrp2)
-						table.Swap(tempTable, domains)
+						_, messagesToEmit = table.Swap(tempTable, domains)
+						Expect(messagesToEmit.InternalUnregistrationMessages).To(HaveLen(2))
 
 						tempTable = routingtable.NewRoutingTable(logger, false, fakeMetronClient)
 						lrp1 = createActualLRP(key, endpoint1, domain)
