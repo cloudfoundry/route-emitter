@@ -224,6 +224,7 @@ var _ = Describe("RoutingTable", func() {
 							IsolationSegment: "",
 							Tags:             map[string]string{"component": "route-emitter"},
 
+							ServerCertDomainSAN:  "ig-1",
 							PrivateInstanceId:    "ig-1",
 							PrivateInstanceIndex: "0",
 							RouteServiceUrl:      "",
@@ -249,6 +250,7 @@ var _ = Describe("RoutingTable", func() {
 								IsolationSegment: "",
 								Tags:             map[string]string{"component": "route-emitter"},
 
+								ServerCertDomainSAN:  "ig-1",
 								PrivateInstanceId:    "ig-1",
 								PrivateInstanceIndex: "0",
 								RouteServiceUrl:      "",

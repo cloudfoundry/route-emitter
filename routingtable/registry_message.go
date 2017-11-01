@@ -11,6 +11,7 @@ type RegistryMessage struct {
 	RouteServiceUrl      string            `json:"route_service_url,omitempty"`
 	PrivateInstanceId    string            `json:"private_instance_id,omitempty"`
 	PrivateInstanceIndex string            `json:"private_instance_index,omitempty"`
+	ServerCertDomainSAN  string            `json:"server_cert_domain_san,omitempty"`
 	IsolationSegment     string            `json:"isolation_segment,omitempty"`
 	Tags                 map[string]string `json:"tags,omitempty"`
 }
@@ -31,6 +32,7 @@ func RegistryMessageFor(endpoint Endpoint, route Route) RegistryMessage {
 
 		PrivateInstanceId:    endpoint.InstanceGUID,
 		PrivateInstanceIndex: index,
+		ServerCertDomainSAN:  endpoint.InstanceGUID,
 		RouteServiceUrl:      route.RouteServiceUrl,
 	}
 }
@@ -49,6 +51,7 @@ func InternalAddressRegistryMessageFor(endpoint Endpoint, route Route) RegistryM
 		IsolationSegment: route.IsolationSegment,
 		Tags:             map[string]string{"component": "route-emitter"},
 
+		ServerCertDomainSAN:  endpoint.InstanceGUID,
 		PrivateInstanceId:    endpoint.InstanceGUID,
 		PrivateInstanceIndex: index,
 		RouteServiceUrl:      route.RouteServiceUrl,

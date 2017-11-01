@@ -18,6 +18,7 @@ var _ = Describe("RegistryMessage", func() {
 			Port:                 61001,
 			URIs:                 []string{"host-1.example.com"},
 			App:                  "app-guid",
+			ServerCertDomainSAN:  "instance-guid",
 			PrivateInstanceId:    "instance-guid",
 			PrivateInstanceIndex: "0",
 			RouteServiceUrl:      "https://hello.com",
@@ -35,6 +36,7 @@ var _ = Describe("RegistryMessage", func() {
 				"uris": ["host-1.example.com"],
 				"app" : "app-guid",
 				"private_instance_id": "instance-guid",
+				"server_cert_domain_san": "instance-guid",
 				"private_instance_index": "0",
 				"route_service_url": "https://hello.com",
 				"tags": {"component":"route-emitter"}
@@ -68,6 +70,7 @@ var _ = Describe("RegistryMessage", func() {
 				"app" : "app-guid",
 				"private_instance_id": "instance-guid",
 				"private_instance_index": "0",
+				"server_cert_domain_san": "instance-guid",
 				"route_service_url": "https://hello.com",
 				"tags": {"component":"route-emitter"}
 			}`
@@ -137,6 +140,7 @@ var _ = Describe("RegistryMessage", func() {
 				App:                  "app-guid",
 				PrivateInstanceId:    "instance-guid",
 				PrivateInstanceIndex: "0",
+				ServerCertDomainSAN:  "instance-guid",
 				RouteServiceUrl:      "https://hello.com",
 				Tags:                 map[string]string{"component": "route-emitter"},
 			}
