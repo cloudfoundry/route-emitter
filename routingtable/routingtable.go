@@ -303,7 +303,7 @@ func (t *routingTable) Swap(other RoutingTable, domains models.DomainSet) (TCPRo
 		merged := mergeUnfreshRoutes(existingInternalEntry, newInternalEntry, domains)
 		otherTable.internalEntries[internalKey] = merged
 		otherTable.deleteInternalEntryIfEmpty(internalKey)
-		_, message := t.emitDiffMessages(internalKey, existingInternalEntry, newInternalEntry)
+		_, message := t.emitDiffMessages(internalKey, existingInternalEntry, merged)
 		messagesToEmit = messagesToEmit.Merge(message)
 	}
 

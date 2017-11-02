@@ -1294,7 +1294,6 @@ var _ = Describe("Route Emitter", func() {
 					)
 
 					BeforeEach(func() {
-						atomic.StoreUint64(&emitInterval, uint64(time.Hour))
 						blkChannel = make(chan struct{}, 1)
 
 						proxy := httputil.NewSingleHostReverseProxy(bbsURL)
@@ -1333,8 +1332,26 @@ var _ = Describe("Route Emitter", func() {
 						Expect(err).NotTo(HaveOccurred())
 					})
 
-					It("stops broadcasting those routes", func() {
-						Consistently(internalRegisteredRoutes, 5).ShouldNot(Receive())
+					It("continues broadcasting those routes", func() {
+						Eventually(internalRegisteredRoutes).Should(Receive(&msg1))
+						Eventually(internalRegisteredRoutes).Should(Receive(&msg2))
+
+						Expect([]routingtable.RegistryMessage{msg1, msg2}).To(ConsistOf(
+							MatchRegistryMessage(routingtable.RegistryMessage{
+								URIs:                 []string{internalHostnames[1], fmt.Sprintf("%d.%s", 0, internalHostnames[1])},
+								Host:                 netInfo.InstanceAddress,
+								PrivateInstanceIndex: "0",
+								App:                  desiredLRP.LogGuid,
+								Tags:                 map[string]string{"component": "route-emitter"},
+							}),
+							MatchRegistryMessage(routingtable.RegistryMessage{
+								URIs:                 []string{internalHostnames[0], fmt.Sprintf("%d.%s", 0, internalHostnames[0])},
+								Host:                 netInfo.InstanceAddress,
+								PrivateInstanceIndex: "0",
+								App:                  desiredLRP.LogGuid,
+								Tags:                 map[string]string{"component": "route-emitter"},
+							}),
+						))
 					})
 				})
 

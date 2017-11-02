@@ -264,7 +264,7 @@ var _ = Describe("RoutingTable", func() {
 	})
 
 	Describe("Swap", func() {
-		Context("when we have existing stuff in the table", func() {
+		Context("when we have existing stuff in the table and an unfresh domain", func() {
 			BeforeEach(func() {
 				tempTable := routingtable.NewRoutingTable(logger, false, fakeMetronClient)
 
@@ -286,21 +286,10 @@ var _ = Describe("RoutingTable", func() {
 				_, messagesToEmit = table.Swap(tempTable, noFreshDomains)
 			})
 
-			It("emits only the different routes", func() {
+			It("emits only additive changes", func() {
 				expected := routingtable.MessagesToEmit{
 					RegistrationMessages: []routingtable.RegistryMessage{
 						routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname3, LogGUID: logGuid}),
-					},
-					InternalUnregistrationMessages: []routingtable.RegistryMessage{
-						{
-							Host: endpoint1.ContainerIP,
-							URIs: []string{internalHostname1, fmt.Sprintf("%d.%s", 0, internalHostname1)},
-							Tags: map[string]string{
-								"component": "route-emitter",
-							},
-							PrivateInstanceIndex: "0",
-							App:                  logGuid,
-						},
 					},
 					InternalRegistrationMessages: []routingtable.RegistryMessage{
 						{
@@ -317,7 +306,7 @@ var _ = Describe("RoutingTable", func() {
 				Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
 			})
 
-			Context("subsequent swaps with still not fresh", func() {
+			Context("subsequent swaps with still not fresh domain", func() {
 				BeforeEach(func() {
 					tempTable := routingtable.NewRoutingTable(logger, false, fakeMetronClient)
 					schedulingInfo := createDesiredLRPSchedulingInfo(key.ProcessGUID, int32(3), key.ContainerPort, logGuid, "", *currentTag, hostname1, hostname3)
