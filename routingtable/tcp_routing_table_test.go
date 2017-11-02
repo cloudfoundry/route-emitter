@@ -969,13 +969,17 @@ var _ = Describe("TCPRoutingTable", func() {
 					})
 
 					Context("existing backends for new container port", func() {
+						var numActualLRPs int
+
 						BeforeEach(func() {
 							routingTable.AddEndpoint(getActualLRP("process-guid-1", "instance-guid-2", "some-ip-1", "container-ip-1", 62006, 5223, false, modificationTag))
+							numActualLRPs++
 						})
 
-						XIt("emits registration events for new container port", func() {
+						It("emits registration events for new container port", func() {
 							afterLRP := getDesiredLRP("process-guid-1", "log-guid-1", newTcpRoutes, newModificationTag)
-							currentRoutesCount := routingTable.TCPAssociationsCount()
+							expectedRoutesCount := len(newTcpRoutes) * numActualLRPs
+
 							routingEvents, _ := routingTable.SetRoutes(beforeLRPSchedulingInfo, afterLRP)
 
 							ttl := 0
@@ -984,11 +988,11 @@ var _ = Describe("TCPRoutingTable", func() {
 									RouterGroupGuid: "router-group-guid",
 									HostPort:        62006,
 									HostIP:          "some-ip-1",
-									ExternalPort:    61000,
+									ExternalPort:    61001,
 									TTL:             &ttl,
 								},
 							}))
-							Expect(routingTable.TCPAssociationsCount()).Should(Equal(currentRoutesCount))
+							Expect(routingTable.TCPAssociationsCount()).Should(Equal(expectedRoutesCount))
 						})
 					})
 				})
