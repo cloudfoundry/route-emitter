@@ -113,6 +113,29 @@ func createActualLRP(
 	}
 }
 
+func createActualLRPWithPortMappings(
+	key routingtable.RoutingKey,
+	instance routingtable.Endpoint,
+	domain string,
+	ports ...*models.PortMapping,
+) *routingtable.ActualLRPRoutingInfo {
+
+	return &routingtable.ActualLRPRoutingInfo{
+		ActualLRP: &models.ActualLRP{
+			ActualLRPKey:         models.NewActualLRPKey(key.ProcessGUID, instance.Index, domain),
+			ActualLRPInstanceKey: models.NewActualLRPInstanceKey(instance.InstanceGUID, "cell-id"),
+			ActualLRPNetInfo: models.NewActualLRPNetInfo(
+				instance.Host,
+				instance.ContainerIP,
+				ports...,
+			),
+			State:           models.ActualLRPStateRunning,
+			ModificationTag: *instance.ModificationTag,
+		},
+		Evacuating: instance.Evacuating,
+	}
+}
+
 var _ = Describe("RoutingTable", func() {
 	var (
 		table                           routingtable.RoutingTable
