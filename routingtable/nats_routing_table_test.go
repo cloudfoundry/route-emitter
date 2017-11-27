@@ -1263,7 +1263,7 @@ var _ = Describe("RoutingTable", func() {
 						table.AddEndpoint(lrp)
 						Eventually(logger).Should(Say(
 							fmt.Sprintf(
-								`\{"Address":\{"Host":"%s","Port":%d\},"instance_guid_a":"%s","instance_guid_b":"%s"\}`,
+								`\{"Address":\{"Host":"%s","Port":%d\},"instance_guid_a":"%s","instance_guid_b":"%s"`,
 								endpoint1.Host,
 								endpoint1.Port,
 								endpoint1.InstanceGUID,
@@ -1693,7 +1693,7 @@ var _ = Describe("RoutingTable", func() {
 				Context("when adding an endpoint with IP and port that collide with existing endpoint", func() {
 					var counterChan chan string
 					BeforeEach(func() {
-						counterChan = make(chan string, 1)
+						counterChan = make(chan string, 10)
 						fakeMetronClient.IncrementCounterStub = func(name string) error {
 							counterChan <- name
 							return nil
@@ -1706,7 +1706,7 @@ var _ = Describe("RoutingTable", func() {
 					It("logs the collision", func() {
 						Eventually(logger).Should(Say(
 							fmt.Sprintf(
-								`\{"Address":\{"Host":"%s","Port":%d\},"instance_guid_a":"%s","instance_guid_b":"%s"\}`,
+								`\{"Address":\{"Host":"%s","Port":%d\},"instance_guid_a":"%s","instance_guid_b":"%s"`,
 								endpoint1.Host,
 								endpoint1.Port,
 								endpoint1.InstanceGUID,
@@ -1717,6 +1717,7 @@ var _ = Describe("RoutingTable", func() {
 
 					It("emits metrics about the address collisions", func() {
 						Eventually(counterChan).Should(Receive(Equal("AddressCollisions")))
+						Consistently(counterChan).ShouldNot(Receive())
 					})
 				})
 
@@ -1887,7 +1888,7 @@ var _ = Describe("RoutingTable", func() {
 					Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
 				})
 
-				Context("when the instance has multiple ports one with no routes", func() {
+				Context("when the instance has multiple ports, one of which has no routes", func() {
 					var (
 						lrp *routingtable.ActualLRPRoutingInfo
 					)
