@@ -183,8 +183,8 @@ func (entry InternalRoutableEndpoints) copy() InternalRoutableEndpoints {
 	return clone
 }
 
-func NewEndpointsFromActual(actualLRPInfo *ActualLRPRoutingInfo) map[uint32]Endpoint {
-	endpoints := map[uint32]Endpoint{}
+func NewEndpointsFromActual(actualLRPInfo *ActualLRPRoutingInfo) []Endpoint {
+	endpoints := []Endpoint{}
 	actual := actualLRPInfo.ActualLRP
 
 	for _, portMapping := range actual.Ports {
@@ -201,7 +201,7 @@ func NewEndpointsFromActual(actualLRPInfo *ActualLRPRoutingInfo) map[uint32]Endp
 				TlsProxyPort:          portMapping.HostTlsProxyPort,
 				ContainerTlsProxyPort: portMapping.ContainerTlsProxyPort,
 			}
-			endpoints[portMapping.ContainerPort] = endpoint
+			endpoints = append(endpoints, endpoint)
 		}
 	}
 

@@ -47,15 +47,24 @@ type RoutingTable interface {
 	TableSize() int
 }
 
-type routingTable struct {
-	internalEntries     map[RoutingKey]RoutableEndpoints
-	entries             map[RoutingKey]RoutableEndpoints
-	addressEntries      map[Address]EndpointKey
-	addressGenerator    func(endpoint Endpoint) Address
-	directInstanceRoute bool
-	logger              lager.Logger
-	metronClient        loggingclient.IngressClient
+type internalRoutingTable struct {
+	endpointGenerator        func(*ActualLRPRoutingInfo) []Endpoint
+	routesGenerator          func(*models.DesiredLRPSchedulingInfo) map[RoutingKey][]routeMapping
+	entries                  map[RoutingKey]RoutableEndpoints
+	addressEntries           map[Address]EndpointKey
+	addressGenerator         func(endpoint Endpoint) Address
+	directInstanceRoute      bool
+	logger                   lager.Logger
+	metronClient             loggingclient.IngressClient
+	suppressAddressCollision bool
 	sync.Locker
+}
+
+type routingTable struct {
+	logger                     lager.Logger
+	tcpRoutesRoutingTable      *internalRoutingTable
+	httpRoutesRoutingTable     *internalRoutingTable
+	internalRoutesRoutingTable *internalRoutingTable
 }
 
 func NewRoutingTable(logger lager.Logger, directInstanceRoute bool, metronClient loggingclient.IngressClient) RoutingTable {
@@ -69,19 +78,134 @@ func NewRoutingTable(logger lager.Logger, directInstanceRoute bool, metronClient
 		}
 	}
 
-	return &routingTable{
-		internalEntries:     make(map[RoutingKey]RoutableEndpoints),
+	httpRoutingTable := &internalRoutingTable{
+		endpointGenerator:   NewEndpointsFromActual,
+		routesGenerator:     httpRoutesFromSchedulingInfo,
 		entries:             make(map[RoutingKey]RoutableEndpoints),
 		addressEntries:      make(map[Address]EndpointKey),
 		directInstanceRoute: directInstanceRoute,
 		addressGenerator:    addressGenerator,
-		logger:              logger,
+		logger:              logger.Session("http"),
 		metronClient:        metronClient,
 		Locker:              &sync.Mutex{},
+	}
+	tcpRoutingTable := &internalRoutingTable{
+		endpointGenerator:        NewEndpointsFromActual,
+		routesGenerator:          tcpRoutesFromSchedulingInfo,
+		entries:                  make(map[RoutingKey]RoutableEndpoints),
+		addressEntries:           make(map[Address]EndpointKey),
+		directInstanceRoute:      directInstanceRoute,
+		addressGenerator:         addressGenerator,
+		logger:                   logger.Session("tcp"),
+		metronClient:             metronClient,
+		suppressAddressCollision: true,
+		Locker: &sync.Mutex{},
+	}
+	internalRoutingTable := &internalRoutingTable{
+		endpointGenerator:        internalEndpointsFromRoutingInfo,
+		routesGenerator:          internalRoutesFromSchedulingInfo,
+		entries:                  make(map[RoutingKey]RoutableEndpoints),
+		addressEntries:           make(map[Address]EndpointKey),
+		directInstanceRoute:      directInstanceRoute,
+		addressGenerator:         addressGenerator,
+		logger:                   logger.Session("internal"),
+		metronClient:             metronClient,
+		suppressAddressCollision: true,
+		Locker: &sync.Mutex{},
+	}
+
+	return &routingTable{
+		logger:                     logger,
+		tcpRoutesRoutingTable:      tcpRoutingTable,
+		httpRoutesRoutingTable:     httpRoutingTable,
+		internalRoutesRoutingTable: internalRoutingTable,
+	}
+}
+
+func newRoutingTable() *internalRoutingTable {
+	return &internalRoutingTable{}
+}
+
+func internalEndpointsFromRoutingInfo(actualLRP *ActualLRPRoutingInfo) []Endpoint {
+	return []Endpoint{
+		{
+			InstanceGUID:    actualLRP.ActualLRP.InstanceGuid,
+			Index:           actualLRP.ActualLRP.Index,
+			Host:            actualLRP.ActualLRP.Address,
+			ContainerIP:     actualLRP.ActualLRP.InstanceAddress,
+			Evacuating:      actualLRP.Evacuating,
+			ModificationTag: &actualLRP.ActualLRP.ModificationTag,
+		},
 	}
 }
 
 func (table *routingTable) AddEndpoint(actualLRP *ActualLRPRoutingInfo) (TCPRouteMappings, MessagesToEmit) {
+	httpMappings, httpMessages := table.httpRoutesRoutingTable.AddEndpoint(actualLRP)
+	tcpMappings, tcpMessages := table.tcpRoutesRoutingTable.AddEndpoint(actualLRP)
+	internalMappings, internalMessages := table.internalRoutesRoutingTable.AddEndpoint(actualLRP)
+
+	mappings := httpMappings.Merge(tcpMappings).Merge(internalMappings)
+	messages := httpMessages.Merge(tcpMessages).Merge(internalMessages)
+	return mappings, messages
+}
+
+func (table *routingTable) RemoveEndpoint(actualLRP *ActualLRPRoutingInfo) (TCPRouteMappings, MessagesToEmit) {
+	httpMappings, httpMessages := table.httpRoutesRoutingTable.RemoveEndpoint(actualLRP)
+	tcpMappings, tcpMessages := table.tcpRoutesRoutingTable.RemoveEndpoint(actualLRP)
+	internalMappings, internalMessages := table.internalRoutesRoutingTable.RemoveEndpoint(actualLRP)
+
+	mappings := httpMappings.Merge(tcpMappings).Merge(internalMappings)
+	messages := httpMessages.Merge(tcpMessages).Merge(internalMessages)
+	return mappings, messages
+}
+
+func (t *routingTable) Swap(other RoutingTable, domains models.DomainSet) (TCPRouteMappings, MessagesToEmit) {
+	table, ok := other.(*routingTable)
+	if !ok {
+		t.logger.Error("failed-to-convert-to-routing-table", nil)
+		return TCPRouteMappings{}, MessagesToEmit{}
+	}
+
+	httpMappings, httpMessages := t.httpRoutesRoutingTable.Swap(table.httpRoutesRoutingTable, domains)
+	tcpMappings, tcpMessages := t.tcpRoutesRoutingTable.Swap(table.tcpRoutesRoutingTable, domains)
+	internalMappings, internalMessages := t.internalRoutesRoutingTable.Swap(table.internalRoutesRoutingTable, domains)
+
+	mappings := httpMappings.Merge(tcpMappings).Merge(internalMappings)
+	messages := httpMessages.Merge(tcpMessages).Merge(internalMessages)
+	return mappings, messages
+}
+
+func (t *routingTable) GetRoutingEvents() (TCPRouteMappings, MessagesToEmit) {
+	httpMappings, httpMessages := t.httpRoutesRoutingTable.GetRoutingEvents()
+	tcpMappings, tcpMessages := t.tcpRoutesRoutingTable.GetRoutingEvents()
+	internalMappings, internalMessages := t.internalRoutesRoutingTable.GetRoutingEvents()
+
+	mappings := httpMappings.Merge(tcpMappings).Merge(internalMappings)
+	messages := httpMessages.Merge(tcpMessages).Merge(internalMessages)
+	return mappings, messages
+}
+
+func (t *routingTable) SetRoutes(before, after *models.DesiredLRPSchedulingInfo) (TCPRouteMappings, MessagesToEmit) {
+	httpMappings, httpMessages := t.httpRoutesRoutingTable.SetRoutes(before, after)
+	tcpMappings, tcpMessages := t.tcpRoutesRoutingTable.SetRoutes(before, after)
+	internalMappings, internalMessages := t.internalRoutesRoutingTable.SetRoutes(before, after)
+
+	mappings := httpMappings.Merge(tcpMappings).Merge(internalMappings)
+	messages := httpMessages.Merge(tcpMessages).Merge(internalMessages)
+	return mappings, messages
+}
+
+func (t *routingTable) RemoveRoutes(desiredLRP *models.DesiredLRPSchedulingInfo) (TCPRouteMappings, MessagesToEmit) {
+	httpMappings, httpMessages := t.httpRoutesRoutingTable.RemoveRoutes(desiredLRP)
+	tcpMappings, tcpMessages := t.tcpRoutesRoutingTable.RemoveRoutes(desiredLRP)
+	internalMappings, internalMessages := t.internalRoutesRoutingTable.RemoveRoutes(desiredLRP)
+
+	mappings := httpMappings.Merge(tcpMappings).Merge(internalMappings)
+	messages := httpMessages.Merge(tcpMessages).Merge(internalMessages)
+	return mappings, messages
+}
+
+func (table *internalRoutingTable) AddEndpoint(actualLRP *ActualLRPRoutingInfo) (TCPRouteMappings, MessagesToEmit) {
 	logger := table.logger.Session("AddEndpoint", lager.Data{"actual_lrp": actualLRP})
 	logger.Debug("starting")
 	defer logger.Debug("completed")
@@ -90,24 +214,26 @@ func (table *routingTable) AddEndpoint(actualLRP *ActualLRPRoutingInfo) (TCPRout
 	defer table.Unlock()
 
 	logger.Info("handler-add-and-emit", lager.Data{"net_info": actualLRP.ActualLRP.ActualLRPNetInfo})
-	endpoints := NewEndpointsFromActual(actualLRP)
+	endpoints := table.endpointGenerator(actualLRP)
 
 	// collision detection
 
-	for _, endpoint := range endpoints {
-		address := table.addressGenerator(endpoint)
-		// if the address exists and the instance guid doesn't match then we have a collision
-		if existingEndpointKey, ok := table.addressEntries[address]; ok && existingEndpointKey.InstanceGUID != endpoint.InstanceGUID {
-			table.metronClient.IncrementCounter(addressCollisions)
-			existingInstanceGuid := existingEndpointKey.InstanceGUID
-			table.logger.Info("collision-detected-with-endpoint", lager.Data{
-				"instance_guid_a": existingInstanceGuid,
-				"instance_guid_b": endpoint.InstanceGUID,
-				"Address":         address,
-			})
-		}
+	if !table.suppressAddressCollision {
+		for _, endpoint := range endpoints {
+			address := table.addressGenerator(endpoint)
+			// if the address exists and the instance guid doesn't match then we have a collision
+			if existingEndpointKey, ok := table.addressEntries[address]; ok && existingEndpointKey.InstanceGUID != endpoint.InstanceGUID {
+				table.metronClient.IncrementCounter(addressCollisions)
+				existingInstanceGuid := existingEndpointKey.InstanceGUID
+				table.logger.Info("collision-detected-with-endpoint", lager.Data{
+					"instance_guid_a": existingInstanceGuid,
+					"instance_guid_b": endpoint.InstanceGUID,
+					"Address":         address,
+				})
+			}
 
-		table.addressEntries[address] = endpoint.key()
+			table.addressEntries[address] = endpoint.key()
+		}
 	}
 
 	// add endpoints
@@ -120,11 +246,7 @@ func (table *routingTable) AddEndpoint(actualLRP *ActualLRPRoutingInfo) (TCPRout
 			ProcessGUID:   actualLRP.ActualLRP.ProcessGuid,
 			ContainerPort: routingEndpoint.ContainerPort,
 		}
-		internalKey := RoutingKey{
-			ProcessGUID: actualLRP.ActualLRP.ProcessGuid,
-		}
 		currentEntry := table.entries[key]
-		currentInternalEntry := table.internalEntries[internalKey]
 		// Since desiredLRP is same, only need to check one entry
 		if currentEntry.DesiredInstances > 0 && routingEndpoint.Index >= currentEntry.DesiredInstances {
 			logger.Debug("skipping-undesired-instance")
@@ -140,21 +262,12 @@ func (table *routingTable) AddEndpoint(actualLRP *ActualLRPRoutingInfo) (TCPRout
 		mapping, message := table.emitDiffMessages(key, currentEntry, newEntry)
 		mappings = mappings.Merge(mapping)
 		messagesToEmit = messagesToEmit.Merge(message)
-
-		newInternalEntry := currentInternalEntry.copy()
-		//Internal Endpoints do not need container or host ports
-		routingEndpoint.ContainerPort = 0
-		routingEndpoint.Port = 0
-		newInternalEntry.Endpoints[routingEndpoint.key()] = routingEndpoint
-		table.internalEntries[internalKey] = newInternalEntry
-		_, message = table.emitDiffMessages(internalKey, currentInternalEntry, newInternalEntry)
-		messagesToEmit = messagesToEmit.Merge(message)
 	}
 
 	return mappings, messagesToEmit
 }
 
-func (table *routingTable) RemoveEndpoint(actualLRP *ActualLRPRoutingInfo) (TCPRouteMappings, MessagesToEmit) {
+func (table *internalRoutingTable) RemoveEndpoint(actualLRP *ActualLRPRoutingInfo) (TCPRouteMappings, MessagesToEmit) {
 	logger := table.logger.Session("RemoveEndpoint", lager.Data{"actual_lrp": actualLRP})
 	logger.Debug("starting")
 	defer logger.Debug("completed")
@@ -165,21 +278,24 @@ func (table *routingTable) RemoveEndpoint(actualLRP *ActualLRPRoutingInfo) (TCPR
 	table.logger.Session("removing-endpoint")
 	table.logger.Info("starting")
 	defer table.logger.Info("complete")
-	endpoints := NewEndpointsFromActual(actualLRP)
+
+	endpoints := table.endpointGenerator(actualLRP)
 
 	// remove address
-	for _, endpoint := range endpoints {
-		address := table.addressGenerator(endpoint)
-		currentEntry, ok := table.addressEntries[address]
-		if ok && currentEntry.InstanceGUID != endpoint.InstanceGUID {
-			table.logger.Info("collision-detected-with-endpoint", lager.Data{
-				"instance_guid_a": currentEntry.InstanceGUID,
-				"instance_guid_b": endpoint.InstanceGUID,
-				"Address":         address,
-			})
-			continue
+	if !table.suppressAddressCollision {
+		for _, endpoint := range endpoints {
+			address := table.addressGenerator(endpoint)
+			currentEntry, ok := table.addressEntries[address]
+			if ok && currentEntry.InstanceGUID != endpoint.InstanceGUID {
+				table.logger.Info("collision-detected-with-endpoint", lager.Data{
+					"instance_guid_a": currentEntry.InstanceGUID,
+					"instance_guid_b": endpoint.InstanceGUID,
+					"Address":         address,
+				})
+				continue
+			}
+			delete(table.addressEntries, address)
 		}
-		delete(table.addressEntries, address)
 	}
 
 	// remove endpoint
@@ -191,22 +307,9 @@ func (table *routingTable) RemoveEndpoint(actualLRP *ActualLRPRoutingInfo) (TCPR
 			ContainerPort: routingEndpoint.ContainerPort,
 		}
 
-		internalKey := RoutingKey{
-			ProcessGUID: actualLRP.ActualLRP.ProcessGuid,
-		}
-
 		currentEntry := table.entries[key]
 		endpointKey := routingEndpoint.key()
 		currentEndpoint, ok := currentEntry.Endpoints[endpointKey]
-
-		if !ok ||
-			(!currentEndpoint.ModificationTag.Equal(routingEndpoint.ModificationTag) &&
-				!currentEndpoint.ModificationTag.SucceededBy(routingEndpoint.ModificationTag)) {
-			continue
-		}
-
-		currentInternalEntry := table.internalEntries[internalKey]
-		currentEndpoint, ok = currentInternalEntry.Endpoints[endpointKey]
 
 		if !ok ||
 			(!currentEndpoint.ModificationTag.Equal(routingEndpoint.ModificationTag) &&
@@ -223,33 +326,18 @@ func (table *routingTable) RemoveEndpoint(actualLRP *ActualLRPRoutingInfo) (TCPR
 		mapping, message := table.emitDiffMessages(key, currentEntry, newEntry)
 		messagesToEmit = messagesToEmit.Merge(message)
 		mappings = mappings.Merge(mapping)
-
-		newInternalEntry := currentInternalEntry.copy()
-		delete(newInternalEntry.Endpoints, endpointKey)
-
-		table.internalEntries[internalKey] = newInternalEntry
-		table.deleteInternalEntryIfEmpty(internalKey)
-
-		_, message = table.emitDiffMessages(internalKey, currentInternalEntry, newInternalEntry)
-		messagesToEmit = messagesToEmit.Merge(message)
 	}
 
 	return mappings, messagesToEmit
 }
 
-func (t *routingTable) Swap(other RoutingTable, domains models.DomainSet) (TCPRouteMappings, MessagesToEmit) {
+func (t *internalRoutingTable) Swap(otherTable *internalRoutingTable, domains models.DomainSet) (TCPRouteMappings, MessagesToEmit) {
 	logger := t.logger.Session("swap", lager.Data{"received-domains": domains})
 	logger.Info("started")
 	defer logger.Info("finished")
 
 	t.Lock()
 	defer t.Unlock()
-
-	otherTable, ok := other.(*routingTable)
-	if !ok {
-		logger.Error("failed-to-convert-to-routing-table", nil)
-		return TCPRouteMappings{}, MessagesToEmit{}
-	}
 
 	t.addressEntries = otherTable.addressEntries
 
@@ -284,31 +372,7 @@ func (t *routingTable) Swap(other RoutingTable, domains models.DomainSet) (TCPRo
 		mappings = mappings.Merge(mapping)
 	}
 
-	mergedInternalRoutingKeys := map[RoutingKey]struct{}{}
-	for key, _ := range otherTable.internalEntries {
-		mergedInternalRoutingKeys[key] = struct{}{}
-	}
-	for key, _ := range t.internalEntries {
-		mergedInternalRoutingKeys[key] = struct{}{}
-	}
-	for internalKey := range mergedInternalRoutingKeys {
-		existingInternalEntry, ok := t.internalEntries[internalKey]
-		newInternalEntry := otherTable.internalEntries[internalKey]
-		if !ok {
-			// routing key only exist in the new table
-			_, message := t.emitDiffMessages(internalKey, RoutableEndpoints{}, newInternalEntry)
-			messagesToEmit = messagesToEmit.Merge(message)
-			continue
-		}
-		merged := mergeUnfreshRoutes(existingInternalEntry, newInternalEntry, domains)
-		otherTable.internalEntries[internalKey] = merged
-		otherTable.deleteInternalEntryIfEmpty(internalKey)
-		_, message := t.emitDiffMessages(internalKey, existingInternalEntry, merged)
-		messagesToEmit = messagesToEmit.Merge(message)
-	}
-
 	t.entries = otherTable.entries
-	t.internalEntries = otherTable.internalEntries
 
 	return mappings, messagesToEmit
 }
@@ -338,7 +402,7 @@ func mergeUnfreshRoutes(before, after RoutableEndpoints, domains models.DomainSe
 	return merged
 }
 
-func (t *routingTable) GetRoutingEvents() (TCPRouteMappings, MessagesToEmit) {
+func (t *internalRoutingTable) GetRoutingEvents() (TCPRouteMappings, MessagesToEmit) {
 	logger := t.logger.Session("get-routing-events")
 	logger.Info("started")
 	defer logger.Info("finished")
@@ -352,12 +416,6 @@ func (t *routingTable) GetRoutingEvents() (TCPRouteMappings, MessagesToEmit) {
 		mapping, message := t.emitDiffMessages(key, RoutableEndpoints{}, route)
 
 		mappings = mappings.Merge(mapping)
-		messagesToEmit = messagesToEmit.Merge(message)
-	}
-
-	for key, route := range t.internalEntries {
-		_, message := t.emitDiffMessages(key, RoutableEndpoints{}, route)
-
 		messagesToEmit = messagesToEmit.Merge(message)
 	}
 
@@ -430,7 +488,7 @@ func internalRoutesFromSchedulingInfo(lrp *models.DesiredLRPSchedulingInfo) map[
 	return routeEntries
 }
 
-func (table *routingTable) SetRoutes(before, after *models.DesiredLRPSchedulingInfo) (TCPRouteMappings, MessagesToEmit) {
+func (table *internalRoutingTable) SetRoutes(before, after *models.DesiredLRPSchedulingInfo) (TCPRouteMappings, MessagesToEmit) {
 	logger := table.logger.Session("set-routes", lager.Data{"before_lrp": DesiredLRPData(before), "after_lrp": DesiredLRPData(after)})
 	logger.Info("started")
 	defer logger.Info("finished")
@@ -439,38 +497,12 @@ func (table *routingTable) SetRoutes(before, after *models.DesiredLRPSchedulingI
 	defer table.Unlock()
 
 	// update routes
-	httpRemovedRouteEntries := httpRoutesFromSchedulingInfo(before)
-	httpRouteEntries := httpRoutesFromSchedulingInfo(after)
-	tcpRemovedRouteEntries := tcpRoutesFromSchedulingInfo(before)
-	tcpRouteEntries := tcpRoutesFromSchedulingInfo(after)
-	internalRemovedRouteEntries := internalRoutesFromSchedulingInfo(before)
-	internalRouteEntries := internalRoutesFromSchedulingInfo(after)
-	logger.Info("internal-route-table", lager.Data{"numEntries": len(table.internalEntries)})
+	removedRouteEntries := table.routesGenerator(before)
+	routeEntries := table.routesGenerator(after)
+	// logger.Info("internal-route-table", lager.Data{"numEntries": len(table.internalEntries)})
 
 	var messagesToEmit MessagesToEmit = MessagesToEmit{}
 	var mappings TCPRouteMappings
-
-	// merge the http and tcp routes
-	mergeRoutes := func(first, second map[RoutingKey][]routeMapping) map[RoutingKey][]routeMapping {
-		result := make(map[RoutingKey][]routeMapping)
-		for key, routes := range first {
-			result[key] = append(routes, second[key]...)
-		}
-
-		for key, routes := range second {
-			_, ok := first[key]
-			if ok {
-				// this has been merged already in the previous loop
-				continue
-			}
-			result[key] = routes
-		}
-
-		return result
-	}
-
-	routeEntries := mergeRoutes(httpRouteEntries, tcpRouteEntries)
-	removedRouteEntries := mergeRoutes(httpRemovedRouteEntries, tcpRemovedRouteEntries)
 
 	for key, routes := range routeEntries {
 		currentEntry := table.entries[key]
@@ -499,39 +531,6 @@ func (table *routingTable) SetRoutes(before, after *models.DesiredLRPSchedulingI
 
 		table.entries[key] = newEntry
 
-		mapping, message := table.emitDiffMessages(key, currentEntry, newEntry)
-		messagesToEmit = messagesToEmit.Merge(message)
-		mappings = mappings.Merge(mapping)
-	}
-
-	for key, routes := range internalRouteEntries {
-		currentEntry := table.internalEntries[key]
-		// if modification tag is old, ignore the new desired lrp
-		if !currentEntry.ModificationTag.SucceededBy(&after.ModificationTag) {
-			continue
-		}
-
-		newEntry := currentEntry.copy()
-		newEntry.Domain = after.Domain
-		newEntry.Routes = routes
-		newEntry.ModificationTag = &after.ModificationTag
-		newEntry.DesiredInstances = after.Instances
-
-		// check if scaling down
-		if before != nil && after != nil && before.Instances > after.Instances {
-			newEndpoints := make(map[EndpointKey]Endpoint)
-
-			for endpointKey, endpoint := range newEntry.Endpoints {
-				if endpoint.Index < after.Instances {
-					newEndpoints[endpointKey] = endpoint
-				}
-			}
-			newEntry.Endpoints = newEndpoints
-		}
-
-		table.internalEntries[key] = newEntry
-
-		// Emit diff messages
 		mapping, message := table.emitDiffMessages(key, currentEntry, newEntry)
 		messagesToEmit = messagesToEmit.Merge(message)
 		mappings = mappings.Merge(mapping)
@@ -571,53 +570,17 @@ func (table *routingTable) SetRoutes(before, after *models.DesiredLRPSchedulingI
 		mappings = mappings.Merge(mapping)
 	}
 
-	for key := range internalRemovedRouteEntries {
-		currentEntry := table.internalEntries[key]
-		if after == nil {
-			// this is a delete (after == nil), then before lrp modification tag must be >=
-			if !currentEntry.ModificationTag.Equal(&before.ModificationTag) && !currentEntry.ModificationTag.SucceededBy(&before.ModificationTag) {
-				logger.Debug("skipping-old-update")
-				continue
-			}
-		} else if !currentEntry.ModificationTag.SucceededBy(&after.ModificationTag) {
-			// this is an update, then after lrp modification tag must be >
-			continue
-		}
-
-		newEntry := currentEntry.copy()
-		newEntry.Routes = nil
-		if after != nil {
-			newEntry.Domain = after.Domain
-			newEntry.ModificationTag = &after.ModificationTag
-			newEntry.DesiredInstances = after.Instances
-		}
-
-		table.internalEntries[key] = newEntry
-
-		table.deleteInternalEntryIfEmpty(key)
-
-		_, message := table.emitDiffMessages(key, currentEntry, newEntry)
-		messagesToEmit = messagesToEmit.Merge(message)
-	}
-
 	return mappings, messagesToEmit
 }
 
-func (table *routingTable) deleteEntryIfEmpty(key RoutingKey) {
+func (table *internalRoutingTable) deleteEntryIfEmpty(key RoutingKey) {
 	entry := table.entries[key]
 	if len(entry.Endpoints) == 0 && len(entry.Routes) == 0 {
 		delete(table.entries, key)
 	}
 }
 
-func (table *routingTable) deleteInternalEntryIfEmpty(key RoutingKey) {
-	entry := table.internalEntries[key]
-	if len(entry.Endpoints) == 0 && len(entry.Routes) == 0 {
-		delete(table.internalEntries, key)
-	}
-}
-
-func (table *routingTable) emitDiffMessages(key RoutingKey, oldEntry, newEntry RoutableEndpoints) (TCPRouteMappings, MessagesToEmit) {
+func (table *internalRoutingTable) emitDiffMessages(key RoutingKey, oldEntry, newEntry RoutableEndpoints) (TCPRouteMappings, MessagesToEmit) {
 	routesDiff := diffRoutes(oldEntry.Routes, newEntry.Routes)
 	endpointsDiff := diffEndpoints(oldEntry.Endpoints, newEntry.Endpoints)
 	return table.messages(routesDiff, endpointsDiff)
@@ -708,7 +671,7 @@ func diffEndpoints(before, after map[EndpointKey]Endpoint) endpointsDiff {
 	return diff
 }
 
-func (table *routingTable) messages(routesDiff routesDiff, endpointDiff endpointsDiff) (TCPRouteMappings, MessagesToEmit) {
+func (table *internalRoutingTable) messages(routesDiff routesDiff, endpointDiff endpointsDiff) (TCPRouteMappings, MessagesToEmit) {
 	// maps used to remove duplicates
 	unregistrations := map[routeMapping]map[Endpoint]bool{}
 	registrations := map[routeMapping]map[Endpoint]bool{}
@@ -799,7 +762,7 @@ func (table *routingTable) messages(routesDiff routesDiff, endpointDiff endpoint
 	return mappings, messages
 }
 
-func (table *routingTable) RemoveRoutes(desiredLRP *models.DesiredLRPSchedulingInfo) (TCPRouteMappings, MessagesToEmit) {
+func (table *internalRoutingTable) RemoveRoutes(desiredLRP *models.DesiredLRPSchedulingInfo) (TCPRouteMappings, MessagesToEmit) {
 	logger := table.logger.Session("RemoveRoutes", lager.Data{"desired_lrp": DesiredLRPData(desiredLRP)})
 	logger.Debug("starting")
 	defer logger.Debug("completed")
@@ -807,64 +770,26 @@ func (table *routingTable) RemoveRoutes(desiredLRP *models.DesiredLRPSchedulingI
 	return table.SetRoutes(desiredLRP, nil)
 }
 
-func (t *routingTable) HTTPAssociationsCount() int {
+func (t *internalRoutingTable) AssociationsCount() int {
 	t.Lock()
 	defer t.Unlock()
 
 	count := 0
 	for _, entry := range t.entries {
-		count += numberOfHTTPRoutes(entry) * len(entry.Endpoints)
+		count += len(entry.Routes) * len(entry.Endpoints)
 	}
 
 	return count
 }
 
-func (t *routingTable) TCPAssociationsCount() int {
-	t.Lock()
-	defer t.Unlock()
-
-	count := 0
-	for _, entry := range t.entries {
-		count += numberOfTCPRoutes(entry) * len(entry.Endpoints)
-	}
-
-	return count
-}
-
-func (t *routingTable) InternalAssociationsCount() int {
-	t.Lock()
-	defer t.Unlock()
-
-	count := 0
-	for _, entry := range t.internalEntries {
-		count += 2 * len(entry.Routes) * len(entry.Endpoints)
-	}
-
-	return count
-}
-
-func (t *routingTable) TableSize() int {
+func (t *internalRoutingTable) TableSize() int {
 	t.Lock()
 	defer t.Unlock()
 
 	return len(t.entries)
 }
 
-func numberOfTCPRoutes(routableEndpoints RoutableEndpoints) int {
-	count := 0
-	for _, route := range routableEndpoints.Routes {
-		if _, ok := route.(ExternalEndpointInfo); ok {
-			count++
-		}
-	}
-	return count
-}
-
-func numberOfHTTPRoutes(routableEndpoints RoutableEndpoints) int {
-	return len(routableEndpoints.Routes) - numberOfTCPRoutes(routableEndpoints)
-}
-
-func (t *routingTable) HasExternalRoutes(actual *ActualLRPRoutingInfo) bool {
+func (t *internalRoutingTable) HasExternalRoutes(actual *ActualLRPRoutingInfo) bool {
 	for _, key := range NewRoutingKeysFromActual(actual) {
 		if len(t.entries[key].Routes) > 0 {
 			return true
@@ -872,4 +797,24 @@ func (t *routingTable) HasExternalRoutes(actual *ActualLRPRoutingInfo) bool {
 	}
 
 	return false
+}
+
+func (t *routingTable) HTTPAssociationsCount() int {
+	return t.httpRoutesRoutingTable.AssociationsCount()
+}
+
+func (t *routingTable) TCPAssociationsCount() int {
+	return t.tcpRoutesRoutingTable.AssociationsCount()
+}
+
+func (t *routingTable) InternalAssociationsCount() int {
+	return 2 * t.internalRoutesRoutingTable.AssociationsCount()
+}
+
+func (t *routingTable) TableSize() int {
+	return t.httpRoutesRoutingTable.TableSize() + t.tcpRoutesRoutingTable.TableSize() + t.internalRoutesRoutingTable.TableSize()
+}
+
+func (t *routingTable) HasExternalRoutes(actual *ActualLRPRoutingInfo) bool {
+	return t.httpRoutesRoutingTable.HasExternalRoutes(actual) || t.tcpRoutesRoutingTable.HasExternalRoutes(actual)
 }

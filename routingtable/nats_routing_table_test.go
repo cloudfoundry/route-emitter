@@ -1263,7 +1263,7 @@ var _ = Describe("RoutingTable", func() {
 						table.AddEndpoint(lrp)
 						Eventually(logger).Should(Say(
 							fmt.Sprintf(
-								`\{"Address":\{"Host":"%s","Port":%d\},"instance_guid_a":"%s","instance_guid_b":"%s"\}`,
+								`\{"Address":\{"Host":"%s","Port":%d\},"instance_guid_a":"%s","instance_guid_b":"%s"`,
 								endpoint1.Host,
 								endpoint1.Port,
 								endpoint1.InstanceGUID,
@@ -1693,7 +1693,7 @@ var _ = Describe("RoutingTable", func() {
 				Context("when adding an endpoint with IP and port that collide with existing endpoint", func() {
 					var counterChan chan string
 					BeforeEach(func() {
-						counterChan = make(chan string, 1)
+						counterChan = make(chan string, 10)
 						fakeMetronClient.IncrementCounterStub = func(name string) error {
 							counterChan <- name
 							return nil
@@ -1706,7 +1706,7 @@ var _ = Describe("RoutingTable", func() {
 					It("logs the collision", func() {
 						Eventually(logger).Should(Say(
 							fmt.Sprintf(
-								`\{"Address":\{"Host":"%s","Port":%d\},"instance_guid_a":"%s","instance_guid_b":"%s"\}`,
+								`\{"Address":\{"Host":"%s","Port":%d\},"instance_guid_a":"%s","instance_guid_b":"%s"`,
 								endpoint1.Host,
 								endpoint1.Port,
 								endpoint1.InstanceGUID,
@@ -1717,6 +1717,7 @@ var _ = Describe("RoutingTable", func() {
 
 					It("emits metrics about the address collisions", func() {
 						Eventually(counterChan).Should(Receive(Equal("AddressCollisions")))
+						Consistently(counterChan).ShouldNot(Receive())
 					})
 				})
 
@@ -1885,6 +1886,46 @@ var _ = Describe("RoutingTable", func() {
 						},
 					}
 					Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
+				})
+
+				Context("when the instance has multiple ports, one of which has no routes", func() {
+					var (
+						lrp *routingtable.ActualLRPRoutingInfo
+					)
+
+					BeforeEach(func() {
+						table = routingtable.NewRoutingTable(logger, false, fakeMetronClient)
+						routes := createRoutingInfo(key.ContainerPort, []string{hostname1}, []string{internalHostname1}, "", []uint32{}, "")
+
+						beforeLrpInfo = createSchedulingInfoWithRoutes(key.ProcessGUID, 3, routes, logGuid, *currentTag)
+						table.SetRoutes(nil, beforeLrpInfo)
+						lrp = createActualLRPWithPortMappings(key, endpoint1, domain,
+							models.NewPortMapping(endpoint1.Port+1, 2222),
+							models.NewPortMapping(endpoint1.Port, 8080),
+						)
+						table.AddEndpoint(lrp)
+					})
+
+					It("emits unregistration message", func() {
+						_, messages := table.RemoveEndpoint(lrp)
+						expected := routingtable.MessagesToEmit{
+							UnregistrationMessages: []routingtable.RegistryMessage{
+								routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGUID: logGuid}),
+							},
+							InternalUnregistrationMessages: []routingtable.RegistryMessage{
+								{
+									Host:                 endpoint1.ContainerIP,
+									URIs:                 []string{internalHostname1, fmt.Sprintf("%d.%s", 0, internalHostname1)},
+									PrivateInstanceIndex: "0",
+									App:                  logGuid,
+									Tags: map[string]string{
+										"component": "route-emitter",
+									},
+								},
+							},
+						}
+						Expect(messages).To(MatchMessagesToEmit(expected))
+					})
 				})
 
 				It("emits nothing when the tag is older", func() {

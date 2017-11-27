@@ -113,6 +113,29 @@ func createActualLRP(
 	}
 }
 
+func createActualLRPWithPortMappings(
+	key routingtable.RoutingKey,
+	instance routingtable.Endpoint,
+	domain string,
+	ports ...*models.PortMapping,
+) *routingtable.ActualLRPRoutingInfo {
+
+	return &routingtable.ActualLRPRoutingInfo{
+		ActualLRP: &models.ActualLRP{
+			ActualLRPKey:         models.NewActualLRPKey(key.ProcessGUID, instance.Index, domain),
+			ActualLRPInstanceKey: models.NewActualLRPInstanceKey(instance.InstanceGUID, "cell-id"),
+			ActualLRPNetInfo: models.NewActualLRPNetInfo(
+				instance.Host,
+				instance.ContainerIP,
+				ports...,
+			),
+			State:           models.ActualLRPStateRunning,
+			ModificationTag: *instance.ModificationTag,
+		},
+		Evacuating: instance.Evacuating,
+	}
+}
+
 var _ = Describe("RoutingTable", func() {
 	var (
 		table                           routingtable.RoutingTable
@@ -542,13 +565,13 @@ var _ = Describe("RoutingTable", func() {
 		)
 
 		BeforeEach(func() {
-			routes := createRoutingInfo(key.ContainerPort, []string{hostname1}, []string{}, "", []uint32{5222}, "router-group-guid")
+			routes := createRoutingInfo(key.ContainerPort, []string{hostname1}, []string{"internal-hostname"}, "", []uint32{5222}, "router-group-guid")
 			desiredLRP = createSchedulingInfoWithRoutes(key.ProcessGUID, 1, routes, logGuid, *currentTag)
 			table.SetRoutes(nil, desiredLRP)
 			actualLRP = createActualLRP(key, endpoint1, domain)
 			table.AddEndpoint(actualLRP)
 
-			Expect(table.TableSize()).To(Equal(1))
+			Expect(table.TableSize()).To(Equal(3))
 		})
 
 		Context("when routes are deleted", func() {
@@ -558,7 +581,7 @@ var _ = Describe("RoutingTable", func() {
 			})
 
 			It("doesn't remove the entry from the table", func() {
-				Expect(table.TableSize()).To(Equal(1))
+				Expect(table.TableSize()).To(Equal(3))
 			})
 
 			Context("and endpoints are deleted", func() {
@@ -578,7 +601,7 @@ var _ = Describe("RoutingTable", func() {
 			})
 
 			It("doesn't remove the entry from the table", func() {
-				Expect(table.TableSize()).To(Equal(1))
+				Expect(table.TableSize()).To(Equal(3))
 			})
 
 			Context("and endpoints are deleted", func() {
