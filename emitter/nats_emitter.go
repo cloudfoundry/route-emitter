@@ -12,7 +12,8 @@ import (
 )
 
 const (
-	messagesEmittedCounter = "MessagesEmitted"
+	messagesEmittedCounter           = "MessagesEmitted"
+	internalRouteNATSMessagesEmitted = "InternalRouteNATSMessagesEmitted"
 )
 
 //go:generate counterfeiter -o fakes/fake_nats_emitter.go . NATSEmitter
@@ -51,6 +52,7 @@ func (n *natsEmitter) Emit(messagesToEmit routingtable.MessagesToEmit) error {
 		n.emit("router.unregister", message, &wg, errors)
 	}
 
+	var numberOfInternalMessages uint64
 	numberOfMessages := uint64(len(messagesToEmit.RegistrationMessages) + len(messagesToEmit.UnregistrationMessages))
 	if n.emitInternalRoutes {
 		wg.Add(len(messagesToEmit.InternalRegistrationMessages))
@@ -63,7 +65,8 @@ func (n *natsEmitter) Emit(messagesToEmit routingtable.MessagesToEmit) error {
 			n.emit("service-discovery.unregister", message, &wg, errors)
 		}
 
-		numberOfMessages += uint64(len(messagesToEmit.InternalRegistrationMessages) + len(messagesToEmit.InternalUnregistrationMessages))
+		numberOfInternalMessages = uint64(len(messagesToEmit.InternalRegistrationMessages) + len(messagesToEmit.InternalUnregistrationMessages))
+		numberOfMessages += numberOfInternalMessages
 	}
 
 	wg.Wait()
@@ -77,6 +80,13 @@ func (n *natsEmitter) Emit(messagesToEmit routingtable.MessagesToEmit) error {
 	err := n.metronClient.IncrementCounterWithDelta(messagesEmittedCounter, numberOfMessages)
 	if err != nil {
 		n.logger.Error("cannot-emit-number-of-messages", err)
+	}
+
+	if n.emitInternalRoutes {
+		err := n.metronClient.IncrementCounterWithDelta(internalRouteNATSMessagesEmitted, numberOfInternalMessages)
+		if err != nil {
+			n.logger.Error("cannot-emit-number-of-internal-messages", err)
+		}
 	}
 
 	return nil
