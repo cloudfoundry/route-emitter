@@ -13,12 +13,14 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega/gbytes"
 )
 
 var _ = Describe("NatsEmitter", func() {
 	var natsEmitter emitter.NATSEmitter
 	var natsClient *diegonats.FakeNATSClient
 	var fakeMetronClient *mfakes.FakeIngressClient
+	var logger *lagertest.TestLogger
 
 	messagesToEmit := routingtable.MessagesToEmit{
 		RegistrationMessages: []routingtable.RegistryMessage{
@@ -41,7 +43,7 @@ var _ = Describe("NatsEmitter", func() {
 
 	BeforeEach(func() {
 		natsClient = diegonats.NewFakeClient()
-		logger := lagertest.NewTestLogger("test")
+		logger = lagertest.NewTestLogger("test")
 		workPool, err := workpool.NewWorkPool(1)
 		Expect(err).NotTo(HaveOccurred())
 		fakeMetronClient = &mfakes.FakeIngressClient{}
@@ -143,10 +145,14 @@ var _ = Describe("NatsEmitter", func() {
         }
       `)))
 
-			Eventually(fakeMetronClient.IncrementCounterWithDeltaCallCount).Should(Equal(1))
+			Eventually(fakeMetronClient.IncrementCounterWithDeltaCallCount).Should(Equal(2))
 			name, delta := fakeMetronClient.IncrementCounterWithDeltaArgsForCall(0)
 			Expect(name).To(Equal("MessagesEmitted"))
 			Expect(delta).To(BeEquivalentTo(8))
+
+			name, delta = fakeMetronClient.IncrementCounterWithDeltaArgsForCall(1)
+			Expect(name).To(Equal("InternalRouteNATSMessagesEmitted"))
+			Expect(delta).To(BeEquivalentTo(4))
 		})
 
 		Context("when the nats emitter is configured to not emit internal routes", func() {
@@ -225,6 +231,20 @@ var _ = Describe("NatsEmitter", func() {
 
 			It("should error", func() {
 				Expect(natsEmitter.Emit(messagesToEmit)).To(MatchError(errors.New("bam")))
+			})
+		})
+
+		Context("when the metron client errors", func() {
+			BeforeEach(func() {
+				fakeMetronClient.IncrementCounterWithDeltaReturns(errors.New("boo"))
+			})
+
+			It("should log the error message", func() {
+				err := natsEmitter.Emit(messagesToEmit)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(logger).To(gbytes.Say("cannot-emit-number-of-messages.*boo"))
+				Expect(logger).To(gbytes.Say("cannot-emit-number-of-internal-messages.*boo"))
 			})
 		})
 	})
