@@ -25,7 +25,7 @@ func (mappings TCPRouteMappings) Merge(other TCPRouteMappings) TCPRouteMappings 
 	return result
 }
 
-const addressCollisions = "AddressCollisions"
+const addressCollisionsCounter = "AddressCollisions"
 
 //go:generate counterfeiter -o fakeroutingtable/fake_routingtable.go . RoutingTable
 
@@ -223,7 +223,7 @@ func (table *internalRoutingTable) AddEndpoint(actualLRP *ActualLRPRoutingInfo) 
 			address := table.addressGenerator(endpoint)
 			// if the address exists and the instance guid doesn't match then we have a collision
 			if existingEndpointKey, ok := table.addressEntries[address]; ok && existingEndpointKey.InstanceGUID != endpoint.InstanceGUID {
-				table.metronClient.IncrementCounter(addressCollisions)
+				table.metronClient.IncrementCounter(addressCollisionsCounter)
 				existingInstanceGuid := existingEndpointKey.InstanceGUID
 				table.logger.Info("collision-detected-with-endpoint", lager.Data{
 					"instance_guid_a": existingInstanceGuid,

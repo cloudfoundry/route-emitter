@@ -12,12 +12,12 @@ import (
 )
 
 const (
-	routesTotal        = "RoutesTotal"
-	routesSynced       = "RoutesSynced"
-	routesRegistered   = "RoutesRegistered"
-	routesUnregistered = "RoutesUnregistered"
-	httpRouteCount     = "HTTPRouteCount"
-	tcpRouteCount      = "TCPRouteCount"
+	routesTotalMetric         = "RoutesTotal"
+	routesSyncedCounter       = "RoutesSynced"
+	routesRegisteredCounter   = "RoutesRegistered"
+	routesUnregisteredCounter = "RoutesUnregistered"
+	httpRouteCount            = "HTTPRouteCount"
+	tcpRouteCount             = "TCPRouteCount"
 )
 
 type Handler struct {
@@ -86,11 +86,11 @@ func (handler *Handler) Emit(logger lager.Logger) {
 		}
 	}
 
-	err := handler.metronClient.IncrementCounterWithDelta(routesSynced, messagesToEmit.RouteRegistrationCount())
+	err := handler.metronClient.IncrementCounterWithDelta(routesSyncedCounter, messagesToEmit.RouteRegistrationCount())
 	if err != nil {
 		logger.Error("failed-send-routes-synced-count-metric", err)
 	}
-	err = handler.metronClient.SendMetric(routesTotal, handler.routingTable.HTTPAssociationsCount())
+	err = handler.metronClient.SendMetric(routesTotalMetric, handler.routingTable.HTTPAssociationsCount())
 	if err != nil {
 		logger.Error("failed-to-send-total-route-count-metric", err)
 	}
@@ -262,11 +262,11 @@ func (handler *Handler) emitMessages(logger lager.Logger, messagesToEmit routing
 		if err != nil {
 			logger.Error("failed-to-emit-http-routes", err)
 		}
-		err = handler.metronClient.IncrementCounterWithDelta(routesRegistered, messagesToEmit.RouteRegistrationCount())
+		err = handler.metronClient.IncrementCounterWithDelta(routesRegisteredCounter, messagesToEmit.RouteRegistrationCount())
 		if err != nil {
 			logger.Error("failed-to-emit-registration-message-count", err)
 		}
-		err = handler.metronClient.IncrementCounterWithDelta(routesUnregistered, messagesToEmit.RouteUnregistrationCount())
+		err = handler.metronClient.IncrementCounterWithDelta(routesUnregisteredCounter, messagesToEmit.RouteUnregistrationCount())
 		if err != nil {
 			logger.Error("failed-to-emit-unregistration-message-count", err)
 		}

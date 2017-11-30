@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	messagesEmitted = "MessagesEmitted"
+	messagesEmittedCounter = "MessagesEmitted"
 )
 
 //go:generate counterfeiter -o fakes/fake_nats_emitter.go . NATSEmitter
@@ -74,7 +74,7 @@ func (n *natsEmitter) Emit(messagesToEmit routingtable.MessagesToEmit) error {
 	default:
 	}
 
-	err := n.metronClient.IncrementCounterWithDelta(messagesEmitted, numberOfMessages)
+	err := n.metronClient.IncrementCounterWithDelta(messagesEmittedCounter, numberOfMessages)
 	if err != nil {
 		n.logger.Error("cannot-emit-number-of-messages", err)
 	}
