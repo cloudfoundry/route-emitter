@@ -448,6 +448,96 @@ var _ = Describe("Route Emitter", func() {
 				Expect(runner).To(gbytes.Say("creating-noop-uaa-client"))
 			})
 
+			// see https://www.pivotaltracker.com/story/show/153220372
+			FContext("and the initial sync loop is finished", func() {
+				var (
+					processGUID string
+					desiredLRP  models.DesiredLRP
+					fakeBBS     *httptest.Server
+					blkChannel  chan struct{}
+				)
+
+				BeforeEach(func() {
+					processGUID = "some-guid"
+					desiredLRP = getDesiredLRP(processGUID, routerGUID, 5222, 5222)
+					blkChannel = make(chan struct{}, 1)
+					atomic.StoreUint64(&emitInterval, uint64(time.Hour))
+
+					proxy := httputil.NewSingleHostReverseProxy(bbsURL)
+					proxy.FlushInterval = 100 * time.Millisecond
+					fakeBBS = httptest.NewUnstartedServer(
+						http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+							if r.URL.Path == "/v1/domains/list" {
+								By("blocking the sync loop")
+								<-blkChannel
+							}
+							proxy.ServeHTTP(w, r)
+						}),
+					)
+
+					fakeBBS.Start()
+					cfgs = append(cfgs, func(cfg *config.RouteEmitterConfig) {
+						cfg.BBSAddress = fakeBBS.URL
+						cfg.RoutingAPI.URL = "http://127.0.0.1"
+						cfg.RoutingAPI.Port = routingAPIRunner.Config.Port
+						cfg.CommunicationTimeout = durationjson.Duration(5 * time.Second)
+					})
+
+					desiredLRP.Instances = 1
+
+					startCheck = "succeeded-getting-actual-lrps"
+
+					cellID = "cell-id"
+				})
+
+				JustBeforeEach(func() {
+					Expect(bbsClient.UpsertDomain(logger, domain, time.Hour)).To(Succeed())
+					Eventually(blkChannel).Should(BeSent(struct{}{}))
+					Eventually(runner).Should(gbytes.Say("sync.complete"))
+				})
+
+				Context("then a desired lrp event is received", func() {
+					JustBeforeEach(func() {
+						Expect(bbsClient.DesireLRP(logger, &desiredLRP)).NotTo(HaveOccurred())
+						Eventually(runner).Should(gbytes.Say("handling.event"))
+					})
+
+					Context("an actual lrp created event is received during sync", func() {
+						It("should emit a route registration", func() {
+							By("waiting for the sync loop to start")
+							Eventually(runner).Should(gbytes.Say("succeeded-getting-actual-lrps"))
+							lrpKey = models.NewActualLRPKey(processGUID, 0, domain)
+							instanceKey = models.NewActualLRPInstanceKey("instance-guid", "cell-id")
+							netInfo = models.NewActualLRPNetInfo("some-ip", "container-ip", models.NewPortMapping(5222, 5222))
+							Expect(bbsClient.StartActualLRP(logger, &lrpKey, &instanceKey, &netInfo)).To(Succeed())
+							Eventually(runner).Should(gbytes.Say("caching-event"))
+
+							By("unblocking the sync loop")
+							Eventually(blkChannel).Should(BeSent(struct{}{}))
+
+							expectedTcpRouteMapping = apimodels.NewTcpRouteMapping(routerGUID, 5222, "some-ip", 5222, 120)
+
+							Eventually(func() bool {
+								mappings, _ := routingAPIRunner.GetClient().TcpRouteMappings()
+								return contains(mappings, expectedTcpRouteMapping)
+							}, 5*time.Second).Should(BeTrue())
+						})
+
+						AfterEach(func() {
+							// ensure the channel is closed
+							select {
+							case <-blkChannel:
+							default:
+								close(blkChannel)
+							}
+
+							fakeBBS.CloseClientConnections()
+							fakeBBS.Close()
+						})
+					})
+				})
+			})
+
 			Context("and an lrp with routes is desired", func() {
 				var (
 					expectedTCPProcessGUID string
