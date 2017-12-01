@@ -875,8 +875,12 @@ var _ = Describe("Watcher", func() {
 
 					Context("and fetching desired scheduling info fails", func() {
 						BeforeEach(func() {
-							bbsClient.DesiredLRPSchedulingInfosStub = func(lager.Logger, models.DesiredLRPFilter) ([]*models.DesiredLRPSchedulingInfo, error) {
-								return nil, errors.New("boom")
+							bbsClient.DesiredLRPSchedulingInfosStub = func(l lager.Logger, f models.DesiredLRPFilter) ([]*models.DesiredLRPSchedulingInfo, error) {
+								defer GinkgoRecover()
+								if len(f.ProcessGuids) == 1 && f.ProcessGuids[0] == "pg-3" {
+									return nil, errors.New("boom!")
+								}
+								return []*models.DesiredLRPSchedulingInfo{}, nil
 							}
 						})
 
@@ -896,8 +900,12 @@ var _ = Describe("Watcher", func() {
 							Eventually(logger).Should(gbytes.Say("caching-event"))
 							return []*models.ActualLRPGroup{actualLRPGroup1}, nil
 						}
-						bbsClient.DesiredLRPSchedulingInfosStub = func(lager.Logger, models.DesiredLRPFilter) ([]*models.DesiredLRPSchedulingInfo, error) {
-							return nil, errors.New("blam")
+						bbsClient.DesiredLRPSchedulingInfosStub = func(l lager.Logger, f models.DesiredLRPFilter) ([]*models.DesiredLRPSchedulingInfo, error) {
+							defer GinkgoRecover()
+							if len(f.ProcessGuids) == 1 && f.ProcessGuids[0] == "pg-3" {
+								return nil, errors.New("boom!")
+							}
+							return []*models.DesiredLRPSchedulingInfo{}, nil
 						}
 					})
 

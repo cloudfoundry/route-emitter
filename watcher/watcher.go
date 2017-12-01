@@ -115,17 +115,17 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 		case syncEvent := <-syncEnd:
 			syncing = false
 			logger := watcher.logger.Session("sync")
-			var cachedDesired []*models.DesiredLRPSchedulingInfo
-			for _, e := range cachedEvents {
-				desired := watcher.retrieveDesired(logger, e)
-				if len(desired) > 0 {
-					cachedDesired = append(cachedDesired, desired...)
-				}
-			}
-
 			if syncEvent.err != nil {
 				logger.Error("failed-to-sync-events", syncEvent.err)
 				continue
+			}
+
+			var cachedDesired []*models.DesiredLRPSchedulingInfo
+			for _, e := range cachedEvents {
+				desired := watcher.retrieveDesiredWhileSyncing(logger, e, syncEvent.desired)
+				if len(desired) > 0 {
+					cachedDesired = append(cachedDesired, desired...)
+				}
 			}
 
 			if len(cachedDesired) > 0 {
@@ -200,7 +200,7 @@ func (w *Watcher) cacheIncomingEvents(
 	}
 }
 
-func (w *Watcher) retrieveDesired(logger lager.Logger, event models.Event) []*models.DesiredLRPSchedulingInfo {
+func (w *Watcher) retrieveDesiredInternal(logger lager.Logger, event models.Event, currentDesireds []*models.DesiredLRPSchedulingInfo, syncing bool) []*models.DesiredLRPSchedulingInfo {
 	var routingInfo *routingtable.ActualLRPRoutingInfo
 	switch event := event.(type) {
 	case *models.ActualLRPCreatedEvent:
@@ -212,7 +212,7 @@ func (w *Watcher) retrieveDesired(logger lager.Logger, event models.Event) []*mo
 	var desiredLRPs []*models.DesiredLRPSchedulingInfo
 	var err error
 	if routingInfo != nil && routingInfo.ActualLRP.State == models.ActualLRPStateRunning {
-		if w.routeHandler.ShouldRefreshDesired(routingInfo) {
+		if w.routeHandler.ShouldRefreshDesired(routingInfo) || (syncing && !foundInCurrentDesireds(routingInfo.ActualLRP.ProcessGuid, currentDesireds)) {
 			logger.Info("refreshing-desired-lrp-info", lager.Data{"process-guid": routingInfo.ActualLRP.ProcessGuid})
 			desiredLRPs, err = w.bbsClient.DesiredLRPSchedulingInfos(logger, models.DesiredLRPFilter{
 				ProcessGuids: []string{routingInfo.ActualLRP.ProcessGuid},
@@ -224,6 +224,24 @@ func (w *Watcher) retrieveDesired(logger lager.Logger, event models.Event) []*mo
 	}
 
 	return desiredLRPs
+}
+
+func (w *Watcher) retrieveDesired(logger lager.Logger, event models.Event) []*models.DesiredLRPSchedulingInfo {
+	return w.retrieveDesiredInternal(logger, event, nil, false)
+}
+
+func (w *Watcher) retrieveDesiredWhileSyncing(logger lager.Logger, event models.Event, currentDesireds []*models.DesiredLRPSchedulingInfo) []*models.DesiredLRPSchedulingInfo {
+	return w.retrieveDesiredInternal(logger, event, currentDesireds, true)
+}
+
+func foundInCurrentDesireds(guid string, currentDesireds []*models.DesiredLRPSchedulingInfo) bool {
+	for _, d := range currentDesireds {
+		if d.ProcessGuid == guid {
+			return true
+		}
+	}
+
+	return false
 }
 
 func (w *Watcher) handleEvent(logger lager.Logger, event models.Event) {
