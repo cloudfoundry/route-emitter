@@ -12,8 +12,8 @@ import (
 )
 
 const (
-	messagesEmittedCounter           = "MessagesEmitted"
-	internalRouteNATSMessagesEmitted = "InternalRouteNATSMessagesEmitted"
+	messagesEmittedCounter                  = "MessagesEmitted"
+	internalRouteNATSMessagesEmittedCounter = "InternalRouteNATSMessagesEmitted"
 )
 
 //go:generate counterfeiter -o fakes/fake_nats_emitter.go . NATSEmitter
@@ -83,7 +83,7 @@ func (n *natsEmitter) Emit(messagesToEmit routingtable.MessagesToEmit) error {
 	}
 
 	if n.emitInternalRoutes {
-		err := n.metronClient.IncrementCounterWithDelta(internalRouteNATSMessagesEmitted, numberOfInternalMessages)
+		err := n.metronClient.IncrementCounterWithDelta(internalRouteNATSMessagesEmittedCounter, numberOfInternalMessages)
 		if err != nil {
 			n.logger.Error("cannot-emit-number-of-internal-messages", err)
 		}
