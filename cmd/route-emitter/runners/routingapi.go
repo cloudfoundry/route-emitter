@@ -10,7 +10,6 @@ import (
 
 	"gopkg.in/yaml.v2"
 
-	"code.cloudfoundry.org/localip"
 	"code.cloudfoundry.org/routing-api"
 	apiconfig "code.cloudfoundry.org/routing-api/config"
 	"code.cloudfoundry.org/routing-api/models"
@@ -37,14 +36,9 @@ type SQLConfig struct {
 	Password   string
 }
 
-func NewRoutingAPIRunner(binPath, consulURL string, adminPort int, sqlConfig SQLConfig, fs ...func(*Config)) (*RoutingAPIRunner, error) {
-	port, err := localip.LocalPort()
-	if err != nil {
-		return nil, err
-	}
-
+func NewRoutingAPIRunner(binPath, consulURL string, port, adminPort int, sqlConfig SQLConfig, fs ...func(*Config)) (*RoutingAPIRunner, error) {
 	cfg := Config{
-		Port:    int(port),
+		Port:    port,
 		DevMode: true,
 		Config: apiconfig.Config{
 			AdminPort: adminPort,

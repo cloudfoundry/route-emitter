@@ -191,8 +191,11 @@ var _ = Describe("Route Emitter", func() {
 			Username:   sqlRunner.Username(),
 			Password:   sqlRunner.Password(),
 		}
-		adminPort := 10000 + GinkgoParallelNode()
-		routingAPIRunner, err = runners.NewRoutingAPIRunner(routingAPIPath, consulRunner.URL(), adminPort, sqlConfig, func(cfg *runners.Config) {
+
+		port, err := portAllocator.ClaimPorts(2)
+		Expect(err).NotTo(HaveOccurred())
+
+		routingAPIRunner, err = runners.NewRoutingAPIRunner(routingAPIPath, consulRunner.URL(), int(port), int(port+1), sqlConfig, func(cfg *runners.Config) {
 			cfg.ConsulCluster.LockTTL = 5 * time.Second
 		})
 
@@ -1239,8 +1242,11 @@ var _ = Describe("Route Emitter", func() {
 			)
 
 			BeforeEach(func() {
+				port, err := portAllocator.ClaimPorts(1)
+				Expect(err).NotTo(HaveOccurred())
+
 				secondEmitterConfig = append(cfgs, func(cfg *config.RouteEmitterConfig) {
-					cfg.HealthCheckAddress = fmt.Sprintf("127.0.0.1:%d", 4600+GinkgoParallelNode())
+					cfg.HealthCheckAddress = fmt.Sprintf("127.0.0.1:%d", port)
 				})
 				secondRunner = createEmitterRunner("emitter2", "", secondEmitterConfig...)
 				secondRunner.StartCheck = "consul-lock.acquiring-lock"
@@ -1262,9 +1268,11 @@ var _ = Describe("Route Emitter", func() {
 
 				Context("runs in local mode", func() {
 					BeforeEach(func() {
+						port, err := portAllocator.ClaimPorts(1)
+						Expect(err).NotTo(HaveOccurred())
 						secondEmitterConfig = append(cfgs, func(cfg *config.RouteEmitterConfig) {
 							cfg.ConsulCluster = ""
-							cfg.HealthCheckAddress = fmt.Sprintf("127.0.0.1:%d", 4600+GinkgoParallelNode())
+							cfg.HealthCheckAddress = fmt.Sprintf("127.0.0.1:%d", port)
 						})
 						secondRunner = createEmitterRunner("emitter2", "some-cell-id", secondEmitterConfig...)
 						secondRunner.StartCheck = "emitter2.watcher.sync.complete"

@@ -15,6 +15,7 @@ import (
 
 	"code.cloudfoundry.org/cfhttp"
 	"code.cloudfoundry.org/diego-logging-client/testhelpers"
+	"code.cloudfoundry.org/inigo/helpers/portauthority"
 	"code.cloudfoundry.org/lager/lagertest"
 	"code.cloudfoundry.org/route-emitter/cmd/route-emitter/config"
 	"code.cloudfoundry.org/route-emitter/diegonats"
@@ -43,7 +44,7 @@ var (
 	cfgs []func(*config.RouteEmitterConfig)
 
 	emitterPath        string
-	natsPort           int
+	natsPort           uint16
 	healthCheckPort    int
 	healthCheckAddress string
 
@@ -72,6 +73,8 @@ var (
 	bbsRunning        = false
 	useLoggregatorV2  bool
 	testIngressServer *testhelpers.TestIngressServer
+
+	portAllocator portauthority.PortAllocator
 )
 
 func TestRouteEmitter(t *testing.T) {
@@ -107,30 +110,42 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 	err := json.Unmarshal(payload, &binaries)
 	Expect(err).NotTo(HaveOccurred())
 
-	natsPort = 4001 + GinkgoParallelNode()
-
 	emitterPath = string(binaries["emitter"])
 
 	dbName := fmt.Sprintf("diego_%d", GinkgoParallelNode())
 	sqlRunner = test_helpers.NewSQLRunner(dbName)
 
+	node := GinkgoParallelNode()
+	startPort := 1050 * node // make sure we don't conflict with etcd ports 4000+GinkgoParallelNode & 7000+GinkgoParallelNode (4000,7000,40001,70001...)
+	portRange := 1000
+	endPort := startPort + portRange*(node+1)
+
+	portAllocator, err = portauthority.New(startPort, endPort)
+	Expect(err).NotTo(HaveOccurred())
+
+	port, err := portAllocator.ClaimPorts(consulrunner.PortOffsetLength)
+	Expect(err).NotTo(HaveOccurred())
+
 	consulRunner = consulrunner.NewClusterRunner(
 		consulrunner.ClusterRunnerConfig{
-			StartingPort: 9001 + GinkgoParallelNode()*consulrunner.PortOffsetLength,
+			StartingPort: int(port),
 			NumNodes:     1,
 			Scheme:       "http",
 		},
 	)
+
+	natsPort, err = portAllocator.ClaimPorts(1)
+	Expect(err).NotTo(HaveOccurred())
 
 	logger = lagertest.NewTestLogger("test")
 
 	syncInterval = 200 * time.Millisecond
 
 	bbsPath = string(binaries["bbs"])
-	bbsPort := 13000 + GinkgoParallelNode()*2
-	bbsHealthPort := bbsPort + 1
+	bbsPort, err := portAllocator.ClaimPorts(2)
+	Expect(err).NotTo(HaveOccurred())
 	bbsAddress := fmt.Sprintf("127.0.0.1:%d", bbsPort)
-	bbsHealthAddress := fmt.Sprintf("127.0.0.1:%d", bbsHealthPort)
+	bbsHealthAddress := fmt.Sprintf("127.0.0.1:%d", bbsPort+1)
 	routingAPIPath = string(binaries["routing-api"])
 
 	bbsURL = &url.URL{
@@ -204,11 +219,12 @@ var _ = BeforeEach(func() {
 
 	startBBS()
 
-	gnatsdRunner, natsClient = gnatsdrunner.StartGnatsd(natsPort)
+	gnatsdRunner, natsClient = gnatsdrunner.StartGnatsd(int(natsPort))
 
 	testMetricsChan = make(chan interface{}, 10)
 
-	healthCheckPort = 4500 + GinkgoParallelNode()
+	healthCheckPort, err := portAllocator.ClaimPorts(1)
+	Expect(err).NotTo(HaveOccurred())
 	healthCheckAddress = fmt.Sprintf("127.0.0.1:%d", healthCheckPort)
 })
 
