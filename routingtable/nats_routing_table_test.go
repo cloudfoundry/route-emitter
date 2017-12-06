@@ -46,6 +46,7 @@ var _ = Describe("RoutingTable", func() {
 		Port:            11,
 		ContainerPort:   8080,
 		Evacuating:      false,
+		Since:           1,
 		ModificationTag: currentTag,
 	}
 	endpoint2 := routingtable.Endpoint{
@@ -56,6 +57,7 @@ var _ = Describe("RoutingTable", func() {
 		Port:            22,
 		ContainerPort:   8080,
 		Evacuating:      false,
+		Since:           2,
 		ModificationTag: currentTag,
 	}
 	endpoint3 := routingtable.Endpoint{
@@ -66,6 +68,7 @@ var _ = Describe("RoutingTable", func() {
 		Port:            33,
 		ContainerPort:   8080,
 		Evacuating:      false,
+		Since:           3,
 		ModificationTag: currentTag,
 	}
 	collisionEndpoint := routingtable.Endpoint{
@@ -224,6 +227,7 @@ var _ = Describe("RoutingTable", func() {
 							IsolationSegment: "",
 							Tags:             map[string]string{"component": "route-emitter"},
 
+							EndpointUpdatedAtNs:  endpoint1.Since,
 							ServerCertDomainSAN:  "ig-1",
 							PrivateInstanceId:    "ig-1",
 							PrivateInstanceIndex: "0",
@@ -243,12 +247,13 @@ var _ = Describe("RoutingTable", func() {
 					expected := routingtable.MessagesToEmit{
 						UnregistrationMessages: []routingtable.RegistryMessage{
 							{
-								URIs:             []string{hostname1},
-								Host:             "1.2.3.4",
-								Port:             8080,
-								App:              logGuid,
-								IsolationSegment: "",
-								Tags:             map[string]string{"component": "route-emitter"},
+								URIs:                []string{hostname1},
+								Host:                "1.2.3.4",
+								Port:                8080,
+								App:                 logGuid,
+								IsolationSegment:    "",
+								EndpointUpdatedAtNs: endpoint1.Since,
+								Tags:                map[string]string{"component": "route-emitter"},
 
 								ServerCertDomainSAN:  "ig-1",
 								PrivateInstanceId:    "ig-1",
@@ -298,6 +303,7 @@ var _ = Describe("RoutingTable", func() {
 							Tags: map[string]string{
 								"component": "route-emitter",
 							},
+							EndpointUpdatedAtNs:  endpoint1.Since,
 							PrivateInstanceIndex: "0",
 							App:                  logGuid,
 						},
@@ -374,6 +380,7 @@ var _ = Describe("RoutingTable", func() {
 								URIs:                 []string{internalHostname1, fmt.Sprintf("%d.%s", 0, internalHostname1)},
 								PrivateInstanceIndex: "0",
 								App:                  logGuid,
+								EndpointUpdatedAtNs:  endpoint1.Since,
 								Tags: map[string]string{
 									"component": "route-emitter",
 								},
@@ -383,6 +390,7 @@ var _ = Describe("RoutingTable", func() {
 								URIs:                 []string{internalHostname1, fmt.Sprintf("%d.%s", 1, internalHostname1)},
 								PrivateInstanceIndex: "1",
 								App:                  logGuid,
+								EndpointUpdatedAtNs:  endpoint2.Since,
 								Tags: map[string]string{
 									"component": "route-emitter",
 								},
@@ -429,6 +437,7 @@ var _ = Describe("RoutingTable", func() {
 									URIs:                 []string{internalHostname1, fmt.Sprintf("%d.%s", 0, internalHostname1)},
 									PrivateInstanceIndex: "0",
 									App:                  logGuid,
+									EndpointUpdatedAtNs:  endpoint1.Since,
 									Tags: map[string]string{
 										"component": "route-emitter",
 									},
@@ -487,6 +496,7 @@ var _ = Describe("RoutingTable", func() {
 									URIs:                 []string{internalHostname1, fmt.Sprintf("%d.%s", 0, internalHostname1)},
 									PrivateInstanceIndex: "0",
 									App:                  logGuid,
+									EndpointUpdatedAtNs:  endpoint1.Since,
 									Tags: map[string]string{
 										"component": "route-emitter",
 									},
@@ -662,6 +672,7 @@ var _ = Describe("RoutingTable", func() {
 							URIs:                 []string{internalHostname1, fmt.Sprintf("%d.%s", 1, internalHostname1)},
 							PrivateInstanceIndex: "1",
 							App:                  logGuid,
+							EndpointUpdatedAtNs:  endpoint2.Since,
 							Tags: map[string]string{
 								"component": "route-emitter",
 							},
@@ -671,6 +682,7 @@ var _ = Describe("RoutingTable", func() {
 							URIs:                 []string{internalHostname1, fmt.Sprintf("%d.%s", 0, internalHostname1)},
 							PrivateInstanceIndex: "0",
 							App:                  logGuid,
+							EndpointUpdatedAtNs:  evacuating1.Since,
 							Tags: map[string]string{
 								"component": "route-emitter",
 							},
@@ -740,6 +752,7 @@ var _ = Describe("RoutingTable", func() {
 								URIs:                 []string{internalHostname2, fmt.Sprintf("%d.%s", 1, internalHostname2)},
 								PrivateInstanceIndex: "1",
 								App:                  logGuid,
+								EndpointUpdatedAtNs:  endpoint2.Since,
 								Tags: map[string]string{
 									"component": "route-emitter",
 								},
@@ -748,6 +761,7 @@ var _ = Describe("RoutingTable", func() {
 								Host:                 endpoint1.ContainerIP,
 								URIs:                 []string{internalHostname2, fmt.Sprintf("%d.%s", 0, internalHostname2)},
 								PrivateInstanceIndex: "0",
+								EndpointUpdatedAtNs:  endpoint1.Since,
 								App:                  logGuid,
 								Tags: map[string]string{
 									"component": "route-emitter",
@@ -819,6 +833,7 @@ var _ = Describe("RoutingTable", func() {
 								Host:                 endpoint3.ContainerIP,
 								URIs:                 []string{internalHostname1, fmt.Sprintf("%d.%s", 2, internalHostname1)},
 								PrivateInstanceIndex: "2",
+								EndpointUpdatedAtNs:  endpoint3.Since,
 								App:                  logGuid,
 								Tags: map[string]string{
 									"component": "route-emitter",
@@ -901,6 +916,7 @@ var _ = Describe("RoutingTable", func() {
 								URIs:                 []string{internalHostname1, fmt.Sprintf("%d.%s", 2, internalHostname1)},
 								PrivateInstanceIndex: "2",
 								App:                  logGuid,
+								EndpointUpdatedAtNs:  endpoint3.Since,
 								Tags: map[string]string{
 									"component": "route-emitter",
 								},
@@ -910,6 +926,7 @@ var _ = Describe("RoutingTable", func() {
 								URIs:                 []string{internalHostname2, fmt.Sprintf("%d.%s", 2, internalHostname2)},
 								PrivateInstanceIndex: "2",
 								App:                  logGuid,
+								EndpointUpdatedAtNs:  endpoint3.Since,
 								Tags: map[string]string{
 									"component": "route-emitter",
 								},
@@ -919,6 +936,7 @@ var _ = Describe("RoutingTable", func() {
 								URIs:                 []string{internalHostname2, fmt.Sprintf("%d.%s", 1, internalHostname2)},
 								PrivateInstanceIndex: "1",
 								App:                  logGuid,
+								EndpointUpdatedAtNs:  endpoint2.Since,
 								Tags: map[string]string{
 									"component": "route-emitter",
 								},
@@ -928,6 +946,7 @@ var _ = Describe("RoutingTable", func() {
 								URIs:                 []string{internalHostname2, fmt.Sprintf("%d.%s", 0, internalHostname2)},
 								PrivateInstanceIndex: "0",
 								App:                  logGuid,
+								EndpointUpdatedAtNs:  endpoint1.Since,
 								Tags: map[string]string{
 									"component": "route-emitter",
 								},
@@ -964,6 +983,7 @@ var _ = Describe("RoutingTable", func() {
 								URIs:                 []string{internalHostname1, fmt.Sprintf("%d.%s", 0, internalHostname1)},
 								PrivateInstanceIndex: "0",
 								App:                  logGuid,
+								EndpointUpdatedAtNs:  endpoint1.Since,
 								Tags: map[string]string{
 									"component": "route-emitter",
 								},
@@ -973,6 +993,7 @@ var _ = Describe("RoutingTable", func() {
 								URIs:                 []string{internalHostname1, fmt.Sprintf("%d.%s", 1, internalHostname1)},
 								PrivateInstanceIndex: "1",
 								App:                  logGuid,
+								EndpointUpdatedAtNs:  endpoint2.Since,
 								Tags: map[string]string{
 									"component": "route-emitter",
 								},
@@ -1007,6 +1028,7 @@ var _ = Describe("RoutingTable", func() {
 								URIs:                 []string{internalHostname1, fmt.Sprintf("%d.%s", 1, internalHostname1)},
 								PrivateInstanceIndex: "1",
 								App:                  logGuid,
+								EndpointUpdatedAtNs:  endpoint2.Since,
 								Tags: map[string]string{
 									"component": "route-emitter",
 								},
@@ -1042,6 +1064,7 @@ var _ = Describe("RoutingTable", func() {
 								URIs:                 []string{internalHostname1, fmt.Sprintf("%d.%s", 0, internalHostname1)},
 								PrivateInstanceIndex: "0",
 								App:                  logGuid,
+								EndpointUpdatedAtNs:  endpoint1.Since,
 								Tags: map[string]string{
 									"component": "route-emitter",
 								},
@@ -1051,6 +1074,7 @@ var _ = Describe("RoutingTable", func() {
 								URIs:                 []string{internalHostname1, fmt.Sprintf("%d.%s", 1, internalHostname1)},
 								PrivateInstanceIndex: "1",
 								App:                  logGuid,
+								EndpointUpdatedAtNs:  endpoint2.Since,
 								Tags: map[string]string{
 									"component": "route-emitter",
 								},
@@ -1088,6 +1112,7 @@ var _ = Describe("RoutingTable", func() {
 								URIs:                 []string{internalHostname2, fmt.Sprintf("%d.%s", 0, internalHostname2)},
 								PrivateInstanceIndex: "0",
 								App:                  logGuid,
+								EndpointUpdatedAtNs:  endpoint1.Since,
 								Tags: map[string]string{
 									"component": "route-emitter",
 								},
@@ -1099,6 +1124,7 @@ var _ = Describe("RoutingTable", func() {
 								URIs:                 []string{internalHostname1, fmt.Sprintf("%d.%s", 1, internalHostname1)},
 								PrivateInstanceIndex: "1",
 								App:                  logGuid,
+								EndpointUpdatedAtNs:  endpoint2.Since,
 								Tags: map[string]string{
 									"component": "route-emitter",
 								},
@@ -1140,6 +1166,7 @@ var _ = Describe("RoutingTable", func() {
 								URIs:                 []string{internalHostname1, fmt.Sprintf("%d.%s", 1, internalHostname1)},
 								PrivateInstanceIndex: "1",
 								App:                  logGuid,
+								EndpointUpdatedAtNs:  endpoint2.Since,
 								Tags: map[string]string{
 									"component": "route-emitter",
 								},
@@ -1149,6 +1176,7 @@ var _ = Describe("RoutingTable", func() {
 								URIs:                 []string{internalHostname1, fmt.Sprintf("%d.%s", 0, internalHostname1)},
 								PrivateInstanceIndex: "0",
 								App:                  logGuid,
+								EndpointUpdatedAtNs:  endpoint1.Since,
 								Tags: map[string]string{
 									"component": "route-emitter",
 								},
@@ -1190,6 +1218,7 @@ var _ = Describe("RoutingTable", func() {
 									URIs:                 []string{internalHostname1, fmt.Sprintf("%d.%s", 1, internalHostname1)},
 									PrivateInstanceIndex: "1",
 									App:                  logGuid,
+									EndpointUpdatedAtNs:  endpoint2.Since,
 									Tags: map[string]string{
 										"component": "route-emitter",
 									},
@@ -1199,6 +1228,7 @@ var _ = Describe("RoutingTable", func() {
 									URIs:                 []string{internalHostname1, fmt.Sprintf("%d.%s", 0, internalHostname1)},
 									PrivateInstanceIndex: "0",
 									App:                  logGuid,
+									EndpointUpdatedAtNs:  endpoint1.Since,
 									Tags: map[string]string{
 										"component": "route-emitter",
 									},
@@ -1228,6 +1258,7 @@ var _ = Describe("RoutingTable", func() {
 									URIs:                 []string{internalHostname1, fmt.Sprintf("%d.%s", 1, internalHostname1)},
 									PrivateInstanceIndex: "1",
 									App:                  logGuid,
+									EndpointUpdatedAtNs:  endpoint2.Since,
 									Tags: map[string]string{
 										"component": "route-emitter",
 									},
@@ -1237,6 +1268,7 @@ var _ = Describe("RoutingTable", func() {
 									URIs:                 []string{internalHostname1, fmt.Sprintf("%d.%s", 0, internalHostname1)},
 									PrivateInstanceIndex: "0",
 									App:                  logGuid,
+									EndpointUpdatedAtNs:  endpoint1.Since,
 									Tags: map[string]string{
 										"component": "route-emitter",
 									},
@@ -1447,6 +1479,7 @@ var _ = Describe("RoutingTable", func() {
 								URIs:                 []string{internalHostname1, fmt.Sprintf("%d.%s", 1, internalHostname1)},
 								PrivateInstanceIndex: "1",
 								App:                  logGuid,
+								EndpointUpdatedAtNs:  endpoint2.Since,
 								Tags: map[string]string{
 									"component": "route-emitter",
 								},
@@ -1456,6 +1489,7 @@ var _ = Describe("RoutingTable", func() {
 								URIs:                 []string{internalHostname1, fmt.Sprintf("%d.%s", 0, internalHostname1)},
 								PrivateInstanceIndex: "0",
 								App:                  logGuid,
+								EndpointUpdatedAtNs:  endpoint1.Since,
 								Tags: map[string]string{
 									"component": "route-emitter",
 								},
@@ -1491,6 +1525,7 @@ var _ = Describe("RoutingTable", func() {
 								URIs:                 []string{internalHostname2, fmt.Sprintf("%d.%s", 1, internalHostname2)},
 								PrivateInstanceIndex: "1",
 								App:                  logGuid,
+								EndpointUpdatedAtNs:  endpoint2.Since,
 								Tags: map[string]string{
 									"component": "route-emitter",
 								},
@@ -1500,6 +1535,7 @@ var _ = Describe("RoutingTable", func() {
 								URIs:                 []string{internalHostname2, fmt.Sprintf("%d.%s", 0, internalHostname2)},
 								PrivateInstanceIndex: "0",
 								App:                  logGuid,
+								EndpointUpdatedAtNs:  endpoint1.Since,
 								Tags: map[string]string{
 									"component": "route-emitter",
 								},
@@ -1511,6 +1547,7 @@ var _ = Describe("RoutingTable", func() {
 								URIs:                 []string{internalHostname1, fmt.Sprintf("%d.%s", 1, internalHostname1)},
 								PrivateInstanceIndex: "1",
 								App:                  logGuid,
+								EndpointUpdatedAtNs:  endpoint2.Since,
 								Tags: map[string]string{
 									"component": "route-emitter",
 								},
@@ -1520,6 +1557,7 @@ var _ = Describe("RoutingTable", func() {
 								URIs:                 []string{internalHostname1, fmt.Sprintf("%d.%s", 0, internalHostname1)},
 								PrivateInstanceIndex: "0",
 								App:                  logGuid,
+								EndpointUpdatedAtNs:  endpoint1.Since,
 								Tags: map[string]string{
 									"component": "route-emitter",
 								},
@@ -1549,6 +1587,7 @@ var _ = Describe("RoutingTable", func() {
 								URIs:                 []string{internalHostname1, fmt.Sprintf("%d.%s", 1, internalHostname1)},
 								PrivateInstanceIndex: "1",
 								App:                  logGuid,
+								EndpointUpdatedAtNs:  endpoint2.Since,
 								Tags: map[string]string{
 									"component": "route-emitter",
 								},
@@ -1558,6 +1597,7 @@ var _ = Describe("RoutingTable", func() {
 								URIs:                 []string{internalHostname1, fmt.Sprintf("%d.%s", 0, internalHostname1)},
 								PrivateInstanceIndex: "0",
 								App:                  logGuid,
+								EndpointUpdatedAtNs:  endpoint1.Since,
 								Tags: map[string]string{
 									"component": "route-emitter",
 								},
@@ -1593,6 +1633,7 @@ var _ = Describe("RoutingTable", func() {
 								URIs:                 []string{internalHostname1, fmt.Sprintf("%d.%s", 1, internalHostname1)},
 								PrivateInstanceIndex: "1",
 								App:                  logGuid,
+								EndpointUpdatedAtNs:  endpoint2.Since,
 								Tags: map[string]string{
 									"component": "route-emitter",
 								},
@@ -1602,6 +1643,7 @@ var _ = Describe("RoutingTable", func() {
 								URIs:                 []string{internalHostname1, fmt.Sprintf("%d.%s", 0, internalHostname1)},
 								PrivateInstanceIndex: "0",
 								App:                  logGuid,
+								EndpointUpdatedAtNs:  endpoint1.Since,
 								Tags: map[string]string{
 									"component": "route-emitter",
 								},
@@ -1675,6 +1717,7 @@ var _ = Describe("RoutingTable", func() {
 								URIs:                 []string{internalHostname1, fmt.Sprintf("%d.%s", 2, internalHostname1)},
 								PrivateInstanceIndex: "2",
 								App:                  logGuid,
+								EndpointUpdatedAtNs:  endpoint3.Since,
 								Tags: map[string]string{
 									"component": "route-emitter",
 								},
@@ -1770,6 +1813,7 @@ var _ = Describe("RoutingTable", func() {
 								URIs:                 []string{internalHostname, fmt.Sprintf("%d.%s", 2, internalHostname)},
 								PrivateInstanceIndex: "2",
 								App:                  logGuid,
+								EndpointUpdatedAtNs:  endpoint3.Since,
 								Tags: map[string]string{
 									"component": "route-emitter",
 								},
@@ -1853,6 +1897,7 @@ var _ = Describe("RoutingTable", func() {
 								URIs:                 []string{internalHostname1, fmt.Sprintf("%d.%s", 1, internalHostname1)},
 								PrivateInstanceIndex: "1",
 								App:                  logGuid,
+								EndpointUpdatedAtNs:  endpoint2.Since,
 								Tags: map[string]string{
 									"component": "route-emitter",
 								},
@@ -1879,6 +1924,7 @@ var _ = Describe("RoutingTable", func() {
 								URIs:                 []string{internalHostname1, fmt.Sprintf("%d.%s", 1, internalHostname1)},
 								PrivateInstanceIndex: "1",
 								App:                  logGuid,
+								EndpointUpdatedAtNs:  endpoint2.Since,
 								Tags: map[string]string{
 									"component": "route-emitter",
 								},
@@ -1918,6 +1964,7 @@ var _ = Describe("RoutingTable", func() {
 									URIs:                 []string{internalHostname1, fmt.Sprintf("%d.%s", 0, internalHostname1)},
 									PrivateInstanceIndex: "0",
 									App:                  logGuid,
+									EndpointUpdatedAtNs:  endpoint1.Since,
 									Tags: map[string]string{
 										"component": "route-emitter",
 									},
@@ -1940,6 +1987,7 @@ var _ = Describe("RoutingTable", func() {
 					BeforeEach(func() {
 						lrp1 := createActualLRP(key, evacuating1, domain)
 						_, messagesToEmit := table.AddEndpoint(lrp1)
+
 						Expect(messagesToEmit).To(BeZero())
 					})
 
@@ -2128,6 +2176,7 @@ var _ = Describe("RoutingTable", func() {
 							URIs:                 []string{internalHostname1, fmt.Sprintf("%d.%s", 1, internalHostname1)},
 							PrivateInstanceIndex: "1",
 							App:                  logGuid,
+							EndpointUpdatedAtNs:  endpoint2.Since,
 							Tags: map[string]string{
 								"component": "route-emitter",
 							},
@@ -2137,6 +2186,7 @@ var _ = Describe("RoutingTable", func() {
 							URIs:                 []string{internalHostname1, fmt.Sprintf("%d.%s", 0, internalHostname1)},
 							PrivateInstanceIndex: "0",
 							App:                  logGuid,
+							EndpointUpdatedAtNs:  endpoint1.Since,
 							Tags: map[string]string{
 								"component": "route-emitter",
 							},

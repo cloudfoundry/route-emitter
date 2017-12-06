@@ -42,6 +42,7 @@ type Endpoint struct {
 	ContainerTlsProxyPort uint32
 	Evacuating            bool
 	IsolationSegment      string
+	Since                 int64
 	ModificationTag       *models.ModificationTag
 }
 
@@ -200,6 +201,7 @@ func NewEndpointsFromActual(actualLRPInfo *ActualLRPRoutingInfo) []Endpoint {
 				ModificationTag:       &actual.ModificationTag,
 				TlsProxyPort:          portMapping.HostTlsProxyPort,
 				ContainerTlsProxyPort: portMapping.ContainerTlsProxyPort,
+				Since: actual.Since,
 			}
 			endpoints = append(endpoints, endpoint)
 		}

@@ -1,6 +1,8 @@
 package routingtable
 
-import "fmt"
+import (
+	"fmt"
+)
 
 type RegistryMessage struct {
 	Host                 string            `json:"host"`
@@ -13,6 +15,7 @@ type RegistryMessage struct {
 	PrivateInstanceIndex string            `json:"private_instance_index,omitempty"`
 	ServerCertDomainSAN  string            `json:"server_cert_domain_san,omitempty"`
 	IsolationSegment     string            `json:"isolation_segment,omitempty"`
+	EndpointUpdatedAtNs  int64             `json:"endpoint_updated_at_ns,omitempty"`
 	Tags                 map[string]string `json:"tags,omitempty"`
 }
 
@@ -22,13 +25,14 @@ func RegistryMessageFor(endpoint Endpoint, route Route) RegistryMessage {
 		index = fmt.Sprintf("%d", endpoint.Index)
 	}
 	return RegistryMessage{
-		URIs:             []string{route.Hostname},
-		Host:             endpoint.Host,
-		Port:             endpoint.Port,
-		TlsPort:          endpoint.TlsProxyPort,
-		App:              route.LogGUID,
-		IsolationSegment: route.IsolationSegment,
-		Tags:             map[string]string{"component": "route-emitter"},
+		URIs:                []string{route.Hostname},
+		Host:                endpoint.Host,
+		Port:                endpoint.Port,
+		TlsPort:             endpoint.TlsProxyPort,
+		App:                 route.LogGUID,
+		IsolationSegment:    route.IsolationSegment,
+		Tags:                map[string]string{"component": "route-emitter"},
+		EndpointUpdatedAtNs: endpoint.Since,
 
 		PrivateInstanceId:    endpoint.InstanceGUID,
 		PrivateInstanceIndex: index,
@@ -54,6 +58,7 @@ func InternalAddressRegistryMessageFor(endpoint Endpoint, route Route) RegistryM
 		ServerCertDomainSAN:  endpoint.InstanceGUID,
 		PrivateInstanceId:    endpoint.InstanceGUID,
 		PrivateInstanceIndex: index,
+		EndpointUpdatedAtNs:  endpoint.Since,
 		RouteServiceUrl:      route.RouteServiceUrl,
 	}
 }
@@ -65,10 +70,11 @@ func InternalEndpointRegistryMessageFor(endpoint Endpoint, route InternalRoute) 
 		index = fmt.Sprintf("%d", endpoint.Index)
 	}
 	return RegistryMessage{
-		URIs: []string{route.Hostname, fmt.Sprintf("%s.%s", index, route.Hostname)},
-		Host: endpoint.ContainerIP,
-		App:  route.LogGUID,
-		Tags: map[string]string{"component": "route-emitter"},
+		URIs:                []string{route.Hostname, fmt.Sprintf("%s.%s", index, route.Hostname)},
+		Host:                endpoint.ContainerIP,
+		App:                 route.LogGUID,
+		Tags:                map[string]string{"component": "route-emitter"},
+		EndpointUpdatedAtNs: endpoint.Since,
 
 		PrivateInstanceIndex: index,
 	}

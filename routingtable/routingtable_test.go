@@ -107,6 +107,7 @@ func createActualLRP(
 				portMapping,
 			),
 			State:           models.ActualLRPStateRunning,
+			Since:           instance.Since,
 			ModificationTag: *instance.ModificationTag,
 		},
 		Evacuating: instance.Evacuating,
@@ -129,6 +130,7 @@ func createActualLRPWithPortMappings(
 				instance.ContainerIP,
 				ports...,
 			),
+			Since:           instance.Since,
 			State:           models.ActualLRPStateRunning,
 			ModificationTag: *instance.ModificationTag,
 		},
@@ -171,6 +173,7 @@ var _ = Describe("RoutingTable", func() {
 			Port:            11,
 			ContainerPort:   8080,
 			Evacuating:      false,
+			Since:           1,
 			ModificationTag: currentTag,
 		}
 		endpoint2 = routingtable.Endpoint{
@@ -181,6 +184,7 @@ var _ = Describe("RoutingTable", func() {
 			Port:            22,
 			ContainerPort:   8080,
 			Evacuating:      false,
+			Since:           2,
 			ModificationTag: currentTag,
 		}
 		endpoint3 = routingtable.Endpoint{
@@ -191,6 +195,7 @@ var _ = Describe("RoutingTable", func() {
 			Port:            33,
 			ContainerPort:   8080,
 			Evacuating:      false,
+			Since:           3,
 			ModificationTag: currentTag,
 		}
 
@@ -295,6 +300,7 @@ var _ = Describe("RoutingTable", func() {
 							Host:                 endpoint1.ContainerIP,
 							Tags:                 map[string]string{"component": "route-emitter"},
 							App:                  logGuid,
+							EndpointUpdatedAtNs:  endpoint1.Since,
 							PrivateInstanceIndex: "0",
 						},
 					},
@@ -336,6 +342,7 @@ var _ = Describe("RoutingTable", func() {
 							Host:                 endpoint1.ContainerIP,
 							Tags:                 map[string]string{"component": "route-emitter"},
 							App:                  logGuid,
+							EndpointUpdatedAtNs:  endpoint1.Since,
 							PrivateInstanceIndex: "0",
 						},
 					},
@@ -376,6 +383,7 @@ var _ = Describe("RoutingTable", func() {
 							Host:                 endpoint2.ContainerIP,
 							Tags:                 map[string]string{"component": "route-emitter"},
 							App:                  logGuid,
+							EndpointUpdatedAtNs:  endpoint2.Since,
 							PrivateInstanceIndex: "1",
 						},
 						{
@@ -383,6 +391,7 @@ var _ = Describe("RoutingTable", func() {
 							Host:                 endpoint3.ContainerIP,
 							Tags:                 map[string]string{"component": "route-emitter"},
 							App:                  logGuid,
+							EndpointUpdatedAtNs:  endpoint3.Since,
 							PrivateInstanceIndex: "2",
 						},
 					},
@@ -404,6 +413,7 @@ var _ = Describe("RoutingTable", func() {
 							Host:                 endpoint1.ContainerIP,
 							Tags:                 map[string]string{"component": "route-emitter"},
 							App:                  logGuid,
+							EndpointUpdatedAtNs:  endpoint1.Since,
 							PrivateInstanceIndex: "0",
 						},
 					},
@@ -483,6 +493,7 @@ var _ = Describe("RoutingTable", func() {
 						Host:                 endpoint1.ContainerIP,
 						Tags:                 map[string]string{"component": "route-emitter"},
 						App:                  logGuid,
+						EndpointUpdatedAtNs:  endpoint1.Since,
 						PrivateInstanceIndex: "0",
 					}))
 				})
@@ -681,6 +692,7 @@ var _ = Describe("RoutingTable", func() {
 								internalHostname,
 								fmt.Sprintf("%d.%s", 0, internalHostname),
 							},
+							EndpointUpdatedAtNs: endpoint1.Since,
 							Tags: map[string]string{
 								"component": "route-emitter",
 							},

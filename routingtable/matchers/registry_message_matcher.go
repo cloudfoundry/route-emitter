@@ -1,39 +1,33 @@
 package matchers
 
 import (
-	"fmt"
-	"reflect"
-	"sort"
+	"time"
+
+	. "github.com/onsi/gomega"
+	. "github.com/onsi/gomega/gstruct"
 
 	"code.cloudfoundry.org/route-emitter/routingtable"
-	"github.com/onsi/gomega/format"
+	"github.com/onsi/gomega/types"
 )
 
-func MatchRegistryMessage(message routingtable.RegistryMessage) *registryMessageMatcher {
-	return &registryMessageMatcher{
-		expected: message,
-	}
-}
-
-type registryMessageMatcher struct {
-	expected routingtable.RegistryMessage
-}
-
-func (m *registryMessageMatcher) Match(a interface{}) (success bool, err error) {
-	actual, ok := a.(routingtable.RegistryMessage)
-	if !ok {
-		return false, fmt.Errorf("%s is not a routingtable.RegistryMessage", format.Object(actual, 1))
+func MatchRegistryMessage(message routingtable.RegistryMessage) types.GomegaMatcher {
+	uris := []interface{}{}
+	for _, uri := range message.URIs {
+		uris = append(uris, uri)
 	}
 
-	sort.Sort(sort.StringSlice(m.expected.URIs))
-	sort.Sort(sort.StringSlice(actual.URIs))
-	return reflect.DeepEqual(actual, m.expected), nil
-}
-
-func (m *registryMessageMatcher) FailureMessage(actual interface{}) (message string) {
-	return format.Message(actual, "to match", m.expected)
-}
-
-func (m *registryMessageMatcher) NegatedFailureMessage(actual interface{}) (message string) {
-	return format.Message(actual, "not to match", m.expected)
+	return MatchAllFields(Fields{
+		"Host":                 Equal(message.Host),
+		"Port":                 Equal(message.Port),
+		"TlsPort":              Equal(message.TlsPort),
+		"URIs":                 ConsistOf(uris...),
+		"App":                  Equal(message.App),
+		"RouteServiceUrl":      Equal(message.RouteServiceUrl),
+		"PrivateInstanceId":    Equal(message.PrivateInstanceId),
+		"PrivateInstanceIndex": Equal(message.PrivateInstanceIndex),
+		"ServerCertDomainSAN":  Equal(message.ServerCertDomainSAN),
+		"IsolationSegment":     Equal(message.IsolationSegment),
+		"EndpointUpdatedAtNs":  BeNumerically("~", time.Now().UnixNano(), time.Minute),
+		"Tags":                 Equal(message.Tags),
+	})
 }

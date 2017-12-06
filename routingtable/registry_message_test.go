@@ -22,6 +22,7 @@ var _ = Describe("RegistryMessage", func() {
 			PrivateInstanceId:    "instance-guid",
 			PrivateInstanceIndex: "0",
 			RouteServiceUrl:      "https://hello.com",
+			EndpointUpdatedAtNs:  1000,
 			Tags:                 map[string]string{"component": "route-emitter"},
 		}
 	})
@@ -39,6 +40,7 @@ var _ = Describe("RegistryMessage", func() {
 				"server_cert_domain_san": "instance-guid",
 				"private_instance_index": "0",
 				"route_service_url": "https://hello.com",
+				"endpoint_updated_at_ns": 1000,
 				"tags": {"component":"route-emitter"}
 			}`
 		})
@@ -72,6 +74,7 @@ var _ = Describe("RegistryMessage", func() {
 				"private_instance_index": "0",
 				"server_cert_domain_san": "instance-guid",
 				"route_service_url": "https://hello.com",
+				"endpoint_updated_at_ns": 1000,
 				"tags": {"component":"route-emitter"}
 			}`
 			})
@@ -97,6 +100,7 @@ var _ = Describe("RegistryMessage", func() {
 				Host:          "1.1.1.1",
 				Port:          61001,
 				ContainerPort: 11,
+				Since:         2000,
 			}
 
 			route = routingtable.Route{
@@ -104,6 +108,8 @@ var _ = Describe("RegistryMessage", func() {
 				LogGUID:         "app-guid",
 				RouteServiceUrl: "https://hello.com",
 			}
+
+			expectedMessage.EndpointUpdatedAtNs = 2000
 		})
 
 		It("creates a valid message from an endpoint and routes", func() {
@@ -142,6 +148,7 @@ var _ = Describe("RegistryMessage", func() {
 				PrivateInstanceIndex: "0",
 				ServerCertDomainSAN:  "instance-guid",
 				RouteServiceUrl:      "https://hello.com",
+				EndpointUpdatedAtNs:  2000,
 				Tags:                 map[string]string{"component": "route-emitter"},
 			}
 
@@ -152,6 +159,7 @@ var _ = Describe("RegistryMessage", func() {
 				ContainerIP:   "1.2.3.4",
 				Port:          61001,
 				ContainerPort: 11,
+				Since:         2000,
 			}
 			route = routingtable.Route{
 				Hostname:        "host-1.example.com",
