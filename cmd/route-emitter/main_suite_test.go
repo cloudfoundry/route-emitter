@@ -221,7 +221,7 @@ var _ = BeforeEach(func() {
 
 	gnatsdRunner, natsClient = gnatsdrunner.StartGnatsd(int(natsPort))
 
-	testMetricsChan = make(chan interface{}, 10)
+	testMetricsChan = make(chan interface{}, 64)
 
 	healthCheckPort, err := portAllocator.ClaimPorts(1)
 	Expect(err).NotTo(HaveOccurred())

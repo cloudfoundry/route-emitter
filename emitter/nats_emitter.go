@@ -13,6 +13,7 @@ import (
 
 const (
 	messagesEmittedCounter                  = "MessagesEmitted"
+	httpRouteNATSMessagesEmittedCounter     = "HTTPRouteNATSMessagesEmitted"
 	internalRouteNATSMessagesEmittedCounter = "InternalRouteNATSMessagesEmitted"
 )
 
@@ -54,6 +55,7 @@ func (n *natsEmitter) Emit(messagesToEmit routingtable.MessagesToEmit) error {
 
 	var numberOfInternalMessages uint64
 	numberOfMessages := uint64(len(messagesToEmit.RegistrationMessages) + len(messagesToEmit.UnregistrationMessages))
+	numberOfHTTPMessages := uint64(len(messagesToEmit.RegistrationMessages) + len(messagesToEmit.UnregistrationMessages))
 	if n.emitInternalRoutes {
 		wg.Add(len(messagesToEmit.InternalRegistrationMessages))
 		for _, message := range messagesToEmit.InternalRegistrationMessages {
@@ -80,6 +82,11 @@ func (n *natsEmitter) Emit(messagesToEmit routingtable.MessagesToEmit) error {
 	err := n.metronClient.IncrementCounterWithDelta(messagesEmittedCounter, numberOfMessages)
 	if err != nil {
 		n.logger.Error("cannot-emit-number-of-messages", err)
+	}
+
+	err = n.metronClient.IncrementCounterWithDelta(httpRouteNATSMessagesEmittedCounter, numberOfHTTPMessages)
+	if err != nil {
+		n.logger.Error("cannot-emit-number-of-http-messages", err)
 	}
 
 	if n.emitInternalRoutes {
