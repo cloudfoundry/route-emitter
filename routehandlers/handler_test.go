@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	mfakes "code.cloudfoundry.org/diego-logging-client/testhelpers"
+	loggregator "code.cloudfoundry.org/go-loggregator"
 
 	"code.cloudfoundry.org/bbs/models"
 	"code.cloudfoundry.org/lager/lagertest"
@@ -104,7 +105,7 @@ var _ = Describe("Handler", func() {
 			return nil
 		}
 		metricChan = make(chan metric, 10)
-		fakeMetronClient.SendMetricStub = func(name string, value int) error {
+		fakeMetronClient.SendMetricStub = func(name string, value int, opts ...loggregator.EmitGaugeOption) error {
 			metricChan <- metric{name: name, value: value}
 			return nil
 		}

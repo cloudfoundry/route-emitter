@@ -3,6 +3,7 @@ package routehandlers_test
 import (
 	"code.cloudfoundry.org/bbs/models"
 	mfakes "code.cloudfoundry.org/diego-logging-client/testhelpers"
+	loggregator "code.cloudfoundry.org/go-loggregator"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/lager/lagertest"
 	emitterfakes "code.cloudfoundry.org/route-emitter/emitter/fakes"
@@ -582,7 +583,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 
 				BeforeEach(func() {
 					metricsChan = make(chan metric, 10)
-					fakeMetronClient.SendMetricStub = func(name string, value int) error {
+					fakeMetronClient.SendMetricStub = func(name string, value int, opts ...loggregator.EmitGaugeOption) error {
 						metricsChan <- metric{
 							name:  name,
 							value: value,
