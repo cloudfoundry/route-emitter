@@ -719,7 +719,7 @@ var _ = Describe("Watcher", func() {
 
 			It("should emit the sync duration, and allow event processing", func() {
 				Eventually(fakeMetronClient.SendDurationCallCount).Should(Equal(1))
-				metric, value := fakeMetronClient.SendDurationArgsForCall(0)
+				metric, value, _ := fakeMetronClient.SendDurationArgsForCall(0)
 				Expect(metric).To(Equal("RouteEmitterSyncDuration"))
 				Expect(value).To(BeNumerically(">=", 100*time.Millisecond))
 
