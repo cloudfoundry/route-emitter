@@ -119,7 +119,7 @@ var _ = Describe("NatsSyncer", func() {
 		})
 
 		Context("when the router emits a router.start", func() {
-			Context("using an interval", func() {
+			Context("using a one second interval", func() {
 				JustBeforeEach(func() {
 					routerStartMessages <- &nats.Msg{
 						Data: []byte(`{
@@ -174,15 +174,72 @@ var _ = Describe("NatsSyncer", func() {
 					Data: []byte(`{"minimumRegisterIntervalInSeconds":2, "pruneThresholdInSeconds": 6}`),
 				}
 
-				//first emit should be pretty quick, it is in response to the incoming heartbeat interval
+				// first emit should wait a jitter time in response to the incoming heartbeat interval
+				Consistently(syncerRunner.Events().Emit).ShouldNot(Receive())
+				clock.Increment(400 * time.Millisecond)
 				Eventually(syncerRunner.Events().Emit).Should(Receive())
 
 				clock.WaitForWatcherAndIncrement(time.Second)
 				Consistently(syncerRunner.Events().Emit).ShouldNot(Receive())
 
-				//subsequent emit should follow the interval
+				//i subsequent emit should follow the interval
 				clock.WaitForWatcherAndIncrement(time.Second)
 				Eventually(syncerRunner.Events().Emit).Should(Receive())
+			})
+
+			Context("using different interval", func() {
+				It("jitter respects the interval while sleeping", func() {
+					routerStartMessages <- &nats.Msg{
+						Data: []byte(`{"minimumRegisterIntervalInSeconds":5, "pruneThresholdInSeconds": 180}`),
+					}
+
+					// first emit should wait a jitter time in response to the incoming heartbeat interval
+					Consistently(syncerRunner.Events().Emit).ShouldNot(Receive())
+					clock.Increment(1 * time.Second)
+					Eventually(syncerRunner.Events().Emit).Should(Receive())
+
+					// subsequent emit should follow the interval
+					clock.WaitForWatcherAndIncrement(5 * time.Second)
+					Eventually(syncerRunner.Events().Emit).Should(Receive())
+				})
+			})
+
+			It("the jitter should be random", func() {
+				// This test uses the fact that the probability of the jitter being
+				// less than 100 milliseconds should be 50%.
+				// However, this test has a 1/512 chance of failing in the case that
+				// 10 samples of the jitter are less than 100ms or all 10 samples are
+				// greater than 100ms.
+				emitted := []bool{}
+				for i := 0; i < 10; i++ {
+					routerStartMessages <- &nats.Msg{
+						Data: []byte(`{"minimumRegisterIntervalInSeconds":1, "pruneThresholdInSeconds": 180}`),
+					}
+
+					Consistently(syncerRunner.Events().Emit).ShouldNot(Receive())
+					// Wait 10% of the minimum register interval
+					clock.Increment(100 * time.Millisecond)
+					select {
+					case <-syncerRunner.Events().Emit:
+						// Statistically 50% of the jitters should end up here
+						emitted = append(emitted, true)
+						continue
+					case <-time.After(10 * time.Millisecond):
+						emitted = append(emitted, false)
+					}
+					// Wait the last 10% to guarantee that an emit happens
+					clock.Increment(100 * time.Millisecond)
+					Eventually(syncerRunner.Events().Emit).Should(Receive())
+				}
+				trueCount := 0
+				Expect(emitted).To(HaveLen(10))
+				for _, e := range emitted {
+					if e {
+						trueCount++
+					}
+				}
+				Expect(trueCount).To(BeNumerically(">", 0))
+				Expect(trueCount).To(BeNumerically("<", 10))
 			})
 		})
 

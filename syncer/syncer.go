@@ -2,6 +2,7 @@ package syncer
 
 import (
 	"encoding/json"
+	"math/rand"
 	"os"
 	"time"
 
@@ -18,7 +19,7 @@ type NatsSyncer struct {
 	clock        clock.Clock
 	syncInterval time.Duration
 	events       Events
-	routerGreet  chan time.Duration
+	routerStart  chan time.Duration
 
 	logger lager.Logger
 }
@@ -39,7 +40,7 @@ func NewSyncer(
 			Emit: make(chan struct{}, 1),
 		},
 
-		routerGreet: make(chan time.Duration),
+		routerStart: make(chan time.Duration),
 
 		logger: logger.Session("syncer"),
 	}
@@ -74,7 +75,7 @@ GREET_LOOP:
 		}
 
 		select {
-		case routerRegisterInterval = <-s.routerGreet:
+		case routerRegisterInterval = <-s.routerStart:
 			s.logger.Info("received-router-prune-interval", lager.Data{"interval": routerRegisterInterval.String()})
 			break GREET_LOOP
 		case <-retryGreetingTicker.C():
@@ -91,10 +92,13 @@ GREET_LOOP:
 	syncTicker := s.clock.NewTicker(s.syncInterval)
 	routerTicker := s.clock.NewTicker(routerRegisterInterval)
 
+	randSource := rand.New(rand.NewSource(time.Now().UnixNano()))
 	for {
 		select {
-		case routerRegisterInterval = <-s.routerGreet:
+		case routerRegisterInterval = <-s.routerStart:
 			s.logger.Info("received-new-router-prune-interval", lager.Data{"interval": routerRegisterInterval.String()})
+			jitterInterval := randSource.Int63n(int64(0.2 * float64(routerRegisterInterval)))
+			s.clock.Sleep(time.Duration(jitterInterval))
 			routerTicker.Stop()
 			routerTicker = s.clock.NewTicker(routerRegisterInterval)
 			s.emit()
@@ -132,12 +136,12 @@ func (s *NatsSyncer) sync() {
 }
 
 func (s *NatsSyncer) listenForRouter(replyUUID string) error {
-	_, err := s.natsClient.Subscribe("router.start", s.handleRouterGreet)
+	_, err := s.natsClient.Subscribe("router.start", s.handleRouterStart)
 	if err != nil {
 		return err
 	}
 
-	sub, err := s.natsClient.Subscribe(replyUUID, s.handleRouterGreet)
+	sub, err := s.natsClient.Subscribe(replyUUID, s.handleRouterStart)
 	if err != nil {
 		return err
 	}
@@ -155,7 +159,7 @@ func (s *NatsSyncer) greetRouter(replyUUID string) error {
 	return nil
 }
 
-func (s *NatsSyncer) handleRouterGreet(msg *nats.Msg) {
+func (s *NatsSyncer) handleRouterStart(msg *nats.Msg) {
 	var response routingtable.RouterGreetingMessage
 
 	err := json.Unmarshal(msg.Data, &response)
@@ -167,5 +171,5 @@ func (s *NatsSyncer) handleRouterGreet(msg *nats.Msg) {
 	}
 
 	greetInterval := response.MinimumRegisterInterval
-	s.routerGreet <- time.Duration(greetInterval) * time.Second
+	s.routerStart <- time.Duration(greetInterval) * time.Second
 }
