@@ -67,8 +67,8 @@ func (handler *Handler) HandleEvent(logger lager.Logger, event models.Event) {
 	}
 }
 
-func (handler *Handler) Emit(logger lager.Logger) {
-	routingEvents, messagesToEmit := handler.routingTable.GetRoutingEvents()
+func (handler *Handler) EmitExternal(logger lager.Logger) {
+	routingEvents, messagesToEmit := handler.routingTable.GetExternalRoutingEvents()
 
 	logger.Info("emitting-nats-messages", lager.Data{"messages": messagesToEmit})
 	if handler.natsEmitter != nil {
@@ -93,6 +93,18 @@ func (handler *Handler) Emit(logger lager.Logger) {
 	err = handler.metronClient.SendMetric(routesTotalMetric, handler.routingTable.HTTPAssociationsCount())
 	if err != nil {
 		logger.Error("failed-to-send-total-route-count-metric", err)
+	}
+}
+
+func (handler *Handler) EmitInternal(logger lager.Logger) {
+	_, messagesToEmit := handler.routingTable.GetInternalRoutingEvents()
+
+	logger.Info("emitting-nats-messages", lager.Data{"messages": messagesToEmit})
+	if handler.natsEmitter != nil {
+		err := handler.natsEmitter.Emit(messagesToEmit)
+		if err != nil {
+			logger.Error("failed-to-emit-nats-routes", err)
+		}
 	}
 }
 

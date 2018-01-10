@@ -26,6 +26,7 @@ import (
 	"code.cloudfoundry.org/route-emitter/emitter"
 	"code.cloudfoundry.org/route-emitter/routehandlers"
 	"code.cloudfoundry.org/route-emitter/routingtable"
+	"code.cloudfoundry.org/route-emitter/scheduler"
 	"code.cloudfoundry.org/route-emitter/syncer"
 	"code.cloudfoundry.org/route-emitter/watcher"
 	"code.cloudfoundry.org/routing-api"
@@ -69,7 +70,12 @@ func main() {
 	natsClient.SetPingInterval(natsPingDuration)
 
 	clock := clock.NewClock()
-	syncer := syncer.NewSyncer(clock, time.Duration(cfg.SyncInterval), natsClient, logger)
+
+	externalChan := make(chan struct{}, 1)
+	internalChan := make(chan struct{}, 1)
+	syncer := syncer.NewSyncer(clock, time.Duration(cfg.SyncInterval), logger)
+	externalScheduler := scheduler.NewRouteBroadcastScheduler(clock, natsClient, logger, "router", externalChan)
+	internalScheduler := scheduler.NewRouteBroadcastScheduler(clock, natsClient, logger, "service-discovery", internalChan)
 
 	metronClient, err := initializeMetron(logger, cfg)
 	if err != nil {
@@ -107,7 +113,9 @@ func main() {
 		bbsClient,
 		clock,
 		handler,
-		syncer.Events(),
+		syncer.SyncCh(),
+		externalScheduler.EmitCh(),
+		internalScheduler.EmitCh(),
 		logger,
 		metronClient,
 	)
@@ -151,8 +159,13 @@ func main() {
 
 	members = append(members,
 		grouper.Member{"watcher", watcher},
+		grouper.Member{"external-scheduler", externalScheduler},
 		grouper.Member{"syncer", syncer},
 	)
+
+	if cfg.EnableInternalEmitter {
+		members = append(members, grouper.Member{"internal-scheduler", internalScheduler})
+	}
 
 	if cfg.DebugAddress != "" {
 		members = append(grouper.Members{
@@ -197,7 +210,12 @@ func main() {
 			{"consul-down-checker", consulDownChecker},
 			{"consul-down-mode-notifier", consulDownModeNotifier},
 			{"watcher", watcher},
+			{"external-scheduler", externalScheduler},
 			{"syncer", syncer},
+		}
+
+		if cfg.EnableInternalEmitter {
+			members = append(members, grouper.Member{"internal-scheduler", internalScheduler})
 		}
 
 		group = grouper.NewOrdered(os.Interrupt, members)

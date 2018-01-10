@@ -14,7 +14,6 @@ import (
 	loggingclient "code.cloudfoundry.org/diego-logging-client"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/route-emitter/routingtable"
-	"code.cloudfoundry.org/route-emitter/syncer"
 )
 
 const (
@@ -31,19 +30,22 @@ type RouteHandler interface {
 		domains models.DomainSet,
 		cachedEvents map[string]models.Event,
 	)
-	Emit(logger lager.Logger)
+	EmitExternal(logger lager.Logger)
+	EmitInternal(logger lager.Logger)
 	ShouldRefreshDesired(*routingtable.ActualLRPRoutingInfo) bool
 	RefreshDesired(lager.Logger, []*models.DesiredLRPSchedulingInfo)
 }
 
 type Watcher struct {
-	cellID       string
-	bbsClient    bbs.Client
-	clock        clock.Clock
-	routeHandler RouteHandler
-	syncEvents   syncer.Events
-	logger       lager.Logger
-	metronClient loggingclient.IngressClient
+	cellID         string
+	bbsClient      bbs.Client
+	clock          clock.Clock
+	routeHandler   RouteHandler
+	syncCh         chan struct{}
+	emitExternalCh chan struct{}
+	emitInternalCh chan struct{}
+	logger         lager.Logger
+	metronClient   loggingclient.IngressClient
 }
 
 func NewWatcher(
@@ -51,18 +53,22 @@ func NewWatcher(
 	bbsClient bbs.Client,
 	clock clock.Clock,
 	routeHandler RouteHandler,
-	syncEvents syncer.Events,
+	syncCh chan struct{},
+	emitExternalCh chan struct{},
+	emitInternalCh chan struct{},
 	logger lager.Logger,
 	metronClient loggingclient.IngressClient,
 ) *Watcher {
 	return &Watcher{
-		cellID:       cellID,
-		bbsClient:    bbsClient,
-		clock:        clock,
-		routeHandler: routeHandler,
-		syncEvents:   syncEvents,
-		logger:       logger.Session("watcher"),
-		metronClient: metronClient,
+		cellID:         cellID,
+		bbsClient:      bbsClient,
+		clock:          clock,
+		routeHandler:   routeHandler,
+		syncCh:         syncCh,
+		emitExternalCh: emitExternalCh,
+		emitInternalCh: emitInternalCh,
+		logger:         logger.Session("watcher"),
+		metronClient:   metronClient,
 	}
 }
 
@@ -109,9 +115,12 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 			}
 			logger := watcher.logger.Session("handling-event")
 			watcher.handleEvent(logger, event)
-		case <-watcher.syncEvents.Emit:
-			logger := watcher.logger.Session("emit")
-			watcher.routeHandler.Emit(logger)
+		case <-watcher.emitExternalCh:
+			logger := watcher.logger.Session("emit-external")
+			watcher.routeHandler.EmitExternal(logger)
+		case <-watcher.emitInternalCh:
+			logger := watcher.logger.Session("emit-internal")
+			watcher.routeHandler.EmitInternal(logger)
 		case syncEvent := <-syncEnd:
 			syncing = false
 			logger := watcher.logger.Session("sync")
@@ -147,7 +156,7 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 
 			cachedEvents = make(map[string]models.Event)
 			logger.Info("complete")
-		case <-watcher.syncEvents.Sync:
+		case <-watcher.syncCh:
 			if syncing {
 				watcher.logger.Debug("sync-already-in-progress")
 				continue

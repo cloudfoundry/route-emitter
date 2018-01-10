@@ -28,7 +28,6 @@ func (mappings TCPRouteMappings) Merge(other TCPRouteMappings) TCPRouteMappings 
 const addressCollisionsCounter = "AddressCollisions"
 
 //go:generate counterfeiter -o fakeroutingtable/fake_routingtable.go . RoutingTable
-
 type RoutingTable interface {
 	// table modification
 	SetRoutes(beforeLRP, afterLRP *models.DesiredLRPSchedulingInfo) (TCPRouteMappings, MessagesToEmit)
@@ -36,7 +35,8 @@ type RoutingTable interface {
 	AddEndpoint(actualLRP *ActualLRPRoutingInfo) (TCPRouteMappings, MessagesToEmit)
 	RemoveEndpoint(actualLRP *ActualLRPRoutingInfo) (TCPRouteMappings, MessagesToEmit)
 	Swap(t RoutingTable, domains models.DomainSet) (TCPRouteMappings, MessagesToEmit)
-	GetRoutingEvents() (TCPRouteMappings, MessagesToEmit)
+	GetInternalRoutingEvents() (TCPRouteMappings, MessagesToEmit)
+	GetExternalRoutingEvents() (TCPRouteMappings, MessagesToEmit)
 
 	// routes
 
@@ -176,14 +176,17 @@ func (t *routingTable) Swap(other RoutingTable, domains models.DomainSet) (TCPRo
 	return mappings, messages
 }
 
-func (t *routingTable) GetRoutingEvents() (TCPRouteMappings, MessagesToEmit) {
+func (t *routingTable) GetExternalRoutingEvents() (TCPRouteMappings, MessagesToEmit) {
 	httpMappings, httpMessages := t.httpRoutesRoutingTable.GetRoutingEvents()
 	tcpMappings, tcpMessages := t.tcpRoutesRoutingTable.GetRoutingEvents()
-	internalMappings, internalMessages := t.internalRoutesRoutingTable.GetRoutingEvents()
 
-	mappings := httpMappings.Merge(tcpMappings).Merge(internalMappings)
-	messages := httpMessages.Merge(tcpMessages).Merge(internalMessages)
+	mappings := httpMappings.Merge(tcpMappings)
+	messages := httpMessages.Merge(tcpMessages)
 	return mappings, messages
+}
+
+func (t *routingTable) GetInternalRoutingEvents() (TCPRouteMappings, MessagesToEmit) {
+	return t.internalRoutesRoutingTable.GetRoutingEvents()
 }
 
 func (t *routingTable) SetRoutes(before, after *models.DesiredLRPSchedulingInfo) (TCPRouteMappings, MessagesToEmit) {

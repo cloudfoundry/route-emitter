@@ -16,7 +16,6 @@ import (
 	"code.cloudfoundry.org/route-emitter/emitter"
 	"code.cloudfoundry.org/route-emitter/routehandlers"
 	"code.cloudfoundry.org/route-emitter/routingtable"
-	"code.cloudfoundry.org/route-emitter/syncer"
 	"code.cloudfoundry.org/route-emitter/watcher"
 	"code.cloudfoundry.org/routing-api/fake_routing_api"
 	"code.cloudfoundry.org/routing-info/cfroutes"
@@ -35,7 +34,9 @@ var _ = Describe("Watcher Integration", func() {
 		eventSource      *eventfakes.FakeEventSource
 		natsClient       *diegonats.FakeNATSClient
 		routingApiClient *fake_routing_api.FakeClient
-		syncEvents       syncer.Events
+		syncCh           chan struct{}
+		emitExternalCh   chan struct{}
+		emitInternalCh   chan struct{}
 		cellID           string
 		testWatcher      *watcher.Watcher
 		process          ifrit.Process
@@ -50,10 +51,10 @@ var _ = Describe("Watcher Integration", func() {
 
 		natsClient = diegonats.NewFakeClient()
 		routingApiClient = new(fake_routing_api.FakeClient)
-		syncEvents = syncer.Events{
-			Sync: make(chan struct{}),
-			Emit: make(chan struct{}),
-		}
+
+		syncCh = make(chan struct{})
+		emitExternalCh = make(chan struct{})
+		emitInternalCh = make(chan struct{})
 
 		logger = lagertest.NewTestLogger("test")
 		workPool, err := workpool.NewWorkPool(1)
@@ -71,7 +72,9 @@ var _ = Describe("Watcher Integration", func() {
 			bbsClient,
 			clock,
 			handler,
-			syncEvents,
+			syncCh,
+			emitExternalCh,
+			emitInternalCh,
 			logger,
 			fakeMetronClient,
 		)
@@ -179,7 +182,7 @@ var _ = Describe("Watcher Integration", func() {
 		})
 
 		JustBeforeEach(func() {
-			syncEvents.Sync <- struct{}{}
+			syncCh <- struct{}{}
 			Eventually(bbsClient.ActualLRPGroupsCallCount).Should(Equal(1))
 		})
 

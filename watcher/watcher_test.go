@@ -14,7 +14,6 @@ import (
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/lager/lagertest"
 	"code.cloudfoundry.org/route-emitter/routingtable"
-	"code.cloudfoundry.org/route-emitter/syncer"
 	"code.cloudfoundry.org/route-emitter/watcher"
 	"code.cloudfoundry.org/route-emitter/watcher/fakes"
 	"code.cloudfoundry.org/routing-info/cfroutes"
@@ -94,7 +93,9 @@ var _ = Describe("Watcher", func() {
 		clock            *fakeclock.FakeClock
 		process          ifrit.Process
 		cellID           string
-		syncEvents       syncer.Events
+		syncCh           chan struct{}
+		emitExternalCh   chan struct{}
+		emitInternalCh   chan struct{}
 		fakeMetronClient *mfakes.FakeIngressClient
 	)
 
@@ -107,16 +108,25 @@ var _ = Describe("Watcher", func() {
 		clock = fakeclock.NewFakeClock(time.Now())
 		bbsClient.SubscribeToEventsByCellIDReturns(eventSource, nil)
 
-		syncEvents = syncer.Events{
-			Sync: make(chan struct{}),
-			Emit: make(chan struct{}),
-		}
+		syncCh = make(chan struct{})
+		emitExternalCh = make(chan struct{})
+		emitInternalCh = make(chan struct{})
 		cellID = ""
 		fakeMetronClient = &mfakes.FakeIngressClient{}
 	})
 
 	JustBeforeEach(func() {
-		testWatcher = watcher.NewWatcher(cellID, bbsClient, clock, routeHandler, syncEvents, logger, fakeMetronClient)
+		testWatcher = watcher.NewWatcher(
+			cellID,
+			bbsClient,
+			clock,
+			routeHandler,
+			syncCh,
+			emitExternalCh,
+			emitInternalCh,
+			logger,
+			fakeMetronClient,
+		)
 		process = ifrit.Invoke(testWatcher)
 	})
 
@@ -345,7 +355,6 @@ var _ = Describe("Watcher", func() {
 			)
 
 			bbsClient.SubscribeToEventsByCellIDReturns(fakeEventSource, nil)
-			testWatcher = watcher.NewWatcher(cellID, bbsClient, clock, routeHandler, syncEvents, logger, fakeMetronClient)
 		})
 
 		It("should not close the current connection", func() {
@@ -384,8 +393,6 @@ var _ = Describe("Watcher", func() {
 				}
 				return eventSource, nil
 			}
-
-			testWatcher = watcher.NewWatcher(cellID, bbsClient, clock, routeHandler, syncEvents, logger, fakeMetronClient)
 		})
 
 		JustBeforeEach(func() {
@@ -399,10 +406,17 @@ var _ = Describe("Watcher", func() {
 		})
 	})
 
-	Describe("emit event", func() {
+	Describe("emit external event", func() {
 		It("emits registrations", func() {
-			syncEvents.Emit <- struct{}{}
-			Eventually(routeHandler.EmitCallCount).Should(Equal(1))
+			emitExternalCh <- struct{}{}
+			Eventually(routeHandler.EmitExternalCallCount).Should(Equal(1))
+		})
+	})
+
+	Describe("emit internal event", func() {
+		It("emits registrations", func() {
+			emitInternalCh <- struct{}{}
+			Eventually(routeHandler.EmitInternalCallCount).Should(Equal(1))
 		})
 	})
 
@@ -511,7 +525,7 @@ var _ = Describe("Watcher", func() {
 		}
 
 		JustBeforeEach(func() {
-			syncEvents.Sync <- struct{}{}
+			syncCh <- struct{}{}
 		})
 
 		Describe("bbs events", func() {
@@ -585,7 +599,7 @@ var _ = Describe("Watcher", func() {
 			})
 
 			It("ignores a sync event", func() {
-				Eventually(syncEvents.Sync).Should(BeSent(struct{}{}))
+				Eventually(syncCh).Should(BeSent(struct{}{}))
 				Eventually(logger).Should(gbytes.Say("sync-already-in-progress"))
 			})
 
@@ -613,7 +627,7 @@ var _ = Describe("Watcher", func() {
 
 				// return no errors
 				close(errCh)
-				syncEvents.Sync <- struct{}{}
+				syncCh <- struct{}{}
 
 				Eventually(routeHandler.SyncCallCount).Should(Equal(1))
 				Expect(bbsClient.ActualLRPGroupsCallCount()).To(Equal(2))
@@ -640,7 +654,7 @@ var _ = Describe("Watcher", func() {
 
 				// return no errors
 				close(errCh)
-				syncEvents.Sync <- struct{}{}
+				syncCh <- struct{}{}
 
 				Eventually(routeHandler.SyncCallCount).Should(Equal(1))
 				Expect(bbsClient.DesiredLRPSchedulingInfosCallCount()).To(Equal(2))
@@ -667,7 +681,7 @@ var _ = Describe("Watcher", func() {
 
 				// return no errors
 				close(errCh)
-				syncEvents.Sync <- struct{}{}
+				syncCh <- struct{}{}
 
 				Eventually(routeHandler.SyncCallCount).Should(Equal(1))
 				Expect(bbsClient.DomainsCallCount()).To(Equal(2))
@@ -740,8 +754,6 @@ var _ = Describe("Watcher", func() {
 			BeforeEach(func() {
 				cellID = "cell-id"
 				actualLRPGroup2.Instance.ActualLRPInstanceKey.CellId = cellID
-
-				testWatcher = watcher.NewWatcher(cellID, bbsClient, clock, routeHandler, syncEvents, logger, fakeMetronClient)
 			})
 
 			Context("when the cell has actual lrps running", func() {

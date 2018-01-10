@@ -287,7 +287,7 @@ var _ = Describe("TCPRoutingTable", func() {
 
 		Describe("GetRoutingEvents", func() {
 			It("returns empty routing events", func() {
-				routingEvents, _ := routingTable.GetRoutingEvents()
+				routingEvents, _ := routingTable.GetExternalRoutingEvents()
 				Expect(routingEvents.Registrations).To(HaveLen(0))
 				Expect(routingEvents.Unregistrations).To(HaveLen(0))
 			})
@@ -1417,7 +1417,7 @@ var _ = Describe("TCPRoutingTable", func() {
 			})
 
 			It("returns routing events for entries in routing table", func() {
-				routingEvents, _ := routingTable.GetRoutingEvents()
+				routingEvents, _ := routingTable.GetExternalRoutingEvents()
 				ttl := 0
 				Expect(routingEvents.Registrations).To(ConsistOf(tcpmodels.TcpRouteMapping{
 					TcpMappingEntity: tcpmodels.TcpMappingEntity{

@@ -80,7 +80,7 @@ func InternalEndpointRegistryMessageFor(endpoint Endpoint, route InternalRoute) 
 	}
 }
 
-type RouterGreetingMessage struct {
+type ExternalServiceGreetingMessage struct {
 	MinimumRegisterInterval int `json:"minimumRegisterIntervalInSeconds"`
 	PruneThresholdInSeconds int `json:"pruneThresholdInSeconds"`
 }

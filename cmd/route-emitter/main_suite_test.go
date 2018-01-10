@@ -16,7 +16,6 @@ import (
 	"code.cloudfoundry.org/cfhttp"
 	"code.cloudfoundry.org/diego-logging-client/testhelpers"
 	"code.cloudfoundry.org/inigo/helpers/portauthority"
-	"code.cloudfoundry.org/lager/lagertest"
 	"code.cloudfoundry.org/route-emitter/cmd/route-emitter/config"
 	"code.cloudfoundry.org/route-emitter/diegonats"
 	"code.cloudfoundry.org/route-emitter/diegonats/gnatsdrunner"
@@ -62,7 +61,6 @@ var (
 	gnatsdRunner         ifrit.Process
 	natsClient           diegonats.NATSClient
 	bbsClient            bbs.InternalClient
-	logger               *lagertest.TestLogger
 	syncInterval         time.Duration
 	consulClusterAddress string
 	testMetricsListener  net.PacketConn
@@ -136,8 +134,6 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 
 	natsPort, err = portAllocator.ClaimPorts(1)
 	Expect(err).NotTo(HaveOccurred())
-
-	logger = lagertest.NewTestLogger("test")
 
 	syncInterval = 200 * time.Millisecond
 

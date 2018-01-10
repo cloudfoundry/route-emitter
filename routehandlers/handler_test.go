@@ -1061,7 +1061,7 @@ var _ = Describe("Handler", func() {
 		})
 	})
 
-	Describe("Emit", func() {
+	Describe("EmitExternal", func() {
 		var registrationMsgs routingtable.MessagesToEmit
 		BeforeEach(func() {
 			currentTag := &models.ModificationTag{Epoch: "abc", Index: 1}
@@ -1101,18 +1101,18 @@ var _ = Describe("Handler", func() {
 				},
 			}
 
-			fakeTable.GetRoutingEventsReturns(emptyTCPRouteMappings, registrationMsgs)
+			fakeTable.GetExternalRoutingEventsReturns(emptyTCPRouteMappings, registrationMsgs)
 			fakeTable.HTTPAssociationsCountReturns(3)
 		})
 		It("emits all registration events", func() {
-			routeHandler.Emit(logger)
-			Expect(fakeTable.GetRoutingEventsCallCount()).To(Equal(1))
+			routeHandler.EmitExternal(logger)
+			Expect(fakeTable.GetExternalRoutingEventsCallCount()).To(Equal(1))
 			Expect(natsEmitter.EmitCallCount()).To(Equal(1))
 			Expect(natsEmitter.EmitArgsForCall(0)).To(Equal(registrationMsgs))
 		})
 
 		It("sends a 'routes total' metric", func() {
-			routeHandler.Emit(logger)
+			routeHandler.EmitExternal(logger)
 			Eventually(metricChan).Should(Receive(Equal(metric{
 				name:  "RoutesTotal",
 				value: 3,
@@ -1120,11 +1120,67 @@ var _ = Describe("Handler", func() {
 		})
 
 		It("sends a 'synced routes' metric", func() {
-			routeHandler.Emit(logger)
+			routeHandler.EmitExternal(logger)
 			Eventually(counterChan).Should(Receive(Equal(counter{
 				name:  "RoutesSynced",
 				delta: 3,
 			})))
+		})
+	})
+
+	Describe("EmitInternal", func() {
+		var registrationMsgs routingtable.MessagesToEmit
+		BeforeEach(func() {
+			endpoint1 := routingtable.Endpoint{
+				ContainerIP: "1.2.3.4",
+				Since:       1,
+			}
+			endpoint2 := routingtable.Endpoint{
+				ContainerIP: "1.2.3.5",
+				Since:       2,
+			}
+			endpoint3 := routingtable.Endpoint{
+				ContainerIP: "1.2.3.6",
+				Since:       3,
+			}
+			registrationMsgs = routingtable.MessagesToEmit{
+				InternalRegistrationMessages: []routingtable.RegistryMessage{
+					{
+						URIs:                 []string{"internal", "0.internal"},
+						Host:                 endpoint1.ContainerIP,
+						Tags:                 map[string]string{"component": "route-emitter"},
+						App:                  logGuid,
+						EndpointUpdatedAtNs:  endpoint1.Since,
+						PrivateInstanceIndex: "0",
+					},
+					{
+						URIs:                 []string{"internal", "0.internal"},
+						Host:                 endpoint2.ContainerIP,
+						Tags:                 map[string]string{"component": "route-emitter"},
+						App:                  logGuid,
+						EndpointUpdatedAtNs:  endpoint2.Since,
+						PrivateInstanceIndex: "0",
+					},
+					{
+						URIs:                 []string{"internal", "0.internal"},
+						Host:                 endpoint3.ContainerIP,
+						Tags:                 map[string]string{"component": "route-emitter"},
+						App:                  logGuid,
+						EndpointUpdatedAtNs:  endpoint3.Since,
+						PrivateInstanceIndex: "0",
+					},
+				},
+			}
+
+			fakeTable.GetInternalRoutingEventsReturns(emptyTCPRouteMappings, registrationMsgs)
+			fakeTable.HTTPAssociationsCountReturns(3)
+		})
+
+		It("emits all internal registration events", func() {
+			routeHandler.EmitInternal(logger)
+			Expect(fakeTable.GetInternalRoutingEventsCallCount()).To(Equal(1))
+			Expect(natsEmitter.EmitCallCount()).To(Equal(1))
+			Expect(natsEmitter.EmitArgsForCall(0)).To(Equal(registrationMsgs))
 		})
 	})
 

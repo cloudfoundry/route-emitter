@@ -400,7 +400,9 @@ var _ = Describe("RoutingTable", func() {
 			})
 
 			It("no longer emits the extra endpoints", func() {
-				tcpRouteMappings, messagesToEmit = table.GetRoutingEvents()
+				tcpRouteMappings, messagesToEmit = table.GetExternalRoutingEvents()
+				_, internalMessagesToEmit := table.GetInternalRoutingEvents()
+				messagesToEmit = messagesToEmit.Merge(internalMessagesToEmit)
 
 				Expect(tcpRouteMappings).To(BeZero())
 				expected := routingtable.MessagesToEmit{
@@ -485,7 +487,7 @@ var _ = Describe("RoutingTable", func() {
 					Expect(messagesToEmit.InternalUnregistrationMessages).To(BeEmpty())
 					Expect(messagesToEmit.InternalRegistrationMessages).To(BeEmpty())
 
-					tcpRouteMappings, messagesToEmit = table.GetRoutingEvents()
+					tcpRouteMappings, messagesToEmit = table.GetInternalRoutingEvents()
 
 					Expect(messagesToEmit.InternalUnregistrationMessages).To(BeEmpty())
 					Expect(messagesToEmit.InternalRegistrationMessages).To(ConsistOf(routingtable.RegistryMessage{
@@ -543,7 +545,7 @@ var _ = Describe("RoutingTable", func() {
 						tempTable := routingtable.NewRoutingTable(logger, false, fakeMetronClient)
 						tempTable.AddEndpoint(actualLRP)
 						table.Swap(tempTable, noFreshDomains)
-						tcpRouteMappings, messagesToEmit = table.GetRoutingEvents()
+						tcpRouteMappings, messagesToEmit = table.GetExternalRoutingEvents()
 
 						expectedHTTP := routingtable.MessagesToEmit{
 							RegistrationMessages: []routingtable.RegistryMessage{
@@ -710,6 +712,220 @@ var _ = Describe("RoutingTable", func() {
 				tcpRouteMappings, messagesToEmit = table.AddEndpoint(actualLRP3)
 				Expect(tcpRouteMappings).To(BeZero())
 				Expect(messagesToEmit).To(BeZero())
+			})
+		})
+	})
+
+	Describe("GetInternalRoutingEvents", func() {
+		It("returns an empty array", func() {
+			tcpRouteMappings, messagesToEmit = table.GetInternalRoutingEvents()
+			Expect(messagesToEmit).To(Equal(routingtable.MessagesToEmit{}))
+		})
+
+		Context("when the table has routes but no endpoints", func() {
+			var beforeLRPSchedulingInfo *models.DesiredLRPSchedulingInfo
+			BeforeEach(func() {
+				routes := createRoutingInfo(key.ContainerPort, []string{}, []string{"internal"}, "https://rs.example.com", []uint32{}, "")
+				beforeLRPSchedulingInfo = createSchedulingInfoWithRoutes(key.ProcessGUID, 3, routes, logGuid, *currentTag)
+				table.SetRoutes(nil, beforeLRPSchedulingInfo)
+			})
+
+			It("should be empty", func() {
+				_, messagesToEmit = table.GetInternalRoutingEvents()
+				Expect(messagesToEmit).To(BeZero())
+			})
+		})
+
+		Context("when the table has endpoints but no routes", func() {
+			var lrp1, lrp2 *routingtable.ActualLRPRoutingInfo
+
+			BeforeEach(func() {
+				lrp1 = createActualLRP(key, endpoint1, domain)
+				lrp2 = createActualLRP(key, endpoint2, domain)
+				table.AddEndpoint(lrp1)
+				table.AddEndpoint(lrp2)
+			})
+
+			It("should be empty", func() {
+				_, messagesToEmit = table.GetInternalRoutingEvents()
+				Expect(messagesToEmit).To(BeZero())
+			})
+		})
+
+		Context("when the table has routes and endpoints", func() {
+			var beforeLRPSchedulingInfo *models.DesiredLRPSchedulingInfo
+			var lrp1, lrp2 *routingtable.ActualLRPRoutingInfo
+			var hostname2, internalHostname1 string
+
+			BeforeEach(func() {
+				hostname2 = "bar.example.com"
+				internalHostname1 = "internal"
+				routes := createRoutingInfo(key.ContainerPort, []string{hostname1, hostname2}, []string{internalHostname1}, "", []uint32{}, "")
+				beforeLRPSchedulingInfo = createSchedulingInfoWithRoutes(key.ProcessGUID, 3, routes, logGuid, *currentTag)
+				table.SetRoutes(nil, beforeLRPSchedulingInfo)
+				lrp1 = createActualLRP(key, endpoint1, domain)
+				lrp2 = createActualLRP(key, endpoint2, domain)
+				table.AddEndpoint(lrp1)
+				table.AddEndpoint(lrp2)
+			})
+
+			It("emits the internal registrations", func() {
+				tcpRouteMappings, messagesToEmit = table.GetInternalRoutingEvents()
+
+				Expect(tcpRouteMappings).To(BeZero())
+				expected := routingtable.MessagesToEmit{
+					InternalRegistrationMessages: []routingtable.RegistryMessage{
+						{
+							Host:                 endpoint2.ContainerIP,
+							URIs:                 []string{internalHostname1, fmt.Sprintf("%d.%s", 1, internalHostname1)},
+							PrivateInstanceIndex: "1",
+							App:                  logGuid,
+							EndpointUpdatedAtNs:  endpoint2.Since,
+							Tags: map[string]string{
+								"component": "route-emitter",
+							},
+						},
+						{
+							Host:                 endpoint1.ContainerIP,
+							URIs:                 []string{internalHostname1, fmt.Sprintf("%d.%s", 0, internalHostname1)},
+							PrivateInstanceIndex: "0",
+							App:                  logGuid,
+							EndpointUpdatedAtNs:  endpoint1.Since,
+							Tags: map[string]string{
+								"component": "route-emitter",
+							},
+						},
+					},
+				}
+				Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
+			})
+		})
+	})
+
+	Describe("GetExternalRoutingEvents", func() {
+		It("returns an empty array", func() {
+			tcpRouteMappings, messagesToEmit = table.GetExternalRoutingEvents()
+			Expect(messagesToEmit).To(Equal(routingtable.MessagesToEmit{}))
+		})
+
+		Context("when the table has routes but no endpoints", func() {
+			var beforeLRPSchedulingInfo *models.DesiredLRPSchedulingInfo
+			BeforeEach(func() {
+				routes := createRoutingInfo(key.ContainerPort, []string{}, []string{}, "https://rs.example.com", []uint32{}, "")
+				beforeLRPSchedulingInfo = createSchedulingInfoWithRoutes(key.ProcessGUID, 3, routes, logGuid, *currentTag)
+				table.SetRoutes(nil, beforeLRPSchedulingInfo)
+			})
+
+			It("should be empty", func() {
+				_, messagesToEmit = table.GetExternalRoutingEvents()
+				Expect(messagesToEmit).To(BeZero())
+			})
+		})
+
+		Context("when the table has endpoints but no routes", func() {
+			var lrp1, lrp2 *routingtable.ActualLRPRoutingInfo
+
+			BeforeEach(func() {
+				lrp1 = createActualLRP(key, endpoint1, domain)
+				lrp2 = createActualLRP(key, endpoint2, domain)
+				table.AddEndpoint(lrp1)
+				table.AddEndpoint(lrp2)
+			})
+
+			It("should be empty", func() {
+				_, messagesToEmit = table.GetExternalRoutingEvents()
+				Expect(messagesToEmit).To(BeZero())
+			})
+		})
+
+		Context("when the table has routes and endpoints", func() {
+			var beforeLRPSchedulingInfo *models.DesiredLRPSchedulingInfo
+			var lrp1, lrp2 *routingtable.ActualLRPRoutingInfo
+			var hostname2, internalHostname1 string
+
+			BeforeEach(func() {
+				hostname2 = "bar.example.com"
+				internalHostname1 = "internal"
+				routes := createRoutingInfo(key.ContainerPort, []string{hostname1, hostname2}, []string{internalHostname1}, "", []uint32{}, "")
+				beforeLRPSchedulingInfo = createSchedulingInfoWithRoutes(key.ProcessGUID, 3, routes, logGuid, *currentTag)
+				table.SetRoutes(nil, beforeLRPSchedulingInfo)
+				lrp1 = createActualLRP(key, endpoint1, domain)
+				lrp2 = createActualLRP(key, endpoint2, domain)
+				table.AddEndpoint(lrp1)
+				table.AddEndpoint(lrp2)
+			})
+
+			It("emits the external registrations", func() {
+				tcpRouteMappings, messagesToEmit = table.GetExternalRoutingEvents()
+
+				Expect(tcpRouteMappings).To(BeZero())
+				expected := routingtable.MessagesToEmit{
+					RegistrationMessages: []routingtable.RegistryMessage{
+						routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGUID: logGuid}),
+						routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname2, LogGUID: logGuid}),
+						routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname1, LogGUID: logGuid}),
+						routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname2, LogGUID: logGuid}),
+					},
+				}
+				Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
+			})
+		})
+
+		Context("when there are external TCP routes", func() {
+			var (
+				internalHostname string
+			)
+			BeforeEach(func() {
+				internalHostname = "internal"
+
+				// Add routes and internal routes
+				routes := createRoutingInfo(key.ContainerPort, []string{hostname1}, []string{internalHostname}, "", []uint32{9999}, logGuid)
+
+				// Set routes on desired lrp
+				beforeDesiredLRP := createSchedulingInfoWithRoutes(key.ProcessGUID, 2, routes, logGuid, *currentTag)
+				table.SetRoutes(nil, beforeDesiredLRP)
+
+				actualLRP := createActualLRP(key, endpoint1, domain)
+				table.AddEndpoint(actualLRP)
+
+				actualLRP = createActualLRP(key, endpoint2, domain)
+				table.AddEndpoint(actualLRP)
+
+				// TODO: Setup the routing table to return a internal registration and internal unregistration from GetInternalRoutingEvents
+			})
+
+			It("returns only the external messages to emit", func() {
+				tcpRouteMappings, messagesToEmit = table.GetExternalRoutingEvents()
+				ttl := 0
+				expectedTCP := []tcpmodels.TcpRouteMapping{
+					{
+						TcpMappingEntity: tcpmodels.TcpMappingEntity{
+							RouterGroupGuid: logGuid,
+							HostPort:        uint16(endpoint1.Port),
+							HostIP:          endpoint1.Host,
+							ExternalPort:    9999,
+							TTL:             &ttl,
+						},
+					},
+					{
+						TcpMappingEntity: tcpmodels.TcpMappingEntity{
+							RouterGroupGuid: logGuid,
+							HostPort:        uint16(endpoint2.Port),
+							HostIP:          endpoint2.Host,
+							ExternalPort:    9999,
+							TTL:             &ttl,
+						},
+					},
+				}
+				Expect(tcpRouteMappings.Registrations).To(ConsistOf(expectedTCP))
+
+				expected := routingtable.MessagesToEmit{
+					RegistrationMessages: []routingtable.RegistryMessage{
+						routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGUID: logGuid}),
+						routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname1, LogGUID: logGuid}),
+					},
+				}
+				Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
 			})
 		})
 	})

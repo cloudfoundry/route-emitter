@@ -19,6 +19,7 @@ import (
 	"code.cloudfoundry.org/durationjson"
 	"code.cloudfoundry.org/go-loggregator/rpc/loggregator_v2"
 	"code.cloudfoundry.org/lager/lagerflags"
+	"code.cloudfoundry.org/lager/lagertest"
 	"code.cloudfoundry.org/locket"
 	"code.cloudfoundry.org/route-emitter/cmd/route-emitter/config"
 	"code.cloudfoundry.org/route-emitter/cmd/route-emitter/runners"
@@ -68,6 +69,8 @@ var _ = Describe("Route Emitter", func() {
 		routerGUID        string
 
 		emitInterval uint64
+
+		logger *lagertest.TestLogger
 	)
 
 	createEmitterRunner := func(sessionName string, cellID string, modifyConfig ...func(*config.RouteEmitterConfig)) *ginkgomon.Runner {
@@ -134,6 +137,7 @@ var _ = Describe("Route Emitter", func() {
 	}
 
 	BeforeEach(func() {
+		logger = lagertest.NewTestLogger("test")
 		processGuid = "guid1"
 		domain = "tests"
 
@@ -172,7 +176,7 @@ var _ = Describe("Route Emitter", func() {
 		natsClient.Subscribe("router.greet", func(msg *nats.Msg) {
 			defer GinkgoRecover()
 
-			greeting := routingtable.RouterGreetingMessage{
+			greeting := routingtable.ExternalServiceGreetingMessage{
 				MinimumRegisterInterval: int(atomic.LoadUint64(&emitInterval)) / int(time.Second),
 				PruneThresholdInSeconds: 6,
 			}
@@ -183,6 +187,22 @@ var _ = Describe("Route Emitter", func() {
 			err = natsClient.Publish(msg.Reply, response)
 			Expect(err).NotTo(HaveOccurred())
 		})
+
+		natsClient.Subscribe("service-discovery.greet", func(msg *nats.Msg) {
+			defer GinkgoRecover()
+
+			greeting := routingtable.ExternalServiceGreetingMessage{
+				MinimumRegisterInterval: int(atomic.LoadUint64(&emitInterval)) / int(time.Second),
+				PruneThresholdInSeconds: 6,
+			}
+
+			response, err := json.Marshal(greeting)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = natsClient.Publish(msg.Reply, response)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
 		var err error
 		sqlConfig := runners.SQLConfig{
 			Port:       sqlRunner.Port(),
@@ -1354,7 +1374,6 @@ var _ = Describe("Route Emitter", func() {
 			internalHostnames = []string{"foo1.bar", "foo2.bar"}
 			routes = newInternalRoutes(internalHostnames)
 			desiredLRP.Routes = routes
-
 		})
 
 		JustBeforeEach(func() {

@@ -611,7 +611,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 				tempRoutingTable, actualDomains := fakeRoutingTable.SwapArgsForCall(0)
 				Expect(actualDomains).To(Equal(domains))
 				Expect(tempRoutingTable.TCPAssociationsCount()).To(Equal(1))
-				routingEvents, _ := tempRoutingTable.GetRoutingEvents()
+				routingEvents, _ := tempRoutingTable.GetExternalRoutingEvents()
 				ttl := 0
 				Expect(routingEvents.Registrations).To(ConsistOf(tcpmodels.TcpRouteMapping{
 					TcpMappingEntity: tcpmodels.TcpMappingEntity{
@@ -678,16 +678,16 @@ var _ = Describe("RoutingAPIHandler", func() {
 		})
 	})
 
-	Describe("Emit", func() {
+	Describe("EmitExternal", func() {
 		var events routingtable.TCPRouteMappings
 		BeforeEach(func() {
 			events = routingtable.TCPRouteMappings{}
-			fakeRoutingTable.GetRoutingEventsReturns(events, emptyNatsMessages)
+			fakeRoutingTable.GetExternalRoutingEventsReturns(events, emptyNatsMessages)
 		})
 
-		It("emits all valid registration events", func() {
-			routeHandler.Emit(logger)
-			Expect(fakeRoutingTable.GetRoutingEventsCallCount()).To(Equal(1))
+		It("emits all valid external registration events", func() {
+			routeHandler.EmitExternal(logger)
+			Expect(fakeRoutingTable.GetExternalRoutingEventsCallCount()).To(Equal(1))
 			Expect(fakeRoutingAPIEmitter.EmitCallCount()).To(Equal(1))
 			Expect(fakeRoutingAPIEmitter.EmitArgsForCall(0)).To(Equal(events))
 		})
