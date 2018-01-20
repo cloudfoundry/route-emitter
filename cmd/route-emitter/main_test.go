@@ -1,10 +1,12 @@
 package main_test
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/http/httputil"
@@ -21,6 +23,9 @@ import (
 	"code.cloudfoundry.org/lager/lagerflags"
 	"code.cloudfoundry.org/lager/lagertest"
 	"code.cloudfoundry.org/locket"
+	locketconfig "code.cloudfoundry.org/locket/cmd/locket/config"
+	locketrunner "code.cloudfoundry.org/locket/cmd/locket/testrunner"
+	locketmodels "code.cloudfoundry.org/locket/models"
 	"code.cloudfoundry.org/route-emitter/cmd/route-emitter/config"
 	"code.cloudfoundry.org/route-emitter/cmd/route-emitter/runners"
 	"code.cloudfoundry.org/route-emitter/routingtable"
@@ -84,7 +89,10 @@ var _ = Describe("Route Emitter", func() {
 			SyncInterval:         durationjson.Duration(syncInterval),
 			LockRetryInterval:    durationjson.Duration(time.Second),
 			LockTTL:              durationjson.Duration(5 * time.Second),
+			ConsulEnabled:        true,
 			ConsulCluster:        consulClusterAddress,
+			UUID:                 "route-emitter-uuid",
+			ReportInterval:       durationjson.Duration(10 * time.Millisecond),
 			LagerConfig: lagerflags.LagerConfig{
 				LogLevel: lagerflags.DEBUG,
 			},
@@ -1742,7 +1750,7 @@ var _ = Describe("Route Emitter", func() {
 						useLoggregatorV2 = true
 					})
 
-					It("emits consul down mode", func() {
+					FIt("emits consul down mode", func() {
 						Eventually(testMetricsChan, 3*retryInterval+1, time.Millisecond).Should(Receive(matchV2MetricAndValue(metricAndValue{Name: "ConsulDownMode", Value: 1})))
 					})
 				})

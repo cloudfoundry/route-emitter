@@ -43,6 +43,7 @@ var (
 	cfgs []func(*config.RouteEmitterConfig)
 
 	emitterPath        string
+	locketPath         string
 	natsPort           uint16
 	healthCheckPort    int
 	healthCheckAddress string
@@ -88,12 +89,16 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 	bbs, err := gexec.Build("code.cloudfoundry.org/bbs/cmd/bbs", "-race")
 	Expect(err).NotTo(HaveOccurred())
 
+	locket, err := gexec.Build("code.cloudfoundry.org/locket/cmd/locket", "-race")
+	Expect(err).NotTo(HaveOccurred())
+
 	routingAPI, err := gexec.Build("code.cloudfoundry.org/routing-api/cmd/routing-api", "-race")
 	Expect(err).NotTo(HaveOccurred())
 
 	payload, err := json.Marshal(map[string]string{
 		"emitter":     emitter,
 		"bbs":         bbs,
+		"locket":      locket,
 		"routing-api": routingAPI,
 	})
 
@@ -138,6 +143,7 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 	syncInterval = 200 * time.Millisecond
 
 	bbsPath = string(binaries["bbs"])
+	locketPath = string(binaries["locket"])
 	bbsPort, err := portAllocator.ClaimPorts(2)
 	Expect(err).NotTo(HaveOccurred())
 	bbsAddress := fmt.Sprintf("127.0.0.1:%d", bbsPort)
