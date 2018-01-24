@@ -18,6 +18,11 @@ import (
 	"code.cloudfoundry.org/go-loggregator/runtimeemitter"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/lager/lagerflags"
+	"code.cloudfoundry.org/locket"
+	"code.cloudfoundry.org/locket/jointlock"
+	"code.cloudfoundry.org/locket/lock"
+	"code.cloudfoundry.org/locket/lockheldmetrics"
+	locketmodels "code.cloudfoundry.org/locket/models"
 	route_emitter "code.cloudfoundry.org/route-emitter"
 	"code.cloudfoundry.org/route-emitter/cmd/route-emitter/config"
 	"code.cloudfoundry.org/route-emitter/consuldownchecker"
@@ -48,7 +53,8 @@ var configFilePath = flag.String(
 )
 
 const (
-	dropsondeOrigin = "route_emitter"
+	dropsondeOrigin     = "route_emitter"
+	routeEmitterLockKey = "route-emitter"
 )
 
 func main() {
@@ -130,31 +136,75 @@ func main() {
 	}
 
 	var consulClient consuladapter.Client
+	consulLocks := []grouper.Member{}
+	locketLocks := []grouper.Member{}
 	var consulDownModeNotifier *consuldownmodenotifier.ConsulDownModeNotifier
+
 	if cfg.CellID == "" {
-		consulClient = initializeConsulClient(logger, cfg.ConsulCluster)
+		if cfg.ConsulEnabled {
+			consulClient = initializeConsulClient(logger, cfg.ConsulCluster)
 
-		lockMaintainer := initializeLockMaintainer(
-			logger,
-			consulClient,
-			cfg.ConsulSessionName,
-			time.Duration(cfg.LockTTL),
-			time.Duration(cfg.LockRetryInterval),
-			clock,
-			metronClient,
+			lockMaintainer := initializeLockMaintainer(
+				logger,
+				consulClient,
+				cfg.ConsulSessionName,
+				time.Duration(cfg.LockTTL),
+				time.Duration(cfg.LockRetryInterval),
+				clock,
+				metronClient,
+			)
+
+			consulDownModeNotifier = consuldownmodenotifier.NewConsulDownModeNotifier(
+				logger,
+				0,
+				clock,
+				time.Duration(cfg.ConsulDownModeNotificationInterval),
+				metronClient,
+			)
+
+			// we are running in global mode
+			consulLocks = append(consulLocks, grouper.Member{"lock-maintainer", lockMaintainer})
+			consulLocks = append(consulLocks, grouper.Member{"consul-down-mode-notifier", consulDownModeNotifier})
+		}
+
+		if cfg.LocketEnabled {
+			locketClient, err := locket.NewClient(logger, cfg.ClientLocketConfig)
+			if err != nil {
+				logger.Fatal("failed-to-create-locket-client", err)
+			}
+
+			if cfg.UUID == "" {
+				logger.Fatal("invalid-uuid", errors.New("invalid-uuid-from-config"))
+			}
+
+			lockIdentifier := &locketmodels.Resource{
+				Key:      routeEmitterLockKey,
+				Owner:    cfg.UUID,
+				TypeCode: locketmodels.LOCK,
+				Type:     locketmodels.LockType,
+			}
+
+			locketLocks = append(locketLocks, grouper.Member{"sql-lock", lock.NewLockRunner(
+				logger,
+				locketClient,
+				lockIdentifier,
+				locket.DefaultSessionTTLInSeconds,
+				clock,
+				locket.SQLRetryInterval,
+			)})
+		}
+
+		lock := lockRunner(logger, clock, consulLocks, locketLocks)
+
+		fmt.Println("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$", cfg.ReportInterval)
+		metricsTicker := clock.NewTicker(time.Duration(cfg.ReportInterval))
+		lockHeldMetronNotifier := lockheldmetrics.NewLockHeldMetronNotifier(logger, metricsTicker, metronClient)
+
+		members = append(members,
+			grouper.Member{"lock-held-metrics", lockHeldMetronNotifier},
+			grouper.Member{"lock", lock},
+			grouper.Member{"set-lock-held-metrics", lockheldmetrics.SetLockHeldRunner(logger, *lockHeldMetronNotifier)},
 		)
-
-		consulDownModeNotifier = consuldownmodenotifier.NewConsulDownModeNotifier(
-			logger,
-			0,
-			clock,
-			time.Duration(cfg.ConsulDownModeNotificationInterval),
-			metronClient,
-		)
-
-		// we are running in global mode
-		members = append(members, grouper.Member{"lock-maintainer", lockMaintainer})
-		members = append(members, grouper.Member{"consul-down-mode-notifier", consulDownModeNotifier})
 	}
 
 	members = append(members,
@@ -186,10 +236,11 @@ func main() {
 		logger.Info("finished")
 	}
 
-	if cfg.CellID == "" {
+	if cfg.ConsulEnabled && cfg.CellID == "" {
 		// ConsulDown mode
 		logger = logger.Session("consul-down-mode")
 
+		consulClient = initializeConsulClient(logger, cfg.ConsulCluster)
 		consulDownChecker := consuldownchecker.NewConsulDownChecker(
 			logger,
 			clock,
@@ -197,18 +248,25 @@ func main() {
 			time.Duration(cfg.LockRetryInterval),
 		)
 
-		consulDownModeNotifier = consuldownmodenotifier.NewConsulDownModeNotifier(
+		consulDownModeNotifier := consuldownmodenotifier.NewConsulDownModeNotifier(
 			logger,
 			1,
 			clock,
 			time.Duration(cfg.ConsulDownModeNotificationInterval),
 			metronClient,
 		)
+
+		consulLocks = []grouper.Member{
+			grouper.Member{"consul-down-checker", consulDownChecker},
+			grouper.Member{"consul-down-mode-notifier", consulDownModeNotifier},
+		}
+
+		lock := lockRunner(logger, clock, consulLocks, locketLocks)
+
 		// we are running in global mode
 		members = grouper.Members{
 			{"nats-client", natsClientRunner},
-			{"consul-down-checker", consulDownChecker},
-			{"consul-down-mode-notifier", consulDownModeNotifier},
+			{"lock", lock},
 			{"watcher", watcher},
 			{"external-scheduler", externalScheduler},
 			{"syncer", syncer},
@@ -233,6 +291,30 @@ func main() {
 	}
 
 	logger.Info("exited")
+}
+
+func lockRunner(logger lager.Logger, clk clock.Clock, consulLocks []grouper.Member, locketLocks []grouper.Member) ifrit.Runner {
+	var lock ifrit.Runner
+	lockMembers := []grouper.Member{}
+
+	if len(consulLocks) != 0 {
+		logger.Info("consul-configured")
+		lockMembers = append(lockMembers, consulLocks...)
+	}
+
+	if len(locketLocks) != 0 {
+		logger.Info("locket-configured")
+		lockMembers = append(lockMembers, locketLocks...)
+	}
+
+	if len(consulLocks) == 0 && len(locketLocks) == 0 {
+		logger.Fatal("no-locks-configured", errors.New("Lock configuration must be provided"))
+	} else if len(consulLocks) > 0 && len(locketLocks) > 0 {
+		lock = jointlock.NewJointLock(clk, locket.DefaultSessionTTL, lockMembers...)
+	} else {
+		lock = grouper.NewOrdered(os.Interrupt, lockMembers)
+	}
+	return lock
 }
 
 func newUaaClient(logger lager.Logger, c *config.RouteEmitterConfig, klok clock.Clock) uaaclient.Client {
@@ -271,17 +353,17 @@ func initializeDropsonde(logger lager.Logger, dropsondePort int) {
 	}
 }
 
-func initializeMetron(logger lager.Logger, locketConfig config.RouteEmitterConfig) (loggingclient.IngressClient, error) {
-	client, err := loggingclient.NewIngressClient(locketConfig.LoggregatorConfig)
+func initializeMetron(logger lager.Logger, cfg config.RouteEmitterConfig) (loggingclient.IngressClient, error) {
+	client, err := loggingclient.NewIngressClient(cfg.LoggregatorConfig)
 	if err != nil {
 		return nil, err
 	}
 
-	if locketConfig.LoggregatorConfig.UseV2API {
+	if cfg.LoggregatorConfig.UseV2API {
 		emitter := runtimeemitter.NewV1(client)
 		go emitter.Run()
 	} else {
-		initializeDropsonde(logger, locketConfig.DropsondePort)
+		initializeDropsonde(logger, cfg.DropsondePort)
 	}
 
 	return client, nil

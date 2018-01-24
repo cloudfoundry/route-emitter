@@ -34,6 +34,7 @@ type RouteEmitterConfig struct {
 	BBSClientSessionCacheSize          int                   `json:"bbs_client_session_cache_size,omitempty"`
 	BBSMaxIdleConnsPerHost             int                   `json:"bbs_max_idle_conns_per_host,omitempty"`
 	CellID                             string                `json:"cell_id,omitempty"`
+	UUID                               string                `json:"uuid,omitempty"`
 	RegisterDirectInstanceRoutes       bool                  `json:"register_direct_instance_routes",omitempty`
 	CommunicationTimeout               durationjson.Duration `json:"communication_timeout,omitempty"`
 	ConsulCluster                      string                `json:"consul_cluster,omitempty"`
@@ -53,9 +54,13 @@ type RouteEmitterConfig struct {
 	RoutingAPI                         RoutingAPIConfig      `json:"routing_api"`
 	EnableTCPEmitter                   bool                  `json:"enable_tcp_emitter"`
 	LoggregatorConfig                  loggingclient.Config  `json:"loggregator"`
+	ReportInterval                     durationjson.Duration `json:"report_interval,omitempty"`
 	EnableInternalEmitter              bool                  `json:"enable_internal_emitter"`
+	ConsulEnabled                      bool                  `json:"consul_enabled"`
+	LocketEnabled                      bool                  `json:"locket_enabled"`
 	lagerflags.LagerConfig
 	debugserver.DebugServerConfig
+	locket.ClientLocketConfig
 }
 
 func DefaultRouteEmitterConfig() RouteEmitterConfig {

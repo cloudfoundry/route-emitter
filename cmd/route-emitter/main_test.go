@@ -84,7 +84,10 @@ var _ = Describe("Route Emitter", func() {
 			SyncInterval:         durationjson.Duration(syncInterval),
 			LockRetryInterval:    durationjson.Duration(time.Second),
 			LockTTL:              durationjson.Duration(5 * time.Second),
+			ConsulEnabled:        true,
 			ConsulCluster:        consulClusterAddress,
+			UUID:                 "route-emitter-uuid",
+			// ReportInterval:       durationjson.Duration(1 * time.Second),
 			LagerConfig: lagerflags.LagerConfig{
 				LogLevel: lagerflags.DEBUG,
 			},
@@ -1333,7 +1336,7 @@ var _ = Describe("Route Emitter", func() {
 					useLoggregatorV2 = true
 				})
 
-				It("emits not in consul down mode", func() {
+				FIt("emits not in consul down mode", func() {
 					Eventually(testMetricsChan).Should(Receive(matchV2MetricAndValue(metricAndValue{Name: "ConsulDownMode", Value: 0})))
 				})
 			})
