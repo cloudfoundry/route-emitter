@@ -923,6 +923,7 @@ var _ = Describe("Route Emitter", func() {
 		})
 
 		AfterEach(func() {
+			ginkgomon.Kill(emitter)
 			ginkgomon.Kill(locketProcess)
 		})
 
