@@ -95,7 +95,7 @@ var _ = Describe("Route Emitter", func() {
 			ConsulEnabled:        true,
 			ConsulCluster:        consulClusterAddress,
 			UUID:                 "route-emitter-uuid",
-			// ReportInterval:       durationjson.Duration(1 * time.Second),
+			ReportInterval:       durationjson.Duration(1 * time.Second),
 			LagerConfig: lagerflags.LagerConfig{
 				LogLevel: lagerflags.DEBUG,
 			},
@@ -922,14 +922,14 @@ var _ = Describe("Route Emitter", func() {
 			})
 		})
 
+		AfterEach(func() {
+			ginkgomon.Kill(locketProcess)
+		})
+
 		JustBeforeEach(func() {
 			runner = createEmitterRunner("emitter1", "", cfgs...)
 			runner.StartCheck = ""
 			emitter = ginkgomon.Invoke(runner)
-		})
-
-		AfterEach(func() {
-			ginkgomon.Interrupt(emitter)
 		})
 
 		It("acquires the lock and becomes active", func() {
@@ -938,7 +938,7 @@ var _ = Describe("Route Emitter", func() {
 
 		Context("and the locking server becomes unreachable after grabbing the lock", func() {
 			JustBeforeEach(func() {
-				ginkgomon.Interrupt(locketProcess)
+				ginkgomon.Kill(locketProcess)
 			})
 
 			It("exits", func() {
