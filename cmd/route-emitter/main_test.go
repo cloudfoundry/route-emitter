@@ -1,6 +1,14 @@
 package main_test
 
 import (
+	"context"
+
+	"code.cloudfoundry.org/clock"
+	locketconfig "code.cloudfoundry.org/locket/cmd/locket/config"
+	locketrunner "code.cloudfoundry.org/locket/cmd/locket/testrunner"
+	"code.cloudfoundry.org/locket/lock"
+	locketmodels "code.cloudfoundry.org/locket/models"
+
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -84,7 +92,10 @@ var _ = Describe("Route Emitter", func() {
 			SyncInterval:         durationjson.Duration(syncInterval),
 			LockRetryInterval:    durationjson.Duration(time.Second),
 			LockTTL:              durationjson.Duration(5 * time.Second),
+			ConsulEnabled:        true,
 			ConsulCluster:        consulClusterAddress,
+			UUID:                 "route-emitter-uuid",
+			// ReportInterval:       durationjson.Duration(1 * time.Second),
 			LagerConfig: lagerflags.LagerConfig{
 				LogLevel: lagerflags.DEBUG,
 			},
@@ -879,6 +890,192 @@ var _ = Describe("Route Emitter", func() {
 				_, err := client.Get("http://" + healthCheckAddress)
 				return err
 			}, 6*time.Second).Should(HaveOccurred(), "healthcheck unexpectedly started up")
+		})
+	})
+
+	Context("when the RouteEmitter is configured to grab the lock from the sql locking server", func() {
+		var (
+			// competingProcess ifrit.Process
+			locketAddress string
+			locketRunner  ifrit.Runner
+			locketProcess ifrit.Process
+			emitter       ifrit.Process
+			runner        *ginkgomon.Runner
+		)
+
+		BeforeEach(func() {
+			locketPort, err := portAllocator.ClaimPorts(1)
+			Expect(err).NotTo(HaveOccurred())
+			locketAddress = fmt.Sprintf("localhost:%d", locketPort)
+
+			locketRunner = locketrunner.NewLocketRunner(locketPath, func(cfg *locketconfig.LocketConfig) {
+				cfg.ConsulCluster = consulRunner.ConsulCluster()
+				cfg.DatabaseConnectionString = sqlRunner.ConnectionString()
+				cfg.DatabaseDriver = sqlRunner.DriverName()
+				cfg.ListenAddress = locketAddress
+			})
+			locketProcess = ginkgomon.Invoke(locketRunner)
+			cfgs = append(cfgs, func(cfg *config.RouteEmitterConfig) {
+				cfg.ClientLocketConfig = locketrunner.ClientLocketConfig()
+				cfg.LocketEnabled = true
+				cfg.LocketAddress = locketAddress
+			})
+		})
+
+		JustBeforeEach(func() {
+			runner = createEmitterRunner("emitter1", "", cfgs...)
+			runner.StartCheck = ""
+			emitter = ginkgomon.Invoke(runner)
+		})
+
+		AfterEach(func() {
+			ginkgomon.Interrupt(emitter)
+		})
+
+		It("acquires the lock and becomes active", func() {
+			Eventually(runner.Buffer, 5*time.Second).Should(gbytes.Say("emitter1.started"))
+		})
+
+		Context("and the locking server becomes unreachable after grabbing the lock", func() {
+			JustBeforeEach(func() {
+				ginkgomon.Interrupt(locketProcess)
+			})
+
+			It("exits", func() {
+				Eventually(emitter.Wait()).Should(Receive())
+			})
+		})
+
+		Context("when the consul lock is not required", func() {
+			var (
+				competingLockProcess ifrit.Process
+			)
+
+			BeforeEach(func() {
+				cfgs = append(cfgs, func(cfg *config.RouteEmitterConfig) {
+					cfg.ConsulEnabled = false
+				})
+
+				consulClient := consulRunner.NewClient()
+				path := locket.LockSchemaPath("route_emitter_lock")
+				competingLock := locket.NewLock(logger, consulClient, path, nil, clock.NewClock(), 500*time.Millisecond, 10*time.Second)
+				competingLockProcess = ifrit.Invoke(competingLock)
+			})
+
+			AfterEach(func() {
+				ginkgomon.Interrupt(competingLockProcess)
+			})
+
+			It("only grabs the sql lock and starts succesfully", func() {
+				Eventually(runner.Buffer, 5*time.Second).Should(gbytes.Say("emitter1.started"))
+			})
+		})
+
+		Context("when the consul lock is not available", func() {
+			var competingProcess ifrit.Process
+
+			BeforeEach(func() {
+				consulClient := consulRunner.NewClient()
+				path := locket.LockSchemaPath("route_emitter_lock")
+				competingLock := locket.NewLock(logger, consulClient, path, nil, clock.NewClock(), 500*time.Millisecond, 10*time.Second)
+				competingProcess = ifrit.Invoke(competingLock)
+			})
+
+			AfterEach(func() {
+				ginkgomon.Interrupt(competingProcess)
+			})
+
+			It("does not acquire the locket lock", func() {
+				cfg := locketrunner.ClientLocketConfig()
+				cfg.LocketAddress = locketAddress
+				locketClient, err := locket.NewClient(logger, cfg)
+				Expect(err).NotTo(HaveOccurred())
+				Consistently(func() error {
+					_, err := locketClient.Fetch(context.Background(), &locketmodels.FetchRequest{
+						Key: "route_emitter",
+					})
+					return err
+				}).Should(HaveOccurred())
+			})
+
+			It("starts but waits for the lock", func() {
+				Consistently(runner.Buffer).ShouldNot(gbytes.Say("emitter1.started"))
+			})
+
+			Context("and the lock becomes available", func() {
+				JustBeforeEach(func() {
+					ginkgomon.Interrupt(competingProcess)
+				})
+
+				It("acquires the lock and becomes active", func() {
+					Eventually(runner.Buffer).Should(gbytes.Say("emitter1.started"))
+				})
+			})
+		})
+
+		Context("when the locket lock is not available", func() {
+			var competingProcess ifrit.Process
+
+			BeforeEach(func() {
+				cfg := locketrunner.ClientLocketConfig()
+				cfg.LocketAddress = locketAddress
+				locketClient, err := locket.NewClient(logger, cfg)
+				Expect(err).NotTo(HaveOccurred())
+
+				lockIdentifier := &locketmodels.Resource{
+					Key:      "route-emitter",
+					Owner:    "Your worst enemy.",
+					Value:    "Something",
+					TypeCode: locketmodels.LOCK,
+				}
+
+				clock := clock.NewClock()
+				competingRunner := lock.NewLockRunner(logger, locketClient, lockIdentifier, 5, clock, locket.RetryInterval)
+				competingProcess = ginkgomon.Invoke(competingRunner)
+			})
+
+			AfterEach(func() {
+				ginkgomon.Interrupt(competingProcess)
+			})
+
+			It("starts but waits for the lock", func() {
+				Consistently(runner.Buffer).ShouldNot(gbytes.Say("emitter1.started"))
+			})
+
+			Context("and the lock becomes available", func() {
+				JustBeforeEach(func() {
+					ginkgomon.Interrupt(competingProcess)
+				})
+
+				It("acquires the lock and becomes active", func() {
+					Eventually(runner.Buffer).Should(gbytes.Say("emitter1.started"))
+				})
+			})
+		})
+
+		Context("and the UUID is not present", func() {
+			BeforeEach(func() {
+				cfgs = append(cfgs, func(cfg *config.RouteEmitterConfig) {
+					cfg.UUID = ""
+				})
+			})
+
+			It("exits with an error", func() {
+				Eventually(emitter.Wait()).Should(Receive())
+			})
+		})
+
+		Context("when neither lock is configured", func() {
+			BeforeEach(func() {
+				cfgs = append(cfgs, func(cfg *config.RouteEmitterConfig) {
+					cfg.ConsulEnabled = false
+					cfg.LocketEnabled = false
+				})
+			})
+
+			It("exits with an error", func() {
+				Eventually(emitter.Wait()).Should(Receive())
+			})
 		})
 	})
 
