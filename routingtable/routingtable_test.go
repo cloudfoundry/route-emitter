@@ -236,7 +236,7 @@ var _ = Describe("RoutingTable", func() {
 
 			It("emits an unregistration", func() {
 				expectedUnregistrationMessages := []routingtable.RegistryMessage{
-					routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGUID: logGuid}),
+					routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGUID: logGuid}, false),
 				}
 				Expect(messagesToEmit.UnregistrationMessages).To(Equal(expectedUnregistrationMessages))
 			})
@@ -251,7 +251,7 @@ var _ = Describe("RoutingTable", func() {
 				It("emits a registration", func() {
 					expected := routingtable.MessagesToEmit{
 						RegistrationMessages: []routingtable.RegistryMessage{
-							routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: "bar.example.com", LogGUID: logGuid}),
+							routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: "bar.example.com", LogGUID: logGuid}, false),
 						},
 					}
 					Expect(messagesToEmit).To(Equal(expected))
@@ -266,7 +266,7 @@ var _ = Describe("RoutingTable", func() {
 					It("emits a registration", func() {
 						expected := routingtable.MessagesToEmit{
 							RegistrationMessages: []routingtable.RegistryMessage{
-								routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: "bar.example.com", LogGUID: logGuid}),
+								routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: "bar.example.com", LogGUID: logGuid}, false),
 							},
 						}
 						Expect(messagesToEmit).To(Equal(expected))
@@ -300,7 +300,6 @@ var _ = Describe("RoutingTable", func() {
 							Host:                 endpoint1.ContainerIP,
 							Tags:                 map[string]string{"component": "route-emitter"},
 							App:                  logGuid,
-							EndpointUpdatedAtNs:  endpoint1.Since,
 							PrivateInstanceIndex: "0",
 						},
 					},
@@ -342,7 +341,7 @@ var _ = Describe("RoutingTable", func() {
 							Host:                 endpoint1.ContainerIP,
 							Tags:                 map[string]string{"component": "route-emitter"},
 							App:                  logGuid,
-							EndpointUpdatedAtNs:  endpoint1.Since,
+							EndpointUpdatedAtNs:  0, // do not emit this field for route updates
 							PrivateInstanceIndex: "0",
 						},
 					},
@@ -374,8 +373,8 @@ var _ = Describe("RoutingTable", func() {
 				Expect(tcpRouteMappings).To(BeZero())
 				expected := routingtable.MessagesToEmit{
 					UnregistrationMessages: []routingtable.RegistryMessage{
-						routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname1, LogGUID: logGuid}),
-						routingtable.RegistryMessageFor(endpoint3, routingtable.Route{Hostname: hostname1, LogGUID: logGuid}),
+						routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname1, LogGUID: logGuid}, false),
+						routingtable.RegistryMessageFor(endpoint3, routingtable.Route{Hostname: hostname1, LogGUID: logGuid}, false),
 					},
 					InternalUnregistrationMessages: []routingtable.RegistryMessage{
 						{
@@ -383,7 +382,6 @@ var _ = Describe("RoutingTable", func() {
 							Host:                 endpoint2.ContainerIP,
 							Tags:                 map[string]string{"component": "route-emitter"},
 							App:                  logGuid,
-							EndpointUpdatedAtNs:  endpoint2.Since,
 							PrivateInstanceIndex: "1",
 						},
 						{
@@ -391,7 +389,6 @@ var _ = Describe("RoutingTable", func() {
 							Host:                 endpoint3.ContainerIP,
 							Tags:                 map[string]string{"component": "route-emitter"},
 							App:                  logGuid,
-							EndpointUpdatedAtNs:  endpoint3.Since,
 							PrivateInstanceIndex: "2",
 						},
 					},
@@ -407,7 +404,7 @@ var _ = Describe("RoutingTable", func() {
 				Expect(tcpRouteMappings).To(BeZero())
 				expected := routingtable.MessagesToEmit{
 					RegistrationMessages: []routingtable.RegistryMessage{
-						routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGUID: logGuid}),
+						routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGUID: logGuid}, false),
 					},
 					InternalRegistrationMessages: []routingtable.RegistryMessage{
 						{
@@ -415,7 +412,7 @@ var _ = Describe("RoutingTable", func() {
 							Host:                 endpoint1.ContainerIP,
 							Tags:                 map[string]string{"component": "route-emitter"},
 							App:                  logGuid,
-							EndpointUpdatedAtNs:  endpoint1.Since,
+							EndpointUpdatedAtNs:  0,
 							PrivateInstanceIndex: "0",
 						},
 					},
@@ -444,12 +441,11 @@ var _ = Describe("RoutingTable", func() {
 			tempTable = routingtable.NewRoutingTable(logger, false, fakeMetronClient)
 			actualLRP = createActualLRP(key, endpoint1, domain)
 			tempTable.AddEndpoint(actualLRP)
-
 			tcpRouteMappings, messagesToEmit = table.Swap(tempTable, freshDomains)
 
 			expectedHTTP := routingtable.MessagesToEmit{
 				UnregistrationMessages: []routingtable.RegistryMessage{
-					routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGUID: logGuid}),
+					routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGUID: logGuid}, false),
 				},
 			}
 			Expect(messagesToEmit).To(MatchMessagesToEmit(expectedHTTP))
@@ -495,7 +491,6 @@ var _ = Describe("RoutingTable", func() {
 						Host:                 endpoint1.ContainerIP,
 						Tags:                 map[string]string{"component": "route-emitter"},
 						App:                  logGuid,
-						EndpointUpdatedAtNs:  endpoint1.Since,
 						PrivateInstanceIndex: "0",
 					}))
 				})
@@ -509,7 +504,7 @@ var _ = Describe("RoutingTable", func() {
 				table.SetRoutes(nil, beforeDesiredLRP)
 
 				actualLRP := createActualLRP(key, endpoint1, domain)
-				table.AddEndpoint(actualLRP)
+				table.AddEndpoint(actualLRP) // route+lrp
 			})
 
 			Context("when the domain is not fresh", func() {
@@ -522,7 +517,7 @@ var _ = Describe("RoutingTable", func() {
 					It("unregisters non-existent endpoints", func() {
 						expectedHTTP := routingtable.MessagesToEmit{
 							UnregistrationMessages: []routingtable.RegistryMessage{
-								routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGUID: logGuid}),
+								routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGUID: logGuid}, false),
 							},
 						}
 						Expect(messagesToEmit).To(MatchMessagesToEmit(expectedHTTP))
@@ -544,12 +539,11 @@ var _ = Describe("RoutingTable", func() {
 						actualLRP := createActualLRP(key, endpoint1, domain)
 						tempTable := routingtable.NewRoutingTable(logger, false, fakeMetronClient)
 						tempTable.AddEndpoint(actualLRP)
-						table.Swap(tempTable, noFreshDomains)
-						tcpRouteMappings, messagesToEmit = table.GetExternalRoutingEvents()
+						tcpRouteMappings, messagesToEmit = table.Swap(tempTable, noFreshDomains)
 
 						expectedHTTP := routingtable.MessagesToEmit{
 							RegistrationMessages: []routingtable.RegistryMessage{
-								routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGUID: logGuid}),
+								routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGUID: logGuid}, true),
 							},
 						}
 						Expect(messagesToEmit).To(MatchMessagesToEmit(expectedHTTP))
@@ -685,7 +679,7 @@ var _ = Describe("RoutingTable", func() {
 				Expect(tcpRouteMappings).To(BeZero())
 				expected := routingtable.MessagesToEmit{
 					RegistrationMessages: []routingtable.RegistryMessage{
-						routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGUID: logGuid}),
+						routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGUID: logGuid}, true),
 					},
 					InternalRegistrationMessages: []routingtable.RegistryMessage{
 						routingtable.RegistryMessage{
@@ -780,7 +774,6 @@ var _ = Describe("RoutingTable", func() {
 							URIs:                 []string{internalHostname1, fmt.Sprintf("%d.%s", 1, internalHostname1)},
 							PrivateInstanceIndex: "1",
 							App:                  logGuid,
-							EndpointUpdatedAtNs:  endpoint2.Since,
 							Tags: map[string]string{
 								"component": "route-emitter",
 							},
@@ -790,7 +783,6 @@ var _ = Describe("RoutingTable", func() {
 							URIs:                 []string{internalHostname1, fmt.Sprintf("%d.%s", 0, internalHostname1)},
 							PrivateInstanceIndex: "0",
 							App:                  logGuid,
-							EndpointUpdatedAtNs:  endpoint1.Since,
 							Tags: map[string]string{
 								"component": "route-emitter",
 							},
@@ -861,10 +853,10 @@ var _ = Describe("RoutingTable", func() {
 				Expect(tcpRouteMappings).To(BeZero())
 				expected := routingtable.MessagesToEmit{
 					RegistrationMessages: []routingtable.RegistryMessage{
-						routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGUID: logGuid}),
-						routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname2, LogGUID: logGuid}),
-						routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname1, LogGUID: logGuid}),
-						routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname2, LogGUID: logGuid}),
+						routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGUID: logGuid}, false),
+						routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname2, LogGUID: logGuid}, false),
+						routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname1, LogGUID: logGuid}, false),
+						routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname2, LogGUID: logGuid}, false),
 					},
 				}
 				Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
@@ -921,8 +913,8 @@ var _ = Describe("RoutingTable", func() {
 
 				expected := routingtable.MessagesToEmit{
 					RegistrationMessages: []routingtable.RegistryMessage{
-						routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGUID: logGuid}),
-						routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname1, LogGUID: logGuid}),
+						routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGUID: logGuid}, false),
+						routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname1, LogGUID: logGuid}, false),
 					},
 				}
 				Expect(messagesToEmit).To(MatchMessagesToEmit(expected))

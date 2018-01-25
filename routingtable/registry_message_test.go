@@ -112,8 +112,14 @@ var _ = Describe("RegistryMessage", func() {
 			expectedMessage.EndpointUpdatedAtNs = 2000
 		})
 
+		It("omit EndpointUpdatedAtNs if emitEndpointUpdatedAt is set to false", func() {
+			message := routingtable.RegistryMessageFor(endpoint, route, false)
+			expectedMessage.EndpointUpdatedAtNs = 0
+			Expect(message).To(Equal(expectedMessage))
+		})
+
 		It("creates a valid message from an endpoint and routes", func() {
-			message := routingtable.RegistryMessageFor(endpoint, route)
+			message := routingtable.RegistryMessageFor(endpoint, route, true)
 			Expect(message).To(Equal(expectedMessage))
 		})
 
@@ -121,7 +127,7 @@ var _ = Describe("RegistryMessage", func() {
 			expectedMessage.TlsPort = 61005
 			endpoint.TlsProxyPort = 61005
 
-			message := routingtable.RegistryMessageFor(endpoint, route)
+			message := routingtable.RegistryMessageFor(endpoint, route, true)
 			Expect(message).To(Equal(expectedMessage))
 		})
 
@@ -129,7 +135,7 @@ var _ = Describe("RegistryMessage", func() {
 			expectedMessage.PrivateInstanceIndex = "2"
 			endpoint.Index = 2
 
-			message := routingtable.RegistryMessageFor(endpoint, route)
+			message := routingtable.RegistryMessageFor(endpoint, route, true)
 			Expect(message).To(Equal(expectedMessage))
 		})
 	})
@@ -169,8 +175,14 @@ var _ = Describe("RegistryMessage", func() {
 
 		})
 
+		It("omit EndpointUpdatedAtNs if emitEndpointUpdatedAt is set to false", func() {
+			message := routingtable.InternalAddressRegistryMessageFor(endpoint, route, false)
+			expectedMessage.EndpointUpdatedAtNs = 0
+			Expect(message).To(Equal(expectedMessage))
+		})
+
 		It("creates a valid message from an endpoint and routes", func() {
-			message := routingtable.InternalAddressRegistryMessageFor(endpoint, route)
+			message := routingtable.InternalAddressRegistryMessageFor(endpoint, route, true)
 			Expect(message).To(Equal(expectedMessage))
 		})
 
@@ -178,7 +190,7 @@ var _ = Describe("RegistryMessage", func() {
 			expectedMessage.TlsPort = 61007
 			endpoint.ContainerTlsProxyPort = 61007
 
-			message := routingtable.InternalAddressRegistryMessageFor(endpoint, route)
+			message := routingtable.InternalAddressRegistryMessageFor(endpoint, route, true)
 			Expect(message).To(Equal(expectedMessage))
 		})
 
@@ -186,7 +198,7 @@ var _ = Describe("RegistryMessage", func() {
 			expectedMessage.PrivateInstanceIndex = "2"
 			endpoint.Index = 2
 
-			message := routingtable.InternalAddressRegistryMessageFor(endpoint, route)
+			message := routingtable.InternalAddressRegistryMessageFor(endpoint, route, true)
 			Expect(message).To(Equal(expectedMessage))
 		})
 	})
@@ -201,6 +213,7 @@ var _ = Describe("RegistryMessage", func() {
 				URIs:                 []string{"host-1.example.com", "0.host-1.example.com"},
 				App:                  "app-guid",
 				Tags:                 map[string]string{"component": "route-emitter"},
+				EndpointUpdatedAtNs:  2000,
 				PrivateInstanceIndex: "0",
 			}
 
@@ -211,6 +224,7 @@ var _ = Describe("RegistryMessage", func() {
 				ContainerIP:   "1.2.3.4",
 				Port:          61001,
 				ContainerPort: 11,
+				Since:         2000,
 			}
 
 			route = routingtable.InternalRoute{
@@ -220,8 +234,14 @@ var _ = Describe("RegistryMessage", func() {
 			}
 		})
 
+		It("omit EndpointUpdatedAtNs if emitEndpointUpdatedAt is set to false", func() {
+			message := routingtable.InternalEndpointRegistryMessageFor(endpoint, route, false)
+			expectedMessage.EndpointUpdatedAtNs = 0
+			Expect(message).To(Equal(expectedMessage))
+		})
+
 		It("creates a valid message from an endpoint and routes", func() {
-			message := routingtable.InternalEndpointRegistryMessageFor(endpoint, route)
+			message := routingtable.InternalEndpointRegistryMessageFor(endpoint, route, true)
 			Expect(message).To(Equal(expectedMessage))
 		})
 	})

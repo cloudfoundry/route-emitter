@@ -427,7 +427,7 @@ func (t *internalRoutingTable) GetRoutingEvents() (TCPRouteMappings, MessagesToE
 }
 
 type routeMapping interface {
-	MessageFor(endpoint Endpoint, directInstanceAddress bool) (*RegistryMessage, *tcpmodels.TcpRouteMapping, *RegistryMessage)
+	MessageFor(endpoint Endpoint, directInstanceAddress, emitEndpointUpdatedAt bool) (*RegistryMessage, *tcpmodels.TcpRouteMapping, *RegistryMessage)
 }
 
 func httpRoutesFromSchedulingInfo(lrp *models.DesiredLRPSchedulingInfo) map[RoutingKey][]routeMapping {
@@ -673,9 +673,13 @@ func diffEndpoints(before, after map[EndpointKey]Endpoint) endpointsDiff {
 }
 
 func (table *internalRoutingTable) messages(routesDiff routesDiff, endpointDiff endpointsDiff) (TCPRouteMappings, MessagesToEmit) {
+	type registrationMetadata struct {
+		emitEndpointUpdatedAt bool
+	}
+
 	// maps used to remove duplicates
 	unregistrations := map[routeMapping]map[Endpoint]bool{}
-	registrations := map[routeMapping]map[Endpoint]bool{}
+	registrations := map[routeMapping]map[Endpoint]*registrationMetadata{}
 
 	// for removed routes remove endpoints previously registered
 	for _, route := range routesDiff.removed {
@@ -693,13 +697,15 @@ func (table *internalRoutingTable) messages(routesDiff routesDiff, endpointDiff 
 	// for added routes add all currently known endpoints
 	for _, route := range routesDiff.added {
 		for _, container := range endpointDiff.after {
-			if registrations[route] != nil && registrations[route][container] {
+			if registrations[route] != nil && registrations[route][container] != nil {
 				continue
 			}
 			if registrations[route] == nil {
-				registrations[route] = map[Endpoint]bool{}
+				registrations[route] = map[Endpoint]*registrationMetadata{}
 			}
-			registrations[route][container] = true
+			registrations[route][container] = &registrationMetadata{
+				emitEndpointUpdatedAt: false,
+			}
 		}
 	}
 
@@ -719,13 +725,15 @@ func (table *internalRoutingTable) messages(routesDiff routesDiff, endpointDiff 
 	// for added endpoints register all current routes
 	for _, container := range endpointDiff.added {
 		for _, route := range routesDiff.after {
-			if registrations[route] != nil && registrations[route][container] {
+			if registrations[route] != nil && registrations[route][container] != nil {
 				continue
 			}
 			if registrations[route] == nil {
-				registrations[route] = map[Endpoint]bool{}
+				registrations[route] = map[Endpoint]*registrationMetadata{}
 			}
-			registrations[route][container] = true
+			registrations[route][container] = &registrationMetadata{
+				emitEndpointUpdatedAt: true,
+			}
 		}
 	}
 
@@ -733,8 +741,8 @@ func (table *internalRoutingTable) messages(routesDiff routesDiff, endpointDiff 
 	mappings := TCPRouteMappings{}
 
 	for r, es := range registrations {
-		for e := range es {
-			msg, mapping, internalMsg := r.MessageFor(e, table.directInstanceRoute)
+		for e, metadata := range es {
+			msg, mapping, internalMsg := r.MessageFor(e, table.directInstanceRoute, metadata.emitEndpointUpdatedAt)
 			if msg != nil {
 				messages.RegistrationMessages = append(messages.RegistrationMessages, *msg)
 			}
@@ -748,7 +756,7 @@ func (table *internalRoutingTable) messages(routesDiff routesDiff, endpointDiff 
 	}
 	for r, es := range unregistrations {
 		for e := range es {
-			msg, mapping, internalMsg := r.MessageFor(e, table.directInstanceRoute)
+			msg, mapping, internalMsg := r.MessageFor(e, table.directInstanceRoute, false)
 			if msg != nil {
 				messages.UnregistrationMessages = append(messages.UnregistrationMessages, *msg)
 			}

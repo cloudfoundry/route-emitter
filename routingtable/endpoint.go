@@ -76,7 +76,7 @@ type ExternalEndpointInfo struct {
 	Port            uint32
 }
 
-func (info ExternalEndpointInfo) MessageFor(e Endpoint, directInstanceRoute bool) (*RegistryMessage, *tcpmodels.TcpRouteMapping, *RegistryMessage) {
+func (info ExternalEndpointInfo) MessageFor(e Endpoint, directInstanceRoute, _ bool) (*RegistryMessage, *tcpmodels.TcpRouteMapping, *RegistryMessage) {
 	mapping := tcpmodels.NewTcpRouteMapping(
 		info.RouterGroupGUID,
 		uint16(info.Port),
@@ -112,12 +112,12 @@ type Route struct {
 	LogGUID          string
 }
 
-func (r Route) MessageFor(endpoint Endpoint, directInstanceAddress bool) (*RegistryMessage, *tcpmodels.TcpRouteMapping, *RegistryMessage) {
+func (r Route) MessageFor(endpoint Endpoint, directInstanceAddress, emitEndpointUpdatedAt bool) (*RegistryMessage, *tcpmodels.TcpRouteMapping, *RegistryMessage) {
 	generator := RegistryMessageFor
 	if directInstanceAddress {
 		generator = InternalAddressRegistryMessageFor
 	}
-	msg := generator(endpoint, r)
+	msg := generator(endpoint, r, emitEndpointUpdatedAt)
 	return &msg, nil, nil
 }
 
@@ -127,9 +127,9 @@ type InternalRoute struct {
 	LogGUID     string
 }
 
-func (r InternalRoute) MessageFor(endpoint Endpoint, _ bool) (*RegistryMessage, *tcpmodels.TcpRouteMapping, *RegistryMessage) {
+func (r InternalRoute) MessageFor(endpoint Endpoint, _, emitEndpointUpdatedAt bool) (*RegistryMessage, *tcpmodels.TcpRouteMapping, *RegistryMessage) {
 	generator := InternalEndpointRegistryMessageFor
-	msg := generator(endpoint, r)
+	msg := generator(endpoint, r, emitEndpointUpdatedAt)
 	return nil, nil, &msg
 }
 

@@ -19,10 +19,14 @@ type RegistryMessage struct {
 	Tags                 map[string]string `json:"tags,omitempty"`
 }
 
-func RegistryMessageFor(endpoint Endpoint, route Route) RegistryMessage {
+func RegistryMessageFor(endpoint Endpoint, route Route, emitEndpointUpdatedAt bool) RegistryMessage {
 	var index string
 	if endpoint.InstanceGUID != "" {
 		index = fmt.Sprintf("%d", endpoint.Index)
+	}
+	since := endpoint.Since
+	if !emitEndpointUpdatedAt {
+		since = 0
 	}
 	return RegistryMessage{
 		URIs:                []string{route.Hostname},
@@ -32,7 +36,7 @@ func RegistryMessageFor(endpoint Endpoint, route Route) RegistryMessage {
 		App:                 route.LogGUID,
 		IsolationSegment:    route.IsolationSegment,
 		Tags:                map[string]string{"component": "route-emitter"},
-		EndpointUpdatedAtNs: endpoint.Since,
+		EndpointUpdatedAtNs: since,
 
 		PrivateInstanceId:    endpoint.InstanceGUID,
 		PrivateInstanceIndex: index,
@@ -41,10 +45,15 @@ func RegistryMessageFor(endpoint Endpoint, route Route) RegistryMessage {
 	}
 }
 
-func InternalAddressRegistryMessageFor(endpoint Endpoint, route Route) RegistryMessage {
+// This is used when RE is emitting container ip addr/port as opposed to host ip add/port
+func InternalAddressRegistryMessageFor(endpoint Endpoint, route Route, emitEndpointUpdatedAt bool) RegistryMessage {
 	var index string
 	if endpoint.InstanceGUID != "" {
 		index = fmt.Sprintf("%d", endpoint.Index)
+	}
+	since := endpoint.Since
+	if !emitEndpointUpdatedAt {
+		since = 0
 	}
 	return RegistryMessage{
 		URIs:             []string{route.Hostname},
@@ -58,23 +67,27 @@ func InternalAddressRegistryMessageFor(endpoint Endpoint, route Route) RegistryM
 		ServerCertDomainSAN:  endpoint.InstanceGUID,
 		PrivateInstanceId:    endpoint.InstanceGUID,
 		PrivateInstanceIndex: index,
-		EndpointUpdatedAtNs:  endpoint.Since,
+		EndpointUpdatedAtNs:  since,
 		RouteServiceUrl:      route.RouteServiceUrl,
 	}
 }
 
 // This is used to generate registry messages for Internal routes
-func InternalEndpointRegistryMessageFor(endpoint Endpoint, route InternalRoute) RegistryMessage {
+func InternalEndpointRegistryMessageFor(endpoint Endpoint, route InternalRoute, emitEndpointUpdatedAt bool) RegistryMessage {
 	var index string
 	if endpoint.InstanceGUID != "" {
 		index = fmt.Sprintf("%d", endpoint.Index)
+	}
+	since := endpoint.Since
+	if !emitEndpointUpdatedAt {
+		since = 0
 	}
 	return RegistryMessage{
 		URIs:                []string{route.Hostname, fmt.Sprintf("%s.%s", index, route.Hostname)},
 		Host:                endpoint.ContainerIP,
 		App:                 route.LogGUID,
 		Tags:                map[string]string{"component": "route-emitter"},
-		EndpointUpdatedAtNs: endpoint.Since,
+		EndpointUpdatedAtNs: since,
 
 		PrivateInstanceIndex: index,
 	}
