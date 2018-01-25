@@ -89,8 +89,8 @@ var _ = Describe("Handler", func() {
 			Host:         expectedHost,
 			Port:         expectedContainerPort,
 		}
-		dummyMessageFoo := routingtable.RegistryMessageFor(dummyEndpoint, routingtable.Route{Hostname: "foo.com", LogGUID: logGuid})
-		dummyMessageBar := routingtable.RegistryMessageFor(dummyEndpoint, routingtable.Route{Hostname: "bar.com", LogGUID: logGuid})
+		dummyMessageFoo := routingtable.RegistryMessageFor(dummyEndpoint, routingtable.Route{Hostname: "foo.com", LogGUID: logGuid}, true)
+		dummyMessageBar := routingtable.RegistryMessageFor(dummyEndpoint, routingtable.Route{Hostname: "bar.com", LogGUID: logGuid}, true)
 		dummyMessagesToEmit = routingtable.MessagesToEmit{
 			RegistrationMessages: []routingtable.RegistryMessage{dummyMessageFoo, dummyMessageBar},
 		}
@@ -972,9 +972,9 @@ var _ = Describe("Handler", func() {
 
 					return emptyTCPRouteMappings, routingtable.MessagesToEmit{
 						RegistrationMessages: []routingtable.RegistryMessage{
-							routingtable.RegistryMessageFor(endpoint1, routesList[0]),
-							routingtable.RegistryMessageFor(endpoint2, routesList[1]),
-							routingtable.RegistryMessageFor(endpoint3, routesList[2]),
+							routingtable.RegistryMessageFor(endpoint1, routesList[0], true),
+							routingtable.RegistryMessageFor(endpoint2, routesList[1], true),
+							routingtable.RegistryMessageFor(endpoint3, routesList[2], true),
 						},
 					}
 				}
@@ -1095,9 +1095,9 @@ var _ = Describe("Handler", func() {
 			route := routingtable.Route{}
 			registrationMsgs = routingtable.MessagesToEmit{
 				RegistrationMessages: []routingtable.RegistryMessage{
-					routingtable.RegistryMessageFor(endpoint1, route),
-					routingtable.RegistryMessageFor(endpoint2, route),
-					routingtable.RegistryMessageFor(endpoint3, route),
+					routingtable.RegistryMessageFor(endpoint1, route, true),
+					routingtable.RegistryMessageFor(endpoint2, route, true),
+					routingtable.RegistryMessageFor(endpoint3, route, true),
 				},
 			}
 

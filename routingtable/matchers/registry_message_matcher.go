@@ -1,8 +1,6 @@
 package matchers
 
 import (
-	"time"
-
 	. "github.com/onsi/gomega"
 	. "github.com/onsi/gomega/gstruct"
 
@@ -16,7 +14,7 @@ func MatchRegistryMessage(message routingtable.RegistryMessage) types.GomegaMatc
 		uris = append(uris, uri)
 	}
 
-	return MatchAllFields(Fields{
+	return MatchFields(IgnoreExtras, Fields{
 		"Host":                 Equal(message.Host),
 		"Port":                 Equal(message.Port),
 		"TlsPort":              Equal(message.TlsPort),
@@ -27,7 +25,6 @@ func MatchRegistryMessage(message routingtable.RegistryMessage) types.GomegaMatc
 		"PrivateInstanceIndex": Equal(message.PrivateInstanceIndex),
 		"ServerCertDomainSAN":  Equal(message.ServerCertDomainSAN),
 		"IsolationSegment":     Equal(message.IsolationSegment),
-		"EndpointUpdatedAtNs":  BeNumerically("~", time.Now().UnixNano(), time.Minute),
 		"Tags":                 Equal(message.Tags),
 	})
 }

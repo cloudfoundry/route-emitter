@@ -1159,14 +1159,15 @@ var _ = Describe("Route Emitter", func() {
 
 				Context("when backing store loses its data", func() {
 					var msg1 routingtable.RegistryMessage
-					var msg2 routingtable.RegistryMessage
-					var msg3 routingtable.RegistryMessage
-					var msg4 routingtable.RegistryMessage
+
+					BeforeEach(func() {
+						routes = newRoutes([]string{"route-1", "route-2"}, 8080, "https://awesome.com")
+						desiredLRP.Routes = routes
+					})
 
 					JustBeforeEach(func() {
 						// ensure it's seen the route at least once
 						Eventually(registeredRoutes).Should(Receive(&msg1))
-						Eventually(registeredRoutes).Should(Receive(&msg2))
 
 						sqlRunner.Reset()
 
@@ -1176,12 +1177,7 @@ var _ = Describe("Route Emitter", func() {
 					})
 
 					It("continues to broadcast routes", func() {
-						Eventually(registeredRoutes, 5).Should(Receive(&msg3))
-						Eventually(registeredRoutes, 5).Should(Receive(&msg4))
-						Expect([]routingtable.RegistryMessage{msg3, msg4}).To(ConsistOf(
-							MatchRegistryMessage(msg1),
-							MatchRegistryMessage(msg2),
-						))
+						Eventually(registeredRoutes, 5).Should(Receive(MatchRegistryMessage(msg1)))
 					})
 				})
 
