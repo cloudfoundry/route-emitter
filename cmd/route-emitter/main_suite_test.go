@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path"
 	"strconv"
 	"strings"
 	"testing"
@@ -28,7 +29,6 @@ import (
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/ifrit/ginkgomon"
 
-	"code.cloudfoundry.org/bbs"
 	bbsconfig "code.cloudfoundry.org/bbs/cmd/bbs/config"
 	bbstestrunner "code.cloudfoundry.org/bbs/cmd/bbs/testrunner"
 	"code.cloudfoundry.org/bbs/encryption"
@@ -61,7 +61,6 @@ var (
 	consulRunner         *consulrunner.ClusterRunner
 	gnatsdRunner         ifrit.Process
 	natsClient           diegonats.NATSClient
-	bbsClient            bbs.InternalClient
 	syncInterval         time.Duration
 	consulClusterAddress string
 	testMetricsListener  net.PacketConn
@@ -151,11 +150,11 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 	routingAPIPath = string(binaries["routing-api"])
 
 	bbsURL = &url.URL{
-		Scheme: "http",
+		Scheme: "https",
 		Host:   bbsAddress,
 	}
 
-	bbsClient = bbs.NewClient(bbsURL.String())
+	basePath := path.Join(os.Getenv("GOPATH"), "src/code.cloudfoundry.org/route-emitter/cmd/route-emitter/fixtures")
 
 	bbsConfig = bbsconfig.BBSConfig{
 		ListenAddress:            bbsAddress,
@@ -170,6 +169,10 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 			EncryptionKeys: map[string]string{"label": "key"},
 			ActiveKeyLabel: "label",
 		},
+
+		CaFile:   path.Join(basePath, "green-certs", "server-ca.crt"),
+		CertFile: path.Join(basePath, "green-certs", "server.crt"),
+		KeyFile:  path.Join(basePath, "green-certs", "server.key"),
 	}
 })
 

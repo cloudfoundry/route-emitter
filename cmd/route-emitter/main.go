@@ -5,7 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"net/http"
-	"net/url"
 	"os"
 	"time"
 
@@ -383,16 +382,7 @@ func initializeBBSClient(
 	logger lager.Logger,
 	cfg config.RouteEmitterConfig,
 ) bbs.Client {
-	bbsURL, err := url.Parse(cfg.BBSAddress)
-	if err != nil {
-		logger.Fatal("Invalid BBS URL", err)
-	}
-
-	if bbsURL.Scheme != "https" {
-		return bbs.NewClient(cfg.BBSAddress)
-	}
-
-	bbsClient, err := bbs.NewSecureClient(
+	bbsClient, err := bbs.NewClient(
 		cfg.BBSAddress,
 		cfg.BBSCACertFile,
 		cfg.BBSClientCertFile,

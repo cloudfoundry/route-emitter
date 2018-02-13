@@ -2,7 +2,10 @@ package main_test
 
 import (
 	"context"
+	"path"
 
+	"code.cloudfoundry.org/bbs"
+	"code.cloudfoundry.org/cfhttp"
 	"code.cloudfoundry.org/clock"
 	locketconfig "code.cloudfoundry.org/locket/cmd/locket/config"
 	locketrunner "code.cloudfoundry.org/locket/cmd/locket/testrunner"
@@ -78,8 +81,32 @@ var _ = Describe("Route Emitter", func() {
 
 		emitInterval uint64
 
-		logger *lagertest.TestLogger
+		bbsClient bbs.InternalClient
+
+		logger                                *lagertest.TestLogger
+		caFile, clientCertFile, clientKeyFile string
+		serverCertFile, serverKeyFile         string
 	)
+
+	bbsProxy := func(f func(w http.ResponseWriter, r *http.Request)) *httptest.Server {
+		proxy := httputil.NewSingleHostReverseProxy(bbsURL)
+		proxy.FlushInterval = 100 * time.Millisecond
+		tlsConfig, err := cfhttp.NewTLSConfig(clientCertFile, clientKeyFile, caFile)
+		Expect(err).NotTo(HaveOccurred())
+		proxy.Transport = &http.Transport{
+			TLSClientConfig: tlsConfig,
+		}
+		fakeBBS := httptest.NewUnstartedServer(
+			http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				f(w, r)
+				proxy.ServeHTTP(w, r)
+			}),
+		)
+		fakeBBS.TLS, err = cfhttp.NewTLSConfig(serverCertFile, serverKeyFile, caFile)
+		Expect(err).NotTo(HaveOccurred())
+		fakeBBS.StartTLS()
+		return fakeBBS
+	}
 
 	createEmitterRunner := func(sessionName string, cellID string, modifyConfig ...func(*config.RouteEmitterConfig)) *ginkgomon.Runner {
 		cfg := config.RouteEmitterConfig{
@@ -88,7 +115,7 @@ var _ = Describe("Route Emitter", func() {
 			HealthCheckAddress:   healthCheckAddress,
 			NATSAddresses:        fmt.Sprintf("127.0.0.1:%d", natsPort),
 			BBSAddress:           bbsURL.String(),
-			CommunicationTimeout: durationjson.Duration(100 * time.Millisecond),
+			CommunicationTimeout: durationjson.Duration(300 * time.Millisecond),
 			SyncInterval:         durationjson.Duration(syncInterval),
 			LockRetryInterval:    durationjson.Duration(time.Second),
 			LockTTL:              durationjson.Duration(5 * time.Second),
@@ -99,6 +126,9 @@ var _ = Describe("Route Emitter", func() {
 			LagerConfig: lagerflags.LagerConfig{
 				LogLevel: lagerflags.DEBUG,
 			},
+			BBSCACertFile:     caFile,
+			BBSClientCertFile: clientCertFile,
+			BBSClientKeyFile:  clientKeyFile,
 		}
 		for _, f := range modifyConfig {
 			f(&cfg)
@@ -148,6 +178,18 @@ var _ = Describe("Route Emitter", func() {
 	}
 
 	BeforeEach(func() {
+		basePath := path.Join(os.Getenv("GOPATH"), "src/code.cloudfoundry.org/rep/cmd/rep/fixtures")
+
+		caFile = path.Join(basePath, "green-certs", "server-ca.crt")
+		clientCertFile = path.Join(basePath, "green-certs", "client.crt")
+		clientKeyFile = path.Join(basePath, "green-certs", "client.key")
+		serverCertFile = path.Join(basePath, "green-certs", "server.crt")
+		serverKeyFile = path.Join(basePath, "green-certs", "server.key")
+
+		var err error
+		bbsClient, err = bbs.NewClient(bbsURL.String(), caFile, clientCertFile, clientKeyFile, 0, 0)
+		Expect(err).NotTo(HaveOccurred())
+
 		logger = lagertest.NewTestLogger("test")
 		processGuid = "guid1"
 		domain = "tests"
@@ -214,7 +256,6 @@ var _ = Describe("Route Emitter", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		var err error
 		sqlConfig := runners.SQLConfig{
 			Port:       sqlRunner.Port(),
 			DBName:     sqlRunner.DBName(),
@@ -496,19 +537,13 @@ var _ = Describe("Route Emitter", func() {
 					blkChannel = make(chan struct{}, 1)
 					atomic.StoreUint64(&emitInterval, uint64(time.Hour))
 
-					proxy := httputil.NewSingleHostReverseProxy(bbsURL)
-					proxy.FlushInterval = 100 * time.Millisecond
-					fakeBBS = httptest.NewUnstartedServer(
-						http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-							if r.URL.Path == "/v1/domains/list" {
-								By("blocking the sync loop")
-								<-blkChannel
-							}
-							proxy.ServeHTTP(w, r)
-						}),
-					)
+					fakeBBS = bbsProxy(func(w http.ResponseWriter, r *http.Request) {
+						if r.URL.Path == "/v1/domains/list" {
+							By("blocking the sync loop")
+							<-blkChannel
+						}
+					})
 
-					fakeBBS.Start()
 					cfgs = append(cfgs, func(cfg *config.RouteEmitterConfig) {
 						cfg.BBSAddress = fakeBBS.URL
 						cfg.RoutingAPI.URL = "http://127.0.0.1"
@@ -756,19 +791,13 @@ var _ = Describe("Route Emitter", func() {
 					BeforeEach(func() {
 						blkChannel = make(chan struct{}, 1)
 
-						proxy := httputil.NewSingleHostReverseProxy(bbsURL)
-						proxy.FlushInterval = 100 * time.Millisecond
-						fakeBBS = httptest.NewUnstartedServer(
-							http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-								if r.URL.Path == "/v1/domains/list" {
-									By("blocking the sync loop")
-									<-blkChannel
-								}
-								proxy.ServeHTTP(w, r)
-							}),
-						)
+						fakeBBS = bbsProxy(func(w http.ResponseWriter, r *http.Request) {
+							if r.URL.Path == "/v1/domains/list" {
+								By("blocking the sync loop")
+								<-blkChannel
+							}
+						})
 
-						fakeBBS.Start()
 						cfgs = append(cfgs, func(cfg *config.RouteEmitterConfig) {
 							cfg.BBSAddress = fakeBBS.URL
 							cfg.RoutingAPI.URL = "http://127.0.0.1"
@@ -1609,24 +1638,17 @@ var _ = Describe("Route Emitter", func() {
 					BeforeEach(func() {
 						blkChannel = make(chan struct{}, 1)
 
-						proxy := httputil.NewSingleHostReverseProxy(bbsURL)
-						proxy.FlushInterval = 100 * time.Millisecond
-						fakeBBS = httptest.NewUnstartedServer(
-							http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-								if r.URL.Path == "/v1/desired_lrp_scheduling_infos/list" {
-									By("blocking the sync loop")
-									<-blkChannel
-								}
-								proxy.ServeHTTP(w, r)
-							}),
-						)
+						fakeBBS = bbsProxy(func(w http.ResponseWriter, r *http.Request) {
+							if r.URL.Path == "/v1/desired_lrp_scheduling_infos/list" {
+								By("blocking the sync loop")
+								<-blkChannel
+							}
+						})
 
 						cfgs = append(cfgs, func(cfg *config.RouteEmitterConfig) {
 							cfg.BBSAddress = fakeBBS.URL
 							cfg.RoutingAPI.URL = "http://127.0.0.1"
 						})
-
-						fakeBBS.Start()
 					})
 
 					JustBeforeEach(func() {
@@ -2113,18 +2135,6 @@ var _ = Describe("Route Emitter", func() {
 		BeforeEach(func() {
 			blkChannel = make(chan struct{}, 1)
 
-			proxy := httputil.NewSingleHostReverseProxy(bbsURL)
-			proxy.FlushInterval = 100 * time.Millisecond
-			fakeBBS = httptest.NewUnstartedServer(
-				http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					if r.URL.Path == "/v1/domains/list" {
-						By("blocking the sync loop")
-						<-blkChannel
-					}
-					proxy.ServeHTTP(w, r)
-				}),
-			)
-
 			cfgs = append(cfgs, func(cfg *config.RouteEmitterConfig) {
 				cfg.BBSAddress = fakeBBS.URL
 				cfg.RoutingAPI.URL = "http://127.0.0.1"
@@ -2133,7 +2143,12 @@ var _ = Describe("Route Emitter", func() {
 				cfg.SyncInterval = durationjson.Duration(1 * time.Hour)
 			})
 
-			fakeBBS.Start()
+			fakeBBS = bbsProxy(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == "/v1/domains/list" {
+					By("blocking the sync loop")
+					<-blkChannel
+				}
+			})
 		})
 
 		JustBeforeEach(func() {
