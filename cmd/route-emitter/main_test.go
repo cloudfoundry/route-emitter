@@ -566,8 +566,10 @@ var _ = Describe("Route Emitter", func() {
 
 				Context("then a desired lrp event is received", func() {
 					JustBeforeEach(func() {
+						Eventually(runner).Should(gbytes.Say("succeeded-getting-actual-lrps"))
 						Expect(bbsClient.DesireLRP(logger, &desiredLRP)).NotTo(HaveOccurred())
-						Eventually(runner).Should(gbytes.Say("handling.event"))
+						Eventually(runner).Should(gbytes.Say("caching-event"))
+						Eventually(blkChannel).Should(BeSent(struct{}{}))
 					})
 
 					Context("an actual lrp created event is received during sync", func() {
