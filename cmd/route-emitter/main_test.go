@@ -1781,10 +1781,13 @@ var _ = Describe("Route Emitter", func() {
 				})
 
 				It("repeats the route message at the interval given by the router", func() {
+					Eventually(internalRegisteredRoutes).Should(Receive())
+					Eventually(internalRegisteredRoutes).Should(Receive())
+
 					var msg1 routingtable.RegistryMessage
 					var msg2 routingtable.RegistryMessage
-					Eventually(internalRegisteredRoutes).Should(Receive(&msg1))
-					Eventually(internalRegisteredRoutes).Should(Receive(&msg2))
+					Eventually(internalRegisteredRoutes, 5).Should(Receive(&msg1))
+					Eventually(internalRegisteredRoutes, 5).Should(Receive(&msg2))
 					t1 := time.Now()
 
 					var msg3 routingtable.RegistryMessage
