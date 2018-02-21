@@ -772,7 +772,11 @@ var _ = Describe("Route Emitter", func() {
 
 				Context("and an instance is claimed", func() {
 					JustBeforeEach(func() {
-						err := bbsClient.ClaimActualLRP(logger, expectedTCPProcessGUID, int(index), &instanceKey)
+						key := models.ActualLRPKey{
+							ProcessGuid: expectedTCPProcessGUID,
+							Index:       index,
+						}
+						err := bbsClient.ClaimActualLRP(logger, &key, &instanceKey)
 						Expect(err).NotTo(HaveOccurred())
 					})
 
@@ -1373,7 +1377,11 @@ var _ = Describe("Route Emitter", func() {
 
 			Context("and an instance is claimed", func() {
 				BeforeEach(func() {
-					err := bbsClient.ClaimActualLRP(logger, processGuid, int(index), &instanceKey)
+					key := models.ActualLRPKey{
+						ProcessGuid: processGuid,
+						Index:       index,
+					}
+					err := bbsClient.ClaimActualLRP(logger, &key, &instanceKey)
 					Expect(err).NotTo(HaveOccurred())
 				})
 
@@ -1728,7 +1736,11 @@ var _ = Describe("Route Emitter", func() {
 
 			Context("and an instance is claimed", func() {
 				BeforeEach(func() {
-					err := bbsClient.ClaimActualLRP(logger, processGuid, int(index), &instanceKey)
+					key := models.ActualLRPKey{
+						ProcessGuid: processGuid,
+						Index:       index,
+					}
+					err := bbsClient.ClaimActualLRP(logger, &key, &instanceKey)
 					Expect(err).NotTo(HaveOccurred())
 				})
 
