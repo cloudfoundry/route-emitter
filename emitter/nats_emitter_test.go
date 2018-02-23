@@ -145,16 +145,12 @@ var _ = Describe("NatsEmitter", func() {
         }
       `)))
 
-			Eventually(fakeMetronClient.IncrementCounterWithDeltaCallCount).Should(Equal(3))
+			Eventually(fakeMetronClient.IncrementCounterWithDeltaCallCount).Should(Equal(2))
 			name, delta := fakeMetronClient.IncrementCounterWithDeltaArgsForCall(0)
-			Expect(name).To(Equal("MessagesEmitted"))
-			Expect(delta).To(BeEquivalentTo(8))
-
-			name, delta = fakeMetronClient.IncrementCounterWithDeltaArgsForCall(1)
 			Expect(name).To(Equal("HTTPRouteNATSMessagesEmitted"))
 			Expect(delta).To(BeEquivalentTo(4))
 
-			name, delta = fakeMetronClient.IncrementCounterWithDeltaArgsForCall(2)
+			name, delta = fakeMetronClient.IncrementCounterWithDeltaArgsForCall(1)
 			Expect(name).To(Equal("InternalRouteNATSMessagesEmitted"))
 			Expect(delta).To(BeEquivalentTo(4))
 		})
@@ -219,12 +215,8 @@ var _ = Describe("NatsEmitter", func() {
         }
       `)))
 
-				Eventually(fakeMetronClient.IncrementCounterWithDeltaCallCount).Should(Equal(2))
+				Eventually(fakeMetronClient.IncrementCounterWithDeltaCallCount).Should(Equal(1))
 				name, delta := fakeMetronClient.IncrementCounterWithDeltaArgsForCall(0)
-				Expect(name).To(Equal("MessagesEmitted"))
-				Expect(delta).To(BeEquivalentTo(4))
-
-				name, delta = fakeMetronClient.IncrementCounterWithDeltaArgsForCall(1)
 				Expect(name).To(Equal("HTTPRouteNATSMessagesEmitted"))
 				Expect(delta).To(BeEquivalentTo(4))
 			})
@@ -251,7 +243,6 @@ var _ = Describe("NatsEmitter", func() {
 				err := natsEmitter.Emit(messagesToEmit)
 				Expect(err).NotTo(HaveOccurred())
 
-				Expect(logger).To(gbytes.Say("cannot-emit-number-of-messages.*boo"))
 				Expect(logger).To(gbytes.Say("cannot-emit-number-of-internal-messages.*boo"))
 			})
 		})
