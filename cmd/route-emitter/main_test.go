@@ -7,6 +7,7 @@ import (
 	"code.cloudfoundry.org/bbs"
 	"code.cloudfoundry.org/cfhttp"
 	"code.cloudfoundry.org/clock"
+	"code.cloudfoundry.org/diego-logging-client/testhelpers"
 	locketconfig "code.cloudfoundry.org/locket/cmd/locket/config"
 	locketrunner "code.cloudfoundry.org/locket/cmd/locket/testrunner"
 	"code.cloudfoundry.org/locket/lock"
@@ -28,7 +29,6 @@ import (
 
 	"code.cloudfoundry.org/bbs/models"
 	"code.cloudfoundry.org/durationjson"
-	"code.cloudfoundry.org/go-loggregator/rpc/loggregator_v2"
 	"code.cloudfoundry.org/lager/lagerflags"
 	"code.cloudfoundry.org/lager/lagertest"
 	"code.cloudfoundry.org/locket"
@@ -40,12 +40,10 @@ import (
 	"code.cloudfoundry.org/routing-info/cfroutes"
 	"code.cloudfoundry.org/routing-info/internalroutes"
 	"code.cloudfoundry.org/routing-info/tcp_routes"
-	"github.com/cloudfoundry/sonde-go/events"
 	"github.com/nats-io/nats"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gbytes"
-	"github.com/onsi/gomega/types"
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/ifrit/ginkgomon"
 )
@@ -674,13 +672,13 @@ var _ = Describe("Route Emitter", func() {
 							})
 
 							It("emits the tcp route count", func() {
-								Eventually(testMetricsChan).Should(Receive(matchV2MetricAndValue(metricAndValue{Name: "TCPRouteCount", Value: int32(1)})))
+								Eventually(testMetricsChan).Should(Receive(testhelpers.MatchV2MetricAndValue(testhelpers.MetricAndValue{Name: "TCPRouteCount", Value: int32(1)})))
 							})
 						})
 
-						Context("when using loggregator v1 api", func() {
-							It("emits the tcp route count", func() {
-								Eventually(testMetricsChan).Should(Receive(matchMetricAndValue(metricAndValue{Name: "TCPRouteCount", Value: int32(1)})))
+						Context("when not using the loggregator v2 api", func() {
+							It("doesn't emit any metrics", func() {
+								Consistently(testMetricsChan).ShouldNot(Receive())
 							})
 						})
 					})
@@ -1181,13 +1179,13 @@ var _ = Describe("Route Emitter", func() {
 						})
 
 						It("emits the http route count", func() {
-							Eventually(testMetricsChan, "2s").Should(Receive(matchV2MetricAndValue(metricAndValue{Name: "HTTPRouteCount", Value: int32(2)})))
+							Eventually(testMetricsChan, "2s").Should(Receive(testhelpers.MatchV2MetricAndValue(testhelpers.MetricAndValue{Name: "HTTPRouteCount", Value: int32(2)})))
 						})
 					})
 
-					Context("when using loggregator v1 api", func() {
-						It("emits the http route count", func() {
-							Eventually(testMetricsChan, "2s").Should(Receive(matchMetricAndValue(metricAndValue{Name: "HTTPRouteCount", Value: int32(2)})))
+					Context("when not using the loggregator v2 api", func() {
+						It("doesn't emit any metrics", func() {
+							Consistently(testMetricsChan).ShouldNot(Receive())
 						})
 					})
 				})
@@ -1570,13 +1568,13 @@ var _ = Describe("Route Emitter", func() {
 				})
 
 				It("emits not in consul down mode", func() {
-					Eventually(testMetricsChan).Should(Receive(matchV2MetricAndValue(metricAndValue{Name: "ConsulDownMode", Value: 0})))
+					Eventually(testMetricsChan).Should(Receive(testhelpers.MatchV2MetricAndValue(testhelpers.MetricAndValue{Name: "ConsulDownMode", Value: 0})))
 				})
 			})
 
-			Context("when using loggregator api v1", func() {
-				It("emits a metric to say that it is not in consul down mode", func() {
-					Eventually(testMetricsChan).Should(Receive(matchMetricAndValue(metricAndValue{Name: "ConsulDownMode", Value: 0})))
+			Context("when not using the loggregator v2 api", func() {
+				It("doesn't emit any metrics", func() {
+					Consistently(testMetricsChan).ShouldNot(Receive())
 				})
 			})
 		})
@@ -1606,6 +1604,7 @@ var _ = Describe("Route Emitter", func() {
 
 		BeforeEach(func() {
 			cellID = ""
+			useLoggregatorV2 = true
 
 			internalHostnames = []string{"foo1.bar", "foo2.bar"}
 			routes = newInternalRoutes(internalHostnames)
@@ -1852,7 +1851,7 @@ var _ = Describe("Route Emitter", func() {
 		})
 
 		It("emits a metric to say that it is not in consul down mode", func() {
-			Eventually(testMetricsChan).Should(Receive(matchMetricAndValue(metricAndValue{Name: "ConsulDownMode", Value: 0})))
+			Eventually(testMetricsChan).Should(Receive(testhelpers.MatchV2MetricAndValue(testhelpers.MetricAndValue{Name: "ConsulDownMode", Value: 0})))
 		})
 	})
 
@@ -1979,13 +1978,13 @@ var _ = Describe("Route Emitter", func() {
 					})
 
 					It("emits consul down mode", func() {
-						Eventually(testMetricsChan, 3*retryInterval+1, time.Millisecond).Should(Receive(matchV2MetricAndValue(metricAndValue{Name: "ConsulDownMode", Value: 1})))
+						Eventually(testMetricsChan, 3*retryInterval+1, time.Millisecond).Should(Receive(testhelpers.MatchV2MetricAndValue(testhelpers.MetricAndValue{Name: "ConsulDownMode", Value: 1})))
 					})
 				})
 
-				Context("when using lgogregator api v1", func() {
-					It("emits a metric to say that it has entered consul down mode", func() {
-						Eventually(testMetricsChan, 3*retryInterval+1).Should(Receive(matchMetricAndValue(metricAndValue{Name: "ConsulDownMode", Value: 1})))
+				Context("when not using the loggregator v2 api", func() {
+					It("doesn't emit any metrics", func() {
+						Consistently(testMetricsChan).ShouldNot(Receive())
 					})
 				})
 			})
@@ -2226,39 +2225,6 @@ func newInternalRoutes(hosts []string) *models.Routes {
 	}
 
 	return &routes
-}
-
-type metricAndValue struct {
-	Name  string
-	Value int32
-}
-
-func matchMetricAndValue(target metricAndValue) types.GomegaMatcher {
-	return SatisfyAll(
-		WithTransform(func(source *events.Envelope) events.Envelope_EventType {
-			return *source.EventType
-		}, Equal(events.Envelope_ValueMetric)),
-		WithTransform(func(source *events.Envelope) string {
-			return *source.ValueMetric.Name
-		}, Equal(target.Name)),
-		WithTransform(func(source *events.Envelope) int32 {
-			return int32(*source.ValueMetric.Value)
-		}, Equal(target.Value)),
-	)
-}
-
-func matchV2MetricAndValue(target metricAndValue) types.GomegaMatcher {
-	return SatisfyAll(
-		WithTransform(func(source *loggregator_v2.Envelope) *loggregator_v2.Gauge {
-			return source.GetGauge()
-		}, Not(BeNil())),
-		WithTransform(func(source *loggregator_v2.Envelope) map[string]*loggregator_v2.GaugeValue {
-			return source.GetGauge().GetMetrics()
-		}, HaveKey(target.Name)),
-		WithTransform(func(source *loggregator_v2.Envelope) int32 {
-			return int32(source.GetGauge().GetMetrics()[target.Name].Value)
-		}, Equal(target.Value)),
-	)
 }
 
 func contains(ms []apimodels.TcpRouteMapping, tcpRouteMapping apimodels.TcpRouteMapping) bool {

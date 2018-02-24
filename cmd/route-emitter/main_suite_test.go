@@ -16,12 +16,11 @@ import (
 
 	"code.cloudfoundry.org/cfhttp"
 	"code.cloudfoundry.org/diego-logging-client/testhelpers"
+	"code.cloudfoundry.org/go-loggregator/rpc/loggregator_v2"
 	"code.cloudfoundry.org/inigo/helpers/portauthority"
 	"code.cloudfoundry.org/route-emitter/cmd/route-emitter/config"
 	"code.cloudfoundry.org/route-emitter/diegonats"
 	"code.cloudfoundry.org/route-emitter/diegonats/gnatsdrunner"
-	"github.com/cloudfoundry/sonde-go/events"
-	"github.com/gogo/protobuf/proto"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gexec"
@@ -64,7 +63,8 @@ var (
 	syncInterval         time.Duration
 	consulClusterAddress string
 	testMetricsListener  net.PacketConn
-	testMetricsChan      chan interface{}
+	testMetricsChan      chan *loggregator_v2.Envelope
+	signalMetricsChan    chan struct{}
 
 	sqlProcess        ifrit.Process
 	sqlRunner         sqlrunner.SQLRunner
@@ -226,74 +226,29 @@ var _ = BeforeEach(func() {
 
 	gnatsdRunner, natsClient = gnatsdrunner.StartGnatsd(int(natsPort))
 
-	testMetricsChan = make(chan interface{}, 64)
-
 	healthCheckPort, err := portAllocator.ClaimPorts(1)
 	Expect(err).NotTo(HaveOccurred())
 	healthCheckAddress = fmt.Sprintf("127.0.0.1:%d", healthCheckPort)
 })
 
 var _ = JustBeforeEach(func() {
-	if useLoggregatorV2 {
-		var err error
-		testIngressServer, err = testhelpers.NewTestIngressServer("fixtures/metron/metron.crt", "fixtures/metron/metron.key", "fixtures/metron/CA.crt")
-		Expect(err).NotTo(HaveOccurred())
-		receiversChan := testIngressServer.Receivers()
-		testIngressServer.Start()
-		port, err := strconv.Atoi(strings.TrimPrefix(testIngressServer.Addr(), "127.0.0.1:"))
-		Expect(err).NotTo(HaveOccurred())
-		cfgs = append(cfgs, func(cfg *config.RouteEmitterConfig) {
-			cfg.LoggregatorConfig.BatchFlushInterval = 10 * time.Millisecond
-			cfg.LoggregatorConfig.BatchMaxSize = 1
-			cfg.LoggregatorConfig.UseV2API = true
-			cfg.LoggregatorConfig.APIPort = port
-			cfg.LoggregatorConfig.CACertPath = "fixtures/metron/CA.crt"
-			cfg.LoggregatorConfig.KeyPath = "fixtures/metron/client.key"
-			cfg.LoggregatorConfig.CertPath = "fixtures/metron/client.crt"
-		})
-
-		ch := testMetricsChan
-		go func() {
-			for {
-				receiver := <-receiversChan
-				go func() {
-					for {
-						batch, err := receiver.Recv()
-						if err != nil {
-							return
-						}
-						for _, elem := range batch.Batch {
-							ch <- elem
-						}
-					}
-				}()
-			}
-		}()
-	} else {
-		testMetricsListener, _ = net.ListenPacket("udp", "127.0.0.1:0")
-		go func() {
-			defer GinkgoRecover()
-			for {
-				buffer := make([]byte, 1024)
-				n, _, err := testMetricsListener.ReadFrom(buffer)
-				if err != nil {
-					close(testMetricsChan)
-					return
-				}
-
-				var envelope events.Envelope
-				err = proto.Unmarshal(buffer[:n], &envelope)
-				Expect(err).NotTo(HaveOccurred())
-				testMetricsChan <- &envelope
-			}
-		}()
-
-		dropsondePort, err := strconv.Atoi(strings.TrimPrefix(testMetricsListener.LocalAddr().String(), "127.0.0.1:"))
-		Expect(err).NotTo(HaveOccurred())
-		cfgs = append(cfgs, func(cfg *config.RouteEmitterConfig) {
-			cfg.DropsondePort = dropsondePort
-		})
-	}
+	var err error
+	testIngressServer, err = testhelpers.NewTestIngressServer("fixtures/metron/metron.crt", "fixtures/metron/metron.key", "fixtures/metron/CA.crt")
+	Expect(err).NotTo(HaveOccurred())
+	receiversChan := testIngressServer.Receivers()
+	testIngressServer.Start()
+	port, err := strconv.Atoi(strings.TrimPrefix(testIngressServer.Addr(), "127.0.0.1:"))
+	Expect(err).NotTo(HaveOccurred())
+	cfgs = append(cfgs, func(cfg *config.RouteEmitterConfig) {
+		cfg.LoggregatorConfig.BatchFlushInterval = 10 * time.Millisecond
+		cfg.LoggregatorConfig.BatchMaxSize = 1
+		cfg.LoggregatorConfig.UseV2API = useLoggregatorV2
+		cfg.LoggregatorConfig.APIPort = port
+		cfg.LoggregatorConfig.CACertPath = "fixtures/metron/CA.crt"
+		cfg.LoggregatorConfig.KeyPath = "fixtures/metron/client.key"
+		cfg.LoggregatorConfig.CertPath = "fixtures/metron/client.crt"
+	})
+	testMetricsChan, signalMetricsChan = testhelpers.TestMetricChan(receiversChan)
 })
 
 var _ = AfterEach(func() {
@@ -302,12 +257,8 @@ var _ = AfterEach(func() {
 	gnatsdRunner.Signal(os.Kill)
 	Eventually(gnatsdRunner.Wait(), 5).Should(Receive())
 
-	if useLoggregatorV2 {
-		testIngressServer.Stop()
-	} else {
-		testMetricsListener.Close()
-		Eventually(testMetricsChan).Should(BeClosed())
-	}
+	testIngressServer.Stop()
+	close(signalMetricsChan)
 
 	ginkgomon.Kill(sqlProcess, 5*time.Second)
 })

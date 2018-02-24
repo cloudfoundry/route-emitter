@@ -40,7 +40,6 @@ type RouteEmitterConfig struct {
 	ConsulCluster                      string                `json:"consul_cluster,omitempty"`
 	ConsulDownModeNotificationInterval durationjson.Duration `json:"consul_down_mode_notification_interval,omitempty"`
 	ConsulSessionName                  string                `json:"consul_session_name,omitempty"`
-	DropsondePort                      int                   `json:"dropsonde_port,omitempty"`
 	HealthCheckAddress                 string                `json:"healthcheck_address,omitempty"`
 	LockRetryInterval                  durationjson.Duration `json:"lock_retry_interval,omitempty"`
 	LockTTL                            durationjson.Duration `json:"lock_ttl,omitempty"`
@@ -68,7 +67,6 @@ func DefaultRouteEmitterConfig() RouteEmitterConfig {
 		CommunicationTimeout:               durationjson.Duration(30 * time.Second),
 		ConsulDownModeNotificationInterval: durationjson.Duration(time.Minute),
 		ConsulSessionName:                  "route-emitter",
-		DropsondePort:                      3457,
 		LockRetryInterval:                  durationjson.Duration(locket.RetryInterval),
 		LockTTL:                            durationjson.Duration(locket.DefaultSessionTTL),
 		NATSAddresses:                      "nats://127.0.0.1:4222",

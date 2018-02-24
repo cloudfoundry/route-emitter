@@ -21,7 +21,6 @@ var _ = Describe("Config", func() {
 
 	BeforeEach(func() {
 		configData = `{
-			"dropsonde_port": 1234,
 			"healthcheck_address": "127.0.0.1:8090",
 			"cell_id": "cellID",
 			"uuid": "bosh-boshy-bosh-bosh",
@@ -99,7 +98,6 @@ var _ = Describe("Config", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		expectedConfig := config.RouteEmitterConfig{
-			DropsondePort:                      1234,
 			HealthCheckAddress:                 "127.0.0.1:8090",
 			ConsulCluster:                      "consul.example.com",
 			CellID:                             "cellID",
@@ -194,7 +192,6 @@ var _ = Describe("Config", func() {
 				CommunicationTimeout:               durationjson.Duration(30 * time.Second),
 				ConsulDownModeNotificationInterval: durationjson.Duration(time.Minute),
 				ConsulSessionName:                  "route-emitter",
-				DropsondePort:                      3457,
 				LockRetryInterval:                  durationjson.Duration(locket.RetryInterval),
 				LockTTL:                            durationjson.Duration(locket.DefaultSessionTTL),
 				NATSAddresses:                      "nats://127.0.0.1:4222",

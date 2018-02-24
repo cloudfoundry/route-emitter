@@ -36,7 +36,6 @@ import (
 	uaaclient "code.cloudfoundry.org/uaa-go-client"
 	uaaconfig "code.cloudfoundry.org/uaa-go-client/config"
 	"code.cloudfoundry.org/workpool"
-	"github.com/cloudfoundry/dropsonde"
 	"github.com/nu7hatch/gouuid"
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/ifrit/grouper"
@@ -51,7 +50,6 @@ var configFilePath = flag.String(
 )
 
 const (
-	dropsondeOrigin     = "route_emitter"
 	routeEmitterLockKey = "route_emitter"
 )
 
@@ -313,14 +311,6 @@ func newUaaClient(logger lager.Logger, c *config.RouteEmitterConfig, klok clock.
 	return uaaClient
 }
 
-func initializeDropsonde(logger lager.Logger, dropsondePort int) {
-	dropsondeDestination := fmt.Sprint("localhost:", dropsondePort)
-	err := dropsonde.Initialize(dropsondeDestination, dropsondeOrigin)
-	if err != nil {
-		logger.Error("failed to initialize dropsonde: %v", err)
-	}
-}
-
 func initializeMetron(logger lager.Logger, locketConfig config.RouteEmitterConfig) (loggingclient.IngressClient, error) {
 	client, err := loggingclient.NewIngressClient(locketConfig.LoggregatorConfig)
 	if err != nil {
@@ -330,8 +320,6 @@ func initializeMetron(logger lager.Logger, locketConfig config.RouteEmitterConfi
 	if locketConfig.LoggregatorConfig.UseV2API {
 		emitter := runtimeemitter.NewV1(client)
 		go emitter.Run()
-	} else {
-		initializeDropsonde(logger, locketConfig.DropsondePort)
 	}
 
 	return client, nil
