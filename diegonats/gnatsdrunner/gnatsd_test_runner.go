@@ -2,7 +2,6 @@ package gnatsdrunner
 
 import (
 	"fmt"
-	"os"
 	"os/exec"
 	"strconv"
 	"time"
@@ -28,10 +27,7 @@ func StartGnatsd(natsPort int) (ifrit.Process, diegonats.NATSClient) {
 
 func NewGnatsdTestRunner(natsPort int) *ginkgomon.Runner {
 	gnatsdPath, err := exec.LookPath("gnatsd")
-	if err != nil {
-		fmt.Println("You need gnatsd installed!")
-		os.Exit(1)
-	}
+	Expect(err).NotTo(HaveOccurred(), "You need gnatsd installed!")
 
 	return ginkgomon.New(ginkgomon.Config{
 		Name:              "gnatsd",
