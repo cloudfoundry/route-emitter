@@ -5,7 +5,6 @@ import (
 	"os"
 	"time"
 
-	"code.cloudfoundry.org/bbs/fake_bbs"
 	"code.cloudfoundry.org/clock/fakeclock"
 	"code.cloudfoundry.org/lager/lagertest"
 	"code.cloudfoundry.org/route-emitter/diegonats"
@@ -21,7 +20,6 @@ const logGuid = "some-log-guid"
 
 var _ = Describe("RouteBroadcastScheduler", func() {
 	var (
-		bbsClient       *fake_bbs.FakeClient
 		natsClient      *diegonats.FakeNATSClient
 		schedulerRunner *scheduler.RouteBroadcastScheduler
 		process         ifrit.Process
@@ -36,7 +34,6 @@ var _ = Describe("RouteBroadcastScheduler", func() {
 	testRouteBroadcastScheduler := func(prefix string) {
 		Context(prefix, func() {
 			BeforeEach(func() {
-				bbsClient = new(fake_bbs.FakeClient)
 				natsClient = diegonats.NewFakeClient()
 
 				clock = fakeclock.NewFakeClock(time.Now())
