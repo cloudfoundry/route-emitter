@@ -61,18 +61,16 @@ var _ = Describe("Config", func() {
 				"skip_cert_verify": true
 			},
 			"loggregator": {
-			  "loggregator_use_v2_api": true,
-			  "loggregator_api_port": 1234,
-			  "loggregator_ca_path": "/var/ca_cert",
-			  "loggregator_cert_path": "/var/cert_path",
-			  "loggregator_key_path": "/var/key_path",
-				"loggregator_job_deployment": "job1",
-				"loggregator_job_name": "myjob",
-				"loggregator_job_index": "1",
-				"loggregator_job_ip": "1.1.1.1",
-				"loggregator_job_origin": "Earth"
-		}
-	}`
+				"loggregator_use_v2_api": true,
+				"loggregator_api_port": 1234,
+				"loggregator_ca_path": "/var/ca_cert",
+				"loggregator_cert_path": "/var/cert_path",
+				"loggregator_key_path": "/var/key_path",
+				"loggregator_job_origin": "Earth",
+				"loggregator_source_id": "my-source-id",
+				"loggregator_instance_id": 1
+			}
+		}`
 	})
 
 	JustBeforeEach(func() {
@@ -139,16 +137,14 @@ var _ = Describe("Config", func() {
 				SkipCertVerify: true,
 			},
 			LoggregatorConfig: loggingclient.Config{
-				UseV2API:      true,
-				APIPort:       1234,
-				CACertPath:    "/var/ca_cert",
-				CertPath:      "/var/cert_path",
-				KeyPath:       "/var/key_path",
-				JobDeployment: "job1",
-				JobName:       "myjob",
-				JobIndex:      "1",
-				JobIP:         "1.1.1.1",
-				JobOrigin:     "Earth",
+				UseV2API:   true,
+				APIPort:    1234,
+				CACertPath: "/var/ca_cert",
+				CertPath:   "/var/cert_path",
+				KeyPath:    "/var/key_path",
+				JobOrigin:  "Earth",
+				SourceID:   "my-source-id",
+				InstanceID: 1,
 			},
 			ClientLocketConfig: locket.ClientLocketConfig{
 				LocketAddress:        "127.0.0.1:18018",
@@ -205,6 +201,9 @@ var _ = Describe("Config", func() {
 				RegisterDirectInstanceRoutes:       false,
 				LagerConfig: lagerflags.LagerConfig{
 					LogLevel: "info",
+				},
+				LoggregatorConfig: loggingclient.Config{
+					SourceID: "route_emitter",
 				},
 			}
 
