@@ -2,6 +2,7 @@ package routehandlers
 
 import (
 	"errors"
+	"time"
 
 	"code.cloudfoundry.org/bbs/models"
 	loggingclient "code.cloudfoundry.org/diego-logging-client"
@@ -21,22 +22,24 @@ const (
 )
 
 type Handler struct {
-	routingTable      routingtable.RoutingTable
-	natsEmitter       emitter.NATSEmitter
-	routingAPIEmitter emitter.RoutingAPIEmitter
-	localMode         bool
-	metronClient      loggingclient.IngressClient
+	routingTable        routingtable.RoutingTable
+	natsEmitter         emitter.NATSEmitter
+	routingAPIEmitter   emitter.RoutingAPIEmitter
+	localMode           bool
+	unregistrationDelay time.Duration
+	metronClient        loggingclient.IngressClient
 }
 
 var _ watcher.RouteHandler = new(Handler)
 
-func NewHandler(routingTable routingtable.RoutingTable, natsEmitter emitter.NATSEmitter, routingAPIEmitter emitter.RoutingAPIEmitter, localMode bool, metronClient loggingclient.IngressClient) *Handler {
+func NewHandler(routingTable routingtable.RoutingTable, natsEmitter emitter.NATSEmitter, routingAPIEmitter emitter.RoutingAPIEmitter, localMode bool, metronClient loggingclient.IngressClient, delay time.Duration) *Handler {
 	return &Handler{
-		routingTable:      routingTable,
-		natsEmitter:       natsEmitter,
-		routingAPIEmitter: routingAPIEmitter,
-		localMode:         localMode,
-		metronClient:      metronClient,
+		routingTable:        routingTable,
+		natsEmitter:         natsEmitter,
+		routingAPIEmitter:   routingAPIEmitter,
+		localMode:           localMode,
+		metronClient:        metronClient,
+		unregistrationDelay: delay,
 	}
 }
 
@@ -200,6 +203,9 @@ func (handler *Handler) handleDesiredUpdate(logger lager.Logger, before, after *
 	defer logger.Info("complete")
 
 	routeMappings, messagesToEmit := handler.routingTable.SetRoutes(before, after)
+	if after.Instances < before.Instances && handler.unregistrationDelay > 0 {
+		time.Sleep(handler.unregistrationDelay)
+	}
 	handler.emitMessages(logger, messagesToEmit, routeMappings)
 }
 

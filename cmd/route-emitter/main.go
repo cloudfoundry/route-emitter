@@ -108,7 +108,7 @@ func main() {
 		routingAPIEmitter = emitter.NewRoutingAPIEmitter(tcpLogger, routingAPIClient, uaaClient, int(routeTTL.Seconds()))
 	}
 
-	handler := routehandlers.NewHandler(table, natsEmitter, routingAPIEmitter, localMode, metronClient)
+	handler := routehandlers.NewHandler(table, natsEmitter, routingAPIEmitter, localMode, metronClient, time.Duration(cfg.UnregistrationDelay))
 
 	watcher := watcher.NewWatcher(
 		cfg.CellID,

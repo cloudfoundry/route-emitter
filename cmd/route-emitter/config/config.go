@@ -57,6 +57,7 @@ type RouteEmitterConfig struct {
 	EnableInternalEmitter              bool                  `json:"enable_internal_emitter"`
 	ConsulEnabled                      bool                  `json:"consul_enabled"`
 	LocketEnabled                      bool                  `json:"locket_enabled"`
+	UnregistrationDelay                durationjson.Duration `json:"unregistration_delay,omitempty"`
 	lagerflags.LagerConfig
 	debugserver.DebugServerConfig
 	locket.ClientLocketConfig
