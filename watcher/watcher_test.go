@@ -232,28 +232,6 @@ var _ = Describe("Watcher", func() {
 			_, createEvent := routeHandler.HandleEventArgsForCall(0)
 			Expect(createEvent).Should(Equal(event))
 		})
-
-		Context("when the cell id is set", func() {
-			Context("and doesn't match the event cell id", func() {
-				BeforeEach(func() {
-					cellID = "random-cell-id"
-				})
-
-				It("ignores the event", func() {
-					Consistently(routeHandler.HandleEventCallCount).Should(BeZero())
-				})
-			})
-
-			Context("and matches the event cell id", func() {
-				BeforeEach(func() {
-					cellID = "cell-id-1"
-				})
-
-				It("handles the event", func() {
-					Eventually(routeHandler.HandleEventCallCount).Should(BeNumerically(">=", 1))
-				})
-			})
-		})
 	})
 
 	Context("handle ActualLRPCreatedEvent", func() {
@@ -271,28 +249,6 @@ var _ = Describe("Watcher", func() {
 			Eventually(routeHandler.HandleEventCallCount).Should(BeNumerically(">=", 1))
 			_, createEvent := routeHandler.HandleEventArgsForCall(0)
 			Expect(createEvent).Should(Equal(event))
-		})
-
-		Context("when the cell id is set", func() {
-			Context("and doesn't match the event cell id", func() {
-				BeforeEach(func() {
-					cellID = "random-cell-id"
-				})
-
-				It("ignores the event", func() {
-					Consistently(routeHandler.HandleEventCallCount).Should(BeZero())
-				})
-			})
-
-			Context("and matches the event cell id", func() {
-				BeforeEach(func() {
-					cellID = "cell-id-1"
-				})
-
-				It("handles the event", func() {
-					Eventually(routeHandler.HandleEventCallCount).Should(BeNumerically(">=", 1))
-				})
-			})
 		})
 	})
 
@@ -312,28 +268,6 @@ var _ = Describe("Watcher", func() {
 			Eventually(routeHandler.HandleEventCallCount).Should(BeNumerically(">=", 1))
 			_, changeEvent := routeHandler.HandleEventArgsForCall(0)
 			Expect(changeEvent).Should(Equal(event))
-		})
-
-		Context("when the cell id is set", func() {
-			Context("and doesn't match the event cell id", func() {
-				BeforeEach(func() {
-					cellID = "random-cell-id"
-				})
-
-				It("ignores the event", func() {
-					Consistently(routeHandler.HandleEventCallCount).Should(BeZero())
-				})
-			})
-
-			Context("and matches the event cell id", func() {
-				BeforeEach(func() {
-					cellID = "cell-id-1"
-				})
-
-				It("handles the event", func() {
-					Eventually(routeHandler.HandleEventCallCount).Should(BeNumerically(">=", 1))
-				})
-			})
 		})
 	})
 
@@ -536,36 +470,6 @@ var _ = Describe("Watcher", func() {
 					Eventually(logger).Should(gbytes.Say("caching-event"))
 					return nil, nil
 				}
-			})
-			Context("when cell id is set", func() {
-				BeforeEach(func() {
-					cellID = "cell-id"
-					endpoint4 := routingtable.Endpoint{InstanceGUID: "ig-4", Host: "2.2.2.3", Index: 1, Port: 23, ContainerPort: 8080, Evacuating: false, ModificationTag: currentTag}
-					actualLRPGroup4 := &models.ActualLRPGroup{
-						Instance: &models.ActualLRP{
-							ActualLRPKey:         models.NewActualLRPKey("pg-2", 1, "domain"),
-							ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint4.InstanceGUID, "cell-id4"),
-							ActualLRPNetInfo:     models.NewActualLRPNetInfo(endpoint4.Host, "container-ip", models.NewPortMapping(endpoint4.Port, endpoint4.ContainerPort)),
-							State:                models.ActualLRPStateRunning,
-						},
-					}
-					bbsClient.ActualLRPGroupsStub = func(lager.Logger, models.ActualLRPFilter) ([]*models.ActualLRPGroup, error) {
-						defer GinkgoRecover()
-						Eventually(eventCh).Should(BeSent(EventHolder{models.NewActualLRPRemovedEvent(actualLRPGroup1)}))
-						Eventually(eventCh).Should(BeSent(EventHolder{models.NewActualLRPRemovedEvent(actualLRPGroup4)}))
-						Eventually(logger).Should(gbytes.Say("caching-event"))
-						return nil, nil
-					}
-				})
-
-				It("applies cached events associated only with the cell after syncing is complete", func() {
-					Eventually(routeHandler.SyncCallCount).Should(Equal(1))
-					_, _, _, _, event := routeHandler.SyncArgsForCall(0)
-
-					Expect(event).To(HaveLen(1))
-					expectedEvent := models.NewActualLRPRemovedEvent(actualLRPGroup1)
-					Expect(event[actualLRPGroup1.Instance.InstanceGuid]).To(Equal(expectedEvent))
-				})
 			})
 
 			It("caches events", func() {

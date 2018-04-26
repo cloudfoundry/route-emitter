@@ -103,14 +103,10 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 		select {
 		case event := <-eventChan:
 			if syncing {
-				if watcher.eventCellIDMatches(watcher.logger, event) {
-					watcher.logger.Info("caching-event", lager.Data{
-						"type": event.EventType(),
-					})
-					cachedEvents[event.Key()] = event
-				} else {
-					logSkippedEvent(watcher.logger, event)
-				}
+				watcher.logger.Info("caching-event", lager.Data{
+					"type": event.EventType(),
+				})
+				cachedEvents[event.Key()] = event
 				continue
 			}
 			logger := watcher.logger.Session("handling-event")
@@ -254,66 +250,11 @@ func foundInCurrentDesireds(guid string, currentDesireds []*models.DesiredLRPSch
 }
 
 func (w *Watcher) handleEvent(logger lager.Logger, event models.Event) {
-	if !w.eventCellIDMatches(logger, event) {
-		logSkippedEvent(logger, event)
-		return
-	}
-
 	desiredLRPs := w.retrieveDesired(logger, event)
 	if len(desiredLRPs) > 0 {
 		w.routeHandler.RefreshDesired(logger, desiredLRPs)
 	}
 	w.routeHandler.HandleEvent(logger, event)
-}
-
-func logSkippedEvent(logger lager.Logger, event models.Event) {
-	data := lager.Data{"event-type": event.EventType()}
-	switch e := event.(type) {
-	case *models.ActualLRPCreatedEvent:
-		data["lrp"] = routingtable.ActualLRPData(routingtable.NewActualLRPRoutingInfo(e.ActualLrpGroup))
-	case *models.ActualLRPRemovedEvent:
-		data["lrp"] = routingtable.ActualLRPData(routingtable.NewActualLRPRoutingInfo(e.ActualLrpGroup))
-	case *models.ActualLRPChangedEvent:
-		data["before"] = routingtable.ActualLRPData(routingtable.NewActualLRPRoutingInfo(e.Before))
-		data["after"] = routingtable.ActualLRPData(routingtable.NewActualLRPRoutingInfo(e.After))
-	}
-	logger.Debug("skipping-event", data)
-}
-
-// returns true if the event is relevant to the local cell, e.g. an actual lrp
-// started or stopped on the local cell
-func (watcher *Watcher) eventCellIDMatches(logger lager.Logger, event models.Event) bool {
-	if watcher.cellID == "" {
-		return true
-	}
-
-	switch event := event.(type) {
-	case *models.DesiredLRPCreatedEvent:
-		return true
-	case *models.DesiredLRPChangedEvent:
-		return true
-	case *models.DesiredLRPRemovedEvent:
-		return true
-	case *models.ActualLRPCreatedEvent:
-		lrp, _ := event.ActualLrpGroup.Resolve()
-		return lrp.ActualLRPInstanceKey.CellId == watcher.cellID
-	case *models.ActualLRPChangedEvent:
-		beforeLRP, _ := event.Before.Resolve()
-		afterLRP, _ := event.After.Resolve()
-		if beforeLRP.State == models.ActualLRPStateRunning {
-			return beforeLRP.ActualLRPInstanceKey.CellId == watcher.cellID
-		} else if afterLRP.State == models.ActualLRPStateRunning {
-			return afterLRP.ActualLRPInstanceKey.CellId == watcher.cellID
-		}
-		// this shouldn't matter if we pass it through or not, since the event is
-		// a no-op from the route-emitter point of view
-		return false
-	case *models.ActualLRPRemovedEvent:
-		lrp, _ := event.ActualLrpGroup.Resolve()
-		return lrp.ActualLRPInstanceKey.CellId == watcher.cellID
-	default:
-		return false
-	}
 }
 
 func (w *Watcher) sync(logger lager.Logger, ch chan<- *syncEventResult) {
