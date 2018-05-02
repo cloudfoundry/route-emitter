@@ -79,6 +79,9 @@ func DefaultRouteEmitterConfig() RouteEmitterConfig {
 		EnableTCPEmitter:                   false,
 		EnableInternalEmitter:              false,
 		RegisterDirectInstanceRoutes:       false,
+		LoggregatorConfig: loggingclient.Config{
+			SourceID: "route_emitter",
+		},
 	}
 }
 
