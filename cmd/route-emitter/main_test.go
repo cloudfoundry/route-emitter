@@ -868,7 +868,7 @@ var _ = Describe("Route Emitter", func() {
 					// Do not use Say matcher as ordering of 'subscribed-to-bbs-event' log message
 					// is not defined in relation to the 'tcp-emitter.started' message
 					Eventually(runner.Buffer().Contents).Should(ContainSubstring("subscribed-to-bbs-event"))
-					Eventually(runner.Buffer()).Should(gbytes.Say("syncer.syncing"))
+					Eventually(runner.Buffer()).Should(gbytes.Say("sync.starting"))
 					Eventually(runner.Buffer()).Should(gbytes.Say("unable-to-upsert"))
 					Consistently(runner.Buffer()).ShouldNot(gbytes.Say("successfully-emitted-event"))
 					Consistently(emitter.Wait()).ShouldNot(Receive())

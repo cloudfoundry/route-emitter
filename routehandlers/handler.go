@@ -70,7 +70,7 @@ func (handler *Handler) HandleEvent(logger lager.Logger, event models.Event) {
 func (handler *Handler) EmitExternal(logger lager.Logger) {
 	routingEvents, messagesToEmit := handler.routingTable.GetExternalRoutingEvents()
 
-	logger.Info("emitting-nats-messages", lager.Data{"messages": messagesToEmit})
+	logger.Debug("emitting-nats-messages", lager.Data{"messages": messagesToEmit})
 	if handler.natsEmitter != nil {
 		err := handler.natsEmitter.Emit(messagesToEmit)
 		if err != nil {
@@ -78,7 +78,7 @@ func (handler *Handler) EmitExternal(logger lager.Logger) {
 		}
 	}
 
-	logger.Info("emitting-routing-api-messages", lager.Data{"messages": routingEvents})
+	logger.Debug("emitting-routing-api-messages", lager.Data{"messages": routingEvents})
 	if handler.routingAPIEmitter != nil {
 		err := handler.routingAPIEmitter.Emit(routingEvents)
 		if err != nil {
@@ -99,7 +99,7 @@ func (handler *Handler) EmitExternal(logger lager.Logger) {
 func (handler *Handler) EmitInternal(logger lager.Logger) {
 	_, messagesToEmit := handler.routingTable.GetInternalRoutingEvents()
 
-	logger.Info("emitting-nats-messages", lager.Data{"messages": messagesToEmit})
+	logger.Debug("emitting-nats-messages", lager.Data{"messages": messagesToEmit})
 	if handler.natsEmitter != nil {
 		err := handler.natsEmitter.Emit(messagesToEmit)
 		if err != nil {
@@ -119,7 +119,8 @@ func (handler *Handler) Sync(
 	logger.Debug("starting")
 	defer logger.Debug("completed")
 
-	newTable := routingtable.NewRoutingTable(logger, false, handler.metronClient)
+	nullLogger := lager.NewLogger("") // ignore log messsages from the routing table
+	newTable := routingtable.NewRoutingTable(nullLogger, false, handler.metronClient)
 
 	for _, lrp := range desired {
 		newTable.SetRoutes(nil, lrp)
@@ -184,76 +185,48 @@ func (handler *Handler) ShouldRefreshDesired(actual *routingtable.ActualLRPRouti
 }
 
 func (handler *Handler) handleDesiredCreate(logger lager.Logger, desiredLRP *models.DesiredLRPSchedulingInfo) {
-	logger = logger.Session("handle-desired-create", routingtable.DesiredLRPData(desiredLRP))
-	logger.Info("starting")
-	defer logger.Info("complete")
 	routeMappings, messagesToEmit := handler.routingTable.SetRoutes(nil, desiredLRP)
 	handler.emitMessages(logger, messagesToEmit, routeMappings)
 }
 
 func (handler *Handler) handleDesiredUpdate(logger lager.Logger, before, after *models.DesiredLRPSchedulingInfo) {
-	logger = logger.Session("handling-desired-update", lager.Data{
-		"before": routingtable.DesiredLRPData(before),
-		"after":  routingtable.DesiredLRPData(after),
-	})
-	logger.Info("starting")
-	defer logger.Info("complete")
-
 	routeMappings, messagesToEmit := handler.routingTable.SetRoutes(before, after)
 	handler.emitMessages(logger, messagesToEmit, routeMappings)
 }
 
 func (handler *Handler) handleDesiredDelete(logger lager.Logger, schedulingInfo *models.DesiredLRPSchedulingInfo) {
-	logger = logger.Session("handling-desired-delete", routingtable.DesiredLRPData(schedulingInfo))
-	logger.Info("starting")
-	defer logger.Info("complete")
 	routeMappings, messagesToEmit := handler.routingTable.RemoveRoutes(schedulingInfo)
 	handler.emitMessages(logger, messagesToEmit, routeMappings)
 }
 
 func (handler *Handler) handleActualCreate(logger lager.Logger, actualLRPInfo *routingtable.ActualLRPRoutingInfo) {
-	logger = logger.Session("handling-actual-create", routingtable.ActualLRPData(actualLRPInfo))
-	logger.Info("starting")
-	defer logger.Info("complete")
-	if actualLRPInfo.ActualLRP.State == models.ActualLRPStateRunning {
-		logger.Info("handler-adding-endpoint", lager.Data{"net_info": actualLRPInfo.ActualLRP.ActualLRPNetInfo})
-		routeMappings, messagesToEmit := handler.routingTable.AddEndpoint(actualLRPInfo)
-		handler.emitMessages(logger, messagesToEmit, routeMappings)
+	if actualLRPInfo.ActualLRP.State != models.ActualLRPStateRunning {
+		return
 	}
+	routeMappings, messagesToEmit := handler.routingTable.AddEndpoint(actualLRPInfo)
+	handler.emitMessages(logger, messagesToEmit, routeMappings)
 }
 
 func (handler *Handler) handleActualUpdate(logger lager.Logger, before, after *routingtable.ActualLRPRoutingInfo) {
-	logger = logger.Session("handling-actual-update", lager.Data{
-		"before": routingtable.ActualLRPData(before),
-		"after":  routingtable.ActualLRPData(after),
-	})
-	logger.Info("starting")
-	defer logger.Info("complete")
-
 	var (
 		messagesToEmit routingtable.MessagesToEmit
 		routeMappings  routingtable.TCPRouteMappings
 	)
 	switch {
 	case after.ActualLRP.State == models.ActualLRPStateRunning:
-		logger.Info("handler-adding-endpoint", lager.Data{"net_info": after.ActualLRP.ActualLRPNetInfo})
 		routeMappings, messagesToEmit = handler.routingTable.AddEndpoint(after)
 	case after.ActualLRP.State != models.ActualLRPStateRunning && before.ActualLRP.State == models.ActualLRPStateRunning:
-		logger.Info("handler-removing-endpoint", lager.Data{"net_info": before.ActualLRP.ActualLRPNetInfo})
 		routeMappings, messagesToEmit = handler.routingTable.RemoveEndpoint(before)
 	}
 	handler.emitMessages(logger, messagesToEmit, routeMappings)
 }
 
 func (handler *Handler) handleActualDelete(logger lager.Logger, actualLRPInfo *routingtable.ActualLRPRoutingInfo) {
-	logger = logger.Session("handling-actual-delete", routingtable.ActualLRPData(actualLRPInfo))
-	logger.Info("starting")
-	defer logger.Info("complete")
-	if actualLRPInfo.ActualLRP.State == models.ActualLRPStateRunning {
-		logger.Info("handler-removing-endpoint", lager.Data{"net_info": actualLRPInfo.ActualLRP.ActualLRPNetInfo})
-		routeMappings, messagesToEmit := handler.routingTable.RemoveEndpoint(actualLRPInfo)
-		handler.emitMessages(logger, messagesToEmit, routeMappings)
+	if actualLRPInfo.ActualLRP.State != models.ActualLRPStateRunning {
+		return
 	}
+	routeMappings, messagesToEmit := handler.routingTable.RemoveEndpoint(actualLRPInfo)
+	handler.emitMessages(logger, messagesToEmit, routeMappings)
 }
 
 type set map[interface{}]struct{}

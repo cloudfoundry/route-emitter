@@ -174,10 +174,6 @@ var _ = Describe("Handler", func() {
 			})
 
 			Context("when there are diego ssh-keys on the route", func() {
-				var (
-					foundRoutes bool
-				)
-
 				BeforeEach(func() {
 					diegoSSHInfo := json.RawMessage([]byte(`{"ssh-key": "ssh-value"}`))
 
@@ -187,22 +183,9 @@ var _ = Describe("Handler", func() {
 					desiredLRP.Routes = &routes
 				})
 
-				It("does not log them", func() {
+				It("does not log anything", func() {
 					Expect(fakeTable.SetRoutesCallCount()).To(Equal(1))
-					logs := logger.Logs()
-
-					for _, log := range logs {
-						if log.Data["routes"] != nil {
-							Expect(log.Data["routes"]).ToNot(HaveKey("diego-ssh"))
-							Expect(log.Data["routes"]).To(HaveKey("cf-router"))
-							foundRoutes = true
-						}
-					}
-					if !foundRoutes {
-						Fail("Expected to find diego-ssh routes on desiredLRP")
-					}
-
-					Expect(len(*desiredLRP.Routes)).To(Equal(2))
+					Expect(logger.Buffer()).NotTo(gbytes.Say("diego-ssh"))
 				})
 			})
 		})
@@ -284,8 +267,6 @@ var _ = Describe("Handler", func() {
 			})
 
 			Context("when there are diego ssh-keys on the route", func() {
-				var foundRoutes bool
-
 				BeforeEach(func() {
 					diegoSSHInfo := json.RawMessage([]byte(`{"ssh-key": "ssh-value"}`))
 
@@ -297,24 +278,7 @@ var _ = Describe("Handler", func() {
 
 				It("does not log them", func() {
 					Expect(fakeTable.SetRoutesCallCount()).To(Equal(1))
-					logs := logger.Logs()
-
-					for _, log := range logs {
-						if after, ok := log.Data["after"]; ok {
-							afterData := after.(map[string]interface{})
-
-							if afterData["routes"] != nil {
-								Expect(afterData["routes"]).ToNot(HaveKey("diego-ssh"))
-								Expect(afterData["routes"]).To(HaveKey("cf-router"))
-								foundRoutes = true
-							}
-						}
-					}
-					if !foundRoutes {
-						Fail("Expected to find diego-ssh routes on desiredLRP")
-					}
-
-					Expect(len(*changedDesiredLRP.Routes)).To(Equal(2))
+					Expect(logger.Buffer()).NotTo(gbytes.Say("diego-ssh"))
 				})
 			})
 		})
@@ -357,10 +321,6 @@ var _ = Describe("Handler", func() {
 			})
 
 			Context("when there are diego ssh-keys on the route", func() {
-				var (
-					foundRoutes bool
-				)
-
 				BeforeEach(func() {
 					diegoSSHInfo := json.RawMessage([]byte(`{"ssh-key": "ssh-value"}`))
 
@@ -372,20 +332,7 @@ var _ = Describe("Handler", func() {
 
 				It("does not log them", func() {
 					Expect(fakeTable.RemoveRoutesCallCount()).To(Equal(1))
-					logs := logger.Logs()
-
-					for _, log := range logs {
-						if log.Data["routes"] != nil {
-							Expect(log.Data["routes"]).ToNot(HaveKey("diego-ssh"))
-							Expect(log.Data["routes"]).To(HaveKey("cf-router"))
-							foundRoutes = true
-						}
-					}
-					if !foundRoutes {
-						Fail("Expected to find diego-ssh routes on desiredLRP")
-					}
-
-					Expect(len(*desiredLRP.Routes)).To(Equal(2))
+					Expect(logger.Buffer()).NotTo(gbytes.Say("diego-ssh"))
 				})
 			})
 		})
@@ -426,20 +373,6 @@ var _ = Describe("Handler", func() {
 
 				JustBeforeEach(func() {
 					routeHandler.HandleEvent(logger, models.NewActualLRPCreatedEvent(actualLRPGroup))
-				})
-
-				It("should log the net info", func() {
-					Expect(logger).To(gbytes.Say(
-						fmt.Sprintf(
-							`"net_info":\{"address":"%s","ports":\[\{"container_port":%d,"host_port":%d\},\{"container_port":%d,"host_port":%d\}\],"instance_address":"%s"\}`,
-							expectedHost,
-							expectedContainerPort,
-							expectedExternalPort,
-							expectedAdditionalContainerPort,
-							expectedExternalPort,
-							expectedInstanceAddress,
-						),
-					))
 				})
 
 				It("should add/update the endpoints on the table", func() {
@@ -547,20 +480,6 @@ var _ = Describe("Handler", func() {
 					routeHandler.HandleEvent(logger, models.NewActualLRPChangedEvent(beforeActualLRP, afterActualLRP))
 				})
 
-				It("should log the new net info", func() {
-					Expect(logger).To(gbytes.Say(
-						fmt.Sprintf(
-							`"net_info":\{"address":"%s","ports":\[\{"container_port":%d,"host_port":%d\},\{"container_port":%d,"host_port":%d\}\],"instance_address":"%s"\}`,
-							expectedHost,
-							expectedContainerPort,
-							expectedExternalPort,
-							expectedAdditionalContainerPort,
-							expectedAdditionalExternalPort,
-							expectedInstanceAddress,
-						),
-					))
-				})
-
 				It("should add/update the endpoint on the table", func() {
 					Expect(fakeTable.AddEndpointCallCount()).To(Equal(1))
 
@@ -631,20 +550,6 @@ var _ = Describe("Handler", func() {
 
 				JustBeforeEach(func() {
 					routeHandler.HandleEvent(logger, models.NewActualLRPChangedEvent(beforeActualLRP, afterActualLRP))
-				})
-
-				It("should log the previous net info", func() {
-					Expect(logger).To(gbytes.Say(
-						fmt.Sprintf(
-							`"net_info":\{"address":"%s","ports":\[\{"container_port":%d,"host_port":%d\},\{"container_port":%d,"host_port":%d\}\],"instance_address":"%s"\}`,
-							expectedHost,
-							expectedContainerPort,
-							expectedExternalPort,
-							expectedAdditionalContainerPort,
-							expectedAdditionalExternalPort,
-							expectedInstanceAddress,
-						),
-					))
 				})
 
 				It("should remove the endpoint from the table", func() {
@@ -743,20 +648,6 @@ var _ = Describe("Handler", func() {
 
 				JustBeforeEach(func() {
 					routeHandler.HandleEvent(logger, models.NewActualLRPRemovedEvent(actualLRP))
-				})
-
-				It("should log the previous net info", func() {
-					Expect(logger).To(gbytes.Say(
-						fmt.Sprintf(
-							`"net_info":\{"address":"%s","ports":\[\{"container_port":%d,"host_port":%d\},\{"container_port":%d,"host_port":%d\}\],"instance_address":"%s"\}`,
-							expectedHost,
-							expectedContainerPort,
-							expectedExternalPort,
-							expectedAdditionalContainerPort,
-							expectedAdditionalExternalPort,
-							expectedInstanceAddress,
-						),
-					))
 				})
 
 				It("should remove the endpoint from the table", func() {

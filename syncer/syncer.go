@@ -47,7 +47,6 @@ func (s *NatsSyncer) Run(signals <-chan os.Signal, ready chan<- struct{}) error 
 	for {
 		select {
 		case <-syncTicker.C():
-			s.logger.Info("syncing")
 			s.sync()
 		case <-signals:
 			s.logger.Info("stopping")

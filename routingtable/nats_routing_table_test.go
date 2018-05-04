@@ -216,6 +216,15 @@ var _ = Describe("RoutingTable", func() {
 				_, messagesToEmit = table.AddEndpoint(actualLRP)
 			})
 
+			It("should log the added LRP net info", func() {
+				Expect(logger).To(Say(
+					`"address":"%s".*"ports":\[{"container_port":%d,"host_port":%d}\]`,
+					endpoint1.Host,
+					endpoint1.ContainerPort,
+					endpoint1.Port,
+				))
+			})
+
 			It("emits the container ip and port instead of the host ip and port", func() {
 				expected := routingtable.MessagesToEmit{
 					RegistrationMessages: []routingtable.RegistryMessage{
@@ -241,6 +250,15 @@ var _ = Describe("RoutingTable", func() {
 			Context("then the endpoint is removed", func() {
 				BeforeEach(func() {
 					_, messagesToEmit = table.RemoveEndpoint(actualLRP)
+				})
+
+				It("should log the removed LRP net info", func() {
+					Expect(logger).To(Say(
+						`"address":"%s".*"ports":\[{"container_port":%d,"host_port":%d}\]`,
+						endpoint1.Host,
+						endpoint1.ContainerPort,
+						endpoint1.Port,
+					))
 				})
 
 				It("emits the container ip and port", func() {
