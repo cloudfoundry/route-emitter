@@ -90,7 +90,7 @@ func main() {
 	bbsClient := initializeBBSClient(logger, cfg)
 
 	localMode := cfg.CellID != ""
-	table := routingtable.NewRoutingTable(logger, cfg.RegisterDirectInstanceRoutes, metronClient)
+	table := routingtable.NewRoutingTable(cfg.RegisterDirectInstanceRoutes, metronClient)
 	natsEmitter := initializeNatsEmitter(logger, natsClient, cfg.RouteEmittingWorkers, metronClient, cfg.EnableInternalEmitter)
 
 	routeTTL := time.Duration(cfg.TCPRouteTTL)

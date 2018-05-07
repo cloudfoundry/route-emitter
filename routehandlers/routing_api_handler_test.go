@@ -68,7 +68,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 
 			It("invokes AddRoutes on RoutingTable", func() {
 				Expect(fakeRoutingTable.SetRoutesCallCount()).Should(Equal(1))
-				before, after := fakeRoutingTable.SetRoutesArgsForCall(0)
+				_, before, after := fakeRoutingTable.SetRoutesArgsForCall(0)
 				Expect(before).To(BeNil())
 				Expect(*after).Should(Equal(desiredLRP.DesiredLRPSchedulingInfo()))
 			})
@@ -112,7 +112,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 
 			It("invokes UpdateRoutes on RoutingTable", func() {
 				Expect(fakeRoutingTable.SetRoutesCallCount()).Should(Equal(1))
-				beforeLrp, afterLrp := fakeRoutingTable.SetRoutesArgsForCall(0)
+				_, beforeLrp, afterLrp := fakeRoutingTable.SetRoutesArgsForCall(0)
 				Expect(*beforeLrp).Should(Equal(desiredLRP.DesiredLRPSchedulingInfo()))
 				Expect(*afterLrp).Should(Equal(after.DesiredLRPSchedulingInfo()))
 			})
@@ -144,7 +144,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 			It("does not invoke AddRoutes on RoutingTable", func() {
 				Expect(fakeRoutingTable.RemoveRoutesCallCount()).Should(Equal(1))
 				Expect(fakeRoutingAPIEmitter.EmitCallCount()).Should(Equal(1))
-				lrp := fakeRoutingTable.RemoveRoutesArgsForCall(0)
+				_, lrp := fakeRoutingTable.RemoveRoutesArgsForCall(0)
 				Expect(*lrp).Should(Equal(desiredLRP.DesiredLRPSchedulingInfo()))
 			})
 		})
@@ -186,7 +186,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 
 				It("invokes AddEndpoint on RoutingTable", func() {
 					Expect(fakeRoutingTable.AddEndpointCallCount()).Should(Equal(1))
-					lrp := fakeRoutingTable.AddEndpointArgsForCall(0)
+					_, lrp := fakeRoutingTable.AddEndpointArgsForCall(0)
 					Expect(lrp).Should(Equal(routingtable.NewActualLRPRoutingInfo(actualLRP)))
 				})
 
@@ -271,7 +271,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 
 				It("invokes AddEndpoint on RoutingTable", func() {
 					Expect(fakeRoutingTable.AddEndpointCallCount()).Should(Equal(1))
-					lrp := fakeRoutingTable.AddEndpointArgsForCall(0)
+					_, lrp := fakeRoutingTable.AddEndpointArgsForCall(0)
 					Expect(lrp.ActualLRP).Should(Equal(afterLRP.Instance))
 				})
 
@@ -320,7 +320,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 
 				It("invokes RemoveEndpoint on RoutingTable", func() {
 					Expect(fakeRoutingTable.RemoveEndpointCallCount()).Should(Equal(1))
-					lrp := fakeRoutingTable.RemoveEndpointArgsForCall(0)
+					_, lrp := fakeRoutingTable.RemoveEndpointArgsForCall(0)
 					Expect(lrp).Should(Equal(routingtable.NewActualLRPRoutingInfo(actualLRP)))
 				})
 
@@ -400,7 +400,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 
 				It("invokes RemoveEndpoint on RoutingTable", func() {
 					Expect(fakeRoutingTable.RemoveEndpointCallCount()).Should(Equal(1))
-					lrp := fakeRoutingTable.RemoveEndpointArgsForCall(0)
+					_, lrp := fakeRoutingTable.RemoveEndpointArgsForCall(0)
 					Expect(lrp).Should(Equal(routingtable.NewActualLRPRoutingInfo(actualLRP)))
 				})
 
@@ -512,7 +512,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 			routeHandler.RefreshDesired(logger, []*models.DesiredLRPSchedulingInfo{desiredInfo})
 
 			Expect(fakeRoutingTable.SetRoutesCallCount()).To(Equal(1))
-			_, after := fakeRoutingTable.SetRoutesArgsForCall(0)
+			_, _, after := fakeRoutingTable.SetRoutesArgsForCall(0)
 			Expect(after).To(Equal(desiredInfo))
 			Expect(fakeRoutingAPIEmitter.EmitCallCount()).Should(Equal(1))
 		})
@@ -566,7 +566,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 					},
 				}
 
-				fakeRoutingTable.SwapStub = func(t routingtable.RoutingTable, domains models.DomainSet) (routingtable.TCPRouteMappings, routingtable.MessagesToEmit) {
+				fakeRoutingTable.SwapStub = func(l lager.Logger, t routingtable.RoutingTable, domains models.DomainSet) (routingtable.TCPRouteMappings, routingtable.MessagesToEmit) {
 					return routingtable.TCPRouteMappings{}, emptyNatsMessages
 				}
 			})
@@ -608,7 +608,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 				domains.Add("foo")
 				routeHandler.Sync(logger, desiredInfo, actualInfo, domains, nil)
 				Expect(fakeRoutingTable.SwapCallCount()).Should(Equal(1))
-				tempRoutingTable, actualDomains := fakeRoutingTable.SwapArgsForCall(0)
+				_, tempRoutingTable, actualDomains := fakeRoutingTable.SwapArgsForCall(0)
 				Expect(actualDomains).To(Equal(domains))
 				Expect(tempRoutingTable.TCPAssociationsCount()).To(Equal(1))
 				routingEvents, _ := tempRoutingTable.GetExternalRoutingEvents()
@@ -670,7 +670,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 
 				It("updates the routing table and emit cached events", func() {
 					Expect(fakeRoutingTable.SwapCallCount()).Should(Equal(1))
-					tempRoutingTable, _ := fakeRoutingTable.SwapArgsForCall(0)
+					_, tempRoutingTable, _ := fakeRoutingTable.SwapArgsForCall(0)
 					Expect(tempRoutingTable.TCPAssociationsCount()).Should(Equal(2))
 					Expect(fakeRoutingAPIEmitter.EmitCallCount()).To(Equal(1))
 				})

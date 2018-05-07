@@ -61,7 +61,7 @@ var _ = Describe("Watcher Integration", func() {
 		Expect(err).NotTo(HaveOccurred())
 		fakeMetronClient = &mfakes.FakeIngressClient{}
 		natsEmitter := emitter.NewNATSEmitter(natsClient, workPool, logger, fakeMetronClient, false)
-		natsTable := routingtable.NewRoutingTable(logger, false, fakeMetronClient)
+		natsTable := routingtable.NewRoutingTable(false, fakeMetronClient)
 
 		uaaClient := uaaclient.NewNoOpUaaClient()
 		routingAPIEmitter := emitter.NewRoutingAPIEmitter(logger, routingApiClient, uaaClient, 100)
