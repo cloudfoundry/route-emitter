@@ -620,10 +620,10 @@ var _ = Describe("Watcher", func() {
 					schedulingInfo1,
 					schedulingInfo2,
 				}
-				expectedActuals := []*routingtable.ActualLRPRoutingInfo{
-					routingtable.NewActualLRPRoutingInfo(actualLRPGroup1),
-					routingtable.NewActualLRPRoutingInfo(actualLRPGroup2),
-					routingtable.NewActualLRPRoutingInfo(actualLRPGroup3),
+				expectedActuals := []*models.ActualLRP{
+					routingtable.TODODELETEME(actualLRPGroup1),
+					routingtable.TODODELETEME(actualLRPGroup2),
+					routingtable.TODODELETEME(actualLRPGroup3),
 				}
 
 				expectedDomains := models.DomainSet{}
@@ -685,7 +685,7 @@ var _ = Describe("Watcher", func() {
 				It("registers endpoints for lrps on this cell", func() {
 					Eventually(routeHandler.SyncCallCount).Should(Equal(1))
 					_, _, actual, _, _ := routeHandler.SyncArgsForCall(0)
-					routingInfo2 := routingtable.NewActualLRPRoutingInfo(actualLRPGroup2)
+					routingInfo2 := routingtable.TODODELETEME(actualLRPGroup2)
 					Expect(actual).To(ContainElement(routingInfo2))
 				})
 

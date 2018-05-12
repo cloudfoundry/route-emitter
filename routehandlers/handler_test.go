@@ -343,7 +343,7 @@ var _ = Describe("Handler", func() {
 			var (
 				actualLRPGroup       *models.ActualLRPGroup
 				actualLRP            *models.ActualLRP
-				actualLRPRoutingInfo *routingtable.ActualLRPRoutingInfo
+				actualLRPRoutingInfo *models.ActualLRP
 			)
 
 			Context("when the resulting LRP is in the RUNNING state", func() {
@@ -364,7 +364,7 @@ var _ = Describe("Handler", func() {
 						Instance: actualLRP,
 					}
 
-					actualLRPRoutingInfo = &routingtable.ActualLRPRoutingInfo{
+					actualLRPRoutingInfo = &models.ActualLRP{
 						ActualLRP:  actualLRP,
 						Evacuating: false,
 					}
@@ -489,7 +489,7 @@ var _ = Describe("Handler", func() {
 						endpoint routingtable.Endpoint
 					}
 					lrp, evacuating := afterActualLRP.Resolve()
-					routingInfo := &routingtable.ActualLRPRoutingInfo{
+					routingInfo := &models.ActualLRP{
 						ActualLRP:  lrp,
 						Evacuating: evacuating,
 					}
@@ -556,7 +556,7 @@ var _ = Describe("Handler", func() {
 					Expect(fakeTable.RemoveEndpointCallCount()).To(Equal(1))
 
 					lrp, evacuating := beforeActualLRP.Resolve()
-					lrpRoutingInfo := &routingtable.ActualLRPRoutingInfo{
+					lrpRoutingInfo := &models.ActualLRP{
 						ActualLRP:  lrp,
 						Evacuating: evacuating,
 					}
@@ -654,7 +654,7 @@ var _ = Describe("Handler", func() {
 					Expect(fakeTable.RemoveEndpointCallCount()).To(Equal(1))
 
 					lrp, evacuating := actualLRP.Resolve()
-					lrpRoutingInfo := &routingtable.ActualLRPRoutingInfo{
+					lrpRoutingInfo := &models.ActualLRP{
 						ActualLRP:  lrp,
 						Evacuating: evacuating,
 					}
@@ -717,7 +717,7 @@ var _ = Describe("Handler", func() {
 		Context("when bbs server returns desired and actual lrps", func() {
 			var (
 				desiredInfo []*models.DesiredLRPSchedulingInfo
-				actualInfo  []*routingtable.ActualLRPRoutingInfo
+				actualInfo  []*models.ActualLRP
 				domains     models.DomainSet
 
 				endpoint1, endpoint2, endpoint3, endpoint4 routingtable.Endpoint
@@ -821,10 +821,10 @@ var _ = Describe("Handler", func() {
 				desiredInfo = []*models.DesiredLRPSchedulingInfo{
 					schedulingInfo1, schedulingInfo2, schedulingInfo3,
 				}
-				actualInfo = []*routingtable.ActualLRPRoutingInfo{
-					routingtable.NewActualLRPRoutingInfo(actualLRPGroup1),
-					routingtable.NewActualLRPRoutingInfo(actualLRPGroup2),
-					routingtable.NewActualLRPRoutingInfo(actualLRPGroup3),
+				actualInfo = []*models.ActualLRP{
+					routingtable.TODODELETEME(actualLRPGroup1),
+					routingtable.TODODELETEME(actualLRPGroup2),
+					routingtable.TODODELETEME(actualLRPGroup3),
 				}
 
 				domains = models.NewDomainSet([]string{"domain"})
@@ -1104,7 +1104,7 @@ var _ = Describe("Handler", func() {
 
 	Describe("ShouldRefreshDesired", func() {
 		var (
-			actualInfo *routingtable.ActualLRPRoutingInfo
+			actualInfo *models.ActualLRP
 		)
 		BeforeEach(func() {
 			currentTag := models.ModificationTag{Epoch: "abc", Index: 1}
@@ -1118,7 +1118,7 @@ var _ = Describe("Handler", func() {
 				ModificationTag: &currentTag,
 			}
 
-			actualInfo = &routingtable.ActualLRPRoutingInfo{
+			actualInfo = &models.ActualLRP{
 				ActualLRP: &models.ActualLRP{
 					ActualLRPKey:         models.NewActualLRPKey("pg-1", 0, "domain"),
 					ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint1.InstanceGUID, "cell-id"),

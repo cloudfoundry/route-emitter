@@ -26,18 +26,15 @@ func DesiredLRPData(lrp *models.DesiredLRPSchedulingInfo) lager.Data {
 	}
 }
 
-func ActualLRPData(info *ActualLRPRoutingInfo) lager.Data {
-	lrp := info.ActualLRP
-
+func ActualLRPData(actualLRP *models.FlattenedActualLRP) lager.Data {
 	return lager.Data{
-		"process-guid":  lrp.ProcessGuid,
-		"index":         lrp.Index,
-		"domain":        lrp.Domain,
-		"instance-guid": lrp.InstanceGuid,
-		"cell-id":       lrp.CellId,
-		"address":       lrp.Address,
-		"ports":         lrp.Ports,
-		"evacuating":    info.Evacuating,
-		"state":         lrp.State,
+		"process-guid":  actualLRP.ProcessGuid,
+		"index":         actualLRP.Index,
+		"domain":        actualLRP.Domain,
+		"instance-guid": actualLRP.InstanceGuid,
+		"cell-id":       actualLRP.CellId,
+		"address":       actualLRP.Address,
+		"ports":         actualLRP.Ports,
+		"state":         actualLRP.State,
 	}
 }

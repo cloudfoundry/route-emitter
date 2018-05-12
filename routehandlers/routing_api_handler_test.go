@@ -187,7 +187,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 				It("invokes AddEndpoint on RoutingTable", func() {
 					Expect(fakeRoutingTable.AddEndpointCallCount()).Should(Equal(1))
 					lrp := fakeRoutingTable.AddEndpointArgsForCall(0)
-					Expect(lrp).Should(Equal(routingtable.NewActualLRPRoutingInfo(actualLRP)))
+					Expect(lrp).Should(Equal(routingtable.TODODELETEME(actualLRP)))
 				})
 
 				Context("when there are routing events", func() {
@@ -321,7 +321,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 				It("invokes RemoveEndpoint on RoutingTable", func() {
 					Expect(fakeRoutingTable.RemoveEndpointCallCount()).Should(Equal(1))
 					lrp := fakeRoutingTable.RemoveEndpointArgsForCall(0)
-					Expect(lrp).Should(Equal(routingtable.NewActualLRPRoutingInfo(actualLRP)))
+					Expect(lrp).Should(Equal(routingtable.TODODELETEME(actualLRP)))
 				})
 
 				Context("when there are routing events", func() {
@@ -401,7 +401,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 				It("invokes RemoveEndpoint on RoutingTable", func() {
 					Expect(fakeRoutingTable.RemoveEndpointCallCount()).Should(Equal(1))
 					lrp := fakeRoutingTable.RemoveEndpointArgsForCall(0)
-					Expect(lrp).Should(Equal(routingtable.NewActualLRPRoutingInfo(actualLRP)))
+					Expect(lrp).Should(Equal(routingtable.TODODELETEME(actualLRP)))
 				})
 
 				Context("when there are routing events", func() {
@@ -445,9 +445,9 @@ var _ = Describe("RoutingAPIHandler", func() {
 	})
 
 	Describe("ShouldRefreshDesired", func() {
-		var actualInfo *routingtable.ActualLRPRoutingInfo
+		var actualInfo *models.ActualLRP
 		BeforeEach(func() {
-			actualInfo = &routingtable.ActualLRPRoutingInfo{
+			actualInfo = &models.ActualLRP{
 				ActualLRP: &models.ActualLRP{
 					ActualLRPKey:         models.NewActualLRPKey("process-guid-1", 0, "domain"),
 					ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
@@ -522,7 +522,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 		Context("when bbs server returns desired and actual lrps", func() {
 			var (
 				desiredInfo     []*models.DesiredLRPSchedulingInfo
-				actualInfo      []*routingtable.ActualLRPRoutingInfo
+				actualInfo      []*models.ActualLRP
 				modificationTag models.ModificationTag
 			)
 
@@ -549,8 +549,8 @@ var _ = Describe("RoutingAPIHandler", func() {
 					},
 				}
 
-				actualInfo = []*routingtable.ActualLRPRoutingInfo{
-					&routingtable.ActualLRPRoutingInfo{
+				actualInfo = []*models.ActualLRP{
+					&models.ActualLRP{
 						ActualLRP: &models.ActualLRP{
 							ActualLRPKey:         models.NewActualLRPKey("process-guid-1", 0, "domain"),
 							ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),

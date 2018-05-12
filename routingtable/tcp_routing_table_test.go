@@ -70,8 +70,8 @@ var _ = Describe("TCPRoutingTable", func() {
 		hostPort, containerPort uint32,
 		evacuating bool,
 		modificationTag *models.ModificationTag,
-	) *routingtable.ActualLRPRoutingInfo {
-		return &routingtable.ActualLRPRoutingInfo{
+	) *models.ActualLRP {
+		return &models.ActualLRP{
 			ActualLRP: &models.ActualLRP{
 				ActualLRPKey:         models.NewActualLRPKey(processGuid, 0, "domain"),
 				ActualLRPInstanceKey: models.NewActualLRPInstanceKey(instanceGuid, "cell-id-1"),
