@@ -129,6 +129,7 @@ func internalEndpointsFromRoutingInfo(actualLRP *models.FlattenedActualLRP) []En
 			Index:           actualLRP.Index,
 			Host:            actualLRP.Address,
 			ContainerIP:     actualLRP.InstanceAddress,
+			Evacuating:      actualLRP.ActualLRPInfo.PlacementState == models.PlacementStateType_Evacuating,
 			Since:           actualLRP.Since,
 			ModificationTag: &actualLRP.ModificationTag,
 		},

@@ -208,7 +208,7 @@ var _ = Describe("RoutingTable", func() {
 
 		Context("and an endpoint is added", func() {
 			var (
-				actualLRP *models.ActualLRP
+				actualLRP *models.FlattenedActualLRP
 			)
 
 			BeforeEach(func() {
@@ -1917,7 +1917,7 @@ var _ = Describe("RoutingTable", func() {
 
 				Context("when the instance has multiple ports, one of which has no routes", func() {
 					var (
-						lrp *models.ActualLRP
+						lrp *models.FlattenedActualLRP
 					)
 
 					BeforeEach(func() {
@@ -2040,7 +2040,7 @@ var _ = Describe("RoutingTable", func() {
 
 		Context("when there are only endpoints in the table", func() {
 			var beforeLRPSchedulingInfo *models.DesiredLRPSchedulingInfo
-			var lrp1, lrp2 *models.ActualLRP
+			var lrp1, lrp2 *models.FlattenedActualLRP
 			BeforeEach(func() {
 				lrp1 = createActualLRP(key, endpoint1, domain)
 				lrp2 = createActualLRP(key, endpoint2, domain)

@@ -36,10 +36,10 @@ type FakeRoutingTable struct {
 		result1 routingtable.TCPRouteMappings
 		result2 routingtable.MessagesToEmit
 	}
-	AddEndpointStub        func(actualLRP *models.ActualLRP) (routingtable.TCPRouteMappings, routingtable.MessagesToEmit)
+	AddEndpointStub        func(actualLRP *models.FlattenedActualLRP) (routingtable.TCPRouteMappings, routingtable.MessagesToEmit)
 	addEndpointMutex       sync.RWMutex
 	addEndpointArgsForCall []struct {
-		actualLRP *models.ActualLRP
+		actualLRP *models.FlattenedActualLRP
 	}
 	addEndpointReturns struct {
 		result1 routingtable.TCPRouteMappings
@@ -49,10 +49,10 @@ type FakeRoutingTable struct {
 		result1 routingtable.TCPRouteMappings
 		result2 routingtable.MessagesToEmit
 	}
-	RemoveEndpointStub        func(actualLRP *models.ActualLRP) (routingtable.TCPRouteMappings, routingtable.MessagesToEmit)
+	RemoveEndpointStub        func(actualLRP *models.FlattenedActualLRP) (routingtable.TCPRouteMappings, routingtable.MessagesToEmit)
 	removeEndpointMutex       sync.RWMutex
 	removeEndpointArgsForCall []struct {
-		actualLRP *models.ActualLRP
+		actualLRP *models.FlattenedActualLRP
 	}
 	removeEndpointReturns struct {
 		result1 routingtable.TCPRouteMappings
@@ -98,10 +98,10 @@ type FakeRoutingTable struct {
 		result1 routingtable.TCPRouteMappings
 		result2 routingtable.MessagesToEmit
 	}
-	HasExternalRoutesStub        func(actual *models.ActualLRP) bool
+	HasExternalRoutesStub        func(actual *models.FlattenedActualLRP) bool
 	hasExternalRoutesMutex       sync.RWMutex
 	hasExternalRoutesArgsForCall []struct {
-		actual *models.ActualLRP
+		actual *models.FlattenedActualLRP
 	}
 	hasExternalRoutesReturns struct {
 		result1 bool
@@ -252,11 +252,11 @@ func (fake *FakeRoutingTable) RemoveRoutesReturnsOnCall(i int, result1 routingta
 	}{result1, result2}
 }
 
-func (fake *FakeRoutingTable) AddEndpoint(actualLRP *models.ActualLRP) (routingtable.TCPRouteMappings, routingtable.MessagesToEmit) {
+func (fake *FakeRoutingTable) AddEndpoint(actualLRP *models.FlattenedActualLRP) (routingtable.TCPRouteMappings, routingtable.MessagesToEmit) {
 	fake.addEndpointMutex.Lock()
 	ret, specificReturn := fake.addEndpointReturnsOnCall[len(fake.addEndpointArgsForCall)]
 	fake.addEndpointArgsForCall = append(fake.addEndpointArgsForCall, struct {
-		actualLRP *models.ActualLRP
+		actualLRP *models.FlattenedActualLRP
 	}{actualLRP})
 	fake.recordInvocation("AddEndpoint", []interface{}{actualLRP})
 	fake.addEndpointMutex.Unlock()
@@ -275,7 +275,7 @@ func (fake *FakeRoutingTable) AddEndpointCallCount() int {
 	return len(fake.addEndpointArgsForCall)
 }
 
-func (fake *FakeRoutingTable) AddEndpointArgsForCall(i int) *models.ActualLRP {
+func (fake *FakeRoutingTable) AddEndpointArgsForCall(i int) *models.FlattenedActualLRP {
 	fake.addEndpointMutex.RLock()
 	defer fake.addEndpointMutex.RUnlock()
 	return fake.addEndpointArgsForCall[i].actualLRP
@@ -303,11 +303,11 @@ func (fake *FakeRoutingTable) AddEndpointReturnsOnCall(i int, result1 routingtab
 	}{result1, result2}
 }
 
-func (fake *FakeRoutingTable) RemoveEndpoint(actualLRP *models.ActualLRP) (routingtable.TCPRouteMappings, routingtable.MessagesToEmit) {
+func (fake *FakeRoutingTable) RemoveEndpoint(actualLRP *models.FlattenedActualLRP) (routingtable.TCPRouteMappings, routingtable.MessagesToEmit) {
 	fake.removeEndpointMutex.Lock()
 	ret, specificReturn := fake.removeEndpointReturnsOnCall[len(fake.removeEndpointArgsForCall)]
 	fake.removeEndpointArgsForCall = append(fake.removeEndpointArgsForCall, struct {
-		actualLRP *models.ActualLRP
+		actualLRP *models.FlattenedActualLRP
 	}{actualLRP})
 	fake.recordInvocation("RemoveEndpoint", []interface{}{actualLRP})
 	fake.removeEndpointMutex.Unlock()
@@ -326,7 +326,7 @@ func (fake *FakeRoutingTable) RemoveEndpointCallCount() int {
 	return len(fake.removeEndpointArgsForCall)
 }
 
-func (fake *FakeRoutingTable) RemoveEndpointArgsForCall(i int) *models.ActualLRP {
+func (fake *FakeRoutingTable) RemoveEndpointArgsForCall(i int) *models.FlattenedActualLRP {
 	fake.removeEndpointMutex.RLock()
 	defer fake.removeEndpointMutex.RUnlock()
 	return fake.removeEndpointArgsForCall[i].actualLRP
@@ -492,11 +492,11 @@ func (fake *FakeRoutingTable) GetExternalRoutingEventsReturnsOnCall(i int, resul
 	}{result1, result2}
 }
 
-func (fake *FakeRoutingTable) HasExternalRoutes(actual *models.ActualLRP) bool {
+func (fake *FakeRoutingTable) HasExternalRoutes(actual *models.FlattenedActualLRP) bool {
 	fake.hasExternalRoutesMutex.Lock()
 	ret, specificReturn := fake.hasExternalRoutesReturnsOnCall[len(fake.hasExternalRoutesArgsForCall)]
 	fake.hasExternalRoutesArgsForCall = append(fake.hasExternalRoutesArgsForCall, struct {
-		actual *models.ActualLRP
+		actual *models.FlattenedActualLRP
 	}{actual})
 	fake.recordInvocation("HasExternalRoutes", []interface{}{actual})
 	fake.hasExternalRoutesMutex.Unlock()
@@ -515,7 +515,7 @@ func (fake *FakeRoutingTable) HasExternalRoutesCallCount() int {
 	return len(fake.hasExternalRoutesArgsForCall)
 }
 
-func (fake *FakeRoutingTable) HasExternalRoutesArgsForCall(i int) *models.ActualLRP {
+func (fake *FakeRoutingTable) HasExternalRoutesArgsForCall(i int) *models.FlattenedActualLRP {
 	fake.hasExternalRoutesMutex.RLock()
 	defer fake.hasExternalRoutesMutex.RUnlock()
 	return fake.hasExternalRoutesArgsForCall[i].actual

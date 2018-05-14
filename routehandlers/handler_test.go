@@ -341,44 +341,36 @@ var _ = Describe("Handler", func() {
 	Describe("Actual LRP changes", func() {
 		Context("when a create event occurs", func() {
 			var (
-				actualLRPGroup       *models.ActualLRPGroup
-				actualLRP            *models.ActualLRP
-				actualLRPRoutingInfo *models.ActualLRP
+				actualLRP *models.FlattenedActualLRP
 			)
 
 			Context("when the resulting LRP is in the RUNNING state", func() {
 				BeforeEach(func() {
-					actualLRP = &models.ActualLRP{
+					actualLRP = &models.FlattenedActualLRP{
 						ActualLRPKey:         models.NewActualLRPKey(expectedProcessGuid, expectedIndex, "domain"),
 						ActualLRPInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGUID, "cell-id"),
-						ActualLRPNetInfo: models.NewActualLRPNetInfo(
-							expectedHost,
-							expectedInstanceAddress,
-							models.NewPortMapping(expectedExternalPort, expectedContainerPort),
-							models.NewPortMapping(expectedExternalPort, expectedAdditionalContainerPort),
-						),
-						State: models.ActualLRPStateRunning,
-					}
-
-					actualLRPGroup = &models.ActualLRPGroup{
-						Instance: actualLRP,
-					}
-
-					actualLRPRoutingInfo = &models.ActualLRP{
-						ActualLRP:  actualLRP,
-						Evacuating: false,
+						ActualLRPInfo: models.ActualLRPInfo{
+							ActualLRPNetInfo: models.NewActualLRPNetInfo(
+								expectedHost,
+								expectedInstanceAddress,
+								models.NewPortMapping(expectedExternalPort, expectedContainerPort),
+								models.NewPortMapping(expectedExternalPort, expectedAdditionalContainerPort),
+							),
+							State:          models.ActualLRPStateRunning,
+							PlacementState: models.PlacementStateType_Normal,
+						},
 					}
 					fakeTable.AddEndpointReturns(emptyTCPRouteMappings, dummyMessagesToEmit)
 				})
 
 				JustBeforeEach(func() {
-					routeHandler.HandleEvent(logger, models.NewActualLRPCreatedEvent(actualLRPGroup))
+					routeHandler.HandleEvent(logger, models.NewFlattenedActualLRPCreatedEvent(actualLRP))
 				})
 
 				It("should add/update the endpoints on the table", func() {
 					Expect(fakeTable.AddEndpointCallCount()).To(Equal(1))
 					lrpInfo := fakeTable.AddEndpointArgsForCall(0)
-					Expect(lrpInfo).To(Equal(actualLRPRoutingInfo))
+					Expect(lrpInfo).To(Equal(actualLRP))
 				})
 
 				It("should emit whatever the table tells it to emit", func() {
@@ -405,20 +397,19 @@ var _ = Describe("Handler", func() {
 
 			Context("when the resulting LRP is not in the RUNNING state", func() {
 				JustBeforeEach(func() {
-					actualLRP = &models.ActualLRP{
+					actualLRP = &models.FlattenedActualLRP{
 						ActualLRPKey:         models.NewActualLRPKey(expectedProcessGuid, expectedIndex, "domain"),
 						ActualLRPInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGUID, "cell-id"),
-						ActualLRPNetInfo: models.NewActualLRPNetInfo(
-							expectedHost,
-							expectedInstanceAddress,
-							models.NewPortMapping(expectedExternalPort, expectedContainerPort),
-							models.NewPortMapping(expectedExternalPort, expectedAdditionalContainerPort),
-						),
-						State: models.ActualLRPStateUnclaimed,
-					}
-
-					actualLRPGroup = &models.ActualLRPGroup{
-						Instance: actualLRP,
+						ActualLRPInfo: models.ActualLRPInfo{
+							ActualLRPNetInfo: models.NewActualLRPNetInfo(
+								expectedHost,
+								expectedInstanceAddress,
+								models.NewPortMapping(expectedExternalPort, expectedContainerPort),
+								models.NewPortMapping(expectedExternalPort, expectedAdditionalContainerPort),
+							),
+							State:          models.ActualLRPStateUnclaimed,
+							PlacementState: models.PlacementStateType_Normal,
+						},
 					}
 				})
 
@@ -448,36 +439,38 @@ var _ = Describe("Handler", func() {
 		Context("when a change event occurs", func() {
 			Context("when the resulting LRP is in the RUNNING state", func() {
 				var (
-					afterActualLRP, beforeActualLRP *models.ActualLRPGroup
+					afterActualLRP, beforeActualLRP *models.FlattenedActualLRP
 				)
 
 				BeforeEach(func() {
 					fakeTable.AddEndpointReturns(emptyTCPRouteMappings, dummyMessagesToEmit)
 
-					beforeActualLRP = &models.ActualLRPGroup{
-						Instance: &models.ActualLRP{
-							ActualLRPKey:         models.NewActualLRPKey(expectedProcessGuid, expectedIndex, "domain"),
-							ActualLRPInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGUID, "cell-id"),
-							State:                models.ActualLRPStateClaimed,
+					beforeActualLRP = &models.FlattenedActualLRP{
+						ActualLRPKey:         models.NewActualLRPKey(expectedProcessGuid, expectedIndex, "domain"),
+						ActualLRPInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGUID, "cell-id"),
+						ActualLRPInfo: models.ActualLRPInfo{
+							State:          models.ActualLRPStateClaimed,
+							PlacementState: models.PlacementStateType_Normal,
 						},
 					}
-					afterActualLRP = &models.ActualLRPGroup{
-						Instance: &models.ActualLRP{
-							ActualLRPKey:         models.NewActualLRPKey(expectedProcessGuid, expectedIndex, "domain"),
-							ActualLRPInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGUID, "cell-id"),
+					afterActualLRP = &models.FlattenedActualLRP{
+						ActualLRPKey:         models.NewActualLRPKey(expectedProcessGuid, expectedIndex, "domain"),
+						ActualLRPInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGUID, "cell-id"),
+						ActualLRPInfo: models.ActualLRPInfo{
 							ActualLRPNetInfo: models.NewActualLRPNetInfo(
 								expectedHost,
 								expectedInstanceAddress,
 								models.NewPortMapping(expectedExternalPort, expectedContainerPort),
 								models.NewPortMapping(expectedAdditionalExternalPort, expectedAdditionalContainerPort),
 							),
-							State: models.ActualLRPStateRunning,
+							State:          models.ActualLRPStateRunning,
+							PlacementState: models.PlacementStateType_Normal,
 						},
 					}
 				})
 
 				JustBeforeEach(func() {
-					routeHandler.HandleEvent(logger, models.NewActualLRPChangedEvent(beforeActualLRP, afterActualLRP))
+					routeHandler.HandleEvent(logger, models.NewFlattenedActualLRPChangedEvent(beforeActualLRP, afterActualLRP))
 				})
 
 				It("should add/update the endpoint on the table", func() {
@@ -488,14 +481,9 @@ var _ = Describe("Handler", func() {
 						key      routingtable.RoutingKey
 						endpoint routingtable.Endpoint
 					}
-					lrp, evacuating := afterActualLRP.Resolve()
-					routingInfo := &models.ActualLRP{
-						ActualLRP:  lrp,
-						Evacuating: evacuating,
-					}
 
 					actualLRP := fakeTable.AddEndpointArgsForCall(0)
-					Expect(actualLRP).To(Equal(routingInfo))
+					Expect(actualLRP).To(Equal(afterActualLRP))
 				})
 
 				It("should emit whatever the table tells it to emit", func() {
@@ -522,47 +510,46 @@ var _ = Describe("Handler", func() {
 
 			Context("when the resulting LRP transitions away from the RUNNING state", func() {
 				var (
-					beforeActualLRP, afterActualLRP *models.ActualLRPGroup
+					beforeActualLRP, afterActualLRP *models.FlattenedActualLRP
 				)
 
 				BeforeEach(func() {
-					beforeActualLRP = &models.ActualLRPGroup{
-						Instance: &models.ActualLRP{
-							ActualLRPKey:         models.NewActualLRPKey(expectedProcessGuid, expectedIndex, "domain"),
-							ActualLRPInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGUID, "cell-id"),
+					beforeActualLRP = &models.FlattenedActualLRP{
+						ActualLRPKey:         models.NewActualLRPKey(expectedProcessGuid, expectedIndex, "domain"),
+						ActualLRPInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGUID, "cell-id"),
+						ActualLRPInfo: models.ActualLRPInfo{
 							ActualLRPNetInfo: models.NewActualLRPNetInfo(
 								expectedHost,
 								expectedInstanceAddress,
 								models.NewPortMapping(expectedExternalPort, expectedContainerPort),
 								models.NewPortMapping(expectedAdditionalExternalPort, expectedAdditionalContainerPort),
 							),
-							State: models.ActualLRPStateRunning,
+							State:          models.ActualLRPStateRunning,
+							PlacementState: models.PlacementStateType_Normal,
 						},
 					}
-					afterActualLRP = &models.ActualLRPGroup{
-						Instance: &models.ActualLRP{
-							ActualLRPKey: models.NewActualLRPKey(expectedProcessGuid, expectedIndex, "domain"),
-							State:        models.ActualLRPStateUnclaimed,
+					// NOTE: The ActualLRPInstanceKey was be empty in this case, so the BBS would normally just emit
+					// a Removed event or something
+					afterActualLRP = &models.FlattenedActualLRP{
+						ActualLRPKey:         models.NewActualLRPKey(expectedProcessGuid, expectedIndex, "domain"),
+						ActualLRPInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGUID, "cell-id"),
+						ActualLRPInfo: models.ActualLRPInfo{
+							State:          models.ActualLRPStateUnclaimed,
+							PlacementState: models.PlacementStateType_Normal,
 						},
 					}
 					fakeTable.RemoveEndpointReturns(emptyTCPRouteMappings, dummyMessagesToEmit)
 				})
 
 				JustBeforeEach(func() {
-					routeHandler.HandleEvent(logger, models.NewActualLRPChangedEvent(beforeActualLRP, afterActualLRP))
+					routeHandler.HandleEvent(logger, models.NewFlattenedActualLRPChangedEvent(beforeActualLRP, afterActualLRP))
 				})
 
 				It("should remove the endpoint from the table", func() {
 					Expect(fakeTable.RemoveEndpointCallCount()).To(Equal(1))
 
-					lrp, evacuating := beforeActualLRP.Resolve()
-					lrpRoutingInfo := &models.ActualLRP{
-						ActualLRP:  lrp,
-						Evacuating: evacuating,
-					}
-
-					routingInfo := fakeTable.RemoveEndpointArgsForCall(0)
-					Expect(routingInfo).To(Equal(lrpRoutingInfo))
+					actualLRP := fakeTable.RemoveEndpointArgsForCall(0)
+					Expect(actualLRP).To(Equal(beforeActualLRP))
 				})
 
 				It("should emit whatever the table tells it to emit", func() {
@@ -575,26 +562,31 @@ var _ = Describe("Handler", func() {
 
 			Context("when the endpoint neither starts nor ends in the RUNNING state", func() {
 				JustBeforeEach(func() {
-					beforeActualLRP := &models.ActualLRPGroup{
-						Instance: &models.ActualLRP{
-							ActualLRPKey: models.NewActualLRPKey(expectedProcessGuid, expectedIndex, "domain"),
-							State:        models.ActualLRPStateUnclaimed,
+					// NOTE: The ActualLRPInstanceKey was be empty in this case, so the BBS would normally just emit
+					// an ActualLRPCreated event
+					beforeActualLRP := &models.FlattenedActualLRP{
+						ActualLRPKey:         models.NewActualLRPKey(expectedProcessGuid, expectedIndex, "domain"),
+						ActualLRPInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGUID, "cell-id"),
+						ActualLRPInfo: models.ActualLRPInfo{
+							State:          models.ActualLRPStateUnclaimed,
+							PlacementState: models.PlacementStateType_Normal,
 						},
 					}
-					afterActualLRP := &models.ActualLRPGroup{
-						Instance: &models.ActualLRP{
-							ActualLRPKey:         models.NewActualLRPKey(expectedProcessGuid, expectedIndex, "domain"),
-							ActualLRPInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGUID, "cell-id"),
+					afterActualLRP := &models.FlattenedActualLRP{
+						ActualLRPKey:         models.NewActualLRPKey(expectedProcessGuid, expectedIndex, "domain"),
+						ActualLRPInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGUID, "cell-id"),
+						ActualLRPInfo: models.ActualLRPInfo{
 							ActualLRPNetInfo: models.NewActualLRPNetInfo(
 								expectedHost,
 								expectedInstanceAddress,
 								models.NewPortMapping(expectedExternalPort, expectedContainerPort),
 								models.NewPortMapping(expectedAdditionalExternalPort, expectedAdditionalContainerPort),
 							),
-							State: models.ActualLRPStateClaimed,
+							State:          models.ActualLRPStateClaimed,
+							PlacementState: models.PlacementStateType_Normal,
 						},
 					}
-					routeHandler.HandleEvent(logger, models.NewActualLRPChangedEvent(beforeActualLRP, afterActualLRP))
+					routeHandler.HandleEvent(logger, models.NewFlattenedActualLRPChangedEvent(beforeActualLRP, afterActualLRP))
 				})
 
 				It("should NOT log the net info", func() {
@@ -625,41 +617,37 @@ var _ = Describe("Handler", func() {
 		Context("when a delete event occurs", func() {
 			Context("when the actual is in the RUNNING state", func() {
 				var (
-					actualLRP *models.ActualLRPGroup
+					actualLRP *models.FlattenedActualLRP
 				)
 
 				BeforeEach(func() {
 					fakeTable.RemoveEndpointReturns(emptyTCPRouteMappings, dummyMessagesToEmit)
 
-					actualLRP = &models.ActualLRPGroup{
-						Instance: &models.ActualLRP{
-							ActualLRPKey:         models.NewActualLRPKey(expectedProcessGuid, expectedIndex, "domain"),
-							ActualLRPInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGUID, "cell-id"),
+					actualLRP = &models.FlattenedActualLRP{
+						ActualLRPKey:         models.NewActualLRPKey(expectedProcessGuid, expectedIndex, "domain"),
+						ActualLRPInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGUID, "cell-id"),
+						ActualLRPInfo: models.ActualLRPInfo{
 							ActualLRPNetInfo: models.NewActualLRPNetInfo(
 								expectedHost,
 								expectedInstanceAddress,
 								models.NewPortMapping(expectedExternalPort, expectedContainerPort),
 								models.NewPortMapping(expectedAdditionalExternalPort, expectedAdditionalContainerPort),
 							),
-							State: models.ActualLRPStateRunning,
+							State:          models.ActualLRPStateRunning,
+							PlacementState: models.PlacementStateType_Normal,
 						},
 					}
 				})
 
 				JustBeforeEach(func() {
-					routeHandler.HandleEvent(logger, models.NewActualLRPRemovedEvent(actualLRP))
+					routeHandler.HandleEvent(logger, models.NewFlattenedActualLRPRemovedEvent(actualLRP))
 				})
 
 				It("should remove the endpoint from the table", func() {
 					Expect(fakeTable.RemoveEndpointCallCount()).To(Equal(1))
 
-					lrp, evacuating := actualLRP.Resolve()
-					lrpRoutingInfo := &models.ActualLRP{
-						ActualLRP:  lrp,
-						Evacuating: evacuating,
-					}
-					routingInfo := fakeTable.RemoveEndpointArgsForCall(0)
-					Expect(routingInfo).To(Equal(lrpRoutingInfo))
+					lrp := fakeTable.RemoveEndpointArgsForCall(0)
+					Expect(lrp).To(Equal(actualLRP))
 				})
 
 				It("should emit whatever the table tells it to emit", func() {
@@ -672,20 +660,21 @@ var _ = Describe("Handler", func() {
 
 			Context("when the actual is not in the RUNNING state", func() {
 				JustBeforeEach(func() {
-					actualLRP := &models.ActualLRPGroup{
-						Instance: &models.ActualLRP{
-							ActualLRPKey: models.NewActualLRPKey(expectedProcessGuid, expectedIndex, "domain"),
+					actualLRP := &models.FlattenedActualLRP{
+						ActualLRPKey: models.NewActualLRPKey(expectedProcessGuid, expectedIndex, "domain"),
+						ActualLRPInfo: models.ActualLRPInfo{
 							ActualLRPNetInfo: models.NewActualLRPNetInfo(
 								expectedHost,
 								expectedInstanceAddress,
 								models.NewPortMapping(expectedExternalPort, expectedContainerPort),
 								models.NewPortMapping(expectedAdditionalExternalPort, expectedAdditionalContainerPort),
 							),
-							State: models.ActualLRPStateCrashed,
+							State:          models.ActualLRPStateCrashed,
+							PlacementState: models.PlacementStateType_Normal,
 						},
 					}
 
-					routeHandler.HandleEvent(logger, models.NewActualLRPRemovedEvent(actualLRP))
+					routeHandler.HandleEvent(logger, models.NewFlattenedActualLRPRemovedEvent(actualLRP))
 				})
 
 				It("should NOT log the net info", func() {
@@ -717,7 +706,7 @@ var _ = Describe("Handler", func() {
 		Context("when bbs server returns desired and actual lrps", func() {
 			var (
 				desiredInfo []*models.DesiredLRPSchedulingInfo
-				actualInfo  []*models.ActualLRP
+				actualLRPs  []*models.FlattenedActualLRP
 				domains     models.DomainSet
 
 				endpoint1, endpoint2, endpoint3, endpoint4 routingtable.Endpoint
@@ -791,40 +780,43 @@ var _ = Describe("Handler", func() {
 					Instances: 2,
 				}
 
-				actualLRPGroup1 := &models.ActualLRPGroup{
-					Instance: &models.ActualLRP{
-						ActualLRPKey:         models.NewActualLRPKey("pg-1", 0, "domain"),
-						ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint1.InstanceGUID, "cell-id"),
-						ActualLRPNetInfo:     models.NewActualLRPNetInfo(endpoint1.Host, "container-ip-1", models.NewPortMapping(endpoint1.Port, endpoint1.ContainerPort)),
-						State:                models.ActualLRPStateRunning,
+				actualLRP1 := &models.FlattenedActualLRP{
+					ActualLRPKey:         models.NewActualLRPKey("pg-1", 0, "domain"),
+					ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint1.InstanceGUID, "cell-id"),
+					ActualLRPInfo: models.ActualLRPInfo{
+						ActualLRPNetInfo: models.NewActualLRPNetInfo(endpoint1.Host, "container-ip-1", models.NewPortMapping(endpoint1.Port, endpoint1.ContainerPort)),
+						State:            models.ActualLRPStateRunning,
+						PlacementState:   models.PlacementStateType_Normal,
 					},
 				}
 
-				actualLRPGroup2 := &models.ActualLRPGroup{
-					Instance: &models.ActualLRP{
-						ActualLRPKey:         models.NewActualLRPKey("pg-2", 0, "domain"),
-						ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint2.InstanceGUID, "cell-id"),
-						ActualLRPNetInfo:     models.NewActualLRPNetInfo(endpoint2.Host, "container-ip-2", models.NewPortMapping(endpoint2.Port, endpoint2.ContainerPort)),
-						State:                models.ActualLRPStateRunning,
+				actualLRP2 := &models.FlattenedActualLRP{
+					ActualLRPKey:         models.NewActualLRPKey("pg-2", 0, "domain"),
+					ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint2.InstanceGUID, "cell-id"),
+					ActualLRPInfo: models.ActualLRPInfo{
+						ActualLRPNetInfo: models.NewActualLRPNetInfo(endpoint2.Host, "container-ip-2", models.NewPortMapping(endpoint2.Port, endpoint2.ContainerPort)),
+						State:            models.ActualLRPStateRunning,
+						PlacementState:   models.PlacementStateType_Normal,
 					},
 				}
 
-				actualLRPGroup3 := &models.ActualLRPGroup{
-					Instance: &models.ActualLRP{
-						ActualLRPKey:         models.NewActualLRPKey("pg-3", 1, "domain"),
-						ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint3.InstanceGUID, "cell-id"),
-						ActualLRPNetInfo:     models.NewActualLRPNetInfo(endpoint3.Host, "container-ip-3", models.NewPortMapping(endpoint3.Port, endpoint3.ContainerPort)),
-						State:                models.ActualLRPStateRunning,
+				actualLRP3 := &models.FlattenedActualLRP{
+					ActualLRPKey:         models.NewActualLRPKey("pg-3", 1, "domain"),
+					ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint3.InstanceGUID, "cell-id"),
+					ActualLRPInfo: models.ActualLRPInfo{
+						ActualLRPNetInfo: models.NewActualLRPNetInfo(endpoint3.Host, "container-ip-3", models.NewPortMapping(endpoint3.Port, endpoint3.ContainerPort)),
+						State:            models.ActualLRPStateRunning,
+						PlacementState:   models.PlacementStateType_Normal,
 					},
 				}
 
 				desiredInfo = []*models.DesiredLRPSchedulingInfo{
 					schedulingInfo1, schedulingInfo2, schedulingInfo3,
 				}
-				actualInfo = []*models.ActualLRP{
-					routingtable.TODODELETEME(actualLRPGroup1),
-					routingtable.TODODELETEME(actualLRPGroup2),
-					routingtable.TODODELETEME(actualLRPGroup3),
+				actualLRPs = []*models.FlattenedActualLRP{
+					actualLRP1,
+					actualLRP2,
+					actualLRP3,
 				}
 
 				domains = models.NewDomainSet([]string{"domain"})
@@ -872,7 +864,7 @@ var _ = Describe("Handler", func() {
 			})
 
 			It("updates the routing table", func() {
-				routeHandler.Sync(logger, desiredInfo, actualInfo, domains, nil)
+				routeHandler.Sync(logger, desiredInfo, actualLRPs, domains, nil)
 				Expect(fakeTable.SwapCallCount()).Should(Equal(1))
 				tempRoutingTable, swapDomains := fakeTable.SwapArgsForCall(0)
 				Expect(tempRoutingTable.HTTPAssociationsCount()).To(Equal(3))
@@ -888,7 +880,7 @@ var _ = Describe("Handler", func() {
 				})
 
 				It("emits the HTTPRouteCount", func() {
-					routeHandler.Sync(logger, desiredInfo, actualInfo, domains, nil)
+					routeHandler.Sync(logger, desiredInfo, actualLRPs, domains, nil)
 					Eventually(metricChan).Should(Receive(Equal(metric{
 						name:  "HTTPRouteCount",
 						value: 5,
@@ -920,12 +912,13 @@ var _ = Describe("Handler", func() {
 						ModificationTag: &models.ModificationTag{Epoch: "abc", Index: 1},
 					}
 
-					actualLRPEvent := models.NewActualLRPCreatedEvent(&models.ActualLRPGroup{
-						Instance: &models.ActualLRP{
-							ActualLRPKey:         models.NewActualLRPKey("pg-4", 0, "domain"),
-							ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint4.InstanceGUID, "cell-id"),
-							ActualLRPNetInfo:     models.NewActualLRPNetInfo(endpoint4.Host, "container-ip-4", models.NewPortMapping(endpoint4.Port, endpoint4.ContainerPort)),
-							State:                models.ActualLRPStateRunning,
+					actualLRPEvent := models.NewFlattenedActualLRPCreatedEvent(&models.FlattenedActualLRP{
+						ActualLRPKey:         models.NewActualLRPKey("pg-4", 0, "domain"),
+						ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint4.InstanceGUID, "cell-id"),
+						ActualLRPInfo: models.ActualLRPInfo{
+							ActualLRPNetInfo: models.NewActualLRPNetInfo(endpoint4.Host, "container-ip-4", models.NewPortMapping(endpoint4.Port, endpoint4.ContainerPort)),
+							State:            models.ActualLRPStateRunning,
+							PlacementState:   models.PlacementStateType_Normal,
 						},
 					})
 
@@ -936,7 +929,7 @@ var _ = Describe("Handler", func() {
 					routeHandler.Sync(
 						logger,
 						desiredInfo,
-						actualInfo,
+						actualLRPs,
 						domains,
 						cachedEvents,
 					)
@@ -1104,7 +1097,7 @@ var _ = Describe("Handler", func() {
 
 	Describe("ShouldRefreshDesired", func() {
 		var (
-			actualInfo *models.ActualLRP
+			actualLRP *models.FlattenedActualLRP
 		)
 		BeforeEach(func() {
 			currentTag := models.ModificationTag{Epoch: "abc", Index: 1}
@@ -1118,19 +1111,20 @@ var _ = Describe("Handler", func() {
 				ModificationTag: &currentTag,
 			}
 
-			actualInfo = &models.ActualLRP{
-				ActualLRP: &models.ActualLRP{
-					ActualLRPKey:         models.NewActualLRPKey("pg-1", 0, "domain"),
-					ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint1.InstanceGUID, "cell-id"),
+			actualLRP = &models.FlattenedActualLRP{
+				ActualLRPKey:         models.NewActualLRPKey("pg-1", 0, "domain"),
+				ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint1.InstanceGUID, "cell-id"),
+				ActualLRPInfo: models.ActualLRPInfo{
 					ActualLRPNetInfo: models.NewActualLRPNetInfo(endpoint1.Host,
 						"container-ip-1",
 						models.NewPortMapping(endpoint1.Port, endpoint1.ContainerPort),
 						models.NewPortMapping(12, endpoint1.ContainerPort+1),
 					),
+
 					State:           models.ActualLRPStateRunning,
 					ModificationTag: currentTag,
+					PlacementState:  models.PlacementStateType_Normal,
 				},
-				Evacuating: false,
 			}
 		})
 
@@ -1140,7 +1134,7 @@ var _ = Describe("Handler", func() {
 			})
 
 			It("returns false", func() {
-				Expect(routeHandler.ShouldRefreshDesired(actualInfo)).To(BeTrue())
+				Expect(routeHandler.ShouldRefreshDesired(actualLRP)).To(BeTrue())
 			})
 		})
 
@@ -1150,7 +1144,7 @@ var _ = Describe("Handler", func() {
 			})
 
 			It("returns true", func() {
-				Expect(routeHandler.ShouldRefreshDesired(actualInfo)).To(BeFalse())
+				Expect(routeHandler.ShouldRefreshDesired(actualLRP)).To(BeFalse())
 			})
 		})
 	})

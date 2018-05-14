@@ -197,7 +197,7 @@ func (handler *Handler) handleDesiredDelete(logger lager.Logger, schedulingInfo 
 }
 
 func (handler *Handler) handleActualCreate(logger lager.Logger, actualLRP *models.FlattenedActualLRP) {
-	if actualLRP.ActualLRPInfo.State != models.ActualLRPStateRunning {
+	if actualLRP.State != models.ActualLRPStateRunning {
 		return
 	}
 	routeMappings, messagesToEmit := handler.routingTable.AddEndpoint(actualLRP)
@@ -218,11 +218,11 @@ func (handler *Handler) handleActualUpdate(logger lager.Logger, before, after *m
 	handler.emitMessages(logger, messagesToEmit, routeMappings)
 }
 
-func (handler *Handler) handleActualDelete(logger lager.Logger, actualLRPInfo *models.FlattenedActualLRP) {
-	if actualLRPInfo.State != models.ActualLRPStateRunning {
+func (handler *Handler) handleActualDelete(logger lager.Logger, actualLRP *models.FlattenedActualLRP) {
+	if actualLRP.State != models.ActualLRPStateRunning {
 		return
 	}
-	routeMappings, messagesToEmit := handler.routingTable.RemoveEndpoint(actualLRPInfo)
+	routeMappings, messagesToEmit := handler.routingTable.RemoveEndpoint(actualLRP)
 	handler.emitMessages(logger, messagesToEmit, routeMappings)
 }
 

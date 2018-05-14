@@ -270,17 +270,16 @@ func (w *Watcher) sync(logger lager.Logger, ch chan<- *syncEventResult) {
 	go func() {
 		defer wg.Done()
 		logger.Debug("getting-actual-lrps")
-		var actualLRPGroups []*models.ActualLRPGroup
-		actualLRPGroups, actualErr = w.bbsClient.ActualLRPGroups(logger, models.ActualLRPFilter{CellID: w.cellID})
+		var actualLRPs []*models.FlattenedActualLRP
+		actualLRPs, actualErr = w.bbsClient.ActualLRPs(logger, models.ActualLRPFilter{CellID: w.cellID})
 		if actualErr != nil {
 			logger.Error("failed-getting-actual-lrps", actualErr)
 			return
 		}
-		logger.Debug("succeeded-getting-actual-lrps", lager.Data{"num-actual-responses": len(actualLRPGroups)})
+		logger.Debug("succeeded-getting-actual-lrps", lager.Data{"num-actual-responses": len(actualLRPs)})
 
-		runningActualLRPs = make([]*models.FlattenedActualLRP, 0, len(actualLRPGroups))
-		for _, actualLRPGroup := range actualLRPGroups {
-			actualLRP, _ := actualLRPGroup.Resolve()
+		runningActualLRPs = make([]*models.FlattenedActualLRP, 0, len(actualLRPs))
+		for _, actualLRP := range actualLRPs {
 			if actualLRP.State == models.ActualLRPStateRunning {
 				runningActualLRPs = append(runningActualLRPs, actualLRP)
 			}

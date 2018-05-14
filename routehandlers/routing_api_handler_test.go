@@ -152,7 +152,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 
 	Describe("ActualLRP Event", func() {
 		var (
-			actualLRP     *models.ActualLRPGroup
+			actualLRP     *models.FlattenedActualLRP
 			routingEvents routingtable.TCPRouteMappings
 		)
 
@@ -164,30 +164,30 @@ var _ = Describe("RoutingAPIHandler", func() {
 
 		Describe("HandleActualCreate", func() {
 			JustBeforeEach(func() {
-				routeHandler.HandleEvent(logger, models.NewActualLRPCreatedEvent(actualLRP))
+				routeHandler.HandleEvent(logger, models.NewFlattenedActualLRPCreatedEvent(actualLRP))
 			})
 
 			Context("when state is Running", func() {
 				BeforeEach(func() {
-					actualLRP = &models.ActualLRPGroup{
-						Instance: &models.ActualLRP{
-							ActualLRPKey:         models.NewActualLRPKey("process-guid", 0, "domain"),
-							ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
+					actualLRP = &models.FlattenedActualLRP{
+						ActualLRPKey:         models.NewActualLRPKey("process-guid", 0, "domain"),
+						ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
+						ActualLRPInfo: models.ActualLRPInfo{
 							ActualLRPNetInfo: models.NewActualLRPNetInfo(
 								"some-ip",
 								"container-ip",
 								models.NewPortMapping(611006, 5222),
 							),
-							State: models.ActualLRPStateRunning,
+							State:          models.ActualLRPStateRunning,
+							PlacementState: models.PlacementStateType_Normal,
 						},
-						Evacuating: nil,
 					}
 				})
 
 				It("invokes AddEndpoint on RoutingTable", func() {
 					Expect(fakeRoutingTable.AddEndpointCallCount()).Should(Equal(1))
 					lrp := fakeRoutingTable.AddEndpointArgsForCall(0)
-					Expect(lrp).Should(Equal(routingtable.TODODELETEME(actualLRP)))
+					Expect(lrp).Should(Equal(actualLRP))
 				})
 
 				Context("when there are routing events", func() {
@@ -205,18 +205,18 @@ var _ = Describe("RoutingAPIHandler", func() {
 
 			Context("when state is not in Running", func() {
 				BeforeEach(func() {
-					actualLRP = &models.ActualLRPGroup{
-						Instance: &models.ActualLRP{
-							ActualLRPKey:         models.NewActualLRPKey("process-guid", 0, "domain"),
-							ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
+					actualLRP = &models.FlattenedActualLRP{
+						ActualLRPKey:         models.NewActualLRPKey("process-guid", 0, "domain"),
+						ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
+						ActualLRPInfo: models.ActualLRPInfo{
 							ActualLRPNetInfo: models.NewActualLRPNetInfo(
 								"some-ip",
 								"container-ip",
 								models.NewPortMapping(611006, 5222),
 							),
-							State: models.ActualLRPStateClaimed,
+							State:          models.ActualLRPStateClaimed,
+							PlacementState: models.PlacementStateType_Normal,
 						},
-						Evacuating: nil,
 					}
 				})
 
@@ -232,47 +232,47 @@ var _ = Describe("RoutingAPIHandler", func() {
 
 		Describe("HandleActualUpdate", func() {
 			var (
-				afterLRP *models.ActualLRPGroup
+				afterLRP *models.FlattenedActualLRP
 			)
 
 			JustBeforeEach(func() {
-				routeHandler.HandleEvent(logger, models.NewActualLRPChangedEvent(actualLRP, afterLRP))
+				routeHandler.HandleEvent(logger, models.NewFlattenedActualLRPChangedEvent(actualLRP, afterLRP))
 			})
 
 			Context("when after state is Running", func() {
 				BeforeEach(func() {
-					actualLRP = &models.ActualLRPGroup{
-						Instance: &models.ActualLRP{
-							ActualLRPKey:         models.NewActualLRPKey("process-guid", 0, "domain"),
-							ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
+					actualLRP = &models.FlattenedActualLRP{
+						ActualLRPKey:         models.NewActualLRPKey("process-guid", 0, "domain"),
+						ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
+						ActualLRPInfo: models.ActualLRPInfo{
 							ActualLRPNetInfo: models.NewActualLRPNetInfo(
 								"",
 								"",
 							),
-							State: models.ActualLRPStateClaimed,
+							State:          models.ActualLRPStateClaimed,
+							PlacementState: models.PlacementStateType_Normal,
 						},
-						Evacuating: nil,
 					}
 
-					afterLRP = &models.ActualLRPGroup{
-						Instance: &models.ActualLRP{
-							ActualLRPKey:         models.NewActualLRPKey("process-guid", 0, "domain"),
-							ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
+					afterLRP = &models.FlattenedActualLRP{
+						ActualLRPKey:         models.NewActualLRPKey("process-guid", 0, "domain"),
+						ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
+						ActualLRPInfo: models.ActualLRPInfo{
 							ActualLRPNetInfo: models.NewActualLRPNetInfo(
 								"some-ip",
 								"container-ip",
 								models.NewPortMapping(611006, 5222),
 							),
-							State: models.ActualLRPStateRunning,
+							State:          models.ActualLRPStateRunning,
+							PlacementState: models.PlacementStateType_Normal,
 						},
-						Evacuating: nil,
 					}
 				})
 
 				It("invokes AddEndpoint on RoutingTable", func() {
 					Expect(fakeRoutingTable.AddEndpointCallCount()).Should(Equal(1))
 					lrp := fakeRoutingTable.AddEndpointArgsForCall(0)
-					Expect(lrp.ActualLRP).Should(Equal(afterLRP.Instance))
+					Expect(lrp).Should(Equal(afterLRP))
 				})
 
 				Context("when there are routing events", func() {
@@ -290,38 +290,38 @@ var _ = Describe("RoutingAPIHandler", func() {
 
 			Context("when after state is not Running and before state is Running", func() {
 				BeforeEach(func() {
-					actualLRP = &models.ActualLRPGroup{
-						Instance: &models.ActualLRP{
-							ActualLRPKey:         models.NewActualLRPKey("process-guid", 0, "domain"),
-							ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
+					actualLRP = &models.FlattenedActualLRP{
+						ActualLRPKey:         models.NewActualLRPKey("process-guid", 0, "domain"),
+						ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
+						ActualLRPInfo: models.ActualLRPInfo{
 							ActualLRPNetInfo: models.NewActualLRPNetInfo(
 								"some-ip",
 								"container-ip",
 								models.NewPortMapping(611006, 5222),
 							),
-							State: models.ActualLRPStateRunning,
+							State:          models.ActualLRPStateRunning,
+							PlacementState: models.PlacementStateType_Normal,
 						},
-						Evacuating: nil,
 					}
 
-					afterLRP = &models.ActualLRPGroup{
-						Instance: &models.ActualLRP{
-							ActualLRPKey:         models.NewActualLRPKey("process-guid", 0, "domain"),
-							ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
+					afterLRP = &models.FlattenedActualLRP{
+						ActualLRPKey:         models.NewActualLRPKey("process-guid", 0, "domain"),
+						ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
+						ActualLRPInfo: models.ActualLRPInfo{
 							ActualLRPNetInfo: models.NewActualLRPNetInfo(
 								"",
 								"",
 							),
-							State: models.ActualLRPStateCrashed,
+							State:          models.ActualLRPStateCrashed,
+							PlacementState: models.PlacementStateType_Normal,
 						},
-						Evacuating: nil,
 					}
 				})
 
 				It("invokes RemoveEndpoint on RoutingTable", func() {
 					Expect(fakeRoutingTable.RemoveEndpointCallCount()).Should(Equal(1))
 					lrp := fakeRoutingTable.RemoveEndpointArgsForCall(0)
-					Expect(lrp).Should(Equal(routingtable.TODODELETEME(actualLRP)))
+					Expect(lrp).Should(Equal(actualLRP))
 				})
 
 				Context("when there are routing events", func() {
@@ -339,30 +339,30 @@ var _ = Describe("RoutingAPIHandler", func() {
 
 			Context("when both after and before state is not Running", func() {
 				BeforeEach(func() {
-					actualLRP = &models.ActualLRPGroup{
-						Instance: &models.ActualLRP{
-							ActualLRPKey:         models.NewActualLRPKey("process-guid", 0, "domain"),
-							ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", ""),
+					actualLRP = &models.FlattenedActualLRP{
+						ActualLRPKey:         models.NewActualLRPKey("process-guid", 0, "domain"),
+						ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", ""),
+						ActualLRPInfo: models.ActualLRPInfo{
 							ActualLRPNetInfo: models.NewActualLRPNetInfo(
 								"",
 								"",
 							),
-							State: models.ActualLRPStateUnclaimed,
+							State:          models.ActualLRPStateUnclaimed,
+							PlacementState: models.PlacementStateType_Normal,
 						},
-						Evacuating: nil,
 					}
 
-					afterLRP = &models.ActualLRPGroup{
-						Instance: &models.ActualLRP{
-							ActualLRPKey:         models.NewActualLRPKey("process-guid", 0, "domain"),
-							ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
+					actualLRP = &models.FlattenedActualLRP{
+						ActualLRPKey:         models.NewActualLRPKey("process-guid", 0, "domain"),
+						ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
+						ActualLRPInfo: models.ActualLRPInfo{
 							ActualLRPNetInfo: models.NewActualLRPNetInfo(
 								"",
 								"",
 							),
-							State: models.ActualLRPStateClaimed,
+							State:          models.ActualLRPStateClaimed,
+							PlacementState: models.PlacementStateType_Normal,
 						},
-						Evacuating: nil,
 					}
 				})
 
@@ -378,30 +378,30 @@ var _ = Describe("RoutingAPIHandler", func() {
 
 		Describe("HandleActualDelete", func() {
 			JustBeforeEach(func() {
-				routeHandler.HandleEvent(logger, models.NewActualLRPRemovedEvent(actualLRP))
+				routeHandler.HandleEvent(logger, models.NewFlattenedActualLRPRemovedEvent(actualLRP))
 			})
 
 			Context("when state is Running", func() {
 				BeforeEach(func() {
-					actualLRP = &models.ActualLRPGroup{
-						Instance: &models.ActualLRP{
-							ActualLRPKey:         models.NewActualLRPKey("process-guid", 0, "domain"),
-							ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
+					actualLRP = &models.FlattenedActualLRP{
+						ActualLRPKey:         models.NewActualLRPKey("process-guid", 0, "domain"),
+						ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
+						ActualLRPInfo: models.ActualLRPInfo{
 							ActualLRPNetInfo: models.NewActualLRPNetInfo(
 								"some-ip",
 								"container-ip",
 								models.NewPortMapping(611006, 5222),
 							),
-							State: models.ActualLRPStateRunning,
+							State:          models.ActualLRPStateRunning,
+							PlacementState: models.PlacementStateType_Normal,
 						},
-						Evacuating: nil,
 					}
 				})
 
 				It("invokes RemoveEndpoint on RoutingTable", func() {
 					Expect(fakeRoutingTable.RemoveEndpointCallCount()).Should(Equal(1))
 					lrp := fakeRoutingTable.RemoveEndpointArgsForCall(0)
-					Expect(lrp).Should(Equal(routingtable.TODODELETEME(actualLRP)))
+					Expect(lrp).Should(Equal(actualLRP))
 				})
 
 				Context("when there are routing events", func() {
@@ -419,17 +419,17 @@ var _ = Describe("RoutingAPIHandler", func() {
 
 			Context("when state is not in Running", func() {
 				BeforeEach(func() {
-					actualLRP = &models.ActualLRPGroup{
-						Instance: &models.ActualLRP{
-							ActualLRPKey:         models.NewActualLRPKey("process-guid", 0, "domain"),
-							ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
+					actualLRP = &models.FlattenedActualLRP{
+						ActualLRPKey:         models.NewActualLRPKey("process-guid", 0, "domain"),
+						ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
+						ActualLRPInfo: models.ActualLRPInfo{
 							ActualLRPNetInfo: models.NewActualLRPNetInfo(
 								"",
 								"",
 							),
-							State: models.ActualLRPStateClaimed,
+							State:          models.ActualLRPStateClaimed,
+							PlacementState: models.PlacementStateType_Normal,
 						},
-						Evacuating: nil,
 					}
 				})
 
@@ -445,12 +445,12 @@ var _ = Describe("RoutingAPIHandler", func() {
 	})
 
 	Describe("ShouldRefreshDesired", func() {
-		var actualInfo *models.ActualLRP
+		var actualLRP *models.FlattenedActualLRP
 		BeforeEach(func() {
-			actualInfo = &models.ActualLRP{
-				ActualLRP: &models.ActualLRP{
-					ActualLRPKey:         models.NewActualLRPKey("process-guid-1", 0, "domain"),
-					ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
+			actualLRP = &models.FlattenedActualLRP{
+				ActualLRPKey:         models.NewActualLRPKey("process-guid-1", 0, "domain"),
+				ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
+				ActualLRPInfo: models.ActualLRPInfo{
 					ActualLRPNetInfo: models.NewActualLRPNetInfo(
 						"some-ip",
 						"container-ip",
@@ -458,9 +458,9 @@ var _ = Describe("RoutingAPIHandler", func() {
 						models.NewPortMapping(61007, 5223),
 					),
 					State:           models.ActualLRPStateRunning,
+					PlacementState:  models.PlacementStateType_Normal,
 					ModificationTag: models.ModificationTag{Epoch: "abc", Index: 1},
 				},
-				Evacuating: false,
 			}
 		})
 
@@ -470,7 +470,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 			})
 
 			It("returns false", func() {
-				Expect(routeHandler.ShouldRefreshDesired(actualInfo)).To(BeTrue())
+				Expect(routeHandler.ShouldRefreshDesired(actualLRP)).To(BeTrue())
 			})
 		})
 
@@ -480,7 +480,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 			})
 
 			It("returns true", func() {
-				Expect(routeHandler.ShouldRefreshDesired(actualInfo)).To(BeFalse())
+				Expect(routeHandler.ShouldRefreshDesired(actualLRP)).To(BeFalse())
 			})
 		})
 	})
@@ -522,7 +522,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 		Context("when bbs server returns desired and actual lrps", func() {
 			var (
 				desiredInfo     []*models.DesiredLRPSchedulingInfo
-				actualInfo      []*models.ActualLRP
+				actualLRPs      []*models.FlattenedActualLRP
 				modificationTag models.ModificationTag
 			)
 
@@ -549,11 +549,11 @@ var _ = Describe("RoutingAPIHandler", func() {
 					},
 				}
 
-				actualInfo = []*models.ActualLRP{
-					&models.ActualLRP{
-						ActualLRP: &models.ActualLRP{
-							ActualLRPKey:         models.NewActualLRPKey("process-guid-1", 0, "domain"),
-							ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
+				actualLRPs = []*models.FlattenedActualLRP{
+					&models.FlattenedActualLRP{
+						ActualLRPKey:         models.NewActualLRPKey("process-guid-1", 0, "domain"),
+						ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
+						ActualLRPInfo: models.ActualLRPInfo{
 							ActualLRPNetInfo: models.NewActualLRPNetInfo(
 								"some-ip",
 								"container-ip",
@@ -561,8 +561,8 @@ var _ = Describe("RoutingAPIHandler", func() {
 							),
 							State:           models.ActualLRPStateRunning,
 							ModificationTag: modificationTag,
+							PlacementState:  models.PlacementStateType_Normal,
 						},
-						Evacuating: false,
 					},
 				}
 
@@ -595,7 +595,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 				})
 
 				It("emits the TCPRouteCount", func() {
-					routeHandler.Sync(logger, desiredInfo, actualInfo, nil, nil)
+					routeHandler.Sync(logger, desiredInfo, actualLRPs, nil, nil)
 					Eventually(metricsChan).Should(Receive(Equal(metric{
 						name:  "TCPRouteCount",
 						value: 1,
@@ -606,7 +606,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 			It("updates the routing table", func() {
 				domains := models.DomainSet{}
 				domains.Add("foo")
-				routeHandler.Sync(logger, desiredInfo, actualInfo, domains, nil)
+				routeHandler.Sync(logger, desiredInfo, actualLRPs, domains, nil)
 				Expect(fakeRoutingTable.SwapCallCount()).Should(Equal(1))
 				tempRoutingTable, actualDomains := fakeRoutingTable.SwapArgsForCall(0)
 				Expect(actualDomains).To(Equal(domains))
@@ -641,10 +641,10 @@ var _ = Describe("RoutingAPIHandler", func() {
 						Instances:   1,
 					})
 
-					actualLRPEvent := models.NewActualLRPCreatedEvent(&models.ActualLRPGroup{
-						Instance: &models.ActualLRP{
-							ActualLRPKey:         models.NewActualLRPKey("process-guid-2", 0, "domain"),
-							ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid-1", "cell-id"),
+					actualLRPEvent := models.NewFlattenedActualLRPCreatedEvent(&models.FlattenedActualLRP{
+						ActualLRPKey:         models.NewActualLRPKey("process-guid-2", 0, "domain"),
+						ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid-1", "cell-id"),
+						ActualLRPInfo: models.ActualLRPInfo{
 							ActualLRPNetInfo: models.NewActualLRPNetInfo(
 								"some-ip-2",
 								"container-ip-2",
@@ -652,6 +652,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 							),
 							State:           models.ActualLRPStateRunning,
 							ModificationTag: modificationTag,
+							PlacementState:  models.PlacementStateType_Normal,
 						},
 					})
 
@@ -662,7 +663,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 					routeHandler.Sync(
 						logger,
 						desiredInfo,
-						actualInfo,
+						actualLRPs,
 						nil,
 						cachedEvents,
 					)

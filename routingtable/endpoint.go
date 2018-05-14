@@ -196,6 +196,7 @@ func NewEndpointsFromActual(actualLRP *models.FlattenedActualLRP) []Endpoint {
 				ContainerIP:           actualLRP.InstanceAddress,
 				Port:                  portMapping.HostPort,
 				ContainerPort:         portMapping.ContainerPort,
+				Evacuating:            actualLRP.ActualLRPInfo.PlacementState == models.PlacementStateType_Evacuating,
 				ModificationTag:       &actualLRP.ModificationTag,
 				TlsProxyPort:          portMapping.HostTlsProxyPort,
 				ContainerTlsProxyPort: portMapping.ContainerTlsProxyPort,
