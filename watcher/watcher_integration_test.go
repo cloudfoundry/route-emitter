@@ -47,7 +47,7 @@ var _ = Describe("Watcher Integration", func() {
 	BeforeEach(func() {
 		bbsClient = new(fake_bbs.FakeClient)
 		eventSource = new(eventfakes.FakeEventSource)
-		bbsClient.SubscribeToEventsByCellIDReturns(eventSource, nil)
+		bbsClient.SubscribeToEventsR1ByCellIDReturns(eventSource, nil)
 
 		natsClient = diegonats.NewFakeClient()
 		routingApiClient = new(fake_routing_api.FakeClient)

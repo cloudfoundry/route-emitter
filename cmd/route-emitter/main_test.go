@@ -570,7 +570,7 @@ var _ = Describe("Route Emitter", func() {
 						Eventually(blkChannel).Should(BeSent(struct{}{}))
 					})
 
-					FContext("an actual lrp created event is received during sync", func() {
+					Context("an actual lrp created event is received during sync", func() {
 						It("should emit a route registration", func() {
 							By("waiting for the sync loop to start")
 							Eventually(runner).Should(gbytes.Say("succeeded-getting-actual-lrps"))
@@ -587,7 +587,6 @@ var _ = Describe("Route Emitter", func() {
 
 							Eventually(func() bool {
 								mappings, _ := routingAPIRunner.GetClient().TcpRouteMappings()
-								fmt.Println("Mappings", mappings)
 								return contains(mappings, expectedTcpRouteMapping)
 							}, 5*time.Second).Should(BeTrue())
 						})

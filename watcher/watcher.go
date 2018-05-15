@@ -341,7 +341,7 @@ func (w *Watcher) checkForEvents(resubscribeChannel chan error, eventChan chan m
 	var es events.EventSource
 
 	logger.Info("subscribing-to-bbs-events")
-	es, err = w.bbsClient.SubscribeToEventsByCellID(logger, w.cellID)
+	es, err = w.bbsClient.SubscribeToEventsR1ByCellID(logger, w.cellID)
 	if err != nil {
 		resubscribeChannel <- err
 		return
