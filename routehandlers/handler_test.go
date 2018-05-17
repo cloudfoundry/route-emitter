@@ -488,7 +488,8 @@ var _ = Describe("Handler", func() {
 						key      routingtable.RoutingKey
 						endpoint routingtable.Endpoint
 					}
-					lrp, evacuating := afterActualLRP.Resolve()
+					lrp, evacuating, err := afterActualLRP.Resolve()
+					Expect(err).NotTo(HaveOccurred())
 					routingInfo := &routingtable.ActualLRPRoutingInfo{
 						ActualLRP:  lrp,
 						Evacuating: evacuating,
@@ -555,7 +556,8 @@ var _ = Describe("Handler", func() {
 				It("should remove the endpoint from the table", func() {
 					Expect(fakeTable.RemoveEndpointCallCount()).To(Equal(1))
 
-					lrp, evacuating := beforeActualLRP.Resolve()
+					lrp, evacuating, err := beforeActualLRP.Resolve()
+					Expect(err).NotTo(HaveOccurred())
 					lrpRoutingInfo := &routingtable.ActualLRPRoutingInfo{
 						ActualLRP:  lrp,
 						Evacuating: evacuating,
@@ -653,7 +655,8 @@ var _ = Describe("Handler", func() {
 				It("should remove the endpoint from the table", func() {
 					Expect(fakeTable.RemoveEndpointCallCount()).To(Equal(1))
 
-					lrp, evacuating := actualLRP.Resolve()
+					lrp, evacuating, err := actualLRP.Resolve()
+					Expect(err).NotTo(HaveOccurred())
 					lrpRoutingInfo := &routingtable.ActualLRPRoutingInfo{
 						ActualLRP:  lrp,
 						Evacuating: evacuating,

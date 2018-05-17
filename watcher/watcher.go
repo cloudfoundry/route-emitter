@@ -281,8 +281,10 @@ func (w *Watcher) sync(logger lager.Logger, ch chan<- *syncEventResult) {
 
 		runningActualLRPs = make([]*routingtable.ActualLRPRoutingInfo, 0, len(actualLRPGroups))
 		for _, actualLRPGroup := range actualLRPGroups {
-			actualLRP, evacuating := actualLRPGroup.Resolve()
-			if actualLRP.State == models.ActualLRPStateRunning {
+			actualLRP, evacuating, err := actualLRPGroup.Resolve()
+			if err != nil {
+				logger.Error("failed-resolving-actual-lrp", err, lager.Data{"actual-lrp-group": actualLRPGroup})
+			} else if actualLRP.State == models.ActualLRPStateRunning {
 				runningActualLRPs = append(runningActualLRPs, &routingtable.ActualLRPRoutingInfo{
 					ActualLRP:  actualLRP,
 					Evacuating: evacuating,

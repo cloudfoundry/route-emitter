@@ -538,6 +538,29 @@ var _ = Describe("Watcher", func() {
 			})
 		})
 
+		Context("when one of the actual lrp groups is invalid", func() {
+			BeforeEach(func() {
+				bbsClient.ActualLRPGroupsStub = func(lager.Logger, models.ActualLRPFilter) ([]*models.ActualLRPGroup, error) {
+					return []*models.ActualLRPGroup{actualLRPGroup1, &models.ActualLRPGroup{}, actualLRPGroup2}, nil
+				}
+			})
+
+			It("still syncs all valid groups", func() {
+				Eventually(routeHandler.SyncCallCount).Should(Equal(1))
+				_, _, runningActuals, _, _ := routeHandler.SyncArgsForCall(0)
+				Expect(runningActuals).To(WithTransform(
+					func(ris []*routingtable.ActualLRPRoutingInfo) []models.ActualLRPKey {
+						result := []models.ActualLRPKey{}
+						for _, ri := range ris {
+							result = append(result, ri.ActualLRP.ActualLRPKey)
+						}
+						return result
+					},
+					ConsistOf(actualLRPGroup1.Instance.ActualLRPKey, actualLRPGroup2.Instance.ActualLRPKey),
+				))
+			})
+		})
+
 		Context("when fetching desireds fails", func() {
 			var (
 				errCh chan error
@@ -698,7 +721,8 @@ var _ = Describe("Watcher", func() {
 				It("fetches desired lrp scheduling info that match the cell id", func() {
 					Eventually(bbsClient.DesiredLRPSchedulingInfosCallCount).Should(Equal(1))
 					_, filter := bbsClient.DesiredLRPSchedulingInfosArgsForCall(0)
-					lrp, _ := actualLRPGroup2.Resolve()
+					lrp, _, err := actualLRPGroup2.Resolve()
+					Expect(err).NotTo(HaveOccurred())
 					Expect(filter.ProcessGuids).To(ConsistOf(lrp.ProcessGuid))
 				})
 			})
@@ -749,7 +773,8 @@ var _ = Describe("Watcher", func() {
 						Eventually(bbsClient.DesiredLRPSchedulingInfosCallCount).Should(Equal(2))
 
 						_, filter := bbsClient.DesiredLRPSchedulingInfosArgsForCall(1)
-						lrp, _ := actualLRPGroup3.Resolve()
+						lrp, _, err := actualLRPGroup3.Resolve()
+						Expect(err).NotTo(HaveOccurred())
 
 						Expect(filter.ProcessGuids).To(HaveLen(1))
 						Expect(filter.ProcessGuids).To(ConsistOf(lrp.ProcessGuid))
@@ -778,7 +803,8 @@ var _ = Describe("Watcher", func() {
 						Eventually(bbsClient.DesiredLRPSchedulingInfosCallCount).Should(Equal(2))
 
 						_, filter := bbsClient.DesiredLRPSchedulingInfosArgsForCall(1)
-						lrp, _ := actualLRPGroup3.Resolve()
+						lrp, _, err := actualLRPGroup3.Resolve()
+						Expect(err).NotTo(HaveOccurred())
 
 						Expect(filter.ProcessGuids).To(HaveLen(1))
 						Expect(filter.ProcessGuids).To(ConsistOf(lrp.ProcessGuid))
