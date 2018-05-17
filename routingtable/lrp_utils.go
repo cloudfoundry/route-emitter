@@ -26,7 +26,7 @@ func DesiredLRPData(lrp *models.DesiredLRPSchedulingInfo) lager.Data {
 	}
 }
 
-func ActualLRPData(actualLRP *models.FlattenedActualLRP) lager.Data {
+func ActualLRPData(actualLRP *models.ActualLRP) lager.Data {
 	return lager.Data{
 		"process-guid":  actualLRP.ProcessGuid,
 		"index":         actualLRP.Index,

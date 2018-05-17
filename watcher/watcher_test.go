@@ -52,23 +52,21 @@ var _ = Describe("Watcher", func() {
 	}
 
 	getActualLRP := func(processGuid, instanceGuid, hostAddress, instanceAddress string,
-		hostPort, containerPort uint32, evacuating bool) *models.FlattenedActualLRP {
+		hostPort, containerPort uint32, evacuating bool) *models.ActualLRP {
 		state := models.PlacementStateType_Normal
 		if evacuating {
 			state = models.PlacementStateType_Evacuating
 		}
-		return &models.FlattenedActualLRP{
+		return &models.ActualLRP{
 			ActualLRPKey:         models.NewActualLRPKey(processGuid, 0, "domain"),
 			ActualLRPInstanceKey: models.NewActualLRPInstanceKey(instanceGuid, "cell-id-1"),
-			ActualLRPInfo: models.ActualLRPInfo{
-				ActualLRPNetInfo: models.NewActualLRPNetInfo(
-					hostAddress,
-					instanceAddress,
-					models.NewPortMapping(hostPort, containerPort),
-				),
-				State:          models.ActualLRPStateRunning,
-				PlacementState: state,
-			},
+			ActualLRPNetInfo: models.NewActualLRPNetInfo(
+				hostAddress,
+				instanceAddress,
+				models.NewPortMapping(hostPort, containerPort),
+			),
+			State:          models.ActualLRPStateRunning,
+			PlacementState: state,
 		}
 	}
 
@@ -415,34 +413,28 @@ var _ = Describe("Watcher", func() {
 			Instances: 1,
 		}
 
-		actualLRP1 := &models.FlattenedActualLRP{
+		actualLRP1 := &models.ActualLRP{
 			ActualLRPKey:         models.NewActualLRPKey("pg-1", 0, "domain"),
 			ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint1.InstanceGUID, "cell-id"),
-			ActualLRPInfo: models.ActualLRPInfo{
-				ActualLRPNetInfo: models.NewActualLRPNetInfo(endpoint1.Host, "container-ip", models.NewPortMapping(endpoint1.Port, endpoint1.ContainerPort)),
-				State:            models.ActualLRPStateRunning,
-				PlacementState:   models.PlacementStateType_Normal,
-			},
+			ActualLRPNetInfo:     models.NewActualLRPNetInfo(endpoint1.Host, "container-ip", models.NewPortMapping(endpoint1.Port, endpoint1.ContainerPort)),
+			State:                models.ActualLRPStateRunning,
+			PlacementState:       models.PlacementStateType_Normal,
 		}
 
-		actualLRP2 := &models.FlattenedActualLRP{
+		actualLRP2 := &models.ActualLRP{
 			ActualLRPKey:         models.NewActualLRPKey("pg-2", 0, "domain"),
 			ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint2.InstanceGUID, "cell-id"),
-			ActualLRPInfo: models.ActualLRPInfo{
-				ActualLRPNetInfo: models.NewActualLRPNetInfo(endpoint2.Host, "container-ip", models.NewPortMapping(endpoint2.Port, endpoint2.ContainerPort)),
-				State:            models.ActualLRPStateRunning,
-				PlacementState:   models.PlacementStateType_Normal,
-			},
+			ActualLRPNetInfo:     models.NewActualLRPNetInfo(endpoint2.Host, "container-ip", models.NewPortMapping(endpoint2.Port, endpoint2.ContainerPort)),
+			State:                models.ActualLRPStateRunning,
+			PlacementState:       models.PlacementStateType_Normal,
 		}
 
-		actualLRP3 := &models.FlattenedActualLRP{
+		actualLRP3 := &models.ActualLRP{
 			ActualLRPKey:         models.NewActualLRPKey("pg-3", 1, "domain"),
 			ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint3.InstanceGUID, "cell-id"),
-			ActualLRPInfo: models.ActualLRPInfo{
-				ActualLRPNetInfo: models.NewActualLRPNetInfo(endpoint3.Host, "container-ip", models.NewPortMapping(endpoint3.Port, endpoint3.ContainerPort)),
-				State:            models.ActualLRPStateRunning,
-				PlacementState:   models.PlacementStateType_Normal,
-			},
+			ActualLRPNetInfo:     models.NewActualLRPNetInfo(endpoint3.Host, "container-ip", models.NewPortMapping(endpoint3.Port, endpoint3.ContainerPort)),
+			State:                models.ActualLRPStateRunning,
+			PlacementState:       models.PlacementStateType_Normal,
 		}
 
 		sendEvent := func() {
@@ -455,7 +447,7 @@ var _ = Describe("Watcher", func() {
 
 		Describe("bbs events", func() {
 			BeforeEach(func() {
-				bbsClient.ActualLRPsStub = func(lager.Logger, models.ActualLRPFilter) ([]*models.FlattenedActualLRP, error) {
+				bbsClient.ActualLRPsStub = func(lager.Logger, models.ActualLRPFilter) ([]*models.ActualLRP, error) {
 					defer GinkgoRecover()
 					sendEvent()
 					Eventually(logger).Should(gbytes.Say("caching-event"))
@@ -483,7 +475,7 @@ var _ = Describe("Watcher", func() {
 
 			BeforeEach(func() {
 				unblock = make(chan struct{})
-				bbsClient.ActualLRPsStub = func(lager.Logger, models.ActualLRPFilter) ([]*models.FlattenedActualLRP, error) {
+				bbsClient.ActualLRPsStub = func(lager.Logger, models.ActualLRPFilter) ([]*models.ActualLRP, error) {
 					<-unblock
 					return nil, nil
 				}
@@ -511,8 +503,8 @@ var _ = Describe("Watcher", func() {
 			BeforeEach(func() {
 				errCh = make(chan error, 1)
 				errCh <- errors.New("bam")
-				bbsClient.ActualLRPsStub = func(lager.Logger, models.ActualLRPFilter) ([]*models.FlattenedActualLRP, error) {
-					return []*models.FlattenedActualLRP{}, <-errCh
+				bbsClient.ActualLRPsStub = func(lager.Logger, models.ActualLRPFilter) ([]*models.ActualLRP, error) {
+					return []*models.ActualLRP{}, <-errCh
 				}
 			})
 
@@ -589,10 +581,10 @@ var _ = Describe("Watcher", func() {
 
 		Context("when desired lrps are retrieved", func() {
 			BeforeEach(func() {
-				bbsClient.ActualLRPsStub = func(logger lager.Logger, f models.ActualLRPFilter) ([]*models.FlattenedActualLRP, error) {
+				bbsClient.ActualLRPsStub = func(logger lager.Logger, f models.ActualLRPFilter) ([]*models.ActualLRP, error) {
 					clock.IncrementBySeconds(1)
 
-					return []*models.FlattenedActualLRP{
+					return []*models.ActualLRP{
 						actualLRP1,
 						actualLRP2,
 						actualLRP3,
@@ -611,7 +603,7 @@ var _ = Describe("Watcher", func() {
 					schedulingInfo1,
 					schedulingInfo2,
 				}
-				expectedActuals := []*models.FlattenedActualLRP{
+				expectedActuals := []*models.ActualLRP{
 					actualLRP1,
 					actualLRP2,
 					actualLRP3,
@@ -653,10 +645,10 @@ var _ = Describe("Watcher", func() {
 
 			Context("when the cell has actual lrps running", func() {
 				BeforeEach(func() {
-					bbsClient.ActualLRPsStub = func(lager.Logger, models.ActualLRPFilter) ([]*models.FlattenedActualLRP, error) {
+					bbsClient.ActualLRPsStub = func(lager.Logger, models.ActualLRPFilter) ([]*models.ActualLRP, error) {
 						clock.IncrementBySeconds(1)
 
-						return []*models.FlattenedActualLRP{
+						return []*models.ActualLRP{
 							actualLRP2,
 						}, nil
 					}
@@ -694,13 +686,11 @@ var _ = Describe("Watcher", func() {
 
 			Context("when desired lrp for the actual lrp is missing", func() {
 				sendEvent := func() {
-					beforeActualLRP3 := &models.FlattenedActualLRP{
+					beforeActualLRP3 := &models.ActualLRP{
 						ActualLRPKey:         models.NewActualLRPKey("pg-3", 1, "domain"),
 						ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint3.InstanceGUID, "cell-id"),
-						ActualLRPInfo: models.ActualLRPInfo{
-							State:          models.ActualLRPStateClaimed,
-							PlacementState: models.PlacementStateType_Normal,
-						},
+						State:                models.ActualLRPStateClaimed,
+						PlacementState:       models.PlacementStateType_Normal,
 					}
 					Eventually(eventCh).Should(BeSent(EventHolder{models.NewFlattenedActualLRPChangedEvent(
 						beforeActualLRP3,
@@ -724,9 +714,9 @@ var _ = Describe("Watcher", func() {
 					BeforeEach(func() {
 						cellID = "cell-id"
 
-						bbsClient.ActualLRPsStub = func(logger lager.Logger, f models.ActualLRPFilter) ([]*models.FlattenedActualLRP, error) {
+						bbsClient.ActualLRPsStub = func(logger lager.Logger, f models.ActualLRPFilter) ([]*models.ActualLRP, error) {
 							clock.IncrementBySeconds(1)
-							return []*models.FlattenedActualLRP{actualLRP1}, nil
+							return []*models.ActualLRP{actualLRP1}, nil
 						}
 					})
 
@@ -754,12 +744,12 @@ var _ = Describe("Watcher", func() {
 
 				Context("and the event is cached", func() {
 					BeforeEach(func() {
-						bbsClient.ActualLRPsStub = func(lager.Logger, models.ActualLRPFilter) ([]*models.FlattenedActualLRP, error) {
+						bbsClient.ActualLRPsStub = func(lager.Logger, models.ActualLRPFilter) ([]*models.ActualLRP, error) {
 							clock.IncrementBySeconds(1)
 							defer GinkgoRecover()
 							sendEvent()
 							Eventually(logger).Should(gbytes.Say("caching-event"))
-							return []*models.FlattenedActualLRP{actualLRP1}, nil
+							return []*models.ActualLRP{actualLRP1}, nil
 						}
 					})
 
@@ -798,11 +788,11 @@ var _ = Describe("Watcher", func() {
 
 				Context("when fetching desired scheduling info fails", func() {
 					BeforeEach(func() {
-						bbsClient.ActualLRPsStub = func(lager.Logger, models.ActualLRPFilter) ([]*models.FlattenedActualLRP, error) {
+						bbsClient.ActualLRPsStub = func(lager.Logger, models.ActualLRPFilter) ([]*models.ActualLRP, error) {
 							defer GinkgoRecover()
 							sendEvent()
 							Eventually(logger).Should(gbytes.Say("caching-event"))
-							return []*models.FlattenedActualLRP{actualLRP1}, nil
+							return []*models.ActualLRP{actualLRP1}, nil
 						}
 						bbsClient.DesiredLRPSchedulingInfosStub = func(l lager.Logger, f models.DesiredLRPFilter) ([]*models.DesiredLRPSchedulingInfo, error) {
 							defer GinkgoRecover()
@@ -823,8 +813,8 @@ var _ = Describe("Watcher", func() {
 
 			Context("when there are no running actual lrps on the cell", func() {
 				BeforeEach(func() {
-					bbsClient.ActualLRPsStub = func(logger lager.Logger, f models.ActualLRPFilter) ([]*models.FlattenedActualLRP, error) {
-						return []*models.FlattenedActualLRP{}, nil
+					bbsClient.ActualLRPsStub = func(logger lager.Logger, f models.ActualLRPFilter) ([]*models.ActualLRP, error) {
+						return []*models.ActualLRP{}, nil
 					}
 				})
 
@@ -836,13 +826,11 @@ var _ = Describe("Watcher", func() {
 
 		Context("when actual lrp state is not running", func() {
 			BeforeEach(func() {
-				actualLRP4 := &models.FlattenedActualLRP{
+				actualLRP4 := &models.ActualLRP{
 					ActualLRPKey:         models.NewActualLRPKey("pg-4", 1, "domain"),
 					ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint3.InstanceGUID, "cell-id"),
-					ActualLRPInfo: models.ActualLRPInfo{
-						State:          models.ActualLRPStateClaimed,
-						PlacementState: models.PlacementStateType_Normal,
-					},
+					State:                models.ActualLRPStateClaimed,
+					PlacementState:       models.PlacementStateType_Normal,
 				}
 
 				Eventually(eventCh).Should(BeSent(EventHolder{models.NewFlattenedActualLRPCreatedEvent(

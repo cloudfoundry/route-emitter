@@ -16,7 +16,7 @@ type FakeRouteHandler struct {
 		logger lager.Logger
 		event  models.Event
 	}
-	SyncStub        func(logger lager.Logger, desired []*models.DesiredLRPSchedulingInfo, runningActual []*models.FlattenedActualLRP, domains models.DomainSet, cachedEvents map[string]models.Event)
+	SyncStub        func(logger lager.Logger, desired []*models.DesiredLRPSchedulingInfo, runningActual []*models.ActualLRP, domains models.DomainSet, cachedEvents map[string]models.Event)
 	syncMutex       sync.RWMutex
 	syncArgsForCall []struct {
 		logger        lager.Logger

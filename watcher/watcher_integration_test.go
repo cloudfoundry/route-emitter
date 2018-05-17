@@ -95,8 +95,8 @@ var _ = Describe("Watcher Integration", func() {
 			eventCh          chan EventHolder
 			modTag           *models.ModificationTag
 			schedulingInfo1  *models.DesiredLRPSchedulingInfo
-			actualLRP1       *models.FlattenedActualLRP
-			removedActualLRP *models.FlattenedActualLRP
+			actualLRP1       *models.ActualLRP
+			removedActualLRP *models.ActualLRP
 		)
 
 		sendEvent := func() {
@@ -128,24 +128,20 @@ var _ = Describe("Watcher Integration", func() {
 				Instances: 1,
 			}
 
-			actualLRP1 = &models.FlattenedActualLRP{
+			actualLRP1 = &models.ActualLRP{
 				ActualLRPKey:         models.NewActualLRPKey("pg-1", 0, "domain"),
 				ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint1.InstanceGUID, "cell-id"),
-				ActualLRPInfo: models.ActualLRPInfo{
-					ActualLRPNetInfo: models.NewActualLRPNetInfo(endpoint1.Host, "container-ip", models.NewPortMapping(endpoint1.Port, endpoint1.ContainerPort)),
-					State:            models.ActualLRPStateRunning,
-					ModificationTag:  *modTag,
-				},
+				ActualLRPNetInfo:     models.NewActualLRPNetInfo(endpoint1.Host, "container-ip", models.NewPortMapping(endpoint1.Port, endpoint1.ContainerPort)),
+				State:                models.ActualLRPStateRunning,
+				ModificationTag:      *modTag,
 			}
 
-			removedActualLRP = &models.FlattenedActualLRP{
+			removedActualLRP = &models.ActualLRP{
 				ActualLRPKey:         models.NewActualLRPKey("pg-1", 0, "domain"),
 				ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint1.InstanceGUID, "cell-id"),
-				ActualLRPInfo: models.ActualLRPInfo{
-					ActualLRPNetInfo: models.NewActualLRPNetInfo(endpoint1.Host, "container-ip", models.NewPortMapping(endpoint1.Port, endpoint1.ContainerPort)),
-					State:            models.ActualLRPStateRunning,
-					ModificationTag:  *modTag,
-				},
+				ActualLRPNetInfo:     models.NewActualLRPNetInfo(endpoint1.Host, "container-ip", models.NewPortMapping(endpoint1.Port, endpoint1.ContainerPort)),
+				State:                models.ActualLRPStateRunning,
+				ModificationTag:      *modTag,
 			}
 
 			eventSource.CloseStub = func() error {
@@ -165,12 +161,12 @@ var _ = Describe("Watcher Integration", func() {
 				}
 			}
 
-			bbsClient.ActualLRPsStub = func(logger lager.Logger, filter models.ActualLRPFilter) ([]*models.FlattenedActualLRP, error) {
+			bbsClient.ActualLRPsStub = func(logger lager.Logger, filter models.ActualLRPFilter) ([]*models.ActualLRP, error) {
 				defer GinkgoRecover()
 
 				sendEvent()
 
-				return []*models.FlattenedActualLRP{
+				return []*models.ActualLRP{
 					actualLRP1,
 				}, nil
 			}

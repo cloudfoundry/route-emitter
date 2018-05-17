@@ -25,13 +25,13 @@ type RouteHandler interface {
 	Sync(
 		logger lager.Logger,
 		desired []*models.DesiredLRPSchedulingInfo,
-		runningActual []*models.FlattenedActualLRP,
+		runningActual []*models.ActualLRP,
 		domains models.DomainSet,
 		cachedEvents map[string]models.Event,
 	)
 	EmitExternal(logger lager.Logger)
 	EmitInternal(logger lager.Logger)
-	ShouldRefreshDesired(*models.FlattenedActualLRP) bool
+	ShouldRefreshDesired(*models.ActualLRP) bool
 	RefreshDesired(lager.Logger, []*models.DesiredLRPSchedulingInfo)
 }
 
@@ -74,7 +74,7 @@ func NewWatcher(
 type syncEventResult struct {
 	startTime     time.Time
 	desired       []*models.DesiredLRPSchedulingInfo
-	runningActual []*models.FlattenedActualLRP
+	runningActual []*models.ActualLRP
 	domains       models.DomainSet
 	err           error
 }
@@ -205,7 +205,7 @@ func (w *Watcher) cacheIncomingEvents(
 }
 
 func (w *Watcher) retrieveDesiredInternal(logger lager.Logger, event models.Event, currentDesireds []*models.DesiredLRPSchedulingInfo, syncing bool) []*models.DesiredLRPSchedulingInfo {
-	var actualLRP *models.FlattenedActualLRP
+	var actualLRP *models.ActualLRP
 	switch event := event.(type) {
 	case *models.FlattenedActualLRPCreatedEvent:
 		actualLRP = event.ActualLrp
@@ -215,7 +215,7 @@ func (w *Watcher) retrieveDesiredInternal(logger lager.Logger, event models.Even
 	}
 	var desiredLRPs []*models.DesiredLRPSchedulingInfo
 	var err error
-	if actualLRP != nil && actualLRP.ActualLRPInfo.State == models.ActualLRPStateRunning {
+	if actualLRP != nil && actualLRP.State == models.ActualLRPStateRunning {
 		if w.routeHandler.ShouldRefreshDesired(actualLRP) || (syncing && !foundInCurrentDesireds(actualLRP.ActualLRPKey.ProcessGuid, currentDesireds)) {
 			logger.Info("refreshing-desired-lrp-info", lager.Data{"process-guid": actualLRP.ProcessGuid})
 			desiredLRPs, err = w.bbsClient.DesiredLRPSchedulingInfos(logger, models.DesiredLRPFilter{
@@ -258,7 +258,7 @@ func (w *Watcher) handleEvent(logger lager.Logger, event models.Event) {
 
 func (w *Watcher) sync(logger lager.Logger, ch chan<- *syncEventResult) {
 	var desiredSchedulingInfo []*models.DesiredLRPSchedulingInfo
-	var runningActualLRPs []*models.FlattenedActualLRP
+	var runningActualLRPs []*models.ActualLRP
 	var domains models.DomainSet
 
 	var actualErr, desiredErr, domainsErr error
@@ -270,7 +270,7 @@ func (w *Watcher) sync(logger lager.Logger, ch chan<- *syncEventResult) {
 	go func() {
 		defer wg.Done()
 		logger.Debug("getting-actual-lrps")
-		var actualLRPs []*models.FlattenedActualLRP
+		var actualLRPs []*models.ActualLRP
 		actualLRPs, actualErr = w.bbsClient.ActualLRPs(logger, models.ActualLRPFilter{CellID: w.cellID})
 		if actualErr != nil {
 			logger.Error("failed-getting-actual-lrps", actualErr)
@@ -278,7 +278,7 @@ func (w *Watcher) sync(logger lager.Logger, ch chan<- *syncEventResult) {
 		}
 		logger.Debug("succeeded-getting-actual-lrps", lager.Data{"num-actual-responses": len(actualLRPs)})
 
-		runningActualLRPs = make([]*models.FlattenedActualLRP, 0, len(actualLRPs))
+		runningActualLRPs = make([]*models.ActualLRP, 0, len(actualLRPs))
 		for _, actualLRP := range actualLRPs {
 			if actualLRP.State == models.ActualLRPStateRunning {
 				runningActualLRPs = append(runningActualLRPs, actualLRP)

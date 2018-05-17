@@ -70,24 +70,22 @@ var _ = Describe("TCPRoutingTable", func() {
 		hostPort, containerPort uint32,
 		evacuating bool,
 		modificationTag *models.ModificationTag,
-	) *models.FlattenedActualLRP {
+	) *models.ActualLRP {
 		state := models.PlacementStateType_Normal
 		if evacuating {
 			state = models.PlacementStateType_Evacuating
 		}
-		return &models.FlattenedActualLRP{
+		return &models.ActualLRP{
 			ActualLRPKey:         models.NewActualLRPKey(processGuid, 0, "domain"),
 			ActualLRPInstanceKey: models.NewActualLRPInstanceKey(instanceGuid, "cell-id-1"),
-			ActualLRPInfo: models.ActualLRPInfo{
-				ActualLRPNetInfo: models.NewActualLRPNetInfo(
-					hostAddress,
-					instanceAddress,
-					models.NewPortMapping(hostPort, containerPort),
-				),
-				State:           models.ActualLRPStateRunning,
-				PlacementState:  state,
-				ModificationTag: *modificationTag,
-			},
+			ActualLRPNetInfo: models.NewActualLRPNetInfo(
+				hostAddress,
+				instanceAddress,
+				models.NewPortMapping(hostPort, containerPort),
+			),
+			State:           models.ActualLRPStateRunning,
+			PlacementState:  state,
+			ModificationTag: *modificationTag,
 		}
 	}
 
@@ -910,7 +908,7 @@ var _ = Describe("TCPRoutingTable", func() {
 								oldActualLRP := getActualLRP("process-guid-1", "instance-guid-1", "some-ip-1", "container-ip-1", 62004, 5222, false, modificationTag)
 								routingTable.RemoveEndpoint(oldActualLRP)
 								newActualLRP := oldActualLRP
-								newActualLRP.ActualLRPInfo.ActualLRPNetInfo = models.NewActualLRPNetInfo(
+								newActualLRP.ActualLRPNetInfo = models.NewActualLRPNetInfo(
 									"some-ip-1",
 									"container-ip-1",
 									models.NewPortMapping(62004, 5222),

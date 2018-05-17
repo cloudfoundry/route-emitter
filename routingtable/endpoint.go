@@ -184,7 +184,7 @@ func (entry InternalRoutableEndpoints) copy() InternalRoutableEndpoints {
 	return clone
 }
 
-func NewEndpointsFromActual(actualLRP *models.FlattenedActualLRP) []Endpoint {
+func NewEndpointsFromActual(actualLRP *models.ActualLRP) []Endpoint {
 	endpoints := []Endpoint{}
 
 	for _, portMapping := range actualLRP.Ports {
@@ -196,7 +196,7 @@ func NewEndpointsFromActual(actualLRP *models.FlattenedActualLRP) []Endpoint {
 				ContainerIP:           actualLRP.InstanceAddress,
 				Port:                  portMapping.HostPort,
 				ContainerPort:         portMapping.ContainerPort,
-				Evacuating:            actualLRP.ActualLRPInfo.PlacementState == models.PlacementStateType_Evacuating,
+				Evacuating:            actualLRP.PlacementState == models.PlacementStateType_Evacuating,
 				ModificationTag:       &actualLRP.ModificationTag,
 				TlsProxyPort:          portMapping.HostTlsProxyPort,
 				ContainerTlsProxyPort: portMapping.ContainerTlsProxyPort,
@@ -209,7 +209,7 @@ func NewEndpointsFromActual(actualLRP *models.FlattenedActualLRP) []Endpoint {
 	return endpoints
 }
 
-func NewRoutingKeysFromActual(actualLRP *models.FlattenedActualLRP) RoutingKeys {
+func NewRoutingKeysFromActual(actualLRP *models.ActualLRP) RoutingKeys {
 	keys := RoutingKeys{}
 	for _, portMapping := range actualLRP.Ports {
 		keys = append(keys, NewRoutingKey(actualLRP.ProcessGuid, portMapping.ContainerPort))

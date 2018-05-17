@@ -108,7 +108,7 @@ func (handler *Handler) EmitInternal(logger lager.Logger) {
 func (handler *Handler) Sync(
 	logger lager.Logger,
 	desired []*models.DesiredLRPSchedulingInfo,
-	actuals []*models.FlattenedActualLRP,
+	actuals []*models.ActualLRP,
 	domains models.DomainSet,
 	cachedEvents map[string]models.Event,
 ) {
@@ -177,7 +177,7 @@ func (handler *Handler) RefreshDesired(logger lager.Logger, desiredInfo []*model
 	}
 }
 
-func (handler *Handler) ShouldRefreshDesired(actual *models.FlattenedActualLRP) bool {
+func (handler *Handler) ShouldRefreshDesired(actual *models.ActualLRP) bool {
 	return !handler.routingTable.HasExternalRoutes(actual)
 }
 
@@ -196,7 +196,7 @@ func (handler *Handler) handleDesiredDelete(logger lager.Logger, schedulingInfo 
 	handler.emitMessages(logger, messagesToEmit, routeMappings)
 }
 
-func (handler *Handler) handleActualCreate(logger lager.Logger, actualLRP *models.FlattenedActualLRP) {
+func (handler *Handler) handleActualCreate(logger lager.Logger, actualLRP *models.ActualLRP) {
 	if actualLRP.State != models.ActualLRPStateRunning {
 		return
 	}
@@ -204,7 +204,7 @@ func (handler *Handler) handleActualCreate(logger lager.Logger, actualLRP *model
 	handler.emitMessages(logger, messagesToEmit, routeMappings)
 }
 
-func (handler *Handler) handleActualUpdate(logger lager.Logger, before, after *models.FlattenedActualLRP) {
+func (handler *Handler) handleActualUpdate(logger lager.Logger, before, after *models.ActualLRP) {
 	var (
 		messagesToEmit routingtable.MessagesToEmit
 		routeMappings  routingtable.TCPRouteMappings
@@ -218,7 +218,7 @@ func (handler *Handler) handleActualUpdate(logger lager.Logger, before, after *m
 	handler.emitMessages(logger, messagesToEmit, routeMappings)
 }
 
-func (handler *Handler) handleActualDelete(logger lager.Logger, actualLRP *models.FlattenedActualLRP) {
+func (handler *Handler) handleActualDelete(logger lager.Logger, actualLRP *models.ActualLRP) {
 	if actualLRP.State != models.ActualLRPStateRunning {
 		return
 	}

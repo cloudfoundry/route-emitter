@@ -36,10 +36,10 @@ type FakeRoutingTable struct {
 		result1 routingtable.TCPRouteMappings
 		result2 routingtable.MessagesToEmit
 	}
-	AddEndpointStub        func(actualLRP *models.FlattenedActualLRP) (routingtable.TCPRouteMappings, routingtable.MessagesToEmit)
+	AddEndpointStub        func(actualLRP *models.ActualLRP) (routingtable.TCPRouteMappings, routingtable.MessagesToEmit)
 	addEndpointMutex       sync.RWMutex
 	addEndpointArgsForCall []struct {
-		actualLRP *models.FlattenedActualLRP
+		actualLRP *models.ActualLRP
 	}
 	addEndpointReturns struct {
 		result1 routingtable.TCPRouteMappings
@@ -515,7 +515,7 @@ func (fake *FakeRoutingTable) HasExternalRoutesCallCount() int {
 	return len(fake.hasExternalRoutesArgsForCall)
 }
 
-func (fake *FakeRoutingTable) HasExternalRoutesArgsForCall(i int) *models.FlattenedActualLRP {
+func (fake *FakeRoutingTable) HasExternalRoutesArgsForCall(i int) *models.ActualLRP {
 	fake.hasExternalRoutesMutex.RLock()
 	defer fake.hasExternalRoutesMutex.RUnlock()
 	return fake.hasExternalRoutesArgsForCall[i].actual

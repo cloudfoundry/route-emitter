@@ -152,7 +152,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 
 	Describe("ActualLRP Event", func() {
 		var (
-			actualLRP     *models.FlattenedActualLRP
+			actualLRP     *models.ActualLRP
 			routingEvents routingtable.TCPRouteMappings
 		)
 
@@ -169,18 +169,16 @@ var _ = Describe("RoutingAPIHandler", func() {
 
 			Context("when state is Running", func() {
 				BeforeEach(func() {
-					actualLRP = &models.FlattenedActualLRP{
+					actualLRP = &models.ActualLRP{
 						ActualLRPKey:         models.NewActualLRPKey("process-guid", 0, "domain"),
 						ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
-						ActualLRPInfo: models.ActualLRPInfo{
-							ActualLRPNetInfo: models.NewActualLRPNetInfo(
-								"some-ip",
-								"container-ip",
-								models.NewPortMapping(611006, 5222),
-							),
-							State:          models.ActualLRPStateRunning,
-							PlacementState: models.PlacementStateType_Normal,
-						},
+						ActualLRPNetInfo: models.NewActualLRPNetInfo(
+							"some-ip",
+							"container-ip",
+							models.NewPortMapping(611006, 5222),
+						),
+						State:          models.ActualLRPStateRunning,
+						PlacementState: models.PlacementStateType_Normal,
 					}
 				})
 
@@ -205,18 +203,16 @@ var _ = Describe("RoutingAPIHandler", func() {
 
 			Context("when state is not in Running", func() {
 				BeforeEach(func() {
-					actualLRP = &models.FlattenedActualLRP{
+					actualLRP = &models.ActualLRP{
 						ActualLRPKey:         models.NewActualLRPKey("process-guid", 0, "domain"),
 						ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
-						ActualLRPInfo: models.ActualLRPInfo{
-							ActualLRPNetInfo: models.NewActualLRPNetInfo(
-								"some-ip",
-								"container-ip",
-								models.NewPortMapping(611006, 5222),
-							),
-							State:          models.ActualLRPStateClaimed,
-							PlacementState: models.PlacementStateType_Normal,
-						},
+						ActualLRPNetInfo: models.NewActualLRPNetInfo(
+							"some-ip",
+							"container-ip",
+							models.NewPortMapping(611006, 5222),
+						),
+						State:          models.ActualLRPStateClaimed,
+						PlacementState: models.PlacementStateType_Normal,
 					}
 				})
 
@@ -232,7 +228,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 
 		Describe("HandleActualUpdate", func() {
 			var (
-				afterLRP *models.FlattenedActualLRP
+				afterLRP *models.ActualLRP
 			)
 
 			JustBeforeEach(func() {
@@ -241,31 +237,27 @@ var _ = Describe("RoutingAPIHandler", func() {
 
 			Context("when after state is Running", func() {
 				BeforeEach(func() {
-					actualLRP = &models.FlattenedActualLRP{
+					actualLRP = &models.ActualLRP{
 						ActualLRPKey:         models.NewActualLRPKey("process-guid", 0, "domain"),
 						ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
-						ActualLRPInfo: models.ActualLRPInfo{
-							ActualLRPNetInfo: models.NewActualLRPNetInfo(
-								"",
-								"",
-							),
-							State:          models.ActualLRPStateClaimed,
-							PlacementState: models.PlacementStateType_Normal,
-						},
+						ActualLRPNetInfo: models.NewActualLRPNetInfo(
+							"",
+							"",
+						),
+						State:          models.ActualLRPStateClaimed,
+						PlacementState: models.PlacementStateType_Normal,
 					}
 
-					afterLRP = &models.FlattenedActualLRP{
+					afterLRP = &models.ActualLRP{
 						ActualLRPKey:         models.NewActualLRPKey("process-guid", 0, "domain"),
 						ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
-						ActualLRPInfo: models.ActualLRPInfo{
-							ActualLRPNetInfo: models.NewActualLRPNetInfo(
-								"some-ip",
-								"container-ip",
-								models.NewPortMapping(611006, 5222),
-							),
-							State:          models.ActualLRPStateRunning,
-							PlacementState: models.PlacementStateType_Normal,
-						},
+						ActualLRPNetInfo: models.NewActualLRPNetInfo(
+							"some-ip",
+							"container-ip",
+							models.NewPortMapping(611006, 5222),
+						),
+						State:          models.ActualLRPStateRunning,
+						PlacementState: models.PlacementStateType_Normal,
 					}
 				})
 
@@ -290,31 +282,27 @@ var _ = Describe("RoutingAPIHandler", func() {
 
 			Context("when after state is not Running and before state is Running", func() {
 				BeforeEach(func() {
-					actualLRP = &models.FlattenedActualLRP{
+					actualLRP = &models.ActualLRP{
 						ActualLRPKey:         models.NewActualLRPKey("process-guid", 0, "domain"),
 						ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
-						ActualLRPInfo: models.ActualLRPInfo{
-							ActualLRPNetInfo: models.NewActualLRPNetInfo(
-								"some-ip",
-								"container-ip",
-								models.NewPortMapping(611006, 5222),
-							),
-							State:          models.ActualLRPStateRunning,
-							PlacementState: models.PlacementStateType_Normal,
-						},
+						ActualLRPNetInfo: models.NewActualLRPNetInfo(
+							"some-ip",
+							"container-ip",
+							models.NewPortMapping(611006, 5222),
+						),
+						State:          models.ActualLRPStateRunning,
+						PlacementState: models.PlacementStateType_Normal,
 					}
 
-					afterLRP = &models.FlattenedActualLRP{
+					afterLRP = &models.ActualLRP{
 						ActualLRPKey:         models.NewActualLRPKey("process-guid", 0, "domain"),
 						ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
-						ActualLRPInfo: models.ActualLRPInfo{
-							ActualLRPNetInfo: models.NewActualLRPNetInfo(
-								"",
-								"",
-							),
-							State:          models.ActualLRPStateCrashed,
-							PlacementState: models.PlacementStateType_Normal,
-						},
+						ActualLRPNetInfo: models.NewActualLRPNetInfo(
+							"",
+							"",
+						),
+						State:          models.ActualLRPStateCrashed,
+						PlacementState: models.PlacementStateType_Normal,
 					}
 				})
 
@@ -339,30 +327,26 @@ var _ = Describe("RoutingAPIHandler", func() {
 
 			Context("when both after and before state is not Running", func() {
 				BeforeEach(func() {
-					actualLRP = &models.FlattenedActualLRP{
+					actualLRP = &models.ActualLRP{
 						ActualLRPKey:         models.NewActualLRPKey("process-guid", 0, "domain"),
 						ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", ""),
-						ActualLRPInfo: models.ActualLRPInfo{
-							ActualLRPNetInfo: models.NewActualLRPNetInfo(
-								"",
-								"",
-							),
-							State:          models.ActualLRPStateUnclaimed,
-							PlacementState: models.PlacementStateType_Normal,
-						},
+						ActualLRPNetInfo: models.NewActualLRPNetInfo(
+							"",
+							"",
+						),
+						State:          models.ActualLRPStateUnclaimed,
+						PlacementState: models.PlacementStateType_Normal,
 					}
 
-					actualLRP = &models.FlattenedActualLRP{
+					actualLRP = &models.ActualLRP{
 						ActualLRPKey:         models.NewActualLRPKey("process-guid", 0, "domain"),
 						ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
-						ActualLRPInfo: models.ActualLRPInfo{
-							ActualLRPNetInfo: models.NewActualLRPNetInfo(
-								"",
-								"",
-							),
-							State:          models.ActualLRPStateClaimed,
-							PlacementState: models.PlacementStateType_Normal,
-						},
+						ActualLRPNetInfo: models.NewActualLRPNetInfo(
+							"",
+							"",
+						),
+						State:          models.ActualLRPStateClaimed,
+						PlacementState: models.PlacementStateType_Normal,
 					}
 				})
 
@@ -383,18 +367,16 @@ var _ = Describe("RoutingAPIHandler", func() {
 
 			Context("when state is Running", func() {
 				BeforeEach(func() {
-					actualLRP = &models.FlattenedActualLRP{
+					actualLRP = &models.ActualLRP{
 						ActualLRPKey:         models.NewActualLRPKey("process-guid", 0, "domain"),
 						ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
-						ActualLRPInfo: models.ActualLRPInfo{
-							ActualLRPNetInfo: models.NewActualLRPNetInfo(
-								"some-ip",
-								"container-ip",
-								models.NewPortMapping(611006, 5222),
-							),
-							State:          models.ActualLRPStateRunning,
-							PlacementState: models.PlacementStateType_Normal,
-						},
+						ActualLRPNetInfo: models.NewActualLRPNetInfo(
+							"some-ip",
+							"container-ip",
+							models.NewPortMapping(611006, 5222),
+						),
+						State:          models.ActualLRPStateRunning,
+						PlacementState: models.PlacementStateType_Normal,
 					}
 				})
 
@@ -419,17 +401,15 @@ var _ = Describe("RoutingAPIHandler", func() {
 
 			Context("when state is not in Running", func() {
 				BeforeEach(func() {
-					actualLRP = &models.FlattenedActualLRP{
+					actualLRP = &models.ActualLRP{
 						ActualLRPKey:         models.NewActualLRPKey("process-guid", 0, "domain"),
 						ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
-						ActualLRPInfo: models.ActualLRPInfo{
-							ActualLRPNetInfo: models.NewActualLRPNetInfo(
-								"",
-								"",
-							),
-							State:          models.ActualLRPStateClaimed,
-							PlacementState: models.PlacementStateType_Normal,
-						},
+						ActualLRPNetInfo: models.NewActualLRPNetInfo(
+							"",
+							"",
+						),
+						State:          models.ActualLRPStateClaimed,
+						PlacementState: models.PlacementStateType_Normal,
 					}
 				})
 
@@ -445,22 +425,19 @@ var _ = Describe("RoutingAPIHandler", func() {
 	})
 
 	Describe("ShouldRefreshDesired", func() {
-		var actualLRP *models.FlattenedActualLRP
+		var actualLRP *models.ActualLRP
 		BeforeEach(func() {
-			actualLRP = &models.FlattenedActualLRP{
+			actualLRP = &models.ActualLRP{
 				ActualLRPKey:         models.NewActualLRPKey("process-guid-1", 0, "domain"),
 				ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
-				ActualLRPInfo: models.ActualLRPInfo{
-					ActualLRPNetInfo: models.NewActualLRPNetInfo(
-						"some-ip",
-						"container-ip",
-						models.NewPortMapping(61006, 5222),
-						models.NewPortMapping(61007, 5223),
-					),
-					State:           models.ActualLRPStateRunning,
-					PlacementState:  models.PlacementStateType_Normal,
-					ModificationTag: models.ModificationTag{Epoch: "abc", Index: 1},
-				},
+				ActualLRPNetInfo: models.NewActualLRPNetInfo(
+					"some-ip",
+					"container-ip",
+					models.NewPortMapping(61006, 5222),
+					models.NewPortMapping(61007, 5223),
+				),
+				State:          models.ActualLRPStateRunning,
+				PlacementState: models.PlacementStateType_Normal,
 			}
 		})
 
@@ -522,7 +499,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 		Context("when bbs server returns desired and actual lrps", func() {
 			var (
 				desiredInfo     []*models.DesiredLRPSchedulingInfo
-				actualLRPs      []*models.FlattenedActualLRP
+				actualLRPs      []*models.ActualLRP
 				modificationTag models.ModificationTag
 			)
 
@@ -549,20 +526,18 @@ var _ = Describe("RoutingAPIHandler", func() {
 					},
 				}
 
-				actualLRPs = []*models.FlattenedActualLRP{
-					&models.FlattenedActualLRP{
+				actualLRPs = []*models.ActualLRP{
+					&models.ActualLRP{
 						ActualLRPKey:         models.NewActualLRPKey("process-guid-1", 0, "domain"),
 						ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
-						ActualLRPInfo: models.ActualLRPInfo{
-							ActualLRPNetInfo: models.NewActualLRPNetInfo(
-								"some-ip",
-								"container-ip",
-								models.NewPortMapping(61006, containerPort),
-							),
-							State:           models.ActualLRPStateRunning,
-							ModificationTag: modificationTag,
-							PlacementState:  models.PlacementStateType_Normal,
-						},
+						ActualLRPNetInfo: models.NewActualLRPNetInfo(
+							"some-ip",
+							"container-ip",
+							models.NewPortMapping(61006, containerPort),
+						),
+						State:           models.ActualLRPStateRunning,
+						ModificationTag: modificationTag,
+						PlacementState:  models.PlacementStateType_Normal,
 					},
 				}
 
@@ -641,19 +616,17 @@ var _ = Describe("RoutingAPIHandler", func() {
 						Instances:   1,
 					})
 
-					actualLRPEvent := models.NewFlattenedActualLRPCreatedEvent(&models.FlattenedActualLRP{
+					actualLRPEvent := models.NewFlattenedActualLRPCreatedEvent(&models.ActualLRP{
 						ActualLRPKey:         models.NewActualLRPKey("process-guid-2", 0, "domain"),
 						ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid-1", "cell-id"),
-						ActualLRPInfo: models.ActualLRPInfo{
-							ActualLRPNetInfo: models.NewActualLRPNetInfo(
-								"some-ip-2",
-								"container-ip-2",
-								models.NewPortMapping(61006, 5222),
-							),
-							State:           models.ActualLRPStateRunning,
-							ModificationTag: modificationTag,
-							PlacementState:  models.PlacementStateType_Normal,
-						},
+						ActualLRPNetInfo: models.NewActualLRPNetInfo(
+							"some-ip-2",
+							"container-ip-2",
+							models.NewPortMapping(61006, 5222),
+						),
+						State:           models.ActualLRPStateRunning,
+						ModificationTag: modificationTag,
+						PlacementState:  models.PlacementStateType_Normal,
 					})
 
 					cachedEvents := map[string]models.Event{

@@ -14,20 +14,18 @@ var _ = Describe("LRP Utils", func() {
 		Context("when actual is not evacuating", func() {
 			It("builds a map of container port to endpoint", func() {
 				tag := models.ModificationTag{Epoch: "abc", Index: 0}
-				actualInfo := &models.FlattenedActualLRP{
+				actualInfo := &models.ActualLRP{
 					ActualLRPKey:         models.NewActualLRPKey("process-guid", 0, "domain"),
 					ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
-					ActualLRPInfo: models.ActualLRPInfo{
-						ActualLRPNetInfo: models.NewActualLRPNetInfo(
-							"1.1.1.1",
-							"2.2.2.2",
-							models.NewPortMapping(11, 44),
-							models.NewPortMapping(66, 99),
-						),
-						State:           models.ActualLRPStateRunning,
-						ModificationTag: tag,
-						PlacementState:  models.PlacementStateType_Normal,
-					},
+					ActualLRPNetInfo: models.NewActualLRPNetInfo(
+						"1.1.1.1",
+						"2.2.2.2",
+						models.NewPortMapping(11, 44),
+						models.NewPortMapping(66, 99),
+					),
+					State:           models.ActualLRPStateRunning,
+					ModificationTag: tag,
+					PlacementState:  models.PlacementStateType_Normal,
 				}
 
 				endpoints := routingtable.NewEndpointsFromActual(actualInfo)
@@ -41,20 +39,18 @@ var _ = Describe("LRP Utils", func() {
 			Context("with TLS proxy ports", func() {
 				It("builds a map of tls proxy ports to endpoints", func() {
 					tag := models.ModificationTag{Epoch: "abc", Index: 0}
-					actualInfo := &models.FlattenedActualLRP{
+					actualInfo := &models.ActualLRP{
 						ActualLRPKey:         models.NewActualLRPKey("process-guid", 0, "domain"),
 						ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
-						ActualLRPInfo: models.ActualLRPInfo{
-							ActualLRPNetInfo: models.NewActualLRPNetInfo(
-								"1.1.1.1",
-								"2.2.2.2",
-								models.NewPortMappingWithTLSProxy(11, 44, 61004, 61005),
-								models.NewPortMappingWithTLSProxy(66, 99, 61006, 61007),
-							),
-							State:           models.ActualLRPStateRunning,
-							PlacementState:  models.PlacementStateType_Normal,
-							ModificationTag: tag,
-						},
+						ActualLRPNetInfo: models.NewActualLRPNetInfo(
+							"1.1.1.1",
+							"2.2.2.2",
+							models.NewPortMappingWithTLSProxy(11, 44, 61004, 61005),
+							models.NewPortMappingWithTLSProxy(66, 99, 61006, 61007),
+						),
+						State:           models.ActualLRPStateRunning,
+						PlacementState:  models.PlacementStateType_Normal,
+						ModificationTag: tag,
 					}
 
 					endpoints := routingtable.NewEndpointsFromActual(actualInfo)
@@ -71,20 +67,18 @@ var _ = Describe("LRP Utils", func() {
 			It("builds a map of container port to endpoint", func() {
 				tag := models.ModificationTag{Epoch: "abc", Index: 0}
 
-				actualInfo := &models.FlattenedActualLRP{
+				actualInfo := &models.ActualLRP{
 					ActualLRPKey:         models.NewActualLRPKey("process-guid", 0, "domain"),
 					ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
-					ActualLRPInfo: models.ActualLRPInfo{
-						ActualLRPNetInfo: models.NewActualLRPNetInfo(
-							"1.1.1.1",
-							"2.2.2.2",
-							models.NewPortMapping(11, 44),
-							models.NewPortMapping(66, 99),
-						),
-						State:           models.ActualLRPStateRunning,
-						PlacementState:  models.PlacementStateType_Evacuating,
-						ModificationTag: tag,
-					},
+					ActualLRPNetInfo: models.NewActualLRPNetInfo(
+						"1.1.1.1",
+						"2.2.2.2",
+						models.NewPortMapping(11, 44),
+						models.NewPortMapping(66, 99),
+					),
+					State:           models.ActualLRPStateRunning,
+					PlacementState:  models.PlacementStateType_Evacuating,
+					ModificationTag: tag,
 				}
 
 				endpoints := routingtable.NewEndpointsFromActual(actualInfo)
@@ -99,19 +93,17 @@ var _ = Describe("LRP Utils", func() {
 
 	Describe("NewRoutingKeysFromActual", func() {
 		It("creates a list of keys for an actual LRP", func() {
-			keys := routingtable.NewRoutingKeysFromActual(&models.FlattenedActualLRP{
+			keys := routingtable.NewRoutingKeysFromActual(&models.ActualLRP{
 				ActualLRPKey:         models.NewActualLRPKey("process-guid", 0, "domain"),
 				ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
-				ActualLRPInfo: models.ActualLRPInfo{
-					ActualLRPNetInfo: models.NewActualLRPNetInfo(
-						"1.1.1.1",
-						"2.2.2.2",
-						models.NewPortMapping(11, 44),
-						models.NewPortMapping(66, 99),
-					),
-					State:          models.ActualLRPStateRunning,
-					PlacementState: models.PlacementStateType_Normal,
-				},
+				ActualLRPNetInfo: models.NewActualLRPNetInfo(
+					"1.1.1.1",
+					"2.2.2.2",
+					models.NewPortMapping(11, 44),
+					models.NewPortMapping(66, 99),
+				),
+				State:          models.ActualLRPStateRunning,
+				PlacementState: models.PlacementStateType_Normal,
 			})
 
 			Expect(keys).To(HaveLen(2))
@@ -121,19 +113,17 @@ var _ = Describe("LRP Utils", func() {
 
 		Context("when the actual lrp has tls proxy ports", func() {
 			It("creates a list of keys for an actual LRP", func() {
-				keys := routingtable.NewRoutingKeysFromActual(&models.FlattenedActualLRP{
+				keys := routingtable.NewRoutingKeysFromActual(&models.ActualLRP{
 					ActualLRPKey:         models.NewActualLRPKey("process-guid", 0, "domain"),
 					ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
-					ActualLRPInfo: models.ActualLRPInfo{
-						ActualLRPNetInfo: models.NewActualLRPNetInfo(
-							"1.1.1.1",
-							"2.2.2.2",
-							models.NewPortMappingWithTLSProxy(11, 44, 61004, 61005),
-							models.NewPortMappingWithTLSProxy(66, 99, 61006, 61007),
-						),
-						State:          models.ActualLRPStateRunning,
-						PlacementState: models.PlacementStateType_Normal,
-					},
+					ActualLRPNetInfo: models.NewActualLRPNetInfo(
+						"1.1.1.1",
+						"2.2.2.2",
+						models.NewPortMappingWithTLSProxy(11, 44, 61004, 61005),
+						models.NewPortMappingWithTLSProxy(66, 99, 61006, 61007),
+					),
+					State:          models.ActualLRPStateRunning,
+					PlacementState: models.PlacementStateType_Normal,
 				})
 
 				Expect(keys).To(HaveLen(4))
@@ -146,17 +136,15 @@ var _ = Describe("LRP Utils", func() {
 
 		Context("when the actual lrp has no port mappings", func() {
 			It("returns no keys", func() {
-				keys := routingtable.NewRoutingKeysFromActual(&models.FlattenedActualLRP{
+				keys := routingtable.NewRoutingKeysFromActual(&models.ActualLRP{
 					ActualLRPKey:         models.NewActualLRPKey("process-guid", 0, "domain"),
 					ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
-					ActualLRPInfo: models.ActualLRPInfo{
-						ActualLRPNetInfo: models.NewActualLRPNetInfo(
-							"1.1.1.1",
-							"2.2.2.2",
-						),
-						State:          models.ActualLRPStateRunning,
-						PlacementState: models.PlacementStateType_Normal,
-					},
+					ActualLRPNetInfo: models.NewActualLRPNetInfo(
+						"1.1.1.1",
+						"2.2.2.2",
+					),
+					State:          models.ActualLRPStateRunning,
+					PlacementState: models.PlacementStateType_Normal,
 				})
 
 				Expect(keys).To(HaveLen(0))
