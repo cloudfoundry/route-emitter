@@ -187,7 +187,9 @@ var _ = Describe("RoutingAPIHandler", func() {
 				It("invokes AddEndpoint on RoutingTable", func() {
 					Expect(fakeRoutingTable.AddEndpointCallCount()).Should(Equal(1))
 					lrp := fakeRoutingTable.AddEndpointArgsForCall(0)
-					Expect(lrp).Should(Equal(routingtable.NewActualLRPRoutingInfo(actualLRP)))
+					actualLRPRoutingInfo, err := routingtable.NewActualLRPRoutingInfo(actualLRP)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(lrp).Should(Equal(actualLRPRoutingInfo))
 				})
 
 				Context("when there are routing events", func() {
@@ -321,7 +323,9 @@ var _ = Describe("RoutingAPIHandler", func() {
 				It("invokes RemoveEndpoint on RoutingTable", func() {
 					Expect(fakeRoutingTable.RemoveEndpointCallCount()).Should(Equal(1))
 					lrp := fakeRoutingTable.RemoveEndpointArgsForCall(0)
-					Expect(lrp).Should(Equal(routingtable.NewActualLRPRoutingInfo(actualLRP)))
+					actualLRPRoutingInfo, err := routingtable.NewActualLRPRoutingInfo(actualLRP)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(lrp).Should(Equal(actualLRPRoutingInfo))
 				})
 
 				Context("when there are routing events", func() {
@@ -401,7 +405,9 @@ var _ = Describe("RoutingAPIHandler", func() {
 				It("invokes RemoveEndpoint on RoutingTable", func() {
 					Expect(fakeRoutingTable.RemoveEndpointCallCount()).Should(Equal(1))
 					lrp := fakeRoutingTable.RemoveEndpointArgsForCall(0)
-					Expect(lrp).Should(Equal(routingtable.NewActualLRPRoutingInfo(actualLRP)))
+					actualLRPRoutingInfo, err := routingtable.NewActualLRPRoutingInfo(actualLRP)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(lrp).Should(Equal(actualLRPRoutingInfo))
 				})
 
 				Context("when there are routing events", func() {

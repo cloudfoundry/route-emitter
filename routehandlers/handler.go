@@ -41,6 +41,7 @@ func NewHandler(routingTable routingtable.RoutingTable, natsEmitter emitter.NATS
 }
 
 func (handler *Handler) HandleEvent(logger lager.Logger, event models.Event) {
+
 	switch event := event.(type) {
 	case *models.DesiredLRPCreatedEvent:
 		desiredInfo := event.DesiredLrp.DesiredLRPSchedulingInfo()
@@ -53,15 +54,33 @@ func (handler *Handler) HandleEvent(logger lager.Logger, event models.Event) {
 		desiredInfo := event.DesiredLrp.DesiredLRPSchedulingInfo()
 		handler.handleDesiredDelete(logger, &desiredInfo)
 	case *models.ActualLRPCreatedEvent:
-		routingInfo := routingtable.NewActualLRPRoutingInfo(event.ActualLrpGroup)
-		handler.handleActualCreate(logger, routingInfo)
+		routingInfo, err := routingtable.NewActualLRPRoutingInfo(event.ActualLrpGroup)
+		if err != nil {
+			logger.Error("failed-to-get-routing-info", err)
+		} else {
+			handler.handleActualCreate(logger, routingInfo)
+		}
 	case *models.ActualLRPChangedEvent:
-		before := routingtable.NewActualLRPRoutingInfo(event.Before)
-		after := routingtable.NewActualLRPRoutingInfo(event.After)
-		handler.handleActualUpdate(logger, before, after)
+		before, beforeErr := routingtable.NewActualLRPRoutingInfo(event.Before)
+		after, afterErr := routingtable.NewActualLRPRoutingInfo(event.After)
+		var err error
+		if beforeErr != nil {
+			err = beforeErr
+		} else {
+			err = afterErr
+		}
+		if err != nil {
+			logger.Error("failed-to-get-routing-info", err)
+		} else {
+			handler.handleActualUpdate(logger, before, after)
+		}
 	case *models.ActualLRPRemovedEvent:
-		routingInfo := routingtable.NewActualLRPRoutingInfo(event.ActualLrpGroup)
-		handler.handleActualDelete(logger, routingInfo)
+		routingInfo, err := routingtable.NewActualLRPRoutingInfo(event.ActualLrpGroup)
+		if err != nil {
+			logger.Error("failed-to-get-routing-info", err)
+		} else {
+			handler.handleActualDelete(logger, routingInfo)
+		}
 	default:
 		logger.Error("did-not-handle-unrecognizable-event", errors.New("unrecognizable-event"), lager.Data{"event-type": event.EventType()})
 	}

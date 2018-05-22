@@ -346,6 +346,23 @@ var _ = Describe("Handler", func() {
 				actualLRPRoutingInfo *routingtable.ActualLRPRoutingInfo
 			)
 
+			Context("when the resulting LRP is nil", func() {
+				BeforeEach(func() {
+					actualLRPGroup = &models.ActualLRPGroup{
+						Instance: nil,
+					}
+				})
+
+				JustBeforeEach(func() {
+					routeHandler.HandleEvent(logger, models.NewActualLRPCreatedEvent(actualLRPGroup))
+				})
+
+				It("logs an error", func() {
+					routeHandler.HandleEvent(logger, models.NewActualLRPCreatedEvent(actualLRPGroup))
+					Expect(logger).To(gbytes.Say("failed-to-get-routing-info"))
+				})
+			})
+
 			Context("when the resulting LRP is in the RUNNING state", func() {
 				BeforeEach(func() {
 					actualLRP = &models.ActualLRP{
@@ -519,6 +536,32 @@ var _ = Describe("Handler", func() {
 						delta: 0,
 					})))
 				})
+
+				Context("when one or all the LRP are nil", func() {
+					Context("when the before is nil", func() {
+						JustBeforeEach(func() {
+							beforeActualLRP = &models.ActualLRPGroup{
+								Instance: nil,
+							}
+						})
+						It("logs an error", func() {
+							routeHandler.HandleEvent(logger, models.NewActualLRPChangedEvent(beforeActualLRP, afterActualLRP))
+							Expect(logger).To(gbytes.Say("failed-to-get-routing-info"))
+						})
+					})
+
+					Context("when the after is nil", func() {
+						JustBeforeEach(func() {
+							afterActualLRP = &models.ActualLRPGroup{
+								Instance: nil,
+							}
+						})
+						It("logs an error", func() {
+							routeHandler.HandleEvent(logger, models.NewActualLRPChangedEvent(beforeActualLRP, afterActualLRP))
+							Expect(logger).To(gbytes.Say("failed-to-get-routing-info"))
+						})
+					})
+				})
 			})
 
 			Context("when the resulting LRP transitions away from the RUNNING state", func() {
@@ -625,10 +668,10 @@ var _ = Describe("Handler", func() {
 		})
 
 		Context("when a delete event occurs", func() {
+			var (
+				actualLRP *models.ActualLRPGroup
+			)
 			Context("when the actual is in the RUNNING state", func() {
-				var (
-					actualLRP *models.ActualLRPGroup
-				)
 
 				BeforeEach(func() {
 					fakeTable.RemoveEndpointReturns(emptyTCPRouteMappings, dummyMessagesToEmit)
@@ -711,6 +754,15 @@ var _ = Describe("Handler", func() {
 
 				It("doesn't emit", func() {
 					Expect(natsEmitter.EmitCallCount()).To(Equal(0))
+				})
+			})
+			Context("when the actualLRP is nil", func() {
+				JustBeforeEach(func() {
+					actualLRP = &models.ActualLRPGroup{Instance: nil}
+				})
+				It("logs an error", func() {
+					routeHandler.HandleEvent(logger, models.NewActualLRPRemovedEvent(actualLRP))
+					Expect(logger).To(gbytes.Say("failed-to-get-routing-info"))
 				})
 			})
 		})
@@ -824,10 +876,17 @@ var _ = Describe("Handler", func() {
 				desiredInfo = []*models.DesiredLRPSchedulingInfo{
 					schedulingInfo1, schedulingInfo2, schedulingInfo3,
 				}
+
+				actualLRPRoutingInfo1, err := routingtable.NewActualLRPRoutingInfo(actualLRPGroup1)
+				Expect(err).NotTo(HaveOccurred())
+				actualLRPRoutingInfo2, err := routingtable.NewActualLRPRoutingInfo(actualLRPGroup2)
+				Expect(err).NotTo(HaveOccurred())
+				actualLRPRoutingInfo3, err := routingtable.NewActualLRPRoutingInfo(actualLRPGroup3)
+				Expect(err).NotTo(HaveOccurred())
 				actualInfo = []*routingtable.ActualLRPRoutingInfo{
-					routingtable.NewActualLRPRoutingInfo(actualLRPGroup1),
-					routingtable.NewActualLRPRoutingInfo(actualLRPGroup2),
-					routingtable.NewActualLRPRoutingInfo(actualLRPGroup3),
+					actualLRPRoutingInfo1,
+					actualLRPRoutingInfo2,
+					actualLRPRoutingInfo3,
 				}
 
 				domains = models.NewDomainSet([]string{"domain"})

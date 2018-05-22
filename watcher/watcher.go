@@ -207,24 +207,30 @@ func (w *Watcher) cacheIncomingEvents(
 
 func (w *Watcher) retrieveDesiredInternal(logger lager.Logger, event models.Event, currentDesireds []*models.DesiredLRPSchedulingInfo, syncing bool) []*models.DesiredLRPSchedulingInfo {
 	var routingInfo *routingtable.ActualLRPRoutingInfo
+	var err error
 	switch event := event.(type) {
 	case *models.ActualLRPCreatedEvent:
-		routingInfo = routingtable.NewActualLRPRoutingInfo(event.ActualLrpGroup)
+		routingInfo, err = routingtable.NewActualLRPRoutingInfo(event.ActualLrpGroup)
 	case *models.ActualLRPChangedEvent:
-		routingInfo = routingtable.NewActualLRPRoutingInfo(event.After)
+		routingInfo, err = routingtable.NewActualLRPRoutingInfo(event.After)
 	default:
+		return nil
+	}
+	if err != nil {
+		logger.Error("failed-to-resolve", err, lager.Data{"event-type": event.EventType()})
+		return nil
 	}
 	var desiredLRPs []*models.DesiredLRPSchedulingInfo
-	var err error
-	if routingInfo != nil && routingInfo.ActualLRP.State == models.ActualLRPStateRunning {
-		if w.routeHandler.ShouldRefreshDesired(routingInfo) || (syncing && !foundInCurrentDesireds(routingInfo.ActualLRP.ProcessGuid, currentDesireds)) {
-			logger.Info("refreshing-desired-lrp-info", lager.Data{"process-guid": routingInfo.ActualLRP.ProcessGuid})
-			desiredLRPs, err = w.bbsClient.DesiredLRPSchedulingInfos(logger, models.DesiredLRPFilter{
-				ProcessGuids: []string{routingInfo.ActualLRP.ProcessGuid},
-			})
-			if err != nil {
-				logger.Error("failed-getting-desired-lrps-for-missing-actual-lrp", err)
-			}
+	if routingInfo.ActualLRP.State != models.ActualLRPStateRunning {
+		return nil
+	}
+	if w.routeHandler.ShouldRefreshDesired(routingInfo) || (syncing && !foundInCurrentDesireds(routingInfo.ActualLRP.ProcessGuid, currentDesireds)) {
+		logger.Info("refreshing-desired-lrp-info", lager.Data{"process-guid": routingInfo.ActualLRP.ProcessGuid})
+		desiredLRPs, err = w.bbsClient.DesiredLRPSchedulingInfos(logger, models.DesiredLRPFilter{
+			ProcessGuids: []string{routingInfo.ActualLRP.ProcessGuid},
+		})
+		if err != nil {
+			logger.Error("failed-getting-desired-lrps-for-missing-actual-lrp", err)
 		}
 	}
 

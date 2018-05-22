@@ -643,10 +643,18 @@ var _ = Describe("Watcher", func() {
 					schedulingInfo1,
 					schedulingInfo2,
 				}
+
+				actualLRPRoutingInfo1, err := routingtable.NewActualLRPRoutingInfo(actualLRPGroup1)
+				Expect(err).NotTo(HaveOccurred())
+				actualLRPRoutingInfo2, err := routingtable.NewActualLRPRoutingInfo(actualLRPGroup2)
+				Expect(err).NotTo(HaveOccurred())
+				actualLRPRoutingInfo3, err := routingtable.NewActualLRPRoutingInfo(actualLRPGroup3)
+				Expect(err).NotTo(HaveOccurred())
+
 				expectedActuals := []*routingtable.ActualLRPRoutingInfo{
-					routingtable.NewActualLRPRoutingInfo(actualLRPGroup1),
-					routingtable.NewActualLRPRoutingInfo(actualLRPGroup2),
-					routingtable.NewActualLRPRoutingInfo(actualLRPGroup3),
+					actualLRPRoutingInfo1,
+					actualLRPRoutingInfo2,
+					actualLRPRoutingInfo3,
 				}
 
 				expectedDomains := models.DomainSet{}
@@ -708,7 +716,8 @@ var _ = Describe("Watcher", func() {
 				It("registers endpoints for lrps on this cell", func() {
 					Eventually(routeHandler.SyncCallCount).Should(Equal(1))
 					_, _, actual, _, _ := routeHandler.SyncArgsForCall(0)
-					routingInfo2 := routingtable.NewActualLRPRoutingInfo(actualLRPGroup2)
+					routingInfo2, err := routingtable.NewActualLRPRoutingInfo(actualLRPGroup2)
+					Expect(err).NotTo(HaveOccurred())
 					Expect(actual).To(ContainElement(routingInfo2))
 				})
 
@@ -728,7 +737,8 @@ var _ = Describe("Watcher", func() {
 			})
 
 			Context("when desired lrp for the actual lrp is missing", func() {
-				sendEvent := func() {
+				var sendEvent func()
+				sendEvent = func() {
 					beforeActualLRPGroup3 := &models.ActualLRPGroup{
 						Instance: &models.ActualLRP{
 							ActualLRPKey:         models.NewActualLRPKey("pg-3", 1, "domain"),
@@ -767,6 +777,37 @@ var _ = Describe("Watcher", func() {
 					JustBeforeEach(func() {
 						Eventually(routeHandler.SyncCallCount).Should(Equal(1))
 						sendEvent()
+					})
+
+					Context("when an invalid actual lrp created event is received", func() {
+						BeforeEach(func() {
+							sendEvent = func() {
+								beforeActualLRPGroup3 := &models.ActualLRPGroup{Instance: nil}
+								Eventually(eventCh).Should(BeSent(EventHolder{models.NewActualLRPCreatedEvent(
+									beforeActualLRPGroup3,
+								)}))
+							}
+						})
+
+						It("an error is logged", func() {
+							Eventually(logger).Should(gbytes.Say("failed-to-resolve"))
+						})
+					})
+
+					Context("when an invalid actual lrp change event is received", func() {
+						BeforeEach(func() {
+							sendEvent = func() {
+								beforeActualLRPGroup3 := &models.ActualLRPGroup{Instance: nil}
+								Eventually(eventCh).Should(BeSent(EventHolder{models.NewActualLRPChangedEvent(
+									nil,
+									beforeActualLRPGroup3,
+								)}))
+							}
+						})
+
+						It("an error is logged", func() {
+							Eventually(logger).Should(gbytes.Say("failed-to-resolve"))
+						})
 					})
 
 					It("fetches the desired lrp and passes it to the route handler", func() {
