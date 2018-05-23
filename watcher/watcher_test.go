@@ -454,16 +454,19 @@ var _ = Describe("Watcher", func() {
 			},
 		}
 
-		sendEvent := func() {
-			Eventually(eventCh).Should(BeSent(EventHolder{models.NewActualLRPRemovedEvent(actualLRPGroup1)}))
-		}
+		var sendEvent func()
+		BeforeEach(func() {
+			sendEvent = func() {
+				Eventually(eventCh).Should(BeSent(EventHolder{models.NewActualLRPRemovedEvent(actualLRPGroup1)}))
+			}
+		})
 
 		JustBeforeEach(func() {
 			syncCh <- struct{}{}
 		})
 
 		Describe("bbs events", func() {
-			BeforeEach(func() {
+			JustBeforeEach(func() {
 				bbsClient.ActualLRPGroupsStub = func(lager.Logger, models.ActualLRPFilter) ([]*models.ActualLRPGroup, error) {
 					defer GinkgoRecover()
 					sendEvent()
@@ -482,6 +485,38 @@ var _ = Describe("Watcher", func() {
 
 				expectedEvent := models.NewActualLRPRemovedEvent(actualLRPGroup1)
 				Expect(event[actualLRPGroup1.Instance.InstanceGuid]).To(Equal(expectedEvent))
+			})
+
+			Context("when an invalid actual lrp created event is cached", func() {
+				BeforeEach(func() {
+					sendEvent = func() {
+						beforeActualLRPGroup3 := &models.ActualLRPGroup{Instance: nil}
+						Eventually(eventCh).Should(BeSent(EventHolder{models.NewActualLRPCreatedEvent(
+							beforeActualLRPGroup3,
+						)}))
+					}
+				})
+
+				It("an error is logged", func() {
+					Eventually(logger).Should(gbytes.Say("failed-to-resolve"))
+				})
+			})
+
+			Context("when an invalid actual lrp change event is cached", func() {
+				BeforeEach(func() {
+					sendEvent = func() {
+						beforeActualLRPGroup := &models.ActualLRPGroup{Instance: nil}
+						afterActualLRPGroup := &models.ActualLRPGroup{Instance: nil}
+						Eventually(eventCh).Should(BeSent(EventHolder{models.NewActualLRPChangedEvent(
+							beforeActualLRPGroup,
+							afterActualLRPGroup,
+						)}))
+					}
+				})
+
+				It("an error is logged", func() {
+					Eventually(logger).Should(gbytes.Say("failed-to-resolve"))
+				})
 			})
 		})
 
@@ -737,22 +772,21 @@ var _ = Describe("Watcher", func() {
 			})
 
 			Context("when desired lrp for the actual lrp is missing", func() {
-				var sendEvent func()
-				sendEvent = func() {
-					beforeActualLRPGroup3 := &models.ActualLRPGroup{
-						Instance: &models.ActualLRP{
-							ActualLRPKey:         models.NewActualLRPKey("pg-3", 1, "domain"),
-							ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint3.InstanceGUID, "cell-id"),
-							State:                models.ActualLRPStateClaimed,
-						},
-					}
-					Eventually(eventCh).Should(BeSent(EventHolder{models.NewActualLRPChangedEvent(
-						beforeActualLRPGroup3,
-						actualLRPGroup3,
-					)}))
-				}
-
 				BeforeEach(func() {
+					sendEvent = func() {
+						beforeActualLRPGroup3 := &models.ActualLRPGroup{
+							Instance: &models.ActualLRP{
+								ActualLRPKey:         models.NewActualLRPKey("pg-3", 1, "domain"),
+								ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint3.InstanceGUID, "cell-id"),
+								State:                models.ActualLRPStateClaimed,
+							},
+						}
+						Eventually(eventCh).Should(BeSent(EventHolder{models.NewActualLRPChangedEvent(
+							beforeActualLRPGroup3,
+							actualLRPGroup3,
+						)}))
+					}
+
 					bbsClient.DesiredLRPSchedulingInfosStub = func(_ lager.Logger, f models.DesiredLRPFilter) ([]*models.DesiredLRPSchedulingInfo, error) {
 						defer GinkgoRecover()
 						if len(f.ProcessGuids) == 1 && f.ProcessGuids[0] == "pg-3" {
@@ -782,9 +816,9 @@ var _ = Describe("Watcher", func() {
 					Context("when an invalid actual lrp created event is received", func() {
 						BeforeEach(func() {
 							sendEvent = func() {
-								beforeActualLRPGroup3 := &models.ActualLRPGroup{Instance: nil}
+								beforeActualLRPGroup := &models.ActualLRPGroup{Instance: nil}
 								Eventually(eventCh).Should(BeSent(EventHolder{models.NewActualLRPCreatedEvent(
-									beforeActualLRPGroup3,
+									beforeActualLRPGroup,
 								)}))
 							}
 						})
@@ -797,10 +831,11 @@ var _ = Describe("Watcher", func() {
 					Context("when an invalid actual lrp change event is received", func() {
 						BeforeEach(func() {
 							sendEvent = func() {
-								beforeActualLRPGroup3 := &models.ActualLRPGroup{Instance: nil}
+								beforeActualLRPGroup := &models.ActualLRPGroup{Instance: nil}
+								afterActualLRPGroup := &models.ActualLRPGroup{Instance: nil}
 								Eventually(eventCh).Should(BeSent(EventHolder{models.NewActualLRPChangedEvent(
-									nil,
-									beforeActualLRPGroup3,
+									beforeActualLRPGroup,
+									afterActualLRPGroup,
 								)}))
 							}
 						})
