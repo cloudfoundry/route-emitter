@@ -810,7 +810,7 @@ var _ = Describe("Watcher", func() {
 						})
 					})
 
-					It("fetches the desired lrp and passes it to the route handler", func() {
+					FIt("fetches the desired lrp and passes it to the route handler", func() {
 						Eventually(bbsClient.DesiredLRPSchedulingInfosCallCount).Should(Equal(2))
 
 						_, filter := bbsClient.DesiredLRPSchedulingInfosArgsForCall(1)
@@ -840,7 +840,7 @@ var _ = Describe("Watcher", func() {
 						}
 					})
 
-					It("fetches the desired lrp and refreshes the handler", func() {
+					FIt("fetches the desired lrp and refreshes the handler", func() {
 						Eventually(bbsClient.DesiredLRPSchedulingInfosCallCount).Should(Equal(2))
 
 						_, filter := bbsClient.DesiredLRPSchedulingInfosArgsForCall(1)
@@ -867,7 +867,7 @@ var _ = Describe("Watcher", func() {
 							}
 						})
 
-						It("does not refresh the desired state", func() {
+						FIt("does not refresh the desired state", func() {
 							Eventually(routeHandler.ShouldRefreshDesiredCallCount).Should(Equal(1))
 							Eventually(bbsClient.DesiredLRPSchedulingInfosCallCount).Should(Equal(2))
 							Consistently(routeHandler.RefreshDesiredCallCount).Should(Equal(0))
@@ -892,7 +892,7 @@ var _ = Describe("Watcher", func() {
 						}
 					})
 
-					It("does not refresh the desired state", func() {
+					FIt("does not refresh the desired state", func() {
 						Eventually(routeHandler.ShouldRefreshDesiredCallCount).Should(Equal(1))
 						Eventually(bbsClient.DesiredLRPSchedulingInfosCallCount).Should(Equal(2))
 						Consistently(routeHandler.RefreshDesiredCallCount).Should(Equal(0))

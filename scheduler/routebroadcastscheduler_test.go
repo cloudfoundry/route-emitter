@@ -166,7 +166,7 @@ var _ = Describe("RouteBroadcastScheduler", func() {
 						})
 					})
 
-					It("the jitter should be random", func() {
+					FIt("the jitter should be random", func() {
 						// This test uses the fact that the probability of the jitter being
 						// less than 100 milliseconds should be 50%.
 						// However, this test has a 1/512 chance of failing in the case that
