@@ -423,6 +423,39 @@ var _ = Describe("RoutingTable", func() {
 	})
 
 	Describe("Swap", func() {
+		FIt("when an lrp with two routes is created", func() {
+			// routingInfo := createRoutingInfo(key.ContainerPort, []string{hostname1}, []string{}, "", []uint32{5222}, "router-group-guid")
+			routingInfo := cfroutes.CFRoutes{
+				{
+					Hostnames: []string{hostname1, "bar.example.com"},
+					Port:      8080,
+				},
+			}.RoutingInfo()
+
+			beforeDesiredLRP := createSchedulingInfoWithRoutes(key.ProcessGUID, 3, routingInfo, logGuid, *currentTag)
+			table.SetRoutes(nil, beforeDesiredLRP)
+			actualLRP := createActualLRP(key, endpoint1, domain)
+			_, messages := table.AddEndpoint(actualLRP)
+			Expect(messages.RegistrationMessages).To(HaveLen(2))
+
+			By("removing the route")
+			tempTable := routingtable.NewRoutingTable(logger, false, fakeMetronClient)
+			afterRoutingInfo := cfroutes.CFRoutes{
+				{
+					Hostnames: []string{hostname1},
+					Port:      8080,
+				},
+			}.RoutingInfo()
+
+			afterDesiredLRP := createSchedulingInfoWithRoutes(key.ProcessGUID, 3, afterRoutingInfo, logGuid, *currentTag)
+			tempTable.SetRoutes(nil, afterDesiredLRP)
+			actualLRP = createActualLRP(key, endpoint1, domain)
+			tempTable.AddEndpoint(actualLRP)
+			_, messages = table.Swap(tempTable, noFreshDomains)
+			Expect(messages.RegistrationMessages).To(BeEmpty())
+			Expect(messages.UnregistrationMessages).NotTo(BeEmpty())
+		})
+
 		It("preserves the desired LRP domain", func() {
 			By("creating a routing table with a route and endpoint")
 			routingInfo := createRoutingInfo(key.ContainerPort, []string{hostname1}, []string{}, "", []uint32{5222}, "router-group-guid")
