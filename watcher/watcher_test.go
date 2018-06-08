@@ -454,16 +454,19 @@ var _ = Describe("Watcher", func() {
 			},
 		}
 
-		sendEvent := func() {
-			Eventually(eventCh).Should(BeSent(EventHolder{models.NewActualLRPRemovedEvent(actualLRPGroup1)}))
-		}
+		var sendEvent func()
+		BeforeEach(func() {
+			sendEvent = func() {
+				Eventually(eventCh).Should(BeSent(EventHolder{models.NewActualLRPRemovedEvent(actualLRPGroup1)}))
+			}
+		})
 
 		JustBeforeEach(func() {
 			syncCh <- struct{}{}
 		})
 
 		Describe("bbs events", func() {
-			BeforeEach(func() {
+			JustBeforeEach(func() {
 				bbsClient.ActualLRPGroupsStub = func(lager.Logger, models.ActualLRPFilter) ([]*models.ActualLRPGroup, error) {
 					defer GinkgoRecover()
 					sendEvent()
@@ -482,6 +485,38 @@ var _ = Describe("Watcher", func() {
 
 				expectedEvent := models.NewActualLRPRemovedEvent(actualLRPGroup1)
 				Expect(event[actualLRPGroup1.Instance.InstanceGuid]).To(Equal(expectedEvent))
+			})
+
+			Context("when an invalid actual lrp created event is cached", func() {
+				BeforeEach(func() {
+					sendEvent = func() {
+						beforeActualLRPGroup3 := &models.ActualLRPGroup{Instance: nil}
+						Eventually(eventCh).Should(BeSent(EventHolder{models.NewActualLRPCreatedEvent(
+							beforeActualLRPGroup3,
+						)}))
+					}
+				})
+
+				It("an error is logged", func() {
+					Eventually(logger).Should(gbytes.Say("failed-to-resolve"))
+				})
+			})
+
+			Context("when an invalid actual lrp change event is cached", func() {
+				BeforeEach(func() {
+					sendEvent = func() {
+						beforeActualLRPGroup := &models.ActualLRPGroup{Instance: nil}
+						afterActualLRPGroup := &models.ActualLRPGroup{Instance: nil}
+						Eventually(eventCh).Should(BeSent(EventHolder{models.NewActualLRPChangedEvent(
+							beforeActualLRPGroup,
+							afterActualLRPGroup,
+						)}))
+					}
+				})
+
+				It("an error is logged", func() {
+					Eventually(logger).Should(gbytes.Say("failed-to-resolve"))
+				})
 			})
 		})
 
@@ -535,6 +570,29 @@ var _ = Describe("Watcher", func() {
 
 				Eventually(routeHandler.SyncCallCount).Should(Equal(1))
 				Expect(bbsClient.ActualLRPGroupsCallCount()).To(Equal(2))
+			})
+		})
+
+		Context("when one of the actual lrp groups is invalid", func() {
+			BeforeEach(func() {
+				bbsClient.ActualLRPGroupsStub = func(lager.Logger, models.ActualLRPFilter) ([]*models.ActualLRPGroup, error) {
+					return []*models.ActualLRPGroup{actualLRPGroup1, &models.ActualLRPGroup{}, actualLRPGroup2}, nil
+				}
+			})
+
+			It("still syncs all valid groups", func() {
+				Eventually(routeHandler.SyncCallCount).Should(Equal(1))
+				_, _, runningActuals, _, _ := routeHandler.SyncArgsForCall(0)
+				Expect(runningActuals).To(WithTransform(
+					func(ris []*routingtable.ActualLRPRoutingInfo) []models.ActualLRPKey {
+						result := []models.ActualLRPKey{}
+						for _, ri := range ris {
+							result = append(result, ri.ActualLRP.ActualLRPKey)
+						}
+						return result
+					},
+					ConsistOf(actualLRPGroup1.Instance.ActualLRPKey, actualLRPGroup2.Instance.ActualLRPKey),
+				))
 			})
 		})
 
@@ -620,10 +678,18 @@ var _ = Describe("Watcher", func() {
 					schedulingInfo1,
 					schedulingInfo2,
 				}
+
+				actualLRPRoutingInfo1, err := routingtable.NewActualLRPRoutingInfo(actualLRPGroup1)
+				Expect(err).NotTo(HaveOccurred())
+				actualLRPRoutingInfo2, err := routingtable.NewActualLRPRoutingInfo(actualLRPGroup2)
+				Expect(err).NotTo(HaveOccurred())
+				actualLRPRoutingInfo3, err := routingtable.NewActualLRPRoutingInfo(actualLRPGroup3)
+				Expect(err).NotTo(HaveOccurred())
+
 				expectedActuals := []*routingtable.ActualLRPRoutingInfo{
-					routingtable.NewActualLRPRoutingInfo(actualLRPGroup1),
-					routingtable.NewActualLRPRoutingInfo(actualLRPGroup2),
-					routingtable.NewActualLRPRoutingInfo(actualLRPGroup3),
+					actualLRPRoutingInfo1,
+					actualLRPRoutingInfo2,
+					actualLRPRoutingInfo3,
 				}
 
 				expectedDomains := models.DomainSet{}
@@ -685,7 +751,8 @@ var _ = Describe("Watcher", func() {
 				It("registers endpoints for lrps on this cell", func() {
 					Eventually(routeHandler.SyncCallCount).Should(Equal(1))
 					_, _, actual, _, _ := routeHandler.SyncArgsForCall(0)
-					routingInfo2 := routingtable.NewActualLRPRoutingInfo(actualLRPGroup2)
+					routingInfo2, err := routingtable.NewActualLRPRoutingInfo(actualLRPGroup2)
+					Expect(err).NotTo(HaveOccurred())
 					Expect(actual).To(ContainElement(routingInfo2))
 				})
 
@@ -698,27 +765,28 @@ var _ = Describe("Watcher", func() {
 				It("fetches desired lrp scheduling info that match the cell id", func() {
 					Eventually(bbsClient.DesiredLRPSchedulingInfosCallCount).Should(Equal(1))
 					_, filter := bbsClient.DesiredLRPSchedulingInfosArgsForCall(0)
-					lrp, _ := actualLRPGroup2.Resolve()
+					lrp, _, err := actualLRPGroup2.Resolve()
+					Expect(err).NotTo(HaveOccurred())
 					Expect(filter.ProcessGuids).To(ConsistOf(lrp.ProcessGuid))
 				})
 			})
 
 			Context("when desired lrp for the actual lrp is missing", func() {
-				sendEvent := func() {
-					beforeActualLRPGroup3 := &models.ActualLRPGroup{
-						Instance: &models.ActualLRP{
-							ActualLRPKey:         models.NewActualLRPKey("pg-3", 1, "domain"),
-							ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint3.InstanceGUID, "cell-id"),
-							State:                models.ActualLRPStateClaimed,
-						},
-					}
-					Eventually(eventCh).Should(BeSent(EventHolder{models.NewActualLRPChangedEvent(
-						beforeActualLRPGroup3,
-						actualLRPGroup3,
-					)}))
-				}
-
 				BeforeEach(func() {
+					sendEvent = func() {
+						beforeActualLRPGroup3 := &models.ActualLRPGroup{
+							Instance: &models.ActualLRP{
+								ActualLRPKey:         models.NewActualLRPKey("pg-3", 1, "domain"),
+								ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint3.InstanceGUID, "cell-id"),
+								State:                models.ActualLRPStateClaimed,
+							},
+						}
+						Eventually(eventCh).Should(BeSent(EventHolder{models.NewActualLRPChangedEvent(
+							beforeActualLRPGroup3,
+							actualLRPGroup3,
+						)}))
+					}
+
 					bbsClient.DesiredLRPSchedulingInfosStub = func(_ lager.Logger, f models.DesiredLRPFilter) ([]*models.DesiredLRPSchedulingInfo, error) {
 						defer GinkgoRecover()
 						if len(f.ProcessGuids) == 1 && f.ProcessGuids[0] == "pg-3" {
@@ -745,11 +813,44 @@ var _ = Describe("Watcher", func() {
 						sendEvent()
 					})
 
+					Context("when an invalid actual lrp created event is received", func() {
+						BeforeEach(func() {
+							sendEvent = func() {
+								beforeActualLRPGroup := &models.ActualLRPGroup{Instance: nil}
+								Eventually(eventCh).Should(BeSent(EventHolder{models.NewActualLRPCreatedEvent(
+									beforeActualLRPGroup,
+								)}))
+							}
+						})
+
+						It("an error is logged", func() {
+							Eventually(logger).Should(gbytes.Say("failed-to-resolve"))
+						})
+					})
+
+					Context("when an invalid actual lrp change event is received", func() {
+						BeforeEach(func() {
+							sendEvent = func() {
+								beforeActualLRPGroup := &models.ActualLRPGroup{Instance: nil}
+								afterActualLRPGroup := &models.ActualLRPGroup{Instance: nil}
+								Eventually(eventCh).Should(BeSent(EventHolder{models.NewActualLRPChangedEvent(
+									beforeActualLRPGroup,
+									afterActualLRPGroup,
+								)}))
+							}
+						})
+
+						It("an error is logged", func() {
+							Eventually(logger).Should(gbytes.Say("failed-to-resolve"))
+						})
+					})
+
 					It("fetches the desired lrp and passes it to the route handler", func() {
 						Eventually(bbsClient.DesiredLRPSchedulingInfosCallCount).Should(Equal(2))
 
 						_, filter := bbsClient.DesiredLRPSchedulingInfosArgsForCall(1)
-						lrp, _ := actualLRPGroup3.Resolve()
+						lrp, _, err := actualLRPGroup3.Resolve()
+						Expect(err).NotTo(HaveOccurred())
 
 						Expect(filter.ProcessGuids).To(HaveLen(1))
 						Expect(filter.ProcessGuids).To(ConsistOf(lrp.ProcessGuid))
@@ -778,7 +879,8 @@ var _ = Describe("Watcher", func() {
 						Eventually(bbsClient.DesiredLRPSchedulingInfosCallCount).Should(Equal(2))
 
 						_, filter := bbsClient.DesiredLRPSchedulingInfosArgsForCall(1)
-						lrp, _ := actualLRPGroup3.Resolve()
+						lrp, _, err := actualLRPGroup3.Resolve()
+						Expect(err).NotTo(HaveOccurred())
 
 						Expect(filter.ProcessGuids).To(HaveLen(1))
 						Expect(filter.ProcessGuids).To(ConsistOf(lrp.ProcessGuid))

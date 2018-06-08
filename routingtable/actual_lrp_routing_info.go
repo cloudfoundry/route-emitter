@@ -7,10 +7,10 @@ type ActualLRPRoutingInfo struct {
 	Evacuating bool
 }
 
-func NewActualLRPRoutingInfo(actualLRPGroup *models.ActualLRPGroup) *ActualLRPRoutingInfo {
-	lrp, evacuating := actualLRPGroup.Resolve()
+func NewActualLRPRoutingInfo(actualLRPGroup *models.ActualLRPGroup) (*ActualLRPRoutingInfo, error) {
+	lrp, evacuating, err := actualLRPGroup.Resolve()
 	return &ActualLRPRoutingInfo{
 		ActualLRP:  lrp,
 		Evacuating: evacuating,
-	}
+	}, err
 }
