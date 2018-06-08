@@ -6,6 +6,7 @@ import (
 
 	mfakes "code.cloudfoundry.org/diego-logging-client/testhelpers"
 	loggregator "code.cloudfoundry.org/go-loggregator"
+	"code.cloudfoundry.org/lager"
 
 	"code.cloudfoundry.org/bbs/models"
 	"code.cloudfoundry.org/lager/lagertest"
@@ -148,7 +149,7 @@ var _ = Describe("Handler", func() {
 
 			It("should set the routes on the table", func() {
 				Expect(fakeTable.SetRoutesCallCount()).To(Equal(1))
-				before, after := fakeTable.SetRoutesArgsForCall(0)
+				_, before, after := fakeTable.SetRoutesArgsForCall(0)
 				Expect(before).To(BeNil())
 				Expect(*after).To(Equal(desiredLRP.DesiredLRPSchedulingInfo()))
 			})
@@ -241,7 +242,7 @@ var _ = Describe("Handler", func() {
 
 			It("should set the routes on the table", func() {
 				Expect(fakeTable.SetRoutesCallCount()).To(Equal(1))
-				before, after := fakeTable.SetRoutesArgsForCall(0)
+				_, before, after := fakeTable.SetRoutesArgsForCall(0)
 				Expect(*before).To(Equal(originalDesiredLRP.DesiredLRPSchedulingInfo()))
 				Expect(*after).To(Equal(changedDesiredLRP.DesiredLRPSchedulingInfo()))
 			})
@@ -309,7 +310,7 @@ var _ = Describe("Handler", func() {
 
 			It("should remove the routes from the table", func() {
 				Expect(fakeTable.RemoveRoutesCallCount()).To(Equal(1))
-				lrp := fakeTable.RemoveRoutesArgsForCall(0)
+				_, lrp := fakeTable.RemoveRoutesArgsForCall(0)
 				Expect(*lrp).To(Equal(desiredLRP.DesiredLRPSchedulingInfo()))
 			})
 
@@ -394,7 +395,7 @@ var _ = Describe("Handler", func() {
 
 				It("should add/update the endpoints on the table", func() {
 					Expect(fakeTable.AddEndpointCallCount()).To(Equal(1))
-					lrpInfo := fakeTable.AddEndpointArgsForCall(0)
+					_, lrpInfo := fakeTable.AddEndpointArgsForCall(0)
 					Expect(lrpInfo).To(Equal(actualLRPRoutingInfo))
 				})
 
@@ -512,7 +513,7 @@ var _ = Describe("Handler", func() {
 						Evacuating: evacuating,
 					}
 
-					actualLRP := fakeTable.AddEndpointArgsForCall(0)
+					_, actualLRP := fakeTable.AddEndpointArgsForCall(0)
 					Expect(actualLRP).To(Equal(routingInfo))
 				})
 
@@ -606,7 +607,7 @@ var _ = Describe("Handler", func() {
 						Evacuating: evacuating,
 					}
 
-					routingInfo := fakeTable.RemoveEndpointArgsForCall(0)
+					_, routingInfo := fakeTable.RemoveEndpointArgsForCall(0)
 					Expect(routingInfo).To(Equal(lrpRoutingInfo))
 				})
 
@@ -704,7 +705,7 @@ var _ = Describe("Handler", func() {
 						ActualLRP:  lrp,
 						Evacuating: evacuating,
 					}
-					routingInfo := fakeTable.RemoveEndpointArgsForCall(0)
+					_, routingInfo := fakeTable.RemoveEndpointArgsForCall(0)
 					Expect(routingInfo).To(Equal(lrpRoutingInfo))
 				})
 
@@ -915,7 +916,7 @@ var _ = Describe("Handler", func() {
 					return byRoutingKey
 				}
 
-				fakeTable.SwapStub = func(t routingtable.RoutingTable, d models.DomainSet) (routingtable.TCPRouteMappings, routingtable.MessagesToEmit) {
+				fakeTable.SwapStub = func(l lager.Logger, t routingtable.RoutingTable, d models.DomainSet) (routingtable.TCPRouteMappings, routingtable.MessagesToEmit) {
 
 					routes := routesByRoutingKey(desiredInfo)
 					routesList := make([]routingtable.Route, 3)
@@ -936,7 +937,7 @@ var _ = Describe("Handler", func() {
 			It("updates the routing table", func() {
 				routeHandler.Sync(logger, desiredInfo, actualInfo, domains, nil)
 				Expect(fakeTable.SwapCallCount()).Should(Equal(1))
-				tempRoutingTable, swapDomains := fakeTable.SwapArgsForCall(0)
+				_, tempRoutingTable, swapDomains := fakeTable.SwapArgsForCall(0)
 				Expect(tempRoutingTable.HTTPAssociationsCount()).To(Equal(3))
 				Expect(swapDomains).To(Equal(domains))
 
@@ -1006,7 +1007,7 @@ var _ = Describe("Handler", func() {
 
 				It("updates the routing table and emit cached events", func() {
 					Expect(fakeTable.SwapCallCount()).Should(Equal(1))
-					tempRoutingTable, _ := fakeTable.SwapArgsForCall(0)
+					_, tempRoutingTable, _ := fakeTable.SwapArgsForCall(0)
 					Expect(tempRoutingTable.HTTPAssociationsCount()).Should(Equal(4))
 					Expect(natsEmitter.EmitCallCount()).Should(Equal(1))
 				})
@@ -1157,7 +1158,7 @@ var _ = Describe("Handler", func() {
 			routeHandler.RefreshDesired(logger, []*models.DesiredLRPSchedulingInfo{desiredInfo})
 
 			Expect(fakeTable.SetRoutesCallCount()).To(Equal(1))
-			before, after := fakeTable.SetRoutesArgsForCall(0)
+			_, before, after := fakeTable.SetRoutesArgsForCall(0)
 			Expect(before).To(BeNil())
 			Expect(after).To(Equal(desiredInfo))
 			Expect(natsEmitter.EmitCallCount()).Should(Equal(1))

@@ -30,11 +30,11 @@ const addressCollisionsCounter = "AddressCollisions"
 //go:generate counterfeiter -o fakeroutingtable/fake_routingtable.go . RoutingTable
 type RoutingTable interface {
 	// table modification
-	SetRoutes(beforeLRP, afterLRP *models.DesiredLRPSchedulingInfo) (TCPRouteMappings, MessagesToEmit)
-	RemoveRoutes(desiredLRP *models.DesiredLRPSchedulingInfo) (TCPRouteMappings, MessagesToEmit)
-	AddEndpoint(actualLRP *ActualLRPRoutingInfo) (TCPRouteMappings, MessagesToEmit)
-	RemoveEndpoint(actualLRP *ActualLRPRoutingInfo) (TCPRouteMappings, MessagesToEmit)
-	Swap(t RoutingTable, domains models.DomainSet) (TCPRouteMappings, MessagesToEmit)
+	SetRoutes(logger lager.Logger, beforeLRP, afterLRP *models.DesiredLRPSchedulingInfo) (TCPRouteMappings, MessagesToEmit)
+	RemoveRoutes(logger lager.Logger, desiredLRP *models.DesiredLRPSchedulingInfo) (TCPRouteMappings, MessagesToEmit)
+	AddEndpoint(logger lager.Logger, actualLRP *ActualLRPRoutingInfo) (TCPRouteMappings, MessagesToEmit)
+	RemoveEndpoint(logger lager.Logger, actualLRP *ActualLRPRoutingInfo) (TCPRouteMappings, MessagesToEmit)
+	Swap(logger lager.Logger, t RoutingTable, domains models.DomainSet) (TCPRouteMappings, MessagesToEmit)
 	GetInternalRoutingEvents() (TCPRouteMappings, MessagesToEmit)
 	GetExternalRoutingEvents() (TCPRouteMappings, MessagesToEmit)
 
@@ -60,13 +60,12 @@ type internalRoutingTable struct {
 }
 
 type routingTable struct {
-	logger                     lager.Logger
 	tcpRoutesRoutingTable      *internalRoutingTable
 	httpRoutesRoutingTable     *internalRoutingTable
 	internalRoutesRoutingTable *internalRoutingTable
 }
 
-func NewRoutingTable(logger lager.Logger, directInstanceRoute bool, metronClient loggingclient.IngressClient) RoutingTable {
+func NewRoutingTable(directInstanceRoute bool, metronClient loggingclient.IngressClient) RoutingTable {
 	addressGenerator := func(endpoint Endpoint) Address {
 		return Address{Host: endpoint.Host, Port: endpoint.Port}
 	}
@@ -111,7 +110,6 @@ func NewRoutingTable(logger lager.Logger, directInstanceRoute bool, metronClient
 	}
 
 	return &routingTable{
-		logger:                     logger,
 		tcpRoutesRoutingTable:      tcpRoutingTable,
 		httpRoutesRoutingTable:     httpRoutingTable,
 		internalRoutesRoutingTable: internalRoutingTable,
@@ -141,8 +139,7 @@ func hasMessages(mappings TCPRouteMappings, messages MessagesToEmit) bool {
 		len(messages.RegistrationMessages) > 0 || len(messages.UnregistrationMessages) > 0
 }
 
-func (table *routingTable) AddEndpoint(actualLRP *ActualLRPRoutingInfo) (TCPRouteMappings, MessagesToEmit) {
-	logger := table.logger.Session("add-endpoint")
+func (table *routingTable) AddEndpoint(logger lager.Logger, actualLRP *ActualLRPRoutingInfo) (TCPRouteMappings, MessagesToEmit) {
 	httpMappings, httpMessages, httpChanged := table.httpRoutesRoutingTable.AddEndpoint(logger, actualLRP)
 	tcpMappings, tcpMessages, tcpChanged := table.tcpRoutesRoutingTable.AddEndpoint(logger, actualLRP)
 	internalMappings, internalMessages, internalChanged := table.internalRoutesRoutingTable.AddEndpoint(logger, actualLRP)
@@ -158,8 +155,7 @@ func (table *routingTable) AddEndpoint(actualLRP *ActualLRPRoutingInfo) (TCPRout
 	return mappings, messages
 }
 
-func (table *routingTable) RemoveEndpoint(actualLRP *ActualLRPRoutingInfo) (TCPRouteMappings, MessagesToEmit) {
-	logger := table.logger.Session("remove-endpoint")
+func (table *routingTable) RemoveEndpoint(logger lager.Logger, actualLRP *ActualLRPRoutingInfo) (TCPRouteMappings, MessagesToEmit) {
 	httpMappings, httpMessages, httpChanged := table.httpRoutesRoutingTable.RemoveEndpoint(logger, actualLRP)
 	tcpMappings, tcpMessages, tcpChanged := table.tcpRoutesRoutingTable.RemoveEndpoint(logger, actualLRP)
 	internalMappings, internalMessages, internalChanged := table.internalRoutesRoutingTable.RemoveEndpoint(logger, actualLRP)
@@ -175,13 +171,13 @@ func (table *routingTable) RemoveEndpoint(actualLRP *ActualLRPRoutingInfo) (TCPR
 	return mappings, messages
 }
 
-func (t *routingTable) Swap(other RoutingTable, domains models.DomainSet) (TCPRouteMappings, MessagesToEmit) {
+func (t *routingTable) Swap(logger lager.Logger, other RoutingTable, domains models.DomainSet) (TCPRouteMappings, MessagesToEmit) {
 	table, ok := other.(*routingTable)
 	if !ok {
-		t.logger.Error("failed-to-convert-to-routing-table", nil)
+		logger.Error("failed-to-convert-to-routing-table", nil)
 		return TCPRouteMappings{}, MessagesToEmit{}
 	}
-	logger := t.logger.Session("swap")
+	logger = logger.Session("swap")
 	logger.Info("starting", lager.Data{"domains": domains})
 	defer logger.Info("finished")
 
@@ -207,7 +203,7 @@ func (t *routingTable) GetInternalRoutingEvents() (TCPRouteMappings, MessagesToE
 	return t.internalRoutesRoutingTable.GetRoutingEvents()
 }
 
-func (t *routingTable) SetRoutes(before, after *models.DesiredLRPSchedulingInfo) (TCPRouteMappings, MessagesToEmit) {
+func (t *routingTable) SetRoutes(logger lager.Logger, before, after *models.DesiredLRPSchedulingInfo) (TCPRouteMappings, MessagesToEmit) {
 	httpMappings, httpMessages, httpChanged := t.httpRoutesRoutingTable.SetRoutes(before, after)
 	tcpMappings, tcpMessages, tcpChanged := t.tcpRoutesRoutingTable.SetRoutes(before, after)
 	internalMappings, internalMessages, internalChanged := t.internalRoutesRoutingTable.SetRoutes(before, after)
@@ -216,13 +212,13 @@ func (t *routingTable) SetRoutes(before, after *models.DesiredLRPSchedulingInfo)
 	messages := httpMessages.Merge(tcpMessages).Merge(internalMessages)
 
 	if httpChanged || tcpChanged || internalChanged {
-		t.logger.Info("set-routes", lager.Data{"before": DesiredLRPData(before), "after": DesiredLRPData(after)})
+		logger.Info("set-routes", lager.Data{"before": DesiredLRPData(before), "after": DesiredLRPData(after)})
 	}
 
 	return mappings, messages
 }
 
-func (t *routingTable) RemoveRoutes(desiredLRP *models.DesiredLRPSchedulingInfo) (TCPRouteMappings, MessagesToEmit) {
+func (t *routingTable) RemoveRoutes(logger lager.Logger, desiredLRP *models.DesiredLRPSchedulingInfo) (TCPRouteMappings, MessagesToEmit) {
 	httpMappings, httpMessages, httpChanged := t.httpRoutesRoutingTable.RemoveRoutes(desiredLRP)
 	tcpMappings, tcpMessages, tcpChanged := t.tcpRoutesRoutingTable.RemoveRoutes(desiredLRP)
 	internalMappings, internalMessages, internalChanged := t.internalRoutesRoutingTable.RemoveRoutes(desiredLRP)
@@ -231,7 +227,7 @@ func (t *routingTable) RemoveRoutes(desiredLRP *models.DesiredLRPSchedulingInfo)
 	messages := httpMessages.Merge(tcpMessages).Merge(internalMessages)
 
 	if httpChanged || tcpChanged || internalChanged {
-		t.logger.Info("remove-routes", DesiredLRPData(desiredLRP))
+		logger.Info("remove-routes", DesiredLRPData(desiredLRP))
 	}
 
 	return mappings, messages

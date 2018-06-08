@@ -5,13 +5,15 @@ import (
 	"sync"
 
 	"code.cloudfoundry.org/bbs/models"
+	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/route-emitter/routingtable"
 )
 
 type FakeRoutingTable struct {
-	SetRoutesStub        func(beforeLRP, afterLRP *models.DesiredLRPSchedulingInfo) (routingtable.TCPRouteMappings, routingtable.MessagesToEmit)
+	SetRoutesStub        func(logger lager.Logger, beforeLRP, afterLRP *models.DesiredLRPSchedulingInfo) (routingtable.TCPRouteMappings, routingtable.MessagesToEmit)
 	setRoutesMutex       sync.RWMutex
 	setRoutesArgsForCall []struct {
+		logger    lager.Logger
 		beforeLRP *models.DesiredLRPSchedulingInfo
 		afterLRP  *models.DesiredLRPSchedulingInfo
 	}
@@ -23,9 +25,10 @@ type FakeRoutingTable struct {
 		result1 routingtable.TCPRouteMappings
 		result2 routingtable.MessagesToEmit
 	}
-	RemoveRoutesStub        func(desiredLRP *models.DesiredLRPSchedulingInfo) (routingtable.TCPRouteMappings, routingtable.MessagesToEmit)
+	RemoveRoutesStub        func(logger lager.Logger, desiredLRP *models.DesiredLRPSchedulingInfo) (routingtable.TCPRouteMappings, routingtable.MessagesToEmit)
 	removeRoutesMutex       sync.RWMutex
 	removeRoutesArgsForCall []struct {
+		logger     lager.Logger
 		desiredLRP *models.DesiredLRPSchedulingInfo
 	}
 	removeRoutesReturns struct {
@@ -36,9 +39,10 @@ type FakeRoutingTable struct {
 		result1 routingtable.TCPRouteMappings
 		result2 routingtable.MessagesToEmit
 	}
-	AddEndpointStub        func(actualLRP *routingtable.ActualLRPRoutingInfo) (routingtable.TCPRouteMappings, routingtable.MessagesToEmit)
+	AddEndpointStub        func(logger lager.Logger, actualLRP *routingtable.ActualLRPRoutingInfo) (routingtable.TCPRouteMappings, routingtable.MessagesToEmit)
 	addEndpointMutex       sync.RWMutex
 	addEndpointArgsForCall []struct {
+		logger    lager.Logger
 		actualLRP *routingtable.ActualLRPRoutingInfo
 	}
 	addEndpointReturns struct {
@@ -49,9 +53,10 @@ type FakeRoutingTable struct {
 		result1 routingtable.TCPRouteMappings
 		result2 routingtable.MessagesToEmit
 	}
-	RemoveEndpointStub        func(actualLRP *routingtable.ActualLRPRoutingInfo) (routingtable.TCPRouteMappings, routingtable.MessagesToEmit)
+	RemoveEndpointStub        func(logger lager.Logger, actualLRP *routingtable.ActualLRPRoutingInfo) (routingtable.TCPRouteMappings, routingtable.MessagesToEmit)
 	removeEndpointMutex       sync.RWMutex
 	removeEndpointArgsForCall []struct {
+		logger    lager.Logger
 		actualLRP *routingtable.ActualLRPRoutingInfo
 	}
 	removeEndpointReturns struct {
@@ -62,9 +67,10 @@ type FakeRoutingTable struct {
 		result1 routingtable.TCPRouteMappings
 		result2 routingtable.MessagesToEmit
 	}
-	SwapStub        func(t routingtable.RoutingTable, domains models.DomainSet) (routingtable.TCPRouteMappings, routingtable.MessagesToEmit)
+	SwapStub        func(logger lager.Logger, t routingtable.RoutingTable, domains models.DomainSet) (routingtable.TCPRouteMappings, routingtable.MessagesToEmit)
 	swapMutex       sync.RWMutex
 	swapArgsForCall []struct {
+		logger  lager.Logger
 		t       routingtable.RoutingTable
 		domains models.DomainSet
 	}
@@ -149,17 +155,18 @@ type FakeRoutingTable struct {
 	invocationsMutex sync.RWMutex
 }
 
-func (fake *FakeRoutingTable) SetRoutes(beforeLRP *models.DesiredLRPSchedulingInfo, afterLRP *models.DesiredLRPSchedulingInfo) (routingtable.TCPRouteMappings, routingtable.MessagesToEmit) {
+func (fake *FakeRoutingTable) SetRoutes(logger lager.Logger, beforeLRP *models.DesiredLRPSchedulingInfo, afterLRP *models.DesiredLRPSchedulingInfo) (routingtable.TCPRouteMappings, routingtable.MessagesToEmit) {
 	fake.setRoutesMutex.Lock()
 	ret, specificReturn := fake.setRoutesReturnsOnCall[len(fake.setRoutesArgsForCall)]
 	fake.setRoutesArgsForCall = append(fake.setRoutesArgsForCall, struct {
+		logger    lager.Logger
 		beforeLRP *models.DesiredLRPSchedulingInfo
 		afterLRP  *models.DesiredLRPSchedulingInfo
-	}{beforeLRP, afterLRP})
-	fake.recordInvocation("SetRoutes", []interface{}{beforeLRP, afterLRP})
+	}{logger, beforeLRP, afterLRP})
+	fake.recordInvocation("SetRoutes", []interface{}{logger, beforeLRP, afterLRP})
 	fake.setRoutesMutex.Unlock()
 	if fake.SetRoutesStub != nil {
-		return fake.SetRoutesStub(beforeLRP, afterLRP)
+		return fake.SetRoutesStub(logger, beforeLRP, afterLRP)
 	}
 	if specificReturn {
 		return ret.result1, ret.result2
@@ -173,10 +180,10 @@ func (fake *FakeRoutingTable) SetRoutesCallCount() int {
 	return len(fake.setRoutesArgsForCall)
 }
 
-func (fake *FakeRoutingTable) SetRoutesArgsForCall(i int) (*models.DesiredLRPSchedulingInfo, *models.DesiredLRPSchedulingInfo) {
+func (fake *FakeRoutingTable) SetRoutesArgsForCall(i int) (lager.Logger, *models.DesiredLRPSchedulingInfo, *models.DesiredLRPSchedulingInfo) {
 	fake.setRoutesMutex.RLock()
 	defer fake.setRoutesMutex.RUnlock()
-	return fake.setRoutesArgsForCall[i].beforeLRP, fake.setRoutesArgsForCall[i].afterLRP
+	return fake.setRoutesArgsForCall[i].logger, fake.setRoutesArgsForCall[i].beforeLRP, fake.setRoutesArgsForCall[i].afterLRP
 }
 
 func (fake *FakeRoutingTable) SetRoutesReturns(result1 routingtable.TCPRouteMappings, result2 routingtable.MessagesToEmit) {
@@ -201,16 +208,17 @@ func (fake *FakeRoutingTable) SetRoutesReturnsOnCall(i int, result1 routingtable
 	}{result1, result2}
 }
 
-func (fake *FakeRoutingTable) RemoveRoutes(desiredLRP *models.DesiredLRPSchedulingInfo) (routingtable.TCPRouteMappings, routingtable.MessagesToEmit) {
+func (fake *FakeRoutingTable) RemoveRoutes(logger lager.Logger, desiredLRP *models.DesiredLRPSchedulingInfo) (routingtable.TCPRouteMappings, routingtable.MessagesToEmit) {
 	fake.removeRoutesMutex.Lock()
 	ret, specificReturn := fake.removeRoutesReturnsOnCall[len(fake.removeRoutesArgsForCall)]
 	fake.removeRoutesArgsForCall = append(fake.removeRoutesArgsForCall, struct {
+		logger     lager.Logger
 		desiredLRP *models.DesiredLRPSchedulingInfo
-	}{desiredLRP})
-	fake.recordInvocation("RemoveRoutes", []interface{}{desiredLRP})
+	}{logger, desiredLRP})
+	fake.recordInvocation("RemoveRoutes", []interface{}{logger, desiredLRP})
 	fake.removeRoutesMutex.Unlock()
 	if fake.RemoveRoutesStub != nil {
-		return fake.RemoveRoutesStub(desiredLRP)
+		return fake.RemoveRoutesStub(logger, desiredLRP)
 	}
 	if specificReturn {
 		return ret.result1, ret.result2
@@ -224,10 +232,10 @@ func (fake *FakeRoutingTable) RemoveRoutesCallCount() int {
 	return len(fake.removeRoutesArgsForCall)
 }
 
-func (fake *FakeRoutingTable) RemoveRoutesArgsForCall(i int) *models.DesiredLRPSchedulingInfo {
+func (fake *FakeRoutingTable) RemoveRoutesArgsForCall(i int) (lager.Logger, *models.DesiredLRPSchedulingInfo) {
 	fake.removeRoutesMutex.RLock()
 	defer fake.removeRoutesMutex.RUnlock()
-	return fake.removeRoutesArgsForCall[i].desiredLRP
+	return fake.removeRoutesArgsForCall[i].logger, fake.removeRoutesArgsForCall[i].desiredLRP
 }
 
 func (fake *FakeRoutingTable) RemoveRoutesReturns(result1 routingtable.TCPRouteMappings, result2 routingtable.MessagesToEmit) {
@@ -252,16 +260,17 @@ func (fake *FakeRoutingTable) RemoveRoutesReturnsOnCall(i int, result1 routingta
 	}{result1, result2}
 }
 
-func (fake *FakeRoutingTable) AddEndpoint(actualLRP *routingtable.ActualLRPRoutingInfo) (routingtable.TCPRouteMappings, routingtable.MessagesToEmit) {
+func (fake *FakeRoutingTable) AddEndpoint(logger lager.Logger, actualLRP *routingtable.ActualLRPRoutingInfo) (routingtable.TCPRouteMappings, routingtable.MessagesToEmit) {
 	fake.addEndpointMutex.Lock()
 	ret, specificReturn := fake.addEndpointReturnsOnCall[len(fake.addEndpointArgsForCall)]
 	fake.addEndpointArgsForCall = append(fake.addEndpointArgsForCall, struct {
+		logger    lager.Logger
 		actualLRP *routingtable.ActualLRPRoutingInfo
-	}{actualLRP})
-	fake.recordInvocation("AddEndpoint", []interface{}{actualLRP})
+	}{logger, actualLRP})
+	fake.recordInvocation("AddEndpoint", []interface{}{logger, actualLRP})
 	fake.addEndpointMutex.Unlock()
 	if fake.AddEndpointStub != nil {
-		return fake.AddEndpointStub(actualLRP)
+		return fake.AddEndpointStub(logger, actualLRP)
 	}
 	if specificReturn {
 		return ret.result1, ret.result2
@@ -275,10 +284,10 @@ func (fake *FakeRoutingTable) AddEndpointCallCount() int {
 	return len(fake.addEndpointArgsForCall)
 }
 
-func (fake *FakeRoutingTable) AddEndpointArgsForCall(i int) *routingtable.ActualLRPRoutingInfo {
+func (fake *FakeRoutingTable) AddEndpointArgsForCall(i int) (lager.Logger, *routingtable.ActualLRPRoutingInfo) {
 	fake.addEndpointMutex.RLock()
 	defer fake.addEndpointMutex.RUnlock()
-	return fake.addEndpointArgsForCall[i].actualLRP
+	return fake.addEndpointArgsForCall[i].logger, fake.addEndpointArgsForCall[i].actualLRP
 }
 
 func (fake *FakeRoutingTable) AddEndpointReturns(result1 routingtable.TCPRouteMappings, result2 routingtable.MessagesToEmit) {
@@ -303,16 +312,17 @@ func (fake *FakeRoutingTable) AddEndpointReturnsOnCall(i int, result1 routingtab
 	}{result1, result2}
 }
 
-func (fake *FakeRoutingTable) RemoveEndpoint(actualLRP *routingtable.ActualLRPRoutingInfo) (routingtable.TCPRouteMappings, routingtable.MessagesToEmit) {
+func (fake *FakeRoutingTable) RemoveEndpoint(logger lager.Logger, actualLRP *routingtable.ActualLRPRoutingInfo) (routingtable.TCPRouteMappings, routingtable.MessagesToEmit) {
 	fake.removeEndpointMutex.Lock()
 	ret, specificReturn := fake.removeEndpointReturnsOnCall[len(fake.removeEndpointArgsForCall)]
 	fake.removeEndpointArgsForCall = append(fake.removeEndpointArgsForCall, struct {
+		logger    lager.Logger
 		actualLRP *routingtable.ActualLRPRoutingInfo
-	}{actualLRP})
-	fake.recordInvocation("RemoveEndpoint", []interface{}{actualLRP})
+	}{logger, actualLRP})
+	fake.recordInvocation("RemoveEndpoint", []interface{}{logger, actualLRP})
 	fake.removeEndpointMutex.Unlock()
 	if fake.RemoveEndpointStub != nil {
-		return fake.RemoveEndpointStub(actualLRP)
+		return fake.RemoveEndpointStub(logger, actualLRP)
 	}
 	if specificReturn {
 		return ret.result1, ret.result2
@@ -326,10 +336,10 @@ func (fake *FakeRoutingTable) RemoveEndpointCallCount() int {
 	return len(fake.removeEndpointArgsForCall)
 }
 
-func (fake *FakeRoutingTable) RemoveEndpointArgsForCall(i int) *routingtable.ActualLRPRoutingInfo {
+func (fake *FakeRoutingTable) RemoveEndpointArgsForCall(i int) (lager.Logger, *routingtable.ActualLRPRoutingInfo) {
 	fake.removeEndpointMutex.RLock()
 	defer fake.removeEndpointMutex.RUnlock()
-	return fake.removeEndpointArgsForCall[i].actualLRP
+	return fake.removeEndpointArgsForCall[i].logger, fake.removeEndpointArgsForCall[i].actualLRP
 }
 
 func (fake *FakeRoutingTable) RemoveEndpointReturns(result1 routingtable.TCPRouteMappings, result2 routingtable.MessagesToEmit) {
@@ -354,17 +364,18 @@ func (fake *FakeRoutingTable) RemoveEndpointReturnsOnCall(i int, result1 routing
 	}{result1, result2}
 }
 
-func (fake *FakeRoutingTable) Swap(t routingtable.RoutingTable, domains models.DomainSet) (routingtable.TCPRouteMappings, routingtable.MessagesToEmit) {
+func (fake *FakeRoutingTable) Swap(logger lager.Logger, t routingtable.RoutingTable, domains models.DomainSet) (routingtable.TCPRouteMappings, routingtable.MessagesToEmit) {
 	fake.swapMutex.Lock()
 	ret, specificReturn := fake.swapReturnsOnCall[len(fake.swapArgsForCall)]
 	fake.swapArgsForCall = append(fake.swapArgsForCall, struct {
+		logger  lager.Logger
 		t       routingtable.RoutingTable
 		domains models.DomainSet
-	}{t, domains})
-	fake.recordInvocation("Swap", []interface{}{t, domains})
+	}{logger, t, domains})
+	fake.recordInvocation("Swap", []interface{}{logger, t, domains})
 	fake.swapMutex.Unlock()
 	if fake.SwapStub != nil {
-		return fake.SwapStub(t, domains)
+		return fake.SwapStub(logger, t, domains)
 	}
 	if specificReturn {
 		return ret.result1, ret.result2
@@ -378,10 +389,10 @@ func (fake *FakeRoutingTable) SwapCallCount() int {
 	return len(fake.swapArgsForCall)
 }
 
-func (fake *FakeRoutingTable) SwapArgsForCall(i int) (routingtable.RoutingTable, models.DomainSet) {
+func (fake *FakeRoutingTable) SwapArgsForCall(i int) (lager.Logger, routingtable.RoutingTable, models.DomainSet) {
 	fake.swapMutex.RLock()
 	defer fake.swapMutex.RUnlock()
-	return fake.swapArgsForCall[i].t, fake.swapArgsForCall[i].domains
+	return fake.swapArgsForCall[i].logger, fake.swapArgsForCall[i].t, fake.swapArgsForCall[i].domains
 }
 
 func (fake *FakeRoutingTable) SwapReturns(result1 routingtable.TCPRouteMappings, result2 routingtable.MessagesToEmit) {
