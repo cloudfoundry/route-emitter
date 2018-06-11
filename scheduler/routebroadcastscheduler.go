@@ -11,7 +11,7 @@ import (
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/route-emitter/diegonats"
 	"code.cloudfoundry.org/route-emitter/routingtable"
-	"github.com/nats-io/nats"
+	"github.com/nats-io/go-nats"
 	uuid "github.com/nu7hatch/gouuid"
 )
 

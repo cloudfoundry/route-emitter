@@ -3,7 +3,7 @@ package diegonats
 import (
 	"time"
 
-	"github.com/nats-io/nats"
+	"github.com/nats-io/go-nats"
 )
 
 type NATSClient interface {

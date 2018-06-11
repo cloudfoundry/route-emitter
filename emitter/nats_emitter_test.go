@@ -9,7 +9,7 @@ import (
 	"code.cloudfoundry.org/route-emitter/emitter"
 	"code.cloudfoundry.org/route-emitter/routingtable"
 	"code.cloudfoundry.org/workpool"
-	"github.com/nats-io/nats"
+	"github.com/nats-io/go-nats"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
