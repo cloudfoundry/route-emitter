@@ -9,7 +9,6 @@ import (
 	"net/url"
 	"os"
 	"path"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -233,11 +232,15 @@ var _ = BeforeEach(func() {
 
 var _ = JustBeforeEach(func() {
 	var err error
-	testIngressServer, err = testhelpers.NewTestIngressServer("fixtures/metron/metron.crt", "fixtures/metron/metron.key", "fixtures/metron/CA.crt")
+	testIngressServer, err = testhelpers.NewTestIngressServer(
+		"fixtures/metron/metron.crt",
+		"fixtures/metron/metron.key",
+		"fixtures/metron/CA.crt",
+	)
 	Expect(err).NotTo(HaveOccurred())
 	receiversChan := testIngressServer.Receivers()
-	testIngressServer.Start()
-	port, err := strconv.Atoi(strings.TrimPrefix(testIngressServer.Addr(), "127.0.0.1:"))
+	Expect(testIngressServer.Start()).To(Succeed())
+	port, err := testIngressServer.Port()
 	Expect(err).NotTo(HaveOccurred())
 	cfgs = append(cfgs, func(cfg *config.RouteEmitterConfig) {
 		cfg.LoggregatorConfig.BatchFlushInterval = 10 * time.Millisecond
