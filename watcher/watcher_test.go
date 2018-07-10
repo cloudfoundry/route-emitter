@@ -466,7 +466,7 @@ var _ = Describe("Watcher", func() {
 		})
 
 		Describe("bbs events", func() {
-			JustBeforeEach(func() {
+			BeforeEach(func() {
 				bbsClient.ActualLRPGroupsStub = func(lager.Logger, models.ActualLRPFilter) ([]*models.ActualLRPGroup, error) {
 					defer GinkgoRecover()
 					sendEvent()
