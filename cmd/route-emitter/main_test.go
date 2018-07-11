@@ -313,27 +313,6 @@ var _ = Describe("Route Emitter", func() {
 		})
 	})
 
-	Context("when emitter cannot connect to the loggregator agent", func() {
-		var (
-			runner  *ginkgomon.Runner
-			emitter ifrit.Process
-		)
-
-		BeforeEach(func() {
-			useLoggregatorV2 = true
-		})
-
-		JustBeforeEach(func() {
-			testIngressServer.Stop()
-			runner = createEmitterRunner("emitter1", "", cfgs...)
-		})
-
-		It("exit with non-zero status code", func() {
-			emitter = ifrit.Background(runner)
-			Eventually(emitter.Wait()).Should(Receive(HaveOccurred()))
-		})
-	})
-
 	Context("when emitter is started with invalid configuration", func() {
 		var (
 			runner  *ginkgomon.Runner
