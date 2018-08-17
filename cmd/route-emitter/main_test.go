@@ -176,7 +176,7 @@ var _ = Describe("Route Emitter", func() {
 	}
 
 	BeforeEach(func() {
-		basePath := path.Join(os.Getenv("GOPATH"), "src/code.cloudfoundry.org/rep/cmd/rep/fixtures")
+		basePath := path.Join(os.Getenv("TOPDIR"), "src/code.cloudfoundry.org/rep/cmd/rep/fixtures")
 
 		caFile = path.Join(basePath, "green-certs", "server-ca.crt")
 		clientCertFile = path.Join(basePath, "green-certs", "client.crt")
