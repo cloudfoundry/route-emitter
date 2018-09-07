@@ -5,6 +5,7 @@ import (
 	"os"
 	"time"
 
+	"code.cloudfoundry.org/bbs/test_helpers"
 	"code.cloudfoundry.org/debugserver"
 	loggingclient "code.cloudfoundry.org/diego-logging-client"
 	"code.cloudfoundry.org/durationjson"
@@ -41,6 +42,7 @@ var _ = Describe("Config", func() {
 			"nats_password": "password",
 			"lock_retry_interval": "15s",
 			"lock_ttl": "20s",
+			"tcp_route_ttl": "2m",
 			"log_level": "debug",
 			"debug_address": "127.0.0.1:9999",
 			"enable_tcp_emitter": true,
@@ -158,7 +160,7 @@ var _ = Describe("Config", func() {
 			},
 		}
 
-		Expect(routeEmitterConfig).To(Equal(expectedConfig))
+		Expect(routeEmitterConfig).To(test_helpers.DeepEqual(expectedConfig))
 	})
 
 	Context("when the file does not exist", func() {
@@ -176,39 +178,6 @@ var _ = Describe("Config", func() {
 		It("returns an error", func() {
 			_, err := config.NewRouteEmitterConfig(configPath)
 			Expect(err).To(HaveOccurred())
-		})
-	})
-
-	Context("DefaultConfig", func() {
-		BeforeEach(func() {
-			configData = `{}`
-		})
-
-		It("has default values", func() {
-			routeEmitterConfig, err := config.NewRouteEmitterConfig(configPath)
-			Expect(err).NotTo(HaveOccurred())
-
-			config := config.RouteEmitterConfig{
-				CommunicationTimeout:               durationjson.Duration(30 * time.Second),
-				ConsulDownModeNotificationInterval: durationjson.Duration(time.Minute),
-				ConsulSessionName:                  "route-emitter",
-				LockRetryInterval:                  durationjson.Duration(locket.RetryInterval),
-				LockTTL:                            durationjson.Duration(locket.DefaultSessionTTL),
-				NATSAddresses:                      "nats://127.0.0.1:4222",
-				NATSUsername:                       "nats",
-				NATSPassword:                       "nats",
-				RouteEmittingWorkers:               20,
-				SyncInterval:                       durationjson.Duration(time.Minute),
-				TCPRouteTTL:                        durationjson.Duration(2 * time.Minute),
-				EnableTCPEmitter:                   false,
-				EnableInternalEmitter:              false,
-				RegisterDirectInstanceRoutes:       false,
-				LagerConfig: lagerflags.LagerConfig{
-					LogLevel: "info",
-				},
-			}
-
-			Expect(routeEmitterConfig).To(Equal(config))
 		})
 	})
 })

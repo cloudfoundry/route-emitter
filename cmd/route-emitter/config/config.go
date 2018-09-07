@@ -3,7 +3,6 @@ package config
 import (
 	"encoding/json"
 	"os"
-	"time"
 
 	"code.cloudfoundry.org/debugserver"
 	loggingclient "code.cloudfoundry.org/diego-logging-client"
@@ -35,7 +34,7 @@ type RouteEmitterConfig struct {
 	BBSMaxIdleConnsPerHost             int                   `json:"bbs_max_idle_conns_per_host,omitempty"`
 	CellID                             string                `json:"cell_id,omitempty"`
 	UUID                               string                `json:"uuid,omitempty"`
-	RegisterDirectInstanceRoutes       bool                  `json:"register_direct_instance_routes",omitempty`
+	RegisterDirectInstanceRoutes       bool                  `json:"register_direct_instance_routes,omitempty"`
 	CommunicationTimeout               durationjson.Duration `json:"communication_timeout,omitempty"`
 	ConsulCluster                      string                `json:"consul_cluster,omitempty"`
 	ConsulDownModeNotificationInterval durationjson.Duration `json:"consul_down_mode_notification_interval,omitempty"`
@@ -62,28 +61,8 @@ type RouteEmitterConfig struct {
 	locket.ClientLocketConfig
 }
 
-func DefaultRouteEmitterConfig() RouteEmitterConfig {
-	return RouteEmitterConfig{
-		CommunicationTimeout:               durationjson.Duration(30 * time.Second),
-		ConsulDownModeNotificationInterval: durationjson.Duration(time.Minute),
-		ConsulSessionName:                  "route-emitter",
-		LockRetryInterval:                  durationjson.Duration(locket.RetryInterval),
-		LockTTL:                            durationjson.Duration(locket.DefaultSessionTTL),
-		NATSAddresses:                      "nats://127.0.0.1:4222",
-		NATSUsername:                       "nats",
-		NATSPassword:                       "nats",
-		RouteEmittingWorkers:               20,
-		SyncInterval:                       durationjson.Duration(time.Minute),
-		TCPRouteTTL:                        durationjson.Duration(2 * time.Minute),
-		LagerConfig:                        lagerflags.DefaultLagerConfig(),
-		EnableTCPEmitter:                   false,
-		EnableInternalEmitter:              false,
-		RegisterDirectInstanceRoutes:       false,
-	}
-}
-
 func NewRouteEmitterConfig(configPath string) (RouteEmitterConfig, error) {
-	routeEmitterConfig := DefaultRouteEmitterConfig()
+	routeEmitterConfig := RouteEmitterConfig{}
 
 	configFile, err := os.Open(configPath)
 	if err != nil {

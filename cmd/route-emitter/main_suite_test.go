@@ -15,8 +15,11 @@ import (
 
 	"code.cloudfoundry.org/cfhttp"
 	"code.cloudfoundry.org/diego-logging-client/testhelpers"
+	"code.cloudfoundry.org/durationjson"
 	"code.cloudfoundry.org/go-loggregator/rpc/loggregator_v2"
 	"code.cloudfoundry.org/inigo/helpers/portauthority"
+	"code.cloudfoundry.org/lager/lagerflags"
+	"code.cloudfoundry.org/locket"
 	"code.cloudfoundry.org/route-emitter/cmd/route-emitter/config"
 	"code.cloudfoundry.org/route-emitter/diegonats"
 	"code.cloudfoundry.org/route-emitter/diegonats/gnatsdrunner"
@@ -156,13 +159,36 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 	basePath := path.Join(os.Getenv("GOPATH"), "src/code.cloudfoundry.org/route-emitter/cmd/route-emitter/fixtures")
 
 	bbsConfig = bbsconfig.BBSConfig{
-		ListenAddress:            bbsAddress,
-		AdvertiseURL:             bbsURL.String(),
-		AuctioneerAddress:        "http://some-address",
-		DatabaseDriver:           sqlRunner.DriverName(),
-		DatabaseConnectionString: sqlRunner.ConnectionString(),
-		ConsulCluster:            consulRunner.ConsulCluster(),
-		HealthAddress:            bbsHealthAddress,
+		SessionName:                     "bbs",
+		CommunicationTimeout:            durationjson.Duration(10 * time.Second),
+		RequireSSL:                      true,
+		DesiredLRPCreationTimeout:       durationjson.Duration(1 * time.Minute),
+		ExpireCompletedTaskDuration:     durationjson.Duration(2 * time.Minute),
+		ExpirePendingTaskDuration:       durationjson.Duration(30 * time.Minute),
+		EnableConsulServiceRegistration: false,
+		ConvergeRepeatInterval:          durationjson.Duration(30 * time.Second),
+		KickTaskDuration:                durationjson.Duration(30 * time.Second),
+		LockTTL:                         durationjson.Duration(locket.DefaultSessionTTL),
+		LockRetryInterval:               durationjson.Duration(locket.RetryInterval),
+		ReportInterval:                  durationjson.Duration(1 * time.Minute),
+		ConvergenceWorkers:              20,
+		UpdateWorkers:                   1000,
+		TaskCallbackWorkers:             1000,
+		MaxOpenDatabaseConnections:      200,
+		MaxIdleDatabaseConnections:      200,
+		AuctioneerRequireTLS:            false,
+		RepClientSessionCacheSize:       0,
+		RepRequireTLS:                   false,
+		LagerConfig:                     lagerflags.DefaultLagerConfig(),
+
+		GenerateSuspectActualLRPs: false,
+		ListenAddress:             bbsAddress,
+		AdvertiseURL:              bbsURL.String(),
+		AuctioneerAddress:         "http://some-address",
+		DatabaseDriver:            sqlRunner.DriverName(),
+		DatabaseConnectionString:  sqlRunner.ConnectionString(),
+		ConsulCluster:             consulRunner.ConsulCluster(),
+		HealthAddress:             bbsHealthAddress,
 
 		EncryptionConfig: encryption.EncryptionConfig{
 			EncryptionKeys: map[string]string{"label": "key"},

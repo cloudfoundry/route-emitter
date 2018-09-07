@@ -124,9 +124,17 @@ var _ = Describe("Route Emitter", func() {
 			LagerConfig: lagerflags.LagerConfig{
 				LogLevel: lagerflags.DEBUG,
 			},
-			BBSCACertFile:     caFile,
-			BBSClientCertFile: clientCertFile,
-			BBSClientKeyFile:  clientKeyFile,
+			BBSCACertFile:                      caFile,
+			BBSClientCertFile:                  clientCertFile,
+			BBSClientKeyFile:                   clientKeyFile,
+			ConsulDownModeNotificationInterval: durationjson.Duration(time.Minute),
+			NATSUsername:                       "nats",
+			NATSPassword:                       "nats",
+			RouteEmittingWorkers:               20,
+			TCPRouteTTL:                        durationjson.Duration(2 * time.Minute),
+			EnableTCPEmitter:                   false,
+			EnableInternalEmitter:              false,
+			RegisterDirectInstanceRoutes:       false,
 		}
 		for _, f := range modifyConfig {
 			f(&cfg)
