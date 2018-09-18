@@ -1086,7 +1086,7 @@ var _ = Describe("Route Emitter", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				lockIdentifier := &locketmodels.Resource{
-					Key:      "route-emitter",
+					Key:      "route_emitter",
 					Owner:    "Your worst enemy.",
 					Value:    "Something",
 					TypeCode: locketmodels.LOCK,
