@@ -181,14 +181,13 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 		RepRequireTLS:                   false,
 		LagerConfig:                     lagerflags.DefaultLagerConfig(),
 
-		GenerateSuspectActualLRPs: false,
-		ListenAddress:             bbsAddress,
-		AdvertiseURL:              bbsURL.String(),
-		AuctioneerAddress:         "http://some-address",
-		DatabaseDriver:            sqlRunner.DriverName(),
-		DatabaseConnectionString:  sqlRunner.ConnectionString(),
-		ConsulCluster:             consulRunner.ConsulCluster(),
-		HealthAddress:             bbsHealthAddress,
+		ListenAddress:            bbsAddress,
+		AdvertiseURL:             bbsURL.String(),
+		AuctioneerAddress:        "http://some-address",
+		DatabaseDriver:           sqlRunner.DriverName(),
+		DatabaseConnectionString: sqlRunner.ConnectionString(),
+		ConsulCluster:            consulRunner.ConsulCluster(),
+		HealthAddress:            bbsHealthAddress,
 
 		EncryptionConfig: encryption.EncryptionConfig{
 			EncryptionKeys: map[string]string{"label": "key"},
