@@ -18,20 +18,17 @@ import (
 	"code.cloudfoundry.org/route-emitter/watcher/fakes"
 	"code.cloudfoundry.org/routing-info/cfroutes"
 	"code.cloudfoundry.org/routing-info/tcp_routes"
-	"github.com/tedsuo/ifrit"
-	"github.com/tedsuo/ifrit/ginkgomon"
-	"github.com/vito/go-sse/sse"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gbytes"
+	"github.com/tedsuo/ifrit"
+	"github.com/tedsuo/ifrit/ginkgomon"
+	"github.com/vito/go-sse/sse"
 )
 
 type EventHolder struct {
 	event models.Event
 }
-
-var nilEventHolder = EventHolder{}
 
 var _ = Describe("Watcher", func() {
 

@@ -248,17 +248,6 @@ func (handler *Handler) handleActualDelete(logger lager.Logger, actualLRPInfo *r
 	handler.emitMessages(logger, messagesToEmit, routeMappings)
 }
 
-type set map[interface{}]struct{}
-
-func (set set) contains(value interface{}) bool {
-	_, found := set[value]
-	return found
-}
-
-func (set set) add(value interface{}) {
-	set[value] = struct{}{}
-}
-
 func (handler *Handler) emitMessages(logger lager.Logger, messagesToEmit routingtable.MessagesToEmit, routeMappings routingtable.TCPRouteMappings) {
 	if handler.natsEmitter != nil {
 		logger.Debug("emit-messages", lager.Data{"messages": messagesToEmit})

@@ -3,11 +3,10 @@ package routingtable
 import (
 	"sync"
 
-	tcpmodels "code.cloudfoundry.org/routing-api/models"
-
 	"code.cloudfoundry.org/bbs/models"
 	loggingclient "code.cloudfoundry.org/diego-logging-client"
 	"code.cloudfoundry.org/lager"
+	tcpmodels "code.cloudfoundry.org/routing-api/models"
 	"code.cloudfoundry.org/routing-info/cfroutes"
 	"code.cloudfoundry.org/routing-info/internalroutes"
 	"code.cloudfoundry.org/routing-info/tcp_routes"
@@ -95,7 +94,7 @@ func NewRoutingTable(directInstanceRoute bool, metronClient loggingclient.Ingres
 		addressGenerator:         addressGenerator,
 		metronClient:             metronClient,
 		suppressAddressCollision: true,
-		Locker: &sync.Mutex{},
+		Locker:                   &sync.Mutex{},
 	}
 	internalRoutingTable := &internalRoutingTable{
 		endpointGenerator:        internalEndpointsFromRoutingInfo,
@@ -106,7 +105,7 @@ func NewRoutingTable(directInstanceRoute bool, metronClient loggingclient.Ingres
 		addressGenerator:         addressGenerator,
 		metronClient:             metronClient,
 		suppressAddressCollision: true,
-		Locker: &sync.Mutex{},
+		Locker:                   &sync.Mutex{},
 	}
 
 	return &routingTable{
@@ -114,10 +113,6 @@ func NewRoutingTable(directInstanceRoute bool, metronClient loggingclient.Ingres
 		httpRoutesRoutingTable:     httpRoutingTable,
 		internalRoutesRoutingTable: internalRoutingTable,
 	}
-}
-
-func newRoutingTable() *internalRoutingTable {
-	return &internalRoutingTable{}
 }
 
 func internalEndpointsFromRoutingInfo(actualLRP *ActualLRPRoutingInfo) []Endpoint {
@@ -132,11 +127,6 @@ func internalEndpointsFromRoutingInfo(actualLRP *ActualLRPRoutingInfo) []Endpoin
 			ModificationTag: &actualLRP.ActualLRP.ModificationTag,
 		},
 	}
-}
-
-func hasMessages(mappings TCPRouteMappings, messages MessagesToEmit) bool {
-	return len(mappings.Registrations) > 0 || len(mappings.Unregistrations) > 0 ||
-		len(messages.RegistrationMessages) > 0 || len(messages.UnregistrationMessages) > 0
 }
 
 func (table *routingTable) AddEndpoint(logger lager.Logger, actualLRP *ActualLRPRoutingInfo) (TCPRouteMappings, MessagesToEmit) {

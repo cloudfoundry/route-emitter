@@ -6,11 +6,9 @@ import (
 
 	"code.cloudfoundry.org/clock"
 	"code.cloudfoundry.org/lager"
-	"code.cloudfoundry.org/route-emitter/diegonats"
 )
 
 type NatsSyncer struct {
-	natsClient           diegonats.NATSClient
 	clock                clock.Clock
 	syncInterval         time.Duration
 	syncCh               chan struct{}

@@ -4,16 +4,20 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
-	"net"
 	"net/http"
 	"net/url"
 	"os"
 	"path"
-	"strings"
 	"testing"
 	"time"
 
+	bbsconfig "code.cloudfoundry.org/bbs/cmd/bbs/config"
+	bbstestrunner "code.cloudfoundry.org/bbs/cmd/bbs/testrunner"
+	"code.cloudfoundry.org/bbs/encryption"
+	"code.cloudfoundry.org/bbs/test_helpers"
+	"code.cloudfoundry.org/bbs/test_helpers/sqlrunner"
 	"code.cloudfoundry.org/cfhttp"
+	"code.cloudfoundry.org/consuladapter/consulrunner"
 	"code.cloudfoundry.org/diego-logging-client/testhelpers"
 	"code.cloudfoundry.org/durationjson"
 	"code.cloudfoundry.org/go-loggregator/rpc/loggregator_v2"
@@ -29,16 +33,7 @@ import (
 	"github.com/onsi/gomega/ghttp"
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/ifrit/ginkgomon"
-
-	bbsconfig "code.cloudfoundry.org/bbs/cmd/bbs/config"
-	bbstestrunner "code.cloudfoundry.org/bbs/cmd/bbs/testrunner"
-	"code.cloudfoundry.org/bbs/encryption"
-	"code.cloudfoundry.org/bbs/test_helpers"
-	"code.cloudfoundry.org/bbs/test_helpers/sqlrunner"
-	"code.cloudfoundry.org/consuladapter/consulrunner"
 )
-
-const heartbeatInterval = 1 * time.Second
 
 var (
 	cfgs []func(*config.RouteEmitterConfig)
@@ -46,7 +41,6 @@ var (
 	emitterPath        string
 	locketPath         string
 	natsPort           uint16
-	healthCheckPort    int
 	healthCheckAddress string
 
 	oauthServer *ghttp.Server
@@ -64,7 +58,6 @@ var (
 	natsClient           diegonats.NATSClient
 	syncInterval         time.Duration
 	consulClusterAddress string
-	testMetricsListener  net.PacketConn
 	testMetricsChan      chan *loggregator_v2.Envelope
 	signalMetricsChan    chan struct{}
 
@@ -296,12 +289,6 @@ var _ = SynchronizedAfterSuite(func() {
 }, func() {
 	gexec.CleanupBuildArtifacts()
 })
-
-func getServerPort(url string) string {
-	endpoints := strings.Split(url, ":")
-	Expect(endpoints).To(HaveLen(3))
-	return endpoints[2]
-}
 
 func stopBBS() {
 	if !bbsRunning {

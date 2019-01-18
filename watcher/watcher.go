@@ -185,26 +185,6 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 	}
 }
 
-func (w *Watcher) cacheIncomingEvents(
-	eventChan chan models.Event,
-	cachedEventsChan chan map[string]models.Event,
-	done chan struct{},
-) {
-	cachedEvents := make(map[string]models.Event)
-	for {
-		select {
-		case event := <-eventChan:
-			w.logger.Info("caching-event", lager.Data{
-				"type": event.EventType(),
-			})
-			cachedEvents[event.Key()] = event
-		case <-done:
-			cachedEventsChan <- cachedEvents
-			return
-		}
-	}
-}
-
 func (w *Watcher) retrieveDesiredInternal(logger lager.Logger, event models.Event, currentDesireds []*models.DesiredLRPSchedulingInfo, syncing bool) []*models.DesiredLRPSchedulingInfo {
 	var routingInfo *routingtable.ActualLRPRoutingInfo
 	var err error

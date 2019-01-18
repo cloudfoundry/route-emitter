@@ -3,10 +3,9 @@ package routingtable
 import (
 	"fmt"
 
-	tcpmodels "code.cloudfoundry.org/routing-api/models"
-
 	"code.cloudfoundry.org/bbs/models"
 	"code.cloudfoundry.org/lager"
+	tcpmodels "code.cloudfoundry.org/routing-api/models"
 	"code.cloudfoundry.org/routing-info/tcp_routes"
 )
 
@@ -48,10 +47,6 @@ type Endpoint struct {
 
 func (e Endpoint) key() EndpointKey {
 	return EndpointKey{InstanceGUID: e.InstanceGUID, Evacuating: e.Evacuating}
-}
-
-func (e Endpoint) address() Address {
-	return Address{Host: e.Host, Port: e.Port}
 }
 
 func NewEndpoint(
@@ -167,23 +162,6 @@ type InternalRoutableEndpoints struct {
 	ModificationTag  *models.ModificationTag
 }
 
-func (entry InternalRoutableEndpoints) copy() InternalRoutableEndpoints {
-	clone := InternalRoutableEndpoints{
-		Endpoints:        map[EndpointKey]Endpoint{},
-		Routes:           make([]InternalRoute, len(entry.Routes)),
-		DesiredInstances: entry.DesiredInstances,
-		ModificationTag:  entry.ModificationTag,
-	}
-
-	copy(clone.Routes, entry.Routes)
-
-	for k, v := range entry.Endpoints {
-		clone.Endpoints[k] = v
-	}
-
-	return clone
-}
-
 func NewEndpointsFromActual(actualLRPInfo *ActualLRPRoutingInfo) []Endpoint {
 	endpoints := []Endpoint{}
 	actual := actualLRPInfo.ActualLRP
@@ -201,7 +179,7 @@ func NewEndpointsFromActual(actualLRPInfo *ActualLRPRoutingInfo) []Endpoint {
 				ModificationTag:       &actual.ModificationTag,
 				TlsProxyPort:          portMapping.HostTlsProxyPort,
 				ContainerTlsProxyPort: portMapping.ContainerTlsProxyPort,
-				Since: actual.Since,
+				Since:                 actual.Since,
 			}
 			endpoints = append(endpoints, endpoint)
 		}

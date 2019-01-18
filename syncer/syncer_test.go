@@ -7,13 +7,10 @@ import (
 	"code.cloudfoundry.org/clock/fakeclock"
 	"code.cloudfoundry.org/lager/lagertest"
 	"code.cloudfoundry.org/route-emitter/syncer"
-	"github.com/tedsuo/ifrit"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/tedsuo/ifrit"
 )
-
-const logGuid = "some-log-guid"
 
 var _ = Describe("NatsSyncer", func() {
 	var (
