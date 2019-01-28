@@ -44,6 +44,8 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gbytes"
+	"github.com/onsi/gomega/gstruct"
+	"github.com/onsi/gomega/types"
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/ifrit/ginkgomon"
 )
@@ -53,6 +55,21 @@ const (
 	routingAPIInterruptTimeout = 10 * time.Second
 	msgReceiveTimeout          = 5 * time.Second
 )
+
+func matchTCPRouteMapping(other apimodels.TcpRouteMapping) types.GomegaMatcher {
+	return WithTransform(
+		func(t apimodels.TcpRouteMapping) apimodels.TcpMappingEntity {
+			return t.TcpMappingEntity
+		},
+		gstruct.MatchFields(gstruct.IgnoreExtras, gstruct.Fields{
+			"RouterGroupGuid": Equal(other.RouterGroupGuid),
+			"ExternalPort":    Equal(other.ExternalPort),
+			"HostIP":          Equal(other.HostIP),
+			"HostPort":        Equal(other.HostPort),
+			"TTL":             Equal(other.TTL),
+		}),
+	)
+}
 
 var _ = Describe("Route Emitter", func() {
 	var (
@@ -614,10 +631,9 @@ var _ = Describe("Route Emitter", func() {
 
 							expectedTcpRouteMapping = apimodels.NewTcpRouteMapping(routerGUID, 5222, "some-ip", 5222, 120)
 
-							Eventually(func() bool {
-								mappings, _ := routingAPIRunner.GetClient().TcpRouteMappings()
-								return contains(mappings, expectedTcpRouteMapping)
-							}, 5*time.Second).Should(BeTrue())
+							Eventually(routingAPIRunner.GetClient().TcpRouteMappings, 5*time.Second).Should(
+								ContainElement(matchTCPRouteMapping(expectedTcpRouteMapping)),
+							)
 						})
 
 						AfterEach(func() {
@@ -666,10 +682,9 @@ var _ = Describe("Route Emitter", func() {
 					})
 
 					It("emits its routes immediately", func() {
-						Eventually(func() bool {
-							mappings, _ := routingAPIRunner.GetClient().TcpRouteMappings()
-							return contains(mappings, expectedTcpRouteMapping)
-						}, 5*time.Second).Should(BeTrue())
+						Eventually(routingAPIRunner.GetClient().TcpRouteMappings, 5*time.Second).Should(
+							ContainElement(matchTCPRouteMapping(expectedTcpRouteMapping)),
+						)
 					})
 
 					Context("and the route-emitter is running in direct instance routes mode", func() {
@@ -682,10 +697,9 @@ var _ = Describe("Route Emitter", func() {
 						It("contains the container host and port", func() {
 							expectedTcpRouteMapping.HostIP = netInfo.InstanceAddress
 							expectedTcpRouteMapping.HostPort = uint16(netInfo.Ports[0].ContainerPort)
-							Eventually(func() bool {
-								mappings, _ := routingAPIRunner.GetClient().TcpRouteMappings()
-								return contains(mappings, expectedTcpRouteMapping)
-							}, 5*time.Second).Should(BeTrue())
+							Eventually(routingAPIRunner.GetClient().TcpRouteMappings, 5*time.Second).Should(
+								ContainElement(matchTCPRouteMapping(expectedTcpRouteMapping)),
+							)
 						})
 					})
 
@@ -718,10 +732,9 @@ var _ = Describe("Route Emitter", func() {
 						})
 
 						It("does not emit the route", func() {
-							Consistently(func() bool {
-								mappings, _ := routingAPIRunner.GetClient().TcpRouteMappings()
-								return contains(mappings, expectedTcpRouteMapping)
-							}, 5*time.Second).Should(BeFalse())
+							Consistently(routingAPIRunner.GetClient().TcpRouteMappings, 5*time.Second).ShouldNot(
+								ContainElement(matchTCPRouteMapping(expectedTcpRouteMapping)),
+							)
 						})
 					})
 
@@ -736,10 +749,9 @@ var _ = Describe("Route Emitter", func() {
 						})
 
 						JustBeforeEach(func() {
-							Consistently(func() bool {
-								mappings, _ := routingAPIRunner.GetClient().TcpRouteMappings()
-								return contains(mappings, expectedTcpRouteMapping)
-							}, 5*time.Second).Should(BeFalse())
+							Consistently(routingAPIRunner.GetClient().TcpRouteMappings, 5*time.Second).ShouldNot(
+								ContainElement(matchTCPRouteMapping(expectedTcpRouteMapping)),
+							)
 						})
 
 						Context("and routes are added", func() {
@@ -752,27 +764,18 @@ var _ = Describe("Route Emitter", func() {
 							})
 
 							It("immediately registers the route", func() {
-								Eventually(func() error {
-									mappings, err := routingAPIRunner.GetClient().TcpRouteMappings()
-									if err != nil {
-										return err
-									}
-
-									if !contains(mappings, expectedTcpRouteMapping) {
-										return fmt.Errorf("%v does not contain the route mappings", mappings)
-									}
-									return nil
-								}).Should(Succeed())
+								Eventually(routingAPIRunner.GetClient().TcpRouteMappings, 5*time.Second).Should(
+									ContainElement(matchTCPRouteMapping(expectedTcpRouteMapping)),
+								)
 							})
 						})
 					})
 
 					Context("and routes are removed", func() {
 						JustBeforeEach(func() {
-							Eventually(func() bool {
-								mappings, _ := routingAPIRunner.GetClient().TcpRouteMappings()
-								return contains(mappings, expectedTcpRouteMapping)
-							}, 5*time.Second).Should(BeTrue())
+							Eventually(routingAPIRunner.GetClient().TcpRouteMappings, 5*time.Second).Should(
+								ContainElement(matchTCPRouteMapping(expectedTcpRouteMapping)),
+							)
 							update := &models.DesiredLRPUpdate{
 								Routes: &models.Routes{},
 							}
@@ -861,10 +864,9 @@ var _ = Describe("Route Emitter", func() {
 
 						expectedTcpRouteMapping = apimodels.NewTcpRouteMapping(routerGUID, 5222, "some-ip", 5222, 120)
 
-						Eventually(func() bool {
-							mappings, _ := routingAPIRunner.GetClient().TcpRouteMappings()
-							return contains(mappings, expectedTcpRouteMapping)
-						}, 5*time.Second).Should(BeTrue())
+						Eventually(routingAPIRunner.GetClient().TcpRouteMappings, 5*time.Second).Should(
+							ContainElement(matchTCPRouteMapping(expectedTcpRouteMapping)),
+						)
 					})
 
 					AfterEach(func() {
@@ -2254,13 +2256,4 @@ func newInternalRoutes(hosts []string) *models.Routes {
 	}
 
 	return &routes
-}
-
-func contains(ms []apimodels.TcpRouteMapping, tcpRouteMapping apimodels.TcpRouteMapping) bool {
-	for _, m := range ms {
-		if m.Matches(tcpRouteMapping) {
-			return true
-		}
-	}
-	return false
 }
