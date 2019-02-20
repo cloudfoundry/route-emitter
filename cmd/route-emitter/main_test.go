@@ -2093,10 +2093,11 @@ var _ = Describe("Route Emitter", func() {
 					hostnames = []string{"route-1", "route-2", "route-3"}
 
 					updateRequest := &models.DesiredLRPUpdate{
-						Routes:     newRoutes(hostnames, containerPort, ""),
-						Instances:  &desiredLRP.Instances,
-						Annotation: &desiredLRP.Annotation,
+						Routes: newRoutes(hostnames, containerPort, ""),
 					}
+					updateRequest.SetInstances(desiredLRP.Instances)
+					updateRequest.SetAnnotation(desiredLRP.Annotation)
+
 					err := bbsClient.UpdateDesiredLRP(logger, processGuid, updateRequest)
 					Expect(err).NotTo(HaveOccurred())
 				})
@@ -2131,10 +2132,10 @@ var _ = Describe("Route Emitter", func() {
 			Context("and a route is removed", func() {
 				JustBeforeEach(func() {
 					updateRequest := &models.DesiredLRPUpdate{
-						Routes:     newRoutes([]string{"route-2"}, containerPort, ""),
-						Instances:  &desiredLRP.Instances,
-						Annotation: &desiredLRP.Annotation,
+						Routes: newRoutes([]string{"route-2"}, containerPort, ""),
 					}
+					updateRequest.SetInstances(desiredLRP.Instances)
+					updateRequest.SetAnnotation(desiredLRP.Annotation)
 					err := bbsClient.UpdateDesiredLRP(logger, processGuid, updateRequest)
 					Expect(err).NotTo(HaveOccurred())
 				})
