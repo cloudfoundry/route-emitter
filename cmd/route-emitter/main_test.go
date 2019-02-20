@@ -5,13 +5,13 @@ import (
 	"path"
 
 	"code.cloudfoundry.org/bbs"
-	"code.cloudfoundry.org/cfhttp"
 	"code.cloudfoundry.org/clock"
 	"code.cloudfoundry.org/diego-logging-client/testhelpers"
 	locketconfig "code.cloudfoundry.org/locket/cmd/locket/config"
 	locketrunner "code.cloudfoundry.org/locket/cmd/locket/testrunner"
 	"code.cloudfoundry.org/locket/lock"
 	locketmodels "code.cloudfoundry.org/locket/models"
+	"code.cloudfoundry.org/tlsconfig"
 
 	"encoding/json"
 	"errors"
@@ -106,8 +106,13 @@ var _ = Describe("Route Emitter", func() {
 	bbsProxy := func(f func(w http.ResponseWriter, r *http.Request)) *httptest.Server {
 		proxy := httputil.NewSingleHostReverseProxy(bbsURL)
 		proxy.FlushInterval = 100 * time.Millisecond
-		tlsConfig, err := cfhttp.NewTLSConfig(clientCertFile, clientKeyFile, caFile)
+		tlsConfig, err := tlsconfig.Build(
+			tlsconfig.WithInternalServiceDefaults(),
+			tlsconfig.WithIdentityFromFile(clientCertFile, clientKeyFile),
+		).Server(tlsconfig.WithClientAuthenticationFromFile(caFile))
 		Expect(err).NotTo(HaveOccurred())
+		// this proxy needs to act as both a client and server
+		tlsConfig.RootCAs = tlsConfig.ClientCAs
 		proxy.Transport = &http.Transport{
 			TLSClientConfig: tlsConfig,
 		}
@@ -117,7 +122,10 @@ var _ = Describe("Route Emitter", func() {
 				proxy.ServeHTTP(w, r)
 			}),
 		)
-		fakeBBS.TLS, err = cfhttp.NewTLSConfig(serverCertFile, serverKeyFile, caFile)
+		fakeBBS.TLS, err = tlsconfig.Build(
+			tlsconfig.WithInternalServiceDefaults(),
+			tlsconfig.WithIdentityFromFile(serverCertFile, serverKeyFile),
+		).Server(tlsconfig.WithClientAuthenticationFromFile(caFile))
 		Expect(err).NotTo(HaveOccurred())
 		fakeBBS.StartTLS()
 		return fakeBBS
