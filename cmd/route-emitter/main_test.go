@@ -138,7 +138,7 @@ var _ = Describe("Route Emitter", func() {
 			HealthCheckAddress:   healthCheckAddress,
 			NATSAddresses:        fmt.Sprintf("127.0.0.1:%d", natsPort),
 			BBSAddress:           bbsURL.String(),
-			CommunicationTimeout: durationjson.Duration(300 * time.Millisecond),
+			CommunicationTimeout: durationjson.Duration(5 * time.Second),
 			SyncInterval:         durationjson.Duration(syncInterval),
 			LockRetryInterval:    durationjson.Duration(time.Second),
 			LockTTL:              durationjson.Duration(5 * time.Second),
@@ -600,7 +600,6 @@ var _ = Describe("Route Emitter", func() {
 						cfg.BBSAddress = fakeBBS.URL
 						cfg.RoutingAPI.URL = "http://127.0.0.1"
 						cfg.RoutingAPI.Port = routingAPIRunner.Config.Port
-						cfg.CommunicationTimeout = durationjson.Duration(5 * time.Second)
 					})
 
 					desiredLRP.Instances = 1
@@ -846,7 +845,6 @@ var _ = Describe("Route Emitter", func() {
 							cfg.BBSAddress = fakeBBS.URL
 							cfg.RoutingAPI.URL = "http://127.0.0.1"
 							cfg.RoutingAPI.Port = routingAPIRunner.Config.Port
-							cfg.CommunicationTimeout = durationjson.Duration(5 * time.Second)
 							cfg.SyncInterval = durationjson.Duration(1 * time.Hour)
 						})
 
@@ -2195,7 +2193,6 @@ var _ = Describe("Route Emitter", func() {
 				cfg.BBSAddress = fakeBBS.URL
 				cfg.RoutingAPI.URL = "http://127.0.0.1"
 				cfg.RoutingAPI.Port = routingAPIRunner.Config.Port
-				cfg.CommunicationTimeout = durationjson.Duration(5 * time.Second)
 				cfg.SyncInterval = durationjson.Duration(1 * time.Hour)
 			})
 
