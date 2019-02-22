@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"code.cloudfoundry.org/bbs"
-	"code.cloudfoundry.org/cfhttp"
 	"code.cloudfoundry.org/clock"
 	"code.cloudfoundry.org/consuladapter"
 	"code.cloudfoundry.org/debugserver"
@@ -61,8 +60,6 @@ func main() {
 		logger, _ := lagerflags.NewFromConfig("route-emitter", lagerflags.DefaultLagerConfig())
 		logger.Fatal("failed-to-parse-config", err)
 	}
-
-	cfhttp.Initialize(time.Duration(cfg.CommunicationTimeout))
 
 	logger, reconfigurableSink := lagerflags.NewFromConfig(cfg.ConsulSessionName, cfg.LagerConfig)
 	natsClient := diegonats.NewClient()
@@ -370,14 +367,16 @@ func initializeBBSClient(
 	logger lager.Logger,
 	cfg config.RouteEmitterConfig,
 ) bbs.Client {
-	bbsClient, err := bbs.NewClient(
-		cfg.BBSAddress,
-		cfg.BBSCACertFile,
-		cfg.BBSClientCertFile,
-		cfg.BBSClientKeyFile,
-		cfg.BBSClientSessionCacheSize,
-		cfg.BBSMaxIdleConnsPerHost,
-	)
+	bbsClient, err := bbs.NewClientWithConfig(bbs.ClientConfig{
+		URL:                    cfg.BBSAddress,
+		IsTLS:                  true,
+		CAFile:                 cfg.BBSCACertFile,
+		CertFile:               cfg.BBSClientCertFile,
+		KeyFile:                cfg.BBSClientKeyFile,
+		ClientSessionCacheSize: cfg.BBSClientSessionCacheSize,
+		MaxIdleConnsPerHost:    cfg.BBSMaxIdleConnsPerHost,
+		RequestTimeout:         time.Duration(cfg.CommunicationTimeout),
+	})
 	if err != nil {
 		logger.Fatal("Failed to configure secure BBS client", err)
 	}
