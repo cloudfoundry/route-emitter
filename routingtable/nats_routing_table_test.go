@@ -45,7 +45,7 @@ var _ = Describe("RoutingTable", func() {
 		Index:           0,
 		Port:            11,
 		ContainerPort:   8080,
-		Evacuating:      false,
+		Presence:        models.ActualLRP_Ordinary,
 		Since:           1,
 		ModificationTag: currentTag,
 	}
@@ -56,7 +56,7 @@ var _ = Describe("RoutingTable", func() {
 		Index:           1,
 		Port:            22,
 		ContainerPort:   8080,
-		Evacuating:      false,
+		Presence:        models.ActualLRP_Ordinary,
 		Since:           2,
 		ModificationTag: currentTag,
 	}
@@ -67,7 +67,7 @@ var _ = Describe("RoutingTable", func() {
 		Index:           2,
 		Port:            33,
 		ContainerPort:   8080,
-		Evacuating:      false,
+		Presence:        models.ActualLRP_Ordinary,
 		Since:           3,
 		ModificationTag: currentTag,
 	}
@@ -78,7 +78,7 @@ var _ = Describe("RoutingTable", func() {
 		Index:           3,
 		Port:            11,
 		ContainerPort:   8080,
-		Evacuating:      false,
+		Presence:        models.ActualLRP_Ordinary,
 		ModificationTag: currentTag,
 	}
 	newInstanceEndpointAfterEvacuation := routingtable.Endpoint{
@@ -88,7 +88,7 @@ var _ = Describe("RoutingTable", func() {
 		Index:           0,
 		Port:            55,
 		ContainerPort:   8080,
-		Evacuating:      false,
+		Presence:        models.ActualLRP_Ordinary,
 		ModificationTag: currentTag,
 	}
 	evacuating1 := routingtable.Endpoint{
@@ -98,7 +98,7 @@ var _ = Describe("RoutingTable", func() {
 		Index:           0,
 		Port:            11,
 		ContainerPort:   8080,
-		Evacuating:      true,
+		Presence:        models.ActualLRP_Evacuating,
 		ModificationTag: currentTag,
 	}
 
@@ -208,7 +208,7 @@ var _ = Describe("RoutingTable", func() {
 
 		Context("and an endpoint is added", func() {
 			var (
-				actualLRP *routingtable.ActualLRPRoutingInfo
+				actualLRP *models.ActualLRP
 			)
 
 			BeforeEach(func() {
@@ -1917,7 +1917,7 @@ var _ = Describe("RoutingTable", func() {
 
 				Context("when the instance has multiple ports, one of which has no routes", func() {
 					var (
-						lrp *routingtable.ActualLRPRoutingInfo
+						lrp *models.ActualLRP
 					)
 
 					BeforeEach(func() {
@@ -2040,7 +2040,7 @@ var _ = Describe("RoutingTable", func() {
 
 		Context("when there are only endpoints in the table", func() {
 			var beforeLRPSchedulingInfo *models.DesiredLRPSchedulingInfo
-			var lrp1, lrp2 *routingtable.ActualLRPRoutingInfo
+			var lrp1, lrp2 *models.ActualLRP
 			BeforeEach(func() {
 				lrp1 = createActualLRP(key, endpoint1, domain)
 				lrp2 = createActualLRP(key, endpoint2, domain)

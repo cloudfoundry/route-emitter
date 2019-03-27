@@ -112,7 +112,7 @@ var _ = Describe("Watcher Integration", func() {
 			nextEventValue := eventCh
 
 			modTag = &models.ModificationTag{Epoch: "abc", Index: 1}
-			endpoint1 := routingtable.Endpoint{InstanceGUID: "ig-1", Host: "1.1.1.1", Index: 0, Port: 11, ContainerPort: 8080, Evacuating: false, ModificationTag: modTag}
+			endpoint1 := routingtable.Endpoint{InstanceGUID: "ig-1", Host: "1.1.1.1", Index: 0, Port: 11, ContainerPort: 8080, Presence: models.ActualLRP_Ordinary, ModificationTag: modTag}
 
 			hostname1 := "foo.example.com"
 			schedulingInfo1 = &models.DesiredLRPSchedulingInfo{

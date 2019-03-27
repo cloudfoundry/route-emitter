@@ -39,25 +39,25 @@ type Endpoint struct {
 	ContainerPort         uint32
 	TlsProxyPort          uint32
 	ContainerTlsProxyPort uint32
-	Evacuating            bool
+	Presence              models.ActualLRP_Presence
 	IsolationSegment      string
 	Since                 int64
 	ModificationTag       *models.ModificationTag
 }
 
 func (e Endpoint) key() EndpointKey {
-	return EndpointKey{InstanceGUID: e.InstanceGUID, Evacuating: e.Evacuating}
+	return EndpointKey{InstanceGUID: e.InstanceGUID, Evacuating: e.Presence == models.ActualLRP_Evacuating}
 }
 
 func NewEndpoint(
-	instanceGUID string, evacuating bool,
+	instanceGUID string, presence models.ActualLRP_Presence,
 	host, containerIP string,
 	port, containerPort uint32,
 	modificationTag *models.ModificationTag,
 ) Endpoint {
 	return Endpoint{
 		InstanceGUID:    instanceGUID,
-		Evacuating:      evacuating,
+		Presence:        presence,
 		Host:            host,
 		ContainerIP:     containerIP,
 		Port:            port,
@@ -173,7 +173,7 @@ func NewEndpointsFromActual(actualLRP *models.ActualLRP) []Endpoint {
 				ContainerIP:           actualLRP.InstanceAddress,
 				Port:                  portMapping.HostPort,
 				ContainerPort:         portMapping.ContainerPort,
-				Evacuating:            actualLRP.Presence == models.ActualLRP_Evacuating,
+				Presence:              actualLRP.Presence,
 				ModificationTag:       &actualLRP.ModificationTag,
 				TlsProxyPort:          portMapping.HostTlsProxyPort,
 				ContainerTlsProxyPort: portMapping.ContainerTlsProxyPort,

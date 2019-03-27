@@ -122,7 +122,7 @@ func internalEndpointsFromActualLRP(actualLRP *models.ActualLRP) []Endpoint {
 			Index:           actualLRP.Index,
 			Host:            actualLRP.Address,
 			ContainerIP:     actualLRP.InstanceAddress,
-			Evacuating:      actualLRP.Presence == models.ActualLRP_Evacuating,
+			Presence:        actualLRP.Presence,
 			Since:           actualLRP.Since,
 			ModificationTag: &actualLRP.ModificationTag,
 		},
@@ -634,12 +634,12 @@ func diffRoutes(before, after []routeMapping) routesDiff {
 
 // endpoints are different if any field is different other than the following:
 // 1. ModificationTag
-// 2. Evacuating
+// 2. Presence
 // 3. Since
 func endpointDifferent(before, after Endpoint) bool {
 	endpoint := before
 	endpoint.ModificationTag = after.ModificationTag
-	endpoint.Evacuating = after.Evacuating
+	endpoint.Presence = after.Presence
 	endpoint.Since = after.Since
 	return endpoint != after
 }

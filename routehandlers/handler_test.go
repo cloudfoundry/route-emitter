@@ -731,7 +731,7 @@ var _ = Describe("Handler", func() {
 					Index:           0,
 					Port:            11,
 					ContainerPort:   8080,
-					Evacuating:      false,
+					Presence:        models.ActualLRP_Ordinary,
 					ModificationTag: currentTag,
 				}
 				endpoint2 = routingtable.Endpoint{
@@ -740,7 +740,7 @@ var _ = Describe("Handler", func() {
 					Index:           0,
 					Port:            22,
 					ContainerPort:   8080,
-					Evacuating:      false,
+					Presence:        models.ActualLRP_Ordinary,
 					ModificationTag: currentTag,
 				}
 				endpoint3 = routingtable.Endpoint{
@@ -749,7 +749,7 @@ var _ = Describe("Handler", func() {
 					Index:           1,
 					Port:            23,
 					ContainerPort:   8080,
-					Evacuating:      false,
+					Presence:        models.ActualLRP_Ordinary,
 					ModificationTag: currentTag,
 				}
 
@@ -907,7 +907,7 @@ var _ = Describe("Handler", func() {
 						Index:           1,
 						Port:            23,
 						ContainerPort:   8080,
-						Evacuating:      false,
+						Presence:        models.ActualLRP_Ordinary,
 						ModificationTag: &models.ModificationTag{Epoch: "abc", Index: 1},
 					}
 
@@ -951,7 +951,7 @@ var _ = Describe("Handler", func() {
 				Index:           0,
 				Port:            11,
 				ContainerPort:   8080,
-				Evacuating:      false,
+				Presence:        models.ActualLRP_Ordinary,
 				ModificationTag: currentTag,
 			}
 			endpoint2 := routingtable.Endpoint{
@@ -960,7 +960,7 @@ var _ = Describe("Handler", func() {
 				Index:           0,
 				Port:            22,
 				ContainerPort:   8080,
-				Evacuating:      false,
+				Presence:        models.ActualLRP_Ordinary,
 				ModificationTag: currentTag,
 			}
 			endpoint3 := routingtable.Endpoint{
@@ -969,7 +969,7 @@ var _ = Describe("Handler", func() {
 				Index:           1,
 				Port:            23,
 				ContainerPort:   8080,
-				Evacuating:      false,
+				Presence:        models.ActualLRP_Ordinary,
 				ModificationTag: currentTag,
 			}
 			route := routingtable.Route{}
@@ -1103,7 +1103,7 @@ var _ = Describe("Handler", func() {
 				Index:           0,
 				Port:            11,
 				ContainerPort:   8080,
-				Evacuating:      false,
+				Presence:        models.ActualLRP_Ordinary,
 				ModificationTag: &currentTag,
 			}
 
