@@ -1952,6 +1952,7 @@ var _ = Describe("Route Emitter", func() {
 
 				Eventually(registeredRoutes).Should(Receive(&msg1))
 				Eventually(registeredRoutes).Should(Receive(&msg2))
+				Expect(append(msg1.URIs, msg2.URIs...)).To(ConsistOf("route-1", "route-2"))
 
 				handlerWriteLock.Lock()
 				fakeConsulHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -199,7 +199,7 @@ var _ = Describe("Watcher", func() {
 		})
 	})
 
-	Context("handle ActualLRPRemovedEvent", func() {
+	Context("handle ActualLRPInstanceRemovedEvent", func() {
 		var (
 			event models.Event
 		)
@@ -217,7 +217,7 @@ var _ = Describe("Watcher", func() {
 		})
 	})
 
-	Context("handle ActualLRPCreatedEvent", func() {
+	Context("handle ActualLRPInstanceCreatedEvent", func() {
 		var (
 			event models.Event
 		)
@@ -235,7 +235,7 @@ var _ = Describe("Watcher", func() {
 		})
 	})
 
-	Context("handle ActualLRPChangedEvent", func() {
+	Context("handle ActualLRPInstanceChangedEvent", func() {
 		var (
 			event models.Event
 		)
