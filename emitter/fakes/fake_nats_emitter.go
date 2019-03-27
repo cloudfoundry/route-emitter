@@ -9,10 +9,10 @@ import (
 )
 
 type FakeNATSEmitter struct {
-	EmitStub        func(messagesToEmit routingtable.MessagesToEmit) error
+	EmitStub        func(routingtable.MessagesToEmit) error
 	emitMutex       sync.RWMutex
 	emitArgsForCall []struct {
-		messagesToEmit routingtable.MessagesToEmit
+		arg1 routingtable.MessagesToEmit
 	}
 	emitReturns struct {
 		result1 error
@@ -24,21 +24,22 @@ type FakeNATSEmitter struct {
 	invocationsMutex sync.RWMutex
 }
 
-func (fake *FakeNATSEmitter) Emit(messagesToEmit routingtable.MessagesToEmit) error {
+func (fake *FakeNATSEmitter) Emit(arg1 routingtable.MessagesToEmit) error {
 	fake.emitMutex.Lock()
 	ret, specificReturn := fake.emitReturnsOnCall[len(fake.emitArgsForCall)]
 	fake.emitArgsForCall = append(fake.emitArgsForCall, struct {
-		messagesToEmit routingtable.MessagesToEmit
-	}{messagesToEmit})
-	fake.recordInvocation("Emit", []interface{}{messagesToEmit})
+		arg1 routingtable.MessagesToEmit
+	}{arg1})
+	fake.recordInvocation("Emit", []interface{}{arg1})
 	fake.emitMutex.Unlock()
 	if fake.EmitStub != nil {
-		return fake.EmitStub(messagesToEmit)
+		return fake.EmitStub(arg1)
 	}
 	if specificReturn {
 		return ret.result1
 	}
-	return fake.emitReturns.result1
+	fakeReturns := fake.emitReturns
+	return fakeReturns.result1
 }
 
 func (fake *FakeNATSEmitter) EmitCallCount() int {
@@ -47,13 +48,22 @@ func (fake *FakeNATSEmitter) EmitCallCount() int {
 	return len(fake.emitArgsForCall)
 }
 
+func (fake *FakeNATSEmitter) EmitCalls(stub func(routingtable.MessagesToEmit) error) {
+	fake.emitMutex.Lock()
+	defer fake.emitMutex.Unlock()
+	fake.EmitStub = stub
+}
+
 func (fake *FakeNATSEmitter) EmitArgsForCall(i int) routingtable.MessagesToEmit {
 	fake.emitMutex.RLock()
 	defer fake.emitMutex.RUnlock()
-	return fake.emitArgsForCall[i].messagesToEmit
+	argsForCall := fake.emitArgsForCall[i]
+	return argsForCall.arg1
 }
 
 func (fake *FakeNATSEmitter) EmitReturns(result1 error) {
+	fake.emitMutex.Lock()
+	defer fake.emitMutex.Unlock()
 	fake.EmitStub = nil
 	fake.emitReturns = struct {
 		result1 error
@@ -61,6 +71,8 @@ func (fake *FakeNATSEmitter) EmitReturns(result1 error) {
 }
 
 func (fake *FakeNATSEmitter) EmitReturnsOnCall(i int, result1 error) {
+	fake.emitMutex.Lock()
+	defer fake.emitMutex.Unlock()
 	fake.EmitStub = nil
 	if fake.emitReturnsOnCall == nil {
 		fake.emitReturnsOnCall = make(map[int]struct {

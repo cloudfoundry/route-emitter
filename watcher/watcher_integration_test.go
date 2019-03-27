@@ -47,7 +47,7 @@ var _ = Describe("Watcher Integration", func() {
 	BeforeEach(func() {
 		bbsClient = new(fake_bbs.FakeClient)
 		eventSource = new(eventfakes.FakeEventSource)
-		bbsClient.SubscribeToEventsByCellIDReturns(eventSource, nil)
+		bbsClient.SubscribeToInstanceEventsByCellIDReturns(eventSource, nil)
 
 		natsClient = diegonats.NewFakeClient()
 		routingApiClient = new(fake_routing_api.FakeClient)
@@ -95,12 +95,12 @@ var _ = Describe("Watcher Integration", func() {
 			eventCh          chan EventHolder
 			modTag           *models.ModificationTag
 			schedulingInfo1  *models.DesiredLRPSchedulingInfo
-			actualLRPGroup1  *models.ActualLRPGroup
-			removedActualLRP *models.ActualLRPGroup
+			actualLRP1       *models.ActualLRP
+			removedActualLRP *models.ActualLRP
 		)
 
 		sendEvent := func() {
-			Eventually(eventCh).Should(BeSent(EventHolder{models.NewActualLRPRemovedEvent(removedActualLRP)}))
+			Eventually(eventCh).Should(BeSent(EventHolder{models.NewActualLRPInstanceRemovedEvent(removedActualLRP)}))
 			Eventually(logger).Should(gbytes.Say("caching-event"))
 		}
 
@@ -128,24 +128,20 @@ var _ = Describe("Watcher Integration", func() {
 				Instances: 1,
 			}
 
-			actualLRPGroup1 = &models.ActualLRPGroup{
-				Instance: &models.ActualLRP{
-					ActualLRPKey:         models.NewActualLRPKey("pg-1", 0, "domain"),
-					ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint1.InstanceGUID, "cell-id"),
-					ActualLRPNetInfo:     models.NewActualLRPNetInfo(endpoint1.Host, "container-ip", models.NewPortMapping(endpoint1.Port, endpoint1.ContainerPort)),
-					State:                models.ActualLRPStateRunning,
-					ModificationTag:      *modTag,
-				},
+			actualLRP1 = &models.ActualLRP{
+				ActualLRPKey:         models.NewActualLRPKey("pg-1", 0, "domain"),
+				ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint1.InstanceGUID, "cell-id"),
+				ActualLRPNetInfo:     models.NewActualLRPNetInfo(endpoint1.Host, "container-ip", models.NewPortMapping(endpoint1.Port, endpoint1.ContainerPort)),
+				State:                models.ActualLRPStateRunning,
+				ModificationTag:      *modTag,
 			}
 
-			removedActualLRP = &models.ActualLRPGroup{
-				Instance: &models.ActualLRP{
-					ActualLRPKey:         models.NewActualLRPKey("pg-1", 0, "domain"),
-					ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint1.InstanceGUID, "cell-id"),
-					ActualLRPNetInfo:     models.NewActualLRPNetInfo(endpoint1.Host, "container-ip", models.NewPortMapping(endpoint1.Port, endpoint1.ContainerPort)),
-					State:                models.ActualLRPStateRunning,
-					ModificationTag:      *modTag,
-				},
+			removedActualLRP = &models.ActualLRP{
+				ActualLRPKey:         models.NewActualLRPKey("pg-1", 0, "domain"),
+				ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint1.InstanceGUID, "cell-id"),
+				ActualLRPNetInfo:     models.NewActualLRPNetInfo(endpoint1.Host, "container-ip", models.NewPortMapping(endpoint1.Port, endpoint1.ContainerPort)),
+				State:                models.ActualLRPStateRunning,
+				ModificationTag:      *modTag,
 			}
 
 			eventSource.CloseStub = func() error {
@@ -165,13 +161,13 @@ var _ = Describe("Watcher Integration", func() {
 				}
 			}
 
-			bbsClient.ActualLRPGroupsStub = func(logger lager.Logger, filter models.ActualLRPFilter) ([]*models.ActualLRPGroup, error) {
+			bbsClient.ActualLRPsStub = func(logger lager.Logger, filter models.ActualLRPFilter) ([]*models.ActualLRP, error) {
 				defer GinkgoRecover()
 
 				sendEvent()
 
-				return []*models.ActualLRPGroup{
-					actualLRPGroup1,
+				return []*models.ActualLRP{
+					actualLRP1,
 				}, nil
 			}
 
@@ -183,12 +179,12 @@ var _ = Describe("Watcher Integration", func() {
 
 		JustBeforeEach(func() {
 			syncCh <- struct{}{}
-			Eventually(bbsClient.ActualLRPGroupsCallCount).Should(Equal(1))
+			Eventually(bbsClient.ActualLRPsCallCount).Should(Equal(1))
 		})
 
 		Context("when an old remove event is cached", func() {
 			BeforeEach(func() {
-				removedActualLRP.Instance.ModificationTag.Index = 0
+				removedActualLRP.ModificationTag.Index = 0
 			})
 
 			It("registers the new route", func() {
@@ -200,7 +196,7 @@ var _ = Describe("Watcher Integration", func() {
 
 		Context("when a newer remove event is cached", func() {
 			BeforeEach(func() {
-				removedActualLRP.Instance.ModificationTag.Index = 2
+				removedActualLRP.ModificationTag.Index = 2
 			})
 
 			It("does not register a new route", func() {

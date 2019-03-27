@@ -9,10 +9,10 @@ import (
 )
 
 type FakeRoutingAPIEmitter struct {
-	EmitStub        func(routingEvents routingtable.TCPRouteMappings) error
+	EmitStub        func(routingtable.TCPRouteMappings) error
 	emitMutex       sync.RWMutex
 	emitArgsForCall []struct {
-		routingEvents routingtable.TCPRouteMappings
+		arg1 routingtable.TCPRouteMappings
 	}
 	emitReturns struct {
 		result1 error
@@ -24,21 +24,22 @@ type FakeRoutingAPIEmitter struct {
 	invocationsMutex sync.RWMutex
 }
 
-func (fake *FakeRoutingAPIEmitter) Emit(routingEvents routingtable.TCPRouteMappings) error {
+func (fake *FakeRoutingAPIEmitter) Emit(arg1 routingtable.TCPRouteMappings) error {
 	fake.emitMutex.Lock()
 	ret, specificReturn := fake.emitReturnsOnCall[len(fake.emitArgsForCall)]
 	fake.emitArgsForCall = append(fake.emitArgsForCall, struct {
-		routingEvents routingtable.TCPRouteMappings
-	}{routingEvents})
-	fake.recordInvocation("Emit", []interface{}{routingEvents})
+		arg1 routingtable.TCPRouteMappings
+	}{arg1})
+	fake.recordInvocation("Emit", []interface{}{arg1})
 	fake.emitMutex.Unlock()
 	if fake.EmitStub != nil {
-		return fake.EmitStub(routingEvents)
+		return fake.EmitStub(arg1)
 	}
 	if specificReturn {
 		return ret.result1
 	}
-	return fake.emitReturns.result1
+	fakeReturns := fake.emitReturns
+	return fakeReturns.result1
 }
 
 func (fake *FakeRoutingAPIEmitter) EmitCallCount() int {
@@ -47,13 +48,22 @@ func (fake *FakeRoutingAPIEmitter) EmitCallCount() int {
 	return len(fake.emitArgsForCall)
 }
 
+func (fake *FakeRoutingAPIEmitter) EmitCalls(stub func(routingtable.TCPRouteMappings) error) {
+	fake.emitMutex.Lock()
+	defer fake.emitMutex.Unlock()
+	fake.EmitStub = stub
+}
+
 func (fake *FakeRoutingAPIEmitter) EmitArgsForCall(i int) routingtable.TCPRouteMappings {
 	fake.emitMutex.RLock()
 	defer fake.emitMutex.RUnlock()
-	return fake.emitArgsForCall[i].routingEvents
+	argsForCall := fake.emitArgsForCall[i]
+	return argsForCall.arg1
 }
 
 func (fake *FakeRoutingAPIEmitter) EmitReturns(result1 error) {
+	fake.emitMutex.Lock()
+	defer fake.emitMutex.Unlock()
 	fake.EmitStub = nil
 	fake.emitReturns = struct {
 		result1 error
@@ -61,6 +71,8 @@ func (fake *FakeRoutingAPIEmitter) EmitReturns(result1 error) {
 }
 
 func (fake *FakeRoutingAPIEmitter) EmitReturnsOnCall(i int, result1 error) {
+	fake.emitMutex.Lock()
+	defer fake.emitMutex.Unlock()
 	fake.EmitStub = nil
 	if fake.emitReturnsOnCall == nil {
 		fake.emitReturnsOnCall = make(map[int]struct {
