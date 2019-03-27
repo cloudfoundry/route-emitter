@@ -31,15 +31,15 @@ type RoutingTable interface {
 	// table modification
 	SetRoutes(logger lager.Logger, beforeLRP, afterLRP *models.DesiredLRPSchedulingInfo) (TCPRouteMappings, MessagesToEmit)
 	RemoveRoutes(logger lager.Logger, desiredLRP *models.DesiredLRPSchedulingInfo) (TCPRouteMappings, MessagesToEmit)
-	AddEndpoint(logger lager.Logger, actualLRP *ActualLRPRoutingInfo) (TCPRouteMappings, MessagesToEmit)
-	RemoveEndpoint(logger lager.Logger, actualLRP *ActualLRPRoutingInfo) (TCPRouteMappings, MessagesToEmit)
+	AddEndpoint(logger lager.Logger, actualLRP *models.ActualLRP) (TCPRouteMappings, MessagesToEmit)
+	RemoveEndpoint(logger lager.Logger, actualLRP *models.ActualLRP) (TCPRouteMappings, MessagesToEmit)
 	Swap(logger lager.Logger, t RoutingTable, domains models.DomainSet) (TCPRouteMappings, MessagesToEmit)
 	GetInternalRoutingEvents() (TCPRouteMappings, MessagesToEmit)
 	GetExternalRoutingEvents() (TCPRouteMappings, MessagesToEmit)
 
 	// routes
 
-	HasExternalRoutes(actual *ActualLRPRoutingInfo) bool
+	HasExternalRoutes(actualLRP *models.ActualLRP) bool
 	HTTPAssociationsCount() int     // return number of associations desired-lrp-http-routes * actual-lrps
 	InternalAssociationsCount() int // return number of associations desired-lrp-internal-routes * 2 * actual-lrps
 	TCPAssociationsCount() int      // return number of associations desired-lrp-tcp-routes * actual-lrps
@@ -47,7 +47,7 @@ type RoutingTable interface {
 }
 
 type internalRoutingTable struct {
-	endpointGenerator        func(*ActualLRPRoutingInfo) []Endpoint
+	endpointGenerator        func(*models.ActualLRP) []Endpoint
 	routesGenerator          func(*models.DesiredLRPSchedulingInfo) map[RoutingKey][]routeMapping
 	entries                  map[RoutingKey]RoutableEndpoints
 	addressEntries           map[Address]EndpointKey
@@ -97,7 +97,7 @@ func NewRoutingTable(directInstanceRoute bool, metronClient loggingclient.Ingres
 		Locker:                   &sync.Mutex{},
 	}
 	internalRoutingTable := &internalRoutingTable{
-		endpointGenerator:        internalEndpointsFromRoutingInfo,
+		endpointGenerator:        internalEndpointsFromActualLRP,
 		routesGenerator:          internalRoutesFromSchedulingInfo,
 		entries:                  make(map[RoutingKey]RoutableEndpoints),
 		addressEntries:           make(map[Address]EndpointKey),
@@ -115,21 +115,21 @@ func NewRoutingTable(directInstanceRoute bool, metronClient loggingclient.Ingres
 	}
 }
 
-func internalEndpointsFromRoutingInfo(actualLRP *ActualLRPRoutingInfo) []Endpoint {
+func internalEndpointsFromActualLRP(actualLRP *models.ActualLRP) []Endpoint {
 	return []Endpoint{
 		{
-			InstanceGUID:    actualLRP.ActualLRP.InstanceGuid,
-			Index:           actualLRP.ActualLRP.Index,
-			Host:            actualLRP.ActualLRP.Address,
-			ContainerIP:     actualLRP.ActualLRP.InstanceAddress,
-			Evacuating:      actualLRP.Evacuating,
-			Since:           actualLRP.ActualLRP.Since,
-			ModificationTag: &actualLRP.ActualLRP.ModificationTag,
+			InstanceGUID:    actualLRP.InstanceGuid,
+			Index:           actualLRP.Index,
+			Host:            actualLRP.Address,
+			ContainerIP:     actualLRP.InstanceAddress,
+			Presence:        actualLRP.Presence,
+			Since:           actualLRP.Since,
+			ModificationTag: &actualLRP.ModificationTag,
 		},
 	}
 }
 
-func (table *routingTable) AddEndpoint(logger lager.Logger, actualLRP *ActualLRPRoutingInfo) (TCPRouteMappings, MessagesToEmit) {
+func (table *routingTable) AddEndpoint(logger lager.Logger, actualLRP *models.ActualLRP) (TCPRouteMappings, MessagesToEmit) {
 	httpMappings, httpMessages, httpChanged := table.httpRoutesRoutingTable.AddEndpoint(logger, actualLRP)
 	tcpMappings, tcpMessages, tcpChanged := table.tcpRoutesRoutingTable.AddEndpoint(logger, actualLRP)
 	internalMappings, internalMessages, internalChanged := table.internalRoutesRoutingTable.AddEndpoint(logger, actualLRP)
@@ -145,7 +145,7 @@ func (table *routingTable) AddEndpoint(logger lager.Logger, actualLRP *ActualLRP
 	return mappings, messages
 }
 
-func (table *routingTable) RemoveEndpoint(logger lager.Logger, actualLRP *ActualLRPRoutingInfo) (TCPRouteMappings, MessagesToEmit) {
+func (table *routingTable) RemoveEndpoint(logger lager.Logger, actualLRP *models.ActualLRP) (TCPRouteMappings, MessagesToEmit) {
 	httpMappings, httpMessages, httpChanged := table.httpRoutesRoutingTable.RemoveEndpoint(logger, actualLRP)
 	tcpMappings, tcpMessages, tcpChanged := table.tcpRoutesRoutingTable.RemoveEndpoint(logger, actualLRP)
 	internalMappings, internalMessages, internalChanged := table.internalRoutesRoutingTable.RemoveEndpoint(logger, actualLRP)
@@ -223,7 +223,7 @@ func (t *routingTable) RemoveRoutes(logger lager.Logger, desiredLRP *models.Desi
 	return mappings, messages
 }
 
-func (table *internalRoutingTable) AddEndpoint(logger lager.Logger, actualLRP *ActualLRPRoutingInfo) (TCPRouteMappings, MessagesToEmit, bool) {
+func (table *internalRoutingTable) AddEndpoint(logger lager.Logger, actualLRP *models.ActualLRP) (TCPRouteMappings, MessagesToEmit, bool) {
 	table.Lock()
 	defer table.Unlock()
 
@@ -257,7 +257,7 @@ func (table *internalRoutingTable) AddEndpoint(logger lager.Logger, actualLRP *A
 
 	for _, routingEndpoint := range endpoints {
 		key := RoutingKey{
-			ProcessGUID:   actualLRP.ActualLRP.ProcessGuid,
+			ProcessGUID:   actualLRP.ProcessGuid,
 			ContainerPort: routingEndpoint.ContainerPort,
 		}
 		currentEntry := table.entries[key]
@@ -282,7 +282,7 @@ func (table *internalRoutingTable) AddEndpoint(logger lager.Logger, actualLRP *A
 	return mappings, messagesToEmit, changeDetected
 }
 
-func (table *internalRoutingTable) RemoveEndpoint(logger lager.Logger, actualLRP *ActualLRPRoutingInfo) (TCPRouteMappings, MessagesToEmit, bool) {
+func (table *internalRoutingTable) RemoveEndpoint(logger lager.Logger, actualLRP *models.ActualLRP) (TCPRouteMappings, MessagesToEmit, bool) {
 	table.Lock()
 	defer table.Unlock()
 
@@ -311,7 +311,7 @@ func (table *internalRoutingTable) RemoveEndpoint(logger lager.Logger, actualLRP
 	var mappings TCPRouteMappings
 	for _, routingEndpoint := range endpoints {
 		key := RoutingKey{
-			ProcessGUID:   actualLRP.ActualLRP.ProcessGuid,
+			ProcessGUID:   actualLRP.ProcessGuid,
 			ContainerPort: routingEndpoint.ContainerPort,
 		}
 
@@ -634,12 +634,12 @@ func diffRoutes(before, after []routeMapping) routesDiff {
 
 // endpoints are different if any field is different other than the following:
 // 1. ModificationTag
-// 2. Evacuating
+// 2. Presence
 // 3. Since
 func endpointDifferent(before, after Endpoint) bool {
 	endpoint := before
 	endpoint.ModificationTag = after.ModificationTag
-	endpoint.Evacuating = after.Evacuating
+	endpoint.Presence = after.Presence
 	endpoint.Since = after.Since
 	return endpoint != after
 }
@@ -798,8 +798,8 @@ func (t *internalRoutingTable) TableSize() int {
 	return len(t.entries)
 }
 
-func (t *internalRoutingTable) HasExternalRoutes(actual *ActualLRPRoutingInfo) bool {
-	for _, key := range NewRoutingKeysFromActual(actual) {
+func (t *internalRoutingTable) HasExternalRoutes(actualLRP *models.ActualLRP) bool {
+	for _, key := range NewRoutingKeysFromActual(actualLRP) {
 		if len(t.entries[key].Routes) > 0 {
 			return true
 		}
@@ -824,6 +824,6 @@ func (t *routingTable) TableSize() int {
 	return t.httpRoutesRoutingTable.TableSize() + t.tcpRoutesRoutingTable.TableSize() + t.internalRoutesRoutingTable.TableSize()
 }
 
-func (t *routingTable) HasExternalRoutes(actual *ActualLRPRoutingInfo) bool {
-	return t.httpRoutesRoutingTable.HasExternalRoutes(actual) || t.tcpRoutesRoutingTable.HasExternalRoutes(actual)
+func (t *routingTable) HasExternalRoutes(actualLRP *models.ActualLRP) bool {
+	return t.httpRoutesRoutingTable.HasExternalRoutes(actualLRP) || t.tcpRoutesRoutingTable.HasExternalRoutes(actualLRP)
 }

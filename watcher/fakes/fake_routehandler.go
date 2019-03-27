@@ -6,46 +6,25 @@ import (
 
 	"code.cloudfoundry.org/bbs/models"
 	"code.cloudfoundry.org/lager"
-	"code.cloudfoundry.org/route-emitter/routingtable"
 	"code.cloudfoundry.org/route-emitter/watcher"
 )
 
 type FakeRouteHandler struct {
-	HandleEventStub        func(logger lager.Logger, event models.Event)
-	handleEventMutex       sync.RWMutex
-	handleEventArgsForCall []struct {
-		logger lager.Logger
-		event  models.Event
-	}
-	SyncStub        func(logger lager.Logger, desired []*models.DesiredLRPSchedulingInfo, runningActual []*routingtable.ActualLRPRoutingInfo, domains models.DomainSet, cachedEvents map[string]models.Event)
-	syncMutex       sync.RWMutex
-	syncArgsForCall []struct {
-		logger        lager.Logger
-		desired       []*models.DesiredLRPSchedulingInfo
-		runningActual []*routingtable.ActualLRPRoutingInfo
-		domains       models.DomainSet
-		cachedEvents  map[string]models.Event
-	}
-	EmitExternalStub        func(logger lager.Logger)
+	EmitExternalStub        func(lager.Logger)
 	emitExternalMutex       sync.RWMutex
 	emitExternalArgsForCall []struct {
-		logger lager.Logger
+		arg1 lager.Logger
 	}
-	EmitInternalStub        func(logger lager.Logger)
+	EmitInternalStub        func(lager.Logger)
 	emitInternalMutex       sync.RWMutex
 	emitInternalArgsForCall []struct {
-		logger lager.Logger
+		arg1 lager.Logger
 	}
-	ShouldRefreshDesiredStub        func(*routingtable.ActualLRPRoutingInfo) bool
-	shouldRefreshDesiredMutex       sync.RWMutex
-	shouldRefreshDesiredArgsForCall []struct {
-		arg1 *routingtable.ActualLRPRoutingInfo
-	}
-	shouldRefreshDesiredReturns struct {
-		result1 bool
-	}
-	shouldRefreshDesiredReturnsOnCall map[int]struct {
-		result1 bool
+	HandleEventStub        func(lager.Logger, models.Event)
+	handleEventMutex       sync.RWMutex
+	handleEventArgsForCall []struct {
+		arg1 lager.Logger
+		arg2 models.Event
 	}
 	RefreshDesiredStub        func(lager.Logger, []*models.DesiredLRPSchedulingInfo)
 	refreshDesiredMutex       sync.RWMutex
@@ -53,82 +32,39 @@ type FakeRouteHandler struct {
 		arg1 lager.Logger
 		arg2 []*models.DesiredLRPSchedulingInfo
 	}
+	ShouldRefreshDesiredStub        func(*models.ActualLRP) bool
+	shouldRefreshDesiredMutex       sync.RWMutex
+	shouldRefreshDesiredArgsForCall []struct {
+		arg1 *models.ActualLRP
+	}
+	shouldRefreshDesiredReturns struct {
+		result1 bool
+	}
+	shouldRefreshDesiredReturnsOnCall map[int]struct {
+		result1 bool
+	}
+	SyncStub        func(lager.Logger, []*models.DesiredLRPSchedulingInfo, []*models.ActualLRP, models.DomainSet, map[string]models.Event)
+	syncMutex       sync.RWMutex
+	syncArgsForCall []struct {
+		arg1 lager.Logger
+		arg2 []*models.DesiredLRPSchedulingInfo
+		arg3 []*models.ActualLRP
+		arg4 models.DomainSet
+		arg5 map[string]models.Event
+	}
 	invocations      map[string][][]interface{}
 	invocationsMutex sync.RWMutex
 }
 
-func (fake *FakeRouteHandler) HandleEvent(logger lager.Logger, event models.Event) {
-	fake.handleEventMutex.Lock()
-	fake.handleEventArgsForCall = append(fake.handleEventArgsForCall, struct {
-		logger lager.Logger
-		event  models.Event
-	}{logger, event})
-	fake.recordInvocation("HandleEvent", []interface{}{logger, event})
-	fake.handleEventMutex.Unlock()
-	if fake.HandleEventStub != nil {
-		fake.HandleEventStub(logger, event)
-	}
-}
-
-func (fake *FakeRouteHandler) HandleEventCallCount() int {
-	fake.handleEventMutex.RLock()
-	defer fake.handleEventMutex.RUnlock()
-	return len(fake.handleEventArgsForCall)
-}
-
-func (fake *FakeRouteHandler) HandleEventArgsForCall(i int) (lager.Logger, models.Event) {
-	fake.handleEventMutex.RLock()
-	defer fake.handleEventMutex.RUnlock()
-	return fake.handleEventArgsForCall[i].logger, fake.handleEventArgsForCall[i].event
-}
-
-func (fake *FakeRouteHandler) Sync(logger lager.Logger, desired []*models.DesiredLRPSchedulingInfo, runningActual []*routingtable.ActualLRPRoutingInfo, domains models.DomainSet, cachedEvents map[string]models.Event) {
-	var desiredCopy []*models.DesiredLRPSchedulingInfo
-	if desired != nil {
-		desiredCopy = make([]*models.DesiredLRPSchedulingInfo, len(desired))
-		copy(desiredCopy, desired)
-	}
-	var runningActualCopy []*routingtable.ActualLRPRoutingInfo
-	if runningActual != nil {
-		runningActualCopy = make([]*routingtable.ActualLRPRoutingInfo, len(runningActual))
-		copy(runningActualCopy, runningActual)
-	}
-	fake.syncMutex.Lock()
-	fake.syncArgsForCall = append(fake.syncArgsForCall, struct {
-		logger        lager.Logger
-		desired       []*models.DesiredLRPSchedulingInfo
-		runningActual []*routingtable.ActualLRPRoutingInfo
-		domains       models.DomainSet
-		cachedEvents  map[string]models.Event
-	}{logger, desiredCopy, runningActualCopy, domains, cachedEvents})
-	fake.recordInvocation("Sync", []interface{}{logger, desiredCopy, runningActualCopy, domains, cachedEvents})
-	fake.syncMutex.Unlock()
-	if fake.SyncStub != nil {
-		fake.SyncStub(logger, desired, runningActual, domains, cachedEvents)
-	}
-}
-
-func (fake *FakeRouteHandler) SyncCallCount() int {
-	fake.syncMutex.RLock()
-	defer fake.syncMutex.RUnlock()
-	return len(fake.syncArgsForCall)
-}
-
-func (fake *FakeRouteHandler) SyncArgsForCall(i int) (lager.Logger, []*models.DesiredLRPSchedulingInfo, []*routingtable.ActualLRPRoutingInfo, models.DomainSet, map[string]models.Event) {
-	fake.syncMutex.RLock()
-	defer fake.syncMutex.RUnlock()
-	return fake.syncArgsForCall[i].logger, fake.syncArgsForCall[i].desired, fake.syncArgsForCall[i].runningActual, fake.syncArgsForCall[i].domains, fake.syncArgsForCall[i].cachedEvents
-}
-
-func (fake *FakeRouteHandler) EmitExternal(logger lager.Logger) {
+func (fake *FakeRouteHandler) EmitExternal(arg1 lager.Logger) {
 	fake.emitExternalMutex.Lock()
 	fake.emitExternalArgsForCall = append(fake.emitExternalArgsForCall, struct {
-		logger lager.Logger
-	}{logger})
-	fake.recordInvocation("EmitExternal", []interface{}{logger})
+		arg1 lager.Logger
+	}{arg1})
+	fake.recordInvocation("EmitExternal", []interface{}{arg1})
 	fake.emitExternalMutex.Unlock()
 	if fake.EmitExternalStub != nil {
-		fake.EmitExternalStub(logger)
+		fake.EmitExternalStub(arg1)
 	}
 }
 
@@ -138,21 +74,28 @@ func (fake *FakeRouteHandler) EmitExternalCallCount() int {
 	return len(fake.emitExternalArgsForCall)
 }
 
+func (fake *FakeRouteHandler) EmitExternalCalls(stub func(lager.Logger)) {
+	fake.emitExternalMutex.Lock()
+	defer fake.emitExternalMutex.Unlock()
+	fake.EmitExternalStub = stub
+}
+
 func (fake *FakeRouteHandler) EmitExternalArgsForCall(i int) lager.Logger {
 	fake.emitExternalMutex.RLock()
 	defer fake.emitExternalMutex.RUnlock()
-	return fake.emitExternalArgsForCall[i].logger
+	argsForCall := fake.emitExternalArgsForCall[i]
+	return argsForCall.arg1
 }
 
-func (fake *FakeRouteHandler) EmitInternal(logger lager.Logger) {
+func (fake *FakeRouteHandler) EmitInternal(arg1 lager.Logger) {
 	fake.emitInternalMutex.Lock()
 	fake.emitInternalArgsForCall = append(fake.emitInternalArgsForCall, struct {
-		logger lager.Logger
-	}{logger})
-	fake.recordInvocation("EmitInternal", []interface{}{logger})
+		arg1 lager.Logger
+	}{arg1})
+	fake.recordInvocation("EmitInternal", []interface{}{arg1})
 	fake.emitInternalMutex.Unlock()
 	if fake.EmitInternalStub != nil {
-		fake.EmitInternalStub(logger)
+		fake.EmitInternalStub(arg1)
 	}
 }
 
@@ -162,58 +105,49 @@ func (fake *FakeRouteHandler) EmitInternalCallCount() int {
 	return len(fake.emitInternalArgsForCall)
 }
 
+func (fake *FakeRouteHandler) EmitInternalCalls(stub func(lager.Logger)) {
+	fake.emitInternalMutex.Lock()
+	defer fake.emitInternalMutex.Unlock()
+	fake.EmitInternalStub = stub
+}
+
 func (fake *FakeRouteHandler) EmitInternalArgsForCall(i int) lager.Logger {
 	fake.emitInternalMutex.RLock()
 	defer fake.emitInternalMutex.RUnlock()
-	return fake.emitInternalArgsForCall[i].logger
+	argsForCall := fake.emitInternalArgsForCall[i]
+	return argsForCall.arg1
 }
 
-func (fake *FakeRouteHandler) ShouldRefreshDesired(arg1 *routingtable.ActualLRPRoutingInfo) bool {
-	fake.shouldRefreshDesiredMutex.Lock()
-	ret, specificReturn := fake.shouldRefreshDesiredReturnsOnCall[len(fake.shouldRefreshDesiredArgsForCall)]
-	fake.shouldRefreshDesiredArgsForCall = append(fake.shouldRefreshDesiredArgsForCall, struct {
-		arg1 *routingtable.ActualLRPRoutingInfo
-	}{arg1})
-	fake.recordInvocation("ShouldRefreshDesired", []interface{}{arg1})
-	fake.shouldRefreshDesiredMutex.Unlock()
-	if fake.ShouldRefreshDesiredStub != nil {
-		return fake.ShouldRefreshDesiredStub(arg1)
+func (fake *FakeRouteHandler) HandleEvent(arg1 lager.Logger, arg2 models.Event) {
+	fake.handleEventMutex.Lock()
+	fake.handleEventArgsForCall = append(fake.handleEventArgsForCall, struct {
+		arg1 lager.Logger
+		arg2 models.Event
+	}{arg1, arg2})
+	fake.recordInvocation("HandleEvent", []interface{}{arg1, arg2})
+	fake.handleEventMutex.Unlock()
+	if fake.HandleEventStub != nil {
+		fake.HandleEventStub(arg1, arg2)
 	}
-	if specificReturn {
-		return ret.result1
-	}
-	return fake.shouldRefreshDesiredReturns.result1
 }
 
-func (fake *FakeRouteHandler) ShouldRefreshDesiredCallCount() int {
-	fake.shouldRefreshDesiredMutex.RLock()
-	defer fake.shouldRefreshDesiredMutex.RUnlock()
-	return len(fake.shouldRefreshDesiredArgsForCall)
+func (fake *FakeRouteHandler) HandleEventCallCount() int {
+	fake.handleEventMutex.RLock()
+	defer fake.handleEventMutex.RUnlock()
+	return len(fake.handleEventArgsForCall)
 }
 
-func (fake *FakeRouteHandler) ShouldRefreshDesiredArgsForCall(i int) *routingtable.ActualLRPRoutingInfo {
-	fake.shouldRefreshDesiredMutex.RLock()
-	defer fake.shouldRefreshDesiredMutex.RUnlock()
-	return fake.shouldRefreshDesiredArgsForCall[i].arg1
+func (fake *FakeRouteHandler) HandleEventCalls(stub func(lager.Logger, models.Event)) {
+	fake.handleEventMutex.Lock()
+	defer fake.handleEventMutex.Unlock()
+	fake.HandleEventStub = stub
 }
 
-func (fake *FakeRouteHandler) ShouldRefreshDesiredReturns(result1 bool) {
-	fake.ShouldRefreshDesiredStub = nil
-	fake.shouldRefreshDesiredReturns = struct {
-		result1 bool
-	}{result1}
-}
-
-func (fake *FakeRouteHandler) ShouldRefreshDesiredReturnsOnCall(i int, result1 bool) {
-	fake.ShouldRefreshDesiredStub = nil
-	if fake.shouldRefreshDesiredReturnsOnCall == nil {
-		fake.shouldRefreshDesiredReturnsOnCall = make(map[int]struct {
-			result1 bool
-		})
-	}
-	fake.shouldRefreshDesiredReturnsOnCall[i] = struct {
-		result1 bool
-	}{result1}
+func (fake *FakeRouteHandler) HandleEventArgsForCall(i int) (lager.Logger, models.Event) {
+	fake.handleEventMutex.RLock()
+	defer fake.handleEventMutex.RUnlock()
+	argsForCall := fake.handleEventArgsForCall[i]
+	return argsForCall.arg1, argsForCall.arg2
 }
 
 func (fake *FakeRouteHandler) RefreshDesired(arg1 lager.Logger, arg2 []*models.DesiredLRPSchedulingInfo) {
@@ -240,27 +174,139 @@ func (fake *FakeRouteHandler) RefreshDesiredCallCount() int {
 	return len(fake.refreshDesiredArgsForCall)
 }
 
+func (fake *FakeRouteHandler) RefreshDesiredCalls(stub func(lager.Logger, []*models.DesiredLRPSchedulingInfo)) {
+	fake.refreshDesiredMutex.Lock()
+	defer fake.refreshDesiredMutex.Unlock()
+	fake.RefreshDesiredStub = stub
+}
+
 func (fake *FakeRouteHandler) RefreshDesiredArgsForCall(i int) (lager.Logger, []*models.DesiredLRPSchedulingInfo) {
 	fake.refreshDesiredMutex.RLock()
 	defer fake.refreshDesiredMutex.RUnlock()
-	return fake.refreshDesiredArgsForCall[i].arg1, fake.refreshDesiredArgsForCall[i].arg2
+	argsForCall := fake.refreshDesiredArgsForCall[i]
+	return argsForCall.arg1, argsForCall.arg2
+}
+
+func (fake *FakeRouteHandler) ShouldRefreshDesired(arg1 *models.ActualLRP) bool {
+	fake.shouldRefreshDesiredMutex.Lock()
+	ret, specificReturn := fake.shouldRefreshDesiredReturnsOnCall[len(fake.shouldRefreshDesiredArgsForCall)]
+	fake.shouldRefreshDesiredArgsForCall = append(fake.shouldRefreshDesiredArgsForCall, struct {
+		arg1 *models.ActualLRP
+	}{arg1})
+	fake.recordInvocation("ShouldRefreshDesired", []interface{}{arg1})
+	fake.shouldRefreshDesiredMutex.Unlock()
+	if fake.ShouldRefreshDesiredStub != nil {
+		return fake.ShouldRefreshDesiredStub(arg1)
+	}
+	if specificReturn {
+		return ret.result1
+	}
+	fakeReturns := fake.shouldRefreshDesiredReturns
+	return fakeReturns.result1
+}
+
+func (fake *FakeRouteHandler) ShouldRefreshDesiredCallCount() int {
+	fake.shouldRefreshDesiredMutex.RLock()
+	defer fake.shouldRefreshDesiredMutex.RUnlock()
+	return len(fake.shouldRefreshDesiredArgsForCall)
+}
+
+func (fake *FakeRouteHandler) ShouldRefreshDesiredCalls(stub func(*models.ActualLRP) bool) {
+	fake.shouldRefreshDesiredMutex.Lock()
+	defer fake.shouldRefreshDesiredMutex.Unlock()
+	fake.ShouldRefreshDesiredStub = stub
+}
+
+func (fake *FakeRouteHandler) ShouldRefreshDesiredArgsForCall(i int) *models.ActualLRP {
+	fake.shouldRefreshDesiredMutex.RLock()
+	defer fake.shouldRefreshDesiredMutex.RUnlock()
+	argsForCall := fake.shouldRefreshDesiredArgsForCall[i]
+	return argsForCall.arg1
+}
+
+func (fake *FakeRouteHandler) ShouldRefreshDesiredReturns(result1 bool) {
+	fake.shouldRefreshDesiredMutex.Lock()
+	defer fake.shouldRefreshDesiredMutex.Unlock()
+	fake.ShouldRefreshDesiredStub = nil
+	fake.shouldRefreshDesiredReturns = struct {
+		result1 bool
+	}{result1}
+}
+
+func (fake *FakeRouteHandler) ShouldRefreshDesiredReturnsOnCall(i int, result1 bool) {
+	fake.shouldRefreshDesiredMutex.Lock()
+	defer fake.shouldRefreshDesiredMutex.Unlock()
+	fake.ShouldRefreshDesiredStub = nil
+	if fake.shouldRefreshDesiredReturnsOnCall == nil {
+		fake.shouldRefreshDesiredReturnsOnCall = make(map[int]struct {
+			result1 bool
+		})
+	}
+	fake.shouldRefreshDesiredReturnsOnCall[i] = struct {
+		result1 bool
+	}{result1}
+}
+
+func (fake *FakeRouteHandler) Sync(arg1 lager.Logger, arg2 []*models.DesiredLRPSchedulingInfo, arg3 []*models.ActualLRP, arg4 models.DomainSet, arg5 map[string]models.Event) {
+	var arg2Copy []*models.DesiredLRPSchedulingInfo
+	if arg2 != nil {
+		arg2Copy = make([]*models.DesiredLRPSchedulingInfo, len(arg2))
+		copy(arg2Copy, arg2)
+	}
+	var arg3Copy []*models.ActualLRP
+	if arg3 != nil {
+		arg3Copy = make([]*models.ActualLRP, len(arg3))
+		copy(arg3Copy, arg3)
+	}
+	fake.syncMutex.Lock()
+	fake.syncArgsForCall = append(fake.syncArgsForCall, struct {
+		arg1 lager.Logger
+		arg2 []*models.DesiredLRPSchedulingInfo
+		arg3 []*models.ActualLRP
+		arg4 models.DomainSet
+		arg5 map[string]models.Event
+	}{arg1, arg2Copy, arg3Copy, arg4, arg5})
+	fake.recordInvocation("Sync", []interface{}{arg1, arg2Copy, arg3Copy, arg4, arg5})
+	fake.syncMutex.Unlock()
+	if fake.SyncStub != nil {
+		fake.SyncStub(arg1, arg2, arg3, arg4, arg5)
+	}
+}
+
+func (fake *FakeRouteHandler) SyncCallCount() int {
+	fake.syncMutex.RLock()
+	defer fake.syncMutex.RUnlock()
+	return len(fake.syncArgsForCall)
+}
+
+func (fake *FakeRouteHandler) SyncCalls(stub func(lager.Logger, []*models.DesiredLRPSchedulingInfo, []*models.ActualLRP, models.DomainSet, map[string]models.Event)) {
+	fake.syncMutex.Lock()
+	defer fake.syncMutex.Unlock()
+	fake.SyncStub = stub
+}
+
+func (fake *FakeRouteHandler) SyncArgsForCall(i int) (lager.Logger, []*models.DesiredLRPSchedulingInfo, []*models.ActualLRP, models.DomainSet, map[string]models.Event) {
+	fake.syncMutex.RLock()
+	defer fake.syncMutex.RUnlock()
+	argsForCall := fake.syncArgsForCall[i]
+	return argsForCall.arg1, argsForCall.arg2, argsForCall.arg3, argsForCall.arg4, argsForCall.arg5
 }
 
 func (fake *FakeRouteHandler) Invocations() map[string][][]interface{} {
 	fake.invocationsMutex.RLock()
 	defer fake.invocationsMutex.RUnlock()
-	fake.handleEventMutex.RLock()
-	defer fake.handleEventMutex.RUnlock()
-	fake.syncMutex.RLock()
-	defer fake.syncMutex.RUnlock()
 	fake.emitExternalMutex.RLock()
 	defer fake.emitExternalMutex.RUnlock()
 	fake.emitInternalMutex.RLock()
 	defer fake.emitInternalMutex.RUnlock()
-	fake.shouldRefreshDesiredMutex.RLock()
-	defer fake.shouldRefreshDesiredMutex.RUnlock()
+	fake.handleEventMutex.RLock()
+	defer fake.handleEventMutex.RUnlock()
 	fake.refreshDesiredMutex.RLock()
 	defer fake.refreshDesiredMutex.RUnlock()
+	fake.shouldRefreshDesiredMutex.RLock()
+	defer fake.shouldRefreshDesiredMutex.RUnlock()
+	fake.syncMutex.RLock()
+	defer fake.syncMutex.RUnlock()
 	copiedInvocations := map[string][][]interface{}{}
 	for key, value := range fake.invocations {
 		copiedInvocations[key] = value

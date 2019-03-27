@@ -87,7 +87,7 @@ func createActualLRP(
 	key routingtable.RoutingKey,
 	instance routingtable.Endpoint,
 	domain string,
-) *routingtable.ActualLRPRoutingInfo {
+) *models.ActualLRP {
 
 	var portMapping *models.PortMapping
 
@@ -97,20 +97,18 @@ func createActualLRP(
 		portMapping = models.NewPortMappingWithTLSProxy(instance.Port, instance.ContainerPort, instance.TlsProxyPort, instance.ContainerTlsProxyPort)
 	}
 
-	return &routingtable.ActualLRPRoutingInfo{
-		ActualLRP: &models.ActualLRP{
-			ActualLRPKey:         models.NewActualLRPKey(key.ProcessGUID, instance.Index, domain),
-			ActualLRPInstanceKey: models.NewActualLRPInstanceKey(instance.InstanceGUID, "cell-id"),
-			ActualLRPNetInfo: models.NewActualLRPNetInfo(
-				instance.Host,
-				instance.ContainerIP,
-				portMapping,
-			),
-			State:           models.ActualLRPStateRunning,
-			Since:           instance.Since,
-			ModificationTag: *instance.ModificationTag,
-		},
-		Evacuating: instance.Evacuating,
+	return &models.ActualLRP{
+		ActualLRPKey:         models.NewActualLRPKey(key.ProcessGUID, instance.Index, domain),
+		ActualLRPInstanceKey: models.NewActualLRPInstanceKey(instance.InstanceGUID, "cell-id"),
+		ActualLRPNetInfo: models.NewActualLRPNetInfo(
+			instance.Host,
+			instance.ContainerIP,
+			portMapping,
+		),
+		Presence:        instance.Presence,
+		State:           models.ActualLRPStateRunning,
+		Since:           instance.Since,
+		ModificationTag: *instance.ModificationTag,
 	}
 }
 
@@ -119,22 +117,20 @@ func createActualLRPWithPortMappings(
 	instance routingtable.Endpoint,
 	domain string,
 	ports ...*models.PortMapping,
-) *routingtable.ActualLRPRoutingInfo {
+) *models.ActualLRP {
 
-	return &routingtable.ActualLRPRoutingInfo{
-		ActualLRP: &models.ActualLRP{
-			ActualLRPKey:         models.NewActualLRPKey(key.ProcessGUID, instance.Index, domain),
-			ActualLRPInstanceKey: models.NewActualLRPInstanceKey(instance.InstanceGUID, "cell-id"),
-			ActualLRPNetInfo: models.NewActualLRPNetInfo(
-				instance.Host,
-				instance.ContainerIP,
-				ports...,
-			),
-			Since:           instance.Since,
-			State:           models.ActualLRPStateRunning,
-			ModificationTag: *instance.ModificationTag,
-		},
-		Evacuating: instance.Evacuating,
+	return &models.ActualLRP{
+		ActualLRPKey:         models.NewActualLRPKey(key.ProcessGUID, instance.Index, domain),
+		ActualLRPInstanceKey: models.NewActualLRPInstanceKey(instance.InstanceGUID, "cell-id"),
+		ActualLRPNetInfo: models.NewActualLRPNetInfo(
+			instance.Host,
+			instance.ContainerIP,
+			ports...,
+		),
+		Presence:        instance.Presence,
+		Since:           instance.Since,
+		State:           models.ActualLRPStateRunning,
+		ModificationTag: *instance.ModificationTag,
 	}
 }
 
@@ -172,7 +168,7 @@ var _ = Describe("RoutingTable", func() {
 			Index:           0,
 			Port:            11,
 			ContainerPort:   8080,
-			Evacuating:      false,
+			Presence:        models.ActualLRP_Ordinary,
 			Since:           1,
 			ModificationTag: currentTag,
 		}
@@ -183,7 +179,7 @@ var _ = Describe("RoutingTable", func() {
 			Index:           1,
 			Port:            22,
 			ContainerPort:   8080,
-			Evacuating:      false,
+			Presence:        models.ActualLRP_Ordinary,
 			Since:           2,
 			ModificationTag: currentTag,
 		}
@@ -194,7 +190,7 @@ var _ = Describe("RoutingTable", func() {
 			Index:           2,
 			Port:            33,
 			ContainerPort:   8080,
-			Evacuating:      false,
+			Presence:        models.ActualLRP_Ordinary,
 			Since:           3,
 			ModificationTag: currentTag,
 		}
@@ -568,7 +564,7 @@ var _ = Describe("RoutingTable", func() {
 	Describe("TableSize", func() {
 		var (
 			desiredLRP *models.DesiredLRPSchedulingInfo
-			actualLRP  *routingtable.ActualLRPRoutingInfo
+			actualLRP  *models.ActualLRP
 		)
 
 		BeforeEach(func() {
@@ -731,7 +727,7 @@ var _ = Describe("RoutingTable", func() {
 		})
 
 		Context("when the table has endpoints but no routes", func() {
-			var lrp1, lrp2 *routingtable.ActualLRPRoutingInfo
+			var lrp1, lrp2 *models.ActualLRP
 
 			BeforeEach(func() {
 				lrp1 = createActualLRP(key, endpoint1, domain)
@@ -748,7 +744,7 @@ var _ = Describe("RoutingTable", func() {
 
 		Context("when the table has routes and endpoints", func() {
 			var beforeLRPSchedulingInfo *models.DesiredLRPSchedulingInfo
-			var lrp1, lrp2 *routingtable.ActualLRPRoutingInfo
+			var lrp1, lrp2 *models.ActualLRP
 			var hostname2, internalHostname1 string
 
 			BeforeEach(func() {
@@ -815,7 +811,7 @@ var _ = Describe("RoutingTable", func() {
 		})
 
 		Context("when the table has endpoints but no routes", func() {
-			var lrp1, lrp2 *routingtable.ActualLRPRoutingInfo
+			var lrp1, lrp2 *models.ActualLRP
 
 			BeforeEach(func() {
 				lrp1 = createActualLRP(key, endpoint1, domain)
@@ -832,7 +828,7 @@ var _ = Describe("RoutingTable", func() {
 
 		Context("when the table has routes and endpoints", func() {
 			var beforeLRPSchedulingInfo *models.DesiredLRPSchedulingInfo
-			var lrp1, lrp2 *routingtable.ActualLRPRoutingInfo
+			var lrp1, lrp2 *models.ActualLRP
 			var hostname2, internalHostname1 string
 
 			BeforeEach(func() {

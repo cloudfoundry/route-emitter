@@ -53,34 +53,26 @@ func (handler *Handler) HandleEvent(logger lager.Logger, event models.Event) {
 	case *models.DesiredLRPRemovedEvent:
 		desiredInfo := event.DesiredLrp.DesiredLRPSchedulingInfo()
 		handler.handleDesiredDelete(logger, &desiredInfo)
-	case *models.ActualLRPCreatedEvent:
-		routingInfo, err := routingtable.NewActualLRPRoutingInfo(event.ActualLrpGroup)
-		if err != nil {
-			logger.Error("failed-to-get-routing-info", err)
-		} else {
-			handler.handleActualCreate(logger, routingInfo)
+	case *models.ActualLRPInstanceCreatedEvent:
+		if event.ActualLrp == nil {
+			logger.Error("nil-actual-lrp", nil, lager.Data{"event-type": event.EventType()})
+			return
 		}
-	case *models.ActualLRPChangedEvent:
-		before, beforeErr := routingtable.NewActualLRPRoutingInfo(event.Before)
-		after, afterErr := routingtable.NewActualLRPRoutingInfo(event.After)
-		var err error
-		if beforeErr != nil {
-			err = beforeErr
-		} else {
-			err = afterErr
+		handler.handleActualCreate(logger, event.ActualLrp)
+	case *models.ActualLRPInstanceChangedEvent:
+		before := event.Before.ToActualLRP(event.ActualLRPKey, event.ActualLRPInstanceKey)
+		after := event.After.ToActualLRP(event.ActualLRPKey, event.ActualLRPInstanceKey)
+		if before == nil || after == nil {
+			logger.Error("nil-actual-lrp", nil, lager.Data{"event-type": event.EventType()})
+			return
 		}
-		if err != nil {
-			logger.Error("failed-to-get-routing-info", err)
-		} else {
-			handler.handleActualUpdate(logger, before, after)
+		handler.handleActualUpdate(logger, before, after)
+	case *models.ActualLRPInstanceRemovedEvent:
+		if event.ActualLrp == nil {
+			logger.Error("nil-actual-lrp", nil, lager.Data{"event-type": event.EventType()})
+			return
 		}
-	case *models.ActualLRPRemovedEvent:
-		routingInfo, err := routingtable.NewActualLRPRoutingInfo(event.ActualLrpGroup)
-		if err != nil {
-			logger.Error("failed-to-get-routing-info", err)
-		} else {
-			handler.handleActualDelete(logger, routingInfo)
-		}
+		handler.handleActualDelete(logger, event.ActualLrp)
 	default:
 		logger.Error("did-not-handle-unrecognizable-event", errors.New("unrecognizable-event"), lager.Data{"event-type": event.EventType()})
 	}
@@ -130,7 +122,7 @@ func (handler *Handler) EmitInternal(logger lager.Logger) {
 func (handler *Handler) Sync(
 	logger lager.Logger,
 	desired []*models.DesiredLRPSchedulingInfo,
-	actuals []*routingtable.ActualLRPRoutingInfo,
+	actuals []*models.ActualLRP,
 	domains models.DomainSet,
 	cachedEvents map[string]models.Event,
 ) {
@@ -199,8 +191,8 @@ func (handler *Handler) RefreshDesired(logger lager.Logger, desiredInfo []*model
 	}
 }
 
-func (handler *Handler) ShouldRefreshDesired(actual *routingtable.ActualLRPRoutingInfo) bool {
-	return !handler.routingTable.HasExternalRoutes(actual)
+func (handler *Handler) ShouldRefreshDesired(actualLRP *models.ActualLRP) bool {
+	return !handler.routingTable.HasExternalRoutes(actualLRP)
 }
 
 func (handler *Handler) handleDesiredCreate(logger lager.Logger, desiredLRP *models.DesiredLRPSchedulingInfo) {
@@ -218,33 +210,33 @@ func (handler *Handler) handleDesiredDelete(logger lager.Logger, schedulingInfo 
 	handler.emitMessages(logger, messagesToEmit, routeMappings)
 }
 
-func (handler *Handler) handleActualCreate(logger lager.Logger, actualLRPInfo *routingtable.ActualLRPRoutingInfo) {
-	if actualLRPInfo.ActualLRP.State != models.ActualLRPStateRunning {
+func (handler *Handler) handleActualCreate(logger lager.Logger, actualLRP *models.ActualLRP) {
+	if actualLRP.State != models.ActualLRPStateRunning {
 		return
 	}
-	routeMappings, messagesToEmit := handler.routingTable.AddEndpoint(logger, actualLRPInfo)
+	routeMappings, messagesToEmit := handler.routingTable.AddEndpoint(logger, actualLRP)
 	handler.emitMessages(logger, messagesToEmit, routeMappings)
 }
 
-func (handler *Handler) handleActualUpdate(logger lager.Logger, before, after *routingtable.ActualLRPRoutingInfo) {
+func (handler *Handler) handleActualUpdate(logger lager.Logger, before, after *models.ActualLRP) {
 	var (
 		messagesToEmit routingtable.MessagesToEmit
 		routeMappings  routingtable.TCPRouteMappings
 	)
 	switch {
-	case after.ActualLRP.State == models.ActualLRPStateRunning:
+	case after.State == models.ActualLRPStateRunning:
 		routeMappings, messagesToEmit = handler.routingTable.AddEndpoint(logger, after)
-	case after.ActualLRP.State != models.ActualLRPStateRunning && before.ActualLRP.State == models.ActualLRPStateRunning:
+	case after.State != models.ActualLRPStateRunning && before.State == models.ActualLRPStateRunning:
 		routeMappings, messagesToEmit = handler.routingTable.RemoveEndpoint(logger, before)
 	}
 	handler.emitMessages(logger, messagesToEmit, routeMappings)
 }
 
-func (handler *Handler) handleActualDelete(logger lager.Logger, actualLRPInfo *routingtable.ActualLRPRoutingInfo) {
-	if actualLRPInfo.ActualLRP.State != models.ActualLRPStateRunning {
+func (handler *Handler) handleActualDelete(logger lager.Logger, actualLRP *models.ActualLRP) {
+	if actualLRP == nil || actualLRP.State != models.ActualLRPStateRunning {
 		return
 	}
-	routeMappings, messagesToEmit := handler.routingTable.RemoveEndpoint(logger, actualLRPInfo)
+	routeMappings, messagesToEmit := handler.routingTable.RemoveEndpoint(logger, actualLRP)
 	handler.emitMessages(logger, messagesToEmit, routeMappings)
 }
 
