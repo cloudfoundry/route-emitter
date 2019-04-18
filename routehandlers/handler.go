@@ -68,6 +68,7 @@ func (handler *Handler) HandleEvent(logger lager.Logger, event models.Event) {
 		}
 		handler.handleActualUpdate(logger, before, after)
 	case *models.ActualLRPInstanceRemovedEvent:
+		logger.Debug("received-actual-lrp-instance-removed-event")
 		if event.ActualLrp == nil {
 			logger.Error("nil-actual-lrp", nil, lager.Data{"event-type": event.EventType()})
 			return
