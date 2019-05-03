@@ -62,13 +62,14 @@ func (handler *Handler) HandleEvent(logger lager.Logger, event models.Event) {
 	case *models.ActualLRPInstanceChangedEvent:
 		before := event.Before.ToActualLRP(event.ActualLRPKey, event.ActualLRPInstanceKey)
 		after := event.After.ToActualLRP(event.ActualLRPKey, event.ActualLRPInstanceKey)
+		logger.Debug("received-actual-lrp-changed-event", lager.Data{"before": before, "after": after})
 		if before == nil || after == nil {
 			logger.Error("nil-actual-lrp", nil, lager.Data{"event-type": event.EventType()})
 			return
 		}
 		handler.handleActualUpdate(logger, before, after)
 	case *models.ActualLRPInstanceRemovedEvent:
-		logger.Debug("received-actual-lrp-instance-removed-event")
+		logger.Debug("received-actual-lrp-instance-removed-event", lager.Data{"lrp": event.ActualLrp})
 		if event.ActualLrp == nil {
 			logger.Error("nil-actual-lrp", nil, lager.Data{"event-type": event.EventType()})
 			return
@@ -227,7 +228,13 @@ func (handler *Handler) handleActualUpdate(logger lager.Logger, before, after *m
 	switch {
 	case after.State == models.ActualLRPStateRunning:
 		routeMappings, messagesToEmit = handler.routingTable.AddEndpoint(logger, after)
-	case after.State != models.ActualLRPStateRunning && before.State == models.ActualLRPStateRunning:
+		if before.State == models.ActualLRPStateRunning &&
+			before.Presence == models.ActualLRP_Ordinary && after.Presence == models.ActualLRP_Evacuating {
+			removeRouteMappings, removeMessagesToEmit := handler.routingTable.RemoveEndpoint(logger, before)
+			routeMappings = routeMappings.Merge(removeRouteMappings)
+			messagesToEmit = messagesToEmit.Merge(removeMessagesToEmit)
+		}
+	case before.State == models.ActualLRPStateRunning && after.State != models.ActualLRPStateRunning:
 		routeMappings, messagesToEmit = handler.routingTable.RemoveEndpoint(logger, before)
 	}
 	handler.emitMessages(logger, messagesToEmit, routeMappings)

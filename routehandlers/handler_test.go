@@ -14,6 +14,7 @@ import (
 	"code.cloudfoundry.org/route-emitter/routehandlers"
 	"code.cloudfoundry.org/route-emitter/routingtable"
 	"code.cloudfoundry.org/route-emitter/routingtable/fakeroutingtable"
+	tcpmodels "code.cloudfoundry.org/routing-api/models"
 	"code.cloudfoundry.org/routing-info/cfroutes"
 	"github.com/gogo/protobuf/proto"
 
@@ -60,8 +61,9 @@ var _ = Describe("Handler", func() {
 	)
 
 	var (
-		fakeTable   *fakeroutingtable.FakeRoutingTable
-		natsEmitter *fakes.FakeNATSEmitter
+		fakeTable             *fakeroutingtable.FakeRoutingTable
+		natsEmitter           *fakes.FakeNATSEmitter
+		fakeRoutingAPIEmitter *fakes.FakeRoutingAPIEmitter
 
 		expectedRoutes  []string
 		expectedCFRoute cfroutes.CFRoute
@@ -82,6 +84,7 @@ var _ = Describe("Handler", func() {
 	BeforeEach(func() {
 		fakeTable = &fakeroutingtable.FakeRoutingTable{}
 		natsEmitter = &fakes.FakeNATSEmitter{}
+		fakeRoutingAPIEmitter = new(fakes.FakeRoutingAPIEmitter)
 		logger = lagertest.NewTestLogger("test")
 
 		dummyEndpoint := routingtable.Endpoint{
@@ -111,7 +114,7 @@ var _ = Describe("Handler", func() {
 			return nil
 		}
 
-		routeHandler = routehandlers.NewHandler(fakeTable, natsEmitter, nil, false, fakeMetronClient)
+		routeHandler = routehandlers.NewHandler(fakeTable, natsEmitter, fakeRoutingAPIEmitter, false, fakeMetronClient)
 	})
 
 	Context("when an unrecognized event is received", func() {
@@ -569,6 +572,146 @@ var _ = Describe("Handler", func() {
 
 					messagesToEmit := natsEmitter.EmitArgsForCall(0)
 					Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
+				})
+			})
+
+			Context("when the LRP remains in RUNNING state", func() {
+				var (
+					afterActualLRP, beforeActualLRP *models.ActualLRP
+
+					addMessagesToEmit, removeMessagesToEmit, combinedMessagesToEmit routingtable.MessagesToEmit
+					addRouteMapping, removeRouteMapping, combinedRouteMapping       routingtable.TCPRouteMappings
+				)
+
+				BeforeEach(func() {
+					dummyEndpoint := routingtable.Endpoint{
+						InstanceGUID: expectedInstanceGUID,
+						Index:        expectedIndex,
+						Host:         expectedHost,
+						Port:         expectedContainerPort,
+					}
+					dummyMessageFoo := routingtable.RegistryMessageFor(dummyEndpoint, routingtable.Route{Hostname: "foo.com", LogGUID: logGuid}, true)
+					dummyMessageBar := routingtable.RegistryMessageFor(dummyEndpoint, routingtable.Route{Hostname: "bar.com", LogGUID: logGuid}, true)
+					addMessagesToEmit = routingtable.MessagesToEmit{
+						RegistrationMessages: []routingtable.RegistryMessage{dummyMessageFoo},
+					}
+					removeMessagesToEmit = routingtable.MessagesToEmit{
+						UnregistrationMessages: []routingtable.RegistryMessage{dummyMessageBar},
+					}
+					combinedMessagesToEmit = routingtable.MessagesToEmit{
+						RegistrationMessages:   []routingtable.RegistryMessage{dummyMessageFoo},
+						UnregistrationMessages: []routingtable.RegistryMessage{dummyMessageBar},
+					}
+					addRouteMapping = routingtable.TCPRouteMappings{
+						Registrations: []tcpmodels.TcpRouteMapping{
+							{Model: tcpmodels.Model{Guid: "add-route-mapping"}},
+						},
+					}
+					removeRouteMapping = routingtable.TCPRouteMappings{
+						Unregistrations: []tcpmodels.TcpRouteMapping{
+							{Model: tcpmodels.Model{Guid: "remove-route-mapping"}},
+						},
+					}
+					combinedRouteMapping = routingtable.TCPRouteMappings{
+						Registrations: []tcpmodels.TcpRouteMapping{
+							{Model: tcpmodels.Model{Guid: "add-route-mapping"}},
+						},
+						Unregistrations: []tcpmodels.TcpRouteMapping{
+							{Model: tcpmodels.Model{Guid: "remove-route-mapping"}},
+						},
+					}
+					fakeTable.AddEndpointReturns(addRouteMapping, addMessagesToEmit)
+					fakeTable.RemoveEndpointReturns(removeRouteMapping, removeMessagesToEmit)
+
+					beforeActualLRP = &models.ActualLRP{
+						ActualLRPKey:         models.NewActualLRPKey(expectedProcessGuid, expectedIndex, "domain"),
+						ActualLRPInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGUID, "cell-id"),
+						State:                models.ActualLRPStateRunning,
+						Presence:             models.ActualLRP_Ordinary,
+					}
+					afterActualLRP = &models.ActualLRP{
+						ActualLRPKey:         models.NewActualLRPKey(expectedProcessGuid, expectedIndex, "domain"),
+						ActualLRPInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGUID, "cell-id"),
+						State:                models.ActualLRPStateRunning,
+					}
+				})
+
+				JustBeforeEach(func() {
+					routeHandler.HandleEvent(logger, models.NewActualLRPInstanceChangedEvent(beforeActualLRP, afterActualLRP))
+				})
+
+				Context("when the resulting LRP presence does not change", func() {
+					BeforeEach(func() {
+						afterActualLRP.Presence = models.ActualLRP_Ordinary
+					})
+
+					It("adds a new endpoint and does not remove an old endpoint", func() {
+						Expect(fakeTable.AddEndpointCallCount()).To(Equal(1))
+						_, actualLRP := fakeTable.AddEndpointArgsForCall(0)
+						Expect(actualLRP).To(Equal(afterActualLRP))
+
+						Expect(fakeTable.RemoveEndpointCallCount()).To(Equal(0))
+
+						Expect(natsEmitter.EmitCallCount()).Should(Equal(1))
+
+						messagesToEmit := natsEmitter.EmitArgsForCall(0)
+						Expect(messagesToEmit).To(Equal(addMessagesToEmit))
+
+						Expect(fakeRoutingAPIEmitter.EmitCallCount()).Should(Equal(1))
+
+						routesToEmit := fakeRoutingAPIEmitter.EmitArgsForCall(0)
+						Expect(routesToEmit).To(Equal(addRouteMapping))
+					})
+				})
+
+				Context("when the resulting LRP changes its presence to SUSPECT", func() {
+					BeforeEach(func() {
+						afterActualLRP.Presence = models.ActualLRP_Suspect
+					})
+
+					It("adds a new endpoint and does not remove an old endpoint", func() {
+						Expect(fakeTable.AddEndpointCallCount()).To(Equal(1))
+						_, actualLRP := fakeTable.AddEndpointArgsForCall(0)
+						Expect(actualLRP).To(Equal(afterActualLRP))
+
+						Expect(fakeTable.RemoveEndpointCallCount()).To(Equal(0))
+
+						Expect(natsEmitter.EmitCallCount()).Should(Equal(1))
+
+						messagesToEmit := natsEmitter.EmitArgsForCall(0)
+						Expect(messagesToEmit).To(Equal(addMessagesToEmit))
+
+						Expect(fakeRoutingAPIEmitter.EmitCallCount()).Should(Equal(1))
+
+						routesToEmit := fakeRoutingAPIEmitter.EmitArgsForCall(0)
+						Expect(routesToEmit).To(Equal(addRouteMapping))
+					})
+				})
+
+				Context("when the resulting LRP changes its presence to EVACUATING", func() {
+					BeforeEach(func() {
+						afterActualLRP.Presence = models.ActualLRP_Evacuating
+					})
+
+					It("adds a new endpoint and removes an old endpoint", func() {
+						Expect(fakeTable.AddEndpointCallCount()).To(Equal(1))
+						_, actualLRP := fakeTable.AddEndpointArgsForCall(0)
+						Expect(actualLRP).To(Equal(afterActualLRP))
+
+						Expect(fakeTable.RemoveEndpointCallCount()).To(Equal(1))
+						_, actualLRP = fakeTable.RemoveEndpointArgsForCall(0)
+						Expect(actualLRP).To(Equal(beforeActualLRP))
+
+						Expect(natsEmitter.EmitCallCount()).Should(Equal(1))
+
+						messagesToEmit := natsEmitter.EmitArgsForCall(0)
+						Expect(messagesToEmit).To(Equal(combinedMessagesToEmit))
+
+						Expect(fakeRoutingAPIEmitter.EmitCallCount()).Should(Equal(1))
+
+						routesToEmit := fakeRoutingAPIEmitter.EmitArgsForCall(0)
+						Expect(routesToEmit).To(Equal(combinedRouteMapping))
+					})
 				})
 			})
 
