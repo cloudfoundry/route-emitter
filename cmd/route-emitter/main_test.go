@@ -101,6 +101,9 @@ var _ = Describe("Route Emitter", func() {
 		logger                                *lagertest.TestLogger
 		caFile, clientCertFile, clientKeyFile string
 		serverCertFile, serverKeyFile         string
+
+		locketConfig  locket.ClientLocketConfig
+		locketProcess ifrit.Process
 	)
 
 	bbsProxy := func(f func(w http.ResponseWriter, r *http.Request)) *httptest.Server {
@@ -298,9 +301,21 @@ var _ = Describe("Route Emitter", func() {
 		port, err := portAllocator.ClaimPorts(2)
 		Expect(err).NotTo(HaveOccurred())
 
-		routingAPIRunner, err = runners.NewRoutingAPIRunner(routingAPIPath, consulRunner.URL(), int(port), int(port+1), sqlConfig, func(cfg *runners.Config) {
-			cfg.ConsulCluster.LockTTL = 5 * time.Second
+		locketPort, err := portAllocator.ClaimPorts(1)
+		Expect(err).NotTo(HaveOccurred())
+		locketAddress := fmt.Sprintf("localhost:%d", locketPort)
+
+		locketRunner := locketrunner.NewLocketRunner(locketPath, func(cfg *locketconfig.LocketConfig) {
+			cfg.ConsulCluster = consulRunner.ConsulCluster()
+			cfg.DatabaseConnectionString = sqlRunner.ConnectionString()
+			cfg.DatabaseDriver = sqlRunner.DriverName()
+			cfg.ListenAddress = locketAddress
 		})
+		locketProcess = ginkgomon.Invoke(locketRunner)
+		locketConfig = locketrunner.ClientLocketConfig()
+		locketConfig.LocketAddress = locketAddress
+
+		routingAPIRunner, err = runners.NewRoutingAPIRunner(routingAPIPath, int(port), int(port+1), sqlConfig, locketConfig)
 
 		Expect(err).NotTo(HaveOccurred())
 		routingApiProcess = ginkgomon.Invoke(routingAPIRunner)
@@ -317,13 +332,14 @@ var _ = Describe("Route Emitter", func() {
 		cfgs = append(cfgs, func(cfg *config.RouteEmitterConfig) {
 			cfg.BBSAddress = bbsURL.String()
 			cfg.RoutingAPI.URL = "http://127.0.0.1"
-			cfg.RoutingAPI.Port = routingAPIRunner.Config.Port
+			cfg.RoutingAPI.Port = routingAPIRunner.Config.API.ListenPort
 		})
 	})
 
 	AfterEach(func() {
 		logger.Info("shutting-down")
 		ginkgomon.Kill(routingApiProcess, routingAPIInterruptTimeout)
+		ginkgomon.Kill(locketProcess)
 	})
 
 	Context("Ping interval for nats client", func() {
@@ -599,7 +615,7 @@ var _ = Describe("Route Emitter", func() {
 					cfgs = append(cfgs, func(cfg *config.RouteEmitterConfig) {
 						cfg.BBSAddress = fakeBBS.URL
 						cfg.RoutingAPI.URL = "http://127.0.0.1"
-						cfg.RoutingAPI.Port = routingAPIRunner.Config.Port
+						cfg.RoutingAPI.Port = routingAPIRunner.Config.API.ListenPort
 					})
 
 					desiredLRP.Instances = 1
@@ -669,7 +685,7 @@ var _ = Describe("Route Emitter", func() {
 						cfg.BBSAddress = bbsURL.String()
 						cfg.SyncInterval = durationjson.Duration(1 * time.Second)
 						cfg.RoutingAPI.URL = "http://127.0.0.1"
-						cfg.RoutingAPI.Port = routingAPIRunner.Config.Port
+						cfg.RoutingAPI.Port = routingAPIRunner.Config.API.ListenPort
 					})
 
 					expectedTCPProcessGUID = "some-guid"
@@ -844,7 +860,7 @@ var _ = Describe("Route Emitter", func() {
 						cfgs = append(cfgs, func(cfg *config.RouteEmitterConfig) {
 							cfg.BBSAddress = fakeBBS.URL
 							cfg.RoutingAPI.URL = "http://127.0.0.1"
-							cfg.RoutingAPI.Port = routingAPIRunner.Config.Port
+							cfg.RoutingAPI.Port = routingAPIRunner.Config.API.ListenPort
 							cfg.SyncInterval = durationjson.Duration(1 * time.Hour)
 						})
 
@@ -965,36 +981,19 @@ var _ = Describe("Route Emitter", func() {
 
 	Context("when the RouteEmitter is configured to grab the lock from the sql locking server", func() {
 		var (
-			// competingProcess ifrit.Process
-			locketAddress string
-			locketRunner  ifrit.Runner
-			locketProcess ifrit.Process
-			emitter       ifrit.Process
-			runner        *ginkgomon.Runner
+			emitter ifrit.Process
+			runner  *ginkgomon.Runner
 		)
 
 		BeforeEach(func() {
-			locketPort, err := portAllocator.ClaimPorts(1)
-			Expect(err).NotTo(HaveOccurred())
-			locketAddress = fmt.Sprintf("localhost:%d", locketPort)
-
-			locketRunner = locketrunner.NewLocketRunner(locketPath, func(cfg *locketconfig.LocketConfig) {
-				cfg.ConsulCluster = consulRunner.ConsulCluster()
-				cfg.DatabaseConnectionString = sqlRunner.ConnectionString()
-				cfg.DatabaseDriver = sqlRunner.DriverName()
-				cfg.ListenAddress = locketAddress
-			})
-			locketProcess = ginkgomon.Invoke(locketRunner)
 			cfgs = append(cfgs, func(cfg *config.RouteEmitterConfig) {
-				cfg.ClientLocketConfig = locketrunner.ClientLocketConfig()
+				cfg.ClientLocketConfig = locketConfig
 				cfg.LocketEnabled = true
-				cfg.LocketAddress = locketAddress
 			})
 		})
 
 		AfterEach(func() {
 			ginkgomon.Kill(emitter)
-			ginkgomon.Kill(locketProcess)
 		})
 
 		JustBeforeEach(func() {
@@ -1057,9 +1056,7 @@ var _ = Describe("Route Emitter", func() {
 			})
 
 			It("does not acquire the locket lock", func() {
-				cfg := locketrunner.ClientLocketConfig()
-				cfg.LocketAddress = locketAddress
-				locketClient, err := locket.NewClient(logger, cfg)
+				locketClient, err := locket.NewClient(logger, locketConfig)
 				Expect(err).NotTo(HaveOccurred())
 				Consistently(func() error {
 					_, err := locketClient.Fetch(context.Background(), &locketmodels.FetchRequest{
@@ -1088,9 +1085,7 @@ var _ = Describe("Route Emitter", func() {
 			var competingProcess ifrit.Process
 
 			BeforeEach(func() {
-				cfg := locketrunner.ClientLocketConfig()
-				cfg.LocketAddress = locketAddress
-				locketClient, err := locket.NewClient(logger, cfg)
+				locketClient, err := locket.NewClient(logger, locketConfig)
 				Expect(err).NotTo(HaveOccurred())
 
 				lockIdentifier := &locketmodels.Resource{
@@ -2193,7 +2188,7 @@ var _ = Describe("Route Emitter", func() {
 			cfgs = append(cfgs, func(cfg *config.RouteEmitterConfig) {
 				cfg.BBSAddress = fakeBBS.URL
 				cfg.RoutingAPI.URL = "http://127.0.0.1"
-				cfg.RoutingAPI.Port = routingAPIRunner.Config.Port
+				cfg.RoutingAPI.Port = routingAPIRunner.Config.API.ListenPort
 				cfg.SyncInterval = durationjson.Duration(1 * time.Hour)
 			})
 
