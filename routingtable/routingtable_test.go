@@ -103,6 +103,7 @@ func createActualLRP(
 		ActualLRPNetInfo: models.NewActualLRPNetInfo(
 			instance.Host,
 			instance.ContainerIP,
+			false,
 			portMapping,
 		),
 		Presence:        instance.Presence,
@@ -125,6 +126,7 @@ func createActualLRPWithPortMappings(
 		ActualLRPNetInfo: models.NewActualLRPNetInfo(
 			instance.Host,
 			instance.ContainerIP,
+			false,
 			ports...,
 		),
 		Presence:        instance.Presence,
