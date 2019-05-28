@@ -251,7 +251,7 @@ var _ = Describe("Route Emitter", func() {
 		lrpKey = models.NewActualLRPKey(processGuid, index, domain)
 		instanceKey = models.NewActualLRPInstanceKey("iguid1", "cell-id")
 
-		netInfo = models.NewActualLRPNetInfo("1.2.3.4", "2.2.2.2", models.NewPortMapping(65100, 8080))
+		netInfo = models.NewActualLRPNetInfo("1.2.3.4", "2.2.2.2", false, models.NewPortMapping(65100, 8080))
 		registeredRoutes = listenForRoutes("router.register")
 		unregisteredRoutes = listenForRoutes("router.unregister")
 
@@ -503,7 +503,7 @@ var _ = Describe("Route Emitter", func() {
 							Expect(bbsClient.DesireLRP(logger, &desiredLRP)).NotTo(HaveOccurred())
 							lrpKey := models.NewActualLRPKey("some-guid", 0, domain)
 							instanceKey := models.NewActualLRPInstanceKey("instance-guid", "cell-id")
-							netInfo := models.NewActualLRPNetInfo("some-ip", "container-ip", models.NewPortMapping(62003, 5222))
+							netInfo := models.NewActualLRPNetInfo("some-ip", "container-ip", false, models.NewPortMapping(62003, 5222))
 							Expect(bbsClient.StartActualLRP(logger, &lrpKey, &instanceKey, &netInfo))
 
 						})
@@ -629,7 +629,7 @@ var _ = Describe("Route Emitter", func() {
 							Eventually(runner).Should(gbytes.Say("succeeded-getting-actual-lrps"))
 							lrpKey = models.NewActualLRPKey(processGUID, 0, domain)
 							instanceKey = models.NewActualLRPInstanceKey("instance-guid", "cell-id")
-							netInfo = models.NewActualLRPNetInfo("some-ip", "container-ip", models.NewPortMapping(5222, 5222))
+							netInfo = models.NewActualLRPNetInfo("some-ip", "container-ip", false, models.NewPortMapping(5222, 5222))
 							Expect(bbsClient.StartActualLRP(logger, &lrpKey, &instanceKey, &netInfo)).To(Succeed())
 							Eventually(runner).Should(gbytes.Say("caching-event"))
 
@@ -684,7 +684,7 @@ var _ = Describe("Route Emitter", func() {
 					BeforeEach(func() {
 						lrpKey = models.NewActualLRPKey(expectedTCPProcessGUID, 0, domain)
 						instanceKey = models.NewActualLRPInstanceKey("instance-guid", "cell-id")
-						netInfo = models.NewActualLRPNetInfo("some-ip", "container-ip", models.NewPortMapping(62003, 5222))
+						netInfo = models.NewActualLRPNetInfo("some-ip", "container-ip", false, models.NewPortMapping(62003, 5222))
 						Expect(bbsClient.StartActualLRP(logger, &lrpKey, &instanceKey, &netInfo))
 					})
 
@@ -861,7 +861,7 @@ var _ = Describe("Route Emitter", func() {
 						By("waiting for the sync loop to start")
 						lrpKey = models.NewActualLRPKey(expectedTCPProcessGUID, 0, domain)
 						instanceKey = models.NewActualLRPInstanceKey("instance-guid", "cell-id")
-						netInfo = models.NewActualLRPNetInfo("some-ip", "container-ip", models.NewPortMapping(5222, 5222))
+						netInfo = models.NewActualLRPNetInfo("some-ip", "container-ip", false, models.NewPortMapping(5222, 5222))
 						Expect(bbsClient.StartActualLRP(logger, &lrpKey, &instanceKey, &netInfo)).To(Succeed())
 						Eventually(runner).Should(gbytes.Say("caching-event"))
 
@@ -897,7 +897,7 @@ var _ = Describe("Route Emitter", func() {
 
 					key := models.NewActualLRPKey("some-guid-1", 0, domain)
 					instanceKey := models.NewActualLRPInstanceKey("instance-guid-1", "cell-id")
-					netInfo := models.NewActualLRPNetInfo("some-ip-1", "container-ip-1", models.NewPortMapping(62003, 1883))
+					netInfo := models.NewActualLRPNetInfo("some-ip-1", "container-ip-1", false, models.NewPortMapping(62003, 1883))
 					Expect(bbsClient.StartActualLRP(logger, &key, &instanceKey, &netInfo))
 				})
 
@@ -1284,7 +1284,7 @@ var _ = Describe("Route Emitter", func() {
 
 				Context("and the TLS proxy port is set on the Actual LRP", func() {
 					BeforeEach(func() {
-						netInfo = models.NewActualLRPNetInfo("1.2.3.4", "2.2.2.2", models.NewPortMappingWithTLSProxy(65100, 8080, 61006, 61007))
+						netInfo = models.NewActualLRPNetInfo("1.2.3.4", "2.2.2.2", false, models.NewPortMappingWithTLSProxy(65100, 8080, 61006, 61007))
 					})
 
 					It("emits a route with the TLS proxy port set", func() {
@@ -1361,7 +1361,7 @@ var _ = Describe("Route Emitter", func() {
 
 					Context("and the TLS proxy port is set on the Actual LRP", func() {
 						BeforeEach(func() {
-							netInfo = models.NewActualLRPNetInfo("1.2.3.4", "2.2.2.2", models.NewPortMappingWithTLSProxy(65100, 8080, 61006, 61007))
+							netInfo = models.NewActualLRPNetInfo("1.2.3.4", "2.2.2.2", false, models.NewPortMappingWithTLSProxy(65100, 8080, 61006, 61007))
 						})
 
 						It("emits a route with the container TLS proxy port set", func() {

@@ -371,6 +371,7 @@ var _ = Describe("Handler", func() {
 						ActualLRPNetInfo: models.NewActualLRPNetInfo(
 							expectedHost,
 							expectedInstanceAddress,
+							false,
 							models.NewPortMapping(expectedExternalPort, expectedContainerPort),
 							models.NewPortMapping(expectedExternalPort, expectedAdditionalContainerPort),
 						),
@@ -420,6 +421,7 @@ var _ = Describe("Handler", func() {
 						ActualLRPNetInfo: models.NewActualLRPNetInfo(
 							expectedHost,
 							expectedInstanceAddress,
+							false,
 							models.NewPortMapping(expectedExternalPort, expectedContainerPort),
 							models.NewPortMapping(expectedExternalPort, expectedAdditionalContainerPort),
 						),
@@ -470,6 +472,7 @@ var _ = Describe("Handler", func() {
 						ActualLRPNetInfo: models.NewActualLRPNetInfo(
 							expectedHost,
 							expectedInstanceAddress,
+							false,
 							models.NewPortMapping(expectedExternalPort, expectedContainerPort),
 							models.NewPortMapping(expectedAdditionalExternalPort, expectedAdditionalContainerPort),
 						),
@@ -544,6 +547,7 @@ var _ = Describe("Handler", func() {
 						ActualLRPNetInfo: models.NewActualLRPNetInfo(
 							expectedHost,
 							expectedInstanceAddress,
+							false,
 							models.NewPortMapping(expectedExternalPort, expectedContainerPort),
 							models.NewPortMapping(expectedAdditionalExternalPort, expectedAdditionalContainerPort),
 						),
@@ -727,6 +731,7 @@ var _ = Describe("Handler", func() {
 						ActualLRPNetInfo: models.NewActualLRPNetInfo(
 							expectedHost,
 							expectedInstanceAddress,
+							false,
 							models.NewPortMapping(expectedExternalPort, expectedContainerPort),
 							models.NewPortMapping(expectedAdditionalExternalPort, expectedAdditionalContainerPort),
 						),
@@ -775,6 +780,7 @@ var _ = Describe("Handler", func() {
 						ActualLRPNetInfo: models.NewActualLRPNetInfo(
 							expectedHost,
 							expectedInstanceAddress,
+							false,
 							models.NewPortMapping(expectedExternalPort, expectedContainerPort),
 							models.NewPortMapping(expectedAdditionalExternalPort, expectedAdditionalContainerPort),
 						),
@@ -808,6 +814,7 @@ var _ = Describe("Handler", func() {
 						ActualLRPNetInfo: models.NewActualLRPNetInfo(
 							expectedHost,
 							expectedInstanceAddress,
+							false,
 							models.NewPortMapping(expectedExternalPort, expectedContainerPort),
 							models.NewPortMapping(expectedAdditionalExternalPort, expectedAdditionalContainerPort),
 						),
@@ -933,21 +940,21 @@ var _ = Describe("Handler", func() {
 				actualLRP1 := &models.ActualLRP{
 					ActualLRPKey:         models.NewActualLRPKey("pg-1", 0, "domain"),
 					ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint1.InstanceGUID, "cell-id"),
-					ActualLRPNetInfo:     models.NewActualLRPNetInfo(endpoint1.Host, "container-ip-1", models.NewPortMapping(endpoint1.Port, endpoint1.ContainerPort)),
+					ActualLRPNetInfo:     models.NewActualLRPNetInfo(endpoint1.Host, "container-ip-1", false, models.NewPortMapping(endpoint1.Port, endpoint1.ContainerPort)),
 					State:                models.ActualLRPStateRunning,
 				}
 
 				actualLRP2 := &models.ActualLRP{
 					ActualLRPKey:         models.NewActualLRPKey("pg-2", 0, "domain"),
 					ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint2.InstanceGUID, "cell-id"),
-					ActualLRPNetInfo:     models.NewActualLRPNetInfo(endpoint2.Host, "container-ip-2", models.NewPortMapping(endpoint2.Port, endpoint2.ContainerPort)),
+					ActualLRPNetInfo:     models.NewActualLRPNetInfo(endpoint2.Host, "container-ip-2", false, models.NewPortMapping(endpoint2.Port, endpoint2.ContainerPort)),
 					State:                models.ActualLRPStateRunning,
 				}
 
 				actualLRP3 := &models.ActualLRP{
 					ActualLRPKey:         models.NewActualLRPKey("pg-3", 1, "domain"),
 					ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint3.InstanceGUID, "cell-id"),
-					ActualLRPNetInfo:     models.NewActualLRPNetInfo(endpoint3.Host, "container-ip-3", models.NewPortMapping(endpoint3.Port, endpoint3.ContainerPort)),
+					ActualLRPNetInfo:     models.NewActualLRPNetInfo(endpoint3.Host, "container-ip-3", false, models.NewPortMapping(endpoint3.Port, endpoint3.ContainerPort)),
 					State:                models.ActualLRPStateRunning,
 				}
 
@@ -1057,7 +1064,7 @@ var _ = Describe("Handler", func() {
 					actualLRPEvent := models.NewActualLRPInstanceCreatedEvent(&models.ActualLRP{
 						ActualLRPKey:         models.NewActualLRPKey("pg-4", 0, "domain"),
 						ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint4.InstanceGUID, "cell-id"),
-						ActualLRPNetInfo:     models.NewActualLRPNetInfo(endpoint4.Host, "container-ip-4", models.NewPortMapping(endpoint4.Port, endpoint4.ContainerPort)),
+						ActualLRPNetInfo:     models.NewActualLRPNetInfo(endpoint4.Host, "container-ip-4", false, models.NewPortMapping(endpoint4.Port, endpoint4.ContainerPort)),
 						State:                models.ActualLRPStateRunning,
 					})
 
@@ -1253,8 +1260,10 @@ var _ = Describe("Handler", func() {
 			actualLRP = &models.ActualLRP{
 				ActualLRPKey:         models.NewActualLRPKey("pg-1", 0, "domain"),
 				ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint1.InstanceGUID, "cell-id"),
-				ActualLRPNetInfo: models.NewActualLRPNetInfo(endpoint1.Host,
+				ActualLRPNetInfo: models.NewActualLRPNetInfo(
+					endpoint1.Host,
 					"container-ip-1",
+					false,
 					models.NewPortMapping(endpoint1.Port, endpoint1.ContainerPort),
 					models.NewPortMapping(12, endpoint1.ContainerPort+1),
 				),

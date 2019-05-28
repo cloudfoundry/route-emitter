@@ -175,6 +175,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 						ActualLRPNetInfo: models.NewActualLRPNetInfo(
 							"some-ip",
 							"container-ip",
+							false,
 							models.NewPortMapping(611006, 5222),
 						),
 						State: models.ActualLRPStateRunning,
@@ -208,6 +209,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 						ActualLRPNetInfo: models.NewActualLRPNetInfo(
 							"some-ip",
 							"container-ip",
+							false,
 							models.NewPortMapping(611006, 5222),
 						),
 						State: models.ActualLRPStateClaimed,
@@ -241,6 +243,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 						ActualLRPNetInfo: models.NewActualLRPNetInfo(
 							"",
 							"",
+							false,
 						),
 						State: models.ActualLRPStateClaimed,
 					}
@@ -251,6 +254,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 						ActualLRPNetInfo: models.NewActualLRPNetInfo(
 							"some-ip",
 							"container-ip",
+							false,
 							models.NewPortMapping(611006, 5222),
 						),
 						State: models.ActualLRPStateRunning,
@@ -284,6 +288,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 						ActualLRPNetInfo: models.NewActualLRPNetInfo(
 							"some-ip",
 							"container-ip",
+							false,
 							models.NewPortMapping(611006, 5222),
 						),
 						State: models.ActualLRPStateRunning,
@@ -295,6 +300,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 						ActualLRPNetInfo: models.NewActualLRPNetInfo(
 							"",
 							"",
+							false,
 						),
 						State: models.ActualLRPStateCrashed,
 					}
@@ -327,6 +333,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 						ActualLRPNetInfo: models.NewActualLRPNetInfo(
 							"",
 							"",
+							false,
 						),
 						State: models.ActualLRPStateUnclaimed,
 					}
@@ -337,6 +344,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 						ActualLRPNetInfo: models.NewActualLRPNetInfo(
 							"",
 							"",
+							false,
 						),
 						State: models.ActualLRPStateClaimed,
 					}
@@ -365,6 +373,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 						ActualLRPNetInfo: models.NewActualLRPNetInfo(
 							"some-ip",
 							"container-ip",
+							false,
 							models.NewPortMapping(611006, 5222),
 						),
 						State: models.ActualLRPStateRunning,
@@ -398,6 +407,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 						ActualLRPNetInfo: models.NewActualLRPNetInfo(
 							"",
 							"",
+							false,
 						),
 						State: models.ActualLRPStateClaimed,
 					}
@@ -423,6 +433,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 				ActualLRPNetInfo: models.NewActualLRPNetInfo(
 					"some-ip",
 					"container-ip",
+					false,
 					models.NewPortMapping(61006, 5222),
 					models.NewPortMapping(61007, 5223),
 				),
@@ -523,6 +534,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 						ActualLRPNetInfo: models.NewActualLRPNetInfo(
 							"some-ip",
 							"container-ip",
+							false,
 							models.NewPortMapping(61006, containerPort),
 						),
 						State:           models.ActualLRPStateRunning,
@@ -611,6 +623,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 						ActualLRPNetInfo: models.NewActualLRPNetInfo(
 							"some-ip-2",
 							"container-ip-2",
+							false,
 							models.NewPortMapping(61006, 5222),
 						),
 						State:           models.ActualLRPStateRunning,
