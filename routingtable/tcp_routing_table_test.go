@@ -76,7 +76,7 @@ var _ = Describe("TCPRoutingTable", func() {
 			ActualLRPNetInfo: models.NewActualLRPNetInfo(
 				hostAddress,
 				instanceAddress,
-				false,
+				models.ActualLRPNetInfo_PreferredAddressHost,
 				models.NewPortMapping(hostPort, containerPort),
 			),
 			Presence:        models.ActualLRP_Ordinary,
@@ -907,7 +907,7 @@ var _ = Describe("TCPRoutingTable", func() {
 								newActualLRP.ActualLRPNetInfo = models.NewActualLRPNetInfo(
 									"some-ip-1",
 									"container-ip-1",
-									false,
+									models.ActualLRPNetInfo_PreferredAddressHost,
 									models.NewPortMapping(62004, 5222),
 									models.NewPortMapping(62005, 5223),
 								)

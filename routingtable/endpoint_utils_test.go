@@ -20,7 +20,7 @@ var _ = Describe("LRP Utils", func() {
 					ActualLRPNetInfo: models.NewActualLRPNetInfo(
 						"1.1.1.1",
 						"2.2.2.2",
-						false,
+						models.ActualLRPNetInfo_PreferredAddressHost,
 						models.NewPortMapping(11, 44),
 						models.NewPortMapping(66, 99),
 					),
@@ -46,7 +46,7 @@ var _ = Describe("LRP Utils", func() {
 						ActualLRPNetInfo: models.NewActualLRPNetInfo(
 							"1.1.1.1",
 							"2.2.2.2",
-							false,
+							models.ActualLRPNetInfo_PreferredAddressHost,
 							models.NewPortMappingWithTLSProxy(11, 44, 61004, 61005),
 							models.NewPortMappingWithTLSProxy(66, 99, 61006, 61007),
 						),
@@ -75,7 +75,7 @@ var _ = Describe("LRP Utils", func() {
 					ActualLRPNetInfo: models.NewActualLRPNetInfo(
 						"1.1.1.1",
 						"2.2.2.2",
-						false,
+						models.ActualLRPNetInfo_PreferredAddressHost,
 						models.NewPortMapping(11, 44),
 						models.NewPortMapping(66, 99),
 					),
@@ -102,7 +102,7 @@ var _ = Describe("LRP Utils", func() {
 				ActualLRPNetInfo: models.NewActualLRPNetInfo(
 					"1.1.1.1",
 					"2.2.2.2",
-					false,
+					models.ActualLRPNetInfo_PreferredAddressHost,
 					models.NewPortMapping(11, 44),
 					models.NewPortMapping(66, 99),
 				),
@@ -122,7 +122,7 @@ var _ = Describe("LRP Utils", func() {
 					ActualLRPNetInfo: models.NewActualLRPNetInfo(
 						"1.1.1.1",
 						"2.2.2.2",
-						false,
+						models.ActualLRPNetInfo_PreferredAddressHost,
 						models.NewPortMappingWithTLSProxy(11, 44, 61004, 61005),
 						models.NewPortMappingWithTLSProxy(66, 99, 61006, 61007),
 					),
@@ -145,7 +145,7 @@ var _ = Describe("LRP Utils", func() {
 					ActualLRPNetInfo: models.NewActualLRPNetInfo(
 						"1.1.1.1",
 						"2.2.2.2",
-						false,
+						models.ActualLRPNetInfo_PreferredAddressHost,
 					),
 					State: models.ActualLRPStateRunning,
 				})

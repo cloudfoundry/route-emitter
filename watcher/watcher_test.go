@@ -56,7 +56,7 @@ var _ = Describe("Watcher", func() {
 			ActualLRPNetInfo: models.NewActualLRPNetInfo(
 				hostAddress,
 				instanceAddress,
-				false,
+				models.ActualLRPNetInfo_PreferredAddressHost,
 				models.NewPortMapping(hostPort, containerPort),
 			),
 			State: models.ActualLRPStateRunning,
@@ -414,21 +414,21 @@ var _ = Describe("Watcher", func() {
 		actualLRP1 := &models.ActualLRP{
 			ActualLRPKey:         models.NewActualLRPKey("pg-1", 0, "domain"),
 			ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint1.InstanceGUID, "cell-id"),
-			ActualLRPNetInfo:     models.NewActualLRPNetInfo(endpoint1.Host, "container-ip", false, models.NewPortMapping(endpoint1.Port, endpoint1.ContainerPort)),
+			ActualLRPNetInfo:     models.NewActualLRPNetInfo(endpoint1.Host, "container-ip", models.ActualLRPNetInfo_PreferredAddressHost, models.NewPortMapping(endpoint1.Port, endpoint1.ContainerPort)),
 			State:                models.ActualLRPStateRunning,
 		}
 
 		actualLRP2 := &models.ActualLRP{
 			ActualLRPKey:         models.NewActualLRPKey("pg-2", 0, "domain"),
 			ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint2.InstanceGUID, "cell-id"),
-			ActualLRPNetInfo:     models.NewActualLRPNetInfo(endpoint2.Host, "container-ip", false, models.NewPortMapping(endpoint2.Port, endpoint2.ContainerPort)),
+			ActualLRPNetInfo:     models.NewActualLRPNetInfo(endpoint2.Host, "container-ip", models.ActualLRPNetInfo_PreferredAddressHost, models.NewPortMapping(endpoint2.Port, endpoint2.ContainerPort)),
 			State:                models.ActualLRPStateRunning,
 		}
 
 		actualLRP3 := &models.ActualLRP{
 			ActualLRPKey:         models.NewActualLRPKey("pg-3", 1, "domain"),
 			ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint3.InstanceGUID, "cell-id"),
-			ActualLRPNetInfo:     models.NewActualLRPNetInfo(endpoint3.Host, "container-ip", false, models.NewPortMapping(endpoint3.Port, endpoint3.ContainerPort)),
+			ActualLRPNetInfo:     models.NewActualLRPNetInfo(endpoint3.Host, "container-ip", models.ActualLRPNetInfo_PreferredAddressHost, models.NewPortMapping(endpoint3.Port, endpoint3.ContainerPort)),
 			State:                models.ActualLRPStateRunning,
 		}
 
