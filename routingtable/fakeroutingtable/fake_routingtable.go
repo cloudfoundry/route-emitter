@@ -93,11 +93,11 @@ type FakeRoutingTable struct {
 		result1 routingtable.TCPRouteMappings
 		result2 routingtable.MessagesToEmit
 	}
-	RemoveRoutesStub        func(lager.Logger, *models.DesiredLRPSchedulingInfo) (routingtable.TCPRouteMappings, routingtable.MessagesToEmit)
+	RemoveRoutesStub        func(lager.Logger, *models.DesiredLRP) (routingtable.TCPRouteMappings, routingtable.MessagesToEmit)
 	removeRoutesMutex       sync.RWMutex
 	removeRoutesArgsForCall []struct {
 		arg1 lager.Logger
-		arg2 *models.DesiredLRPSchedulingInfo
+		arg2 *models.DesiredLRP
 	}
 	removeRoutesReturns struct {
 		result1 routingtable.TCPRouteMappings
@@ -107,12 +107,12 @@ type FakeRoutingTable struct {
 		result1 routingtable.TCPRouteMappings
 		result2 routingtable.MessagesToEmit
 	}
-	SetRoutesStub        func(lager.Logger, *models.DesiredLRPSchedulingInfo, *models.DesiredLRPSchedulingInfo) (routingtable.TCPRouteMappings, routingtable.MessagesToEmit)
+	SetRoutesStub        func(lager.Logger, *models.DesiredLRP, *models.DesiredLRP) (routingtable.TCPRouteMappings, routingtable.MessagesToEmit)
 	setRoutesMutex       sync.RWMutex
 	setRoutesArgsForCall []struct {
 		arg1 lager.Logger
-		arg2 *models.DesiredLRPSchedulingInfo
-		arg3 *models.DesiredLRPSchedulingInfo
+		arg2 *models.DesiredLRP
+		arg3 *models.DesiredLRP
 	}
 	setRoutesReturns struct {
 		result1 routingtable.TCPRouteMappings
@@ -563,12 +563,12 @@ func (fake *FakeRoutingTable) RemoveEndpointReturnsOnCall(i int, result1 routing
 	}{result1, result2}
 }
 
-func (fake *FakeRoutingTable) RemoveRoutes(arg1 lager.Logger, arg2 *models.DesiredLRPSchedulingInfo) (routingtable.TCPRouteMappings, routingtable.MessagesToEmit) {
+func (fake *FakeRoutingTable) RemoveRoutes(arg1 lager.Logger, arg2 *models.DesiredLRP) (routingtable.TCPRouteMappings, routingtable.MessagesToEmit) {
 	fake.removeRoutesMutex.Lock()
 	ret, specificReturn := fake.removeRoutesReturnsOnCall[len(fake.removeRoutesArgsForCall)]
 	fake.removeRoutesArgsForCall = append(fake.removeRoutesArgsForCall, struct {
 		arg1 lager.Logger
-		arg2 *models.DesiredLRPSchedulingInfo
+		arg2 *models.DesiredLRP
 	}{arg1, arg2})
 	fake.recordInvocation("RemoveRoutes", []interface{}{arg1, arg2})
 	fake.removeRoutesMutex.Unlock()
@@ -588,13 +588,13 @@ func (fake *FakeRoutingTable) RemoveRoutesCallCount() int {
 	return len(fake.removeRoutesArgsForCall)
 }
 
-func (fake *FakeRoutingTable) RemoveRoutesCalls(stub func(lager.Logger, *models.DesiredLRPSchedulingInfo) (routingtable.TCPRouteMappings, routingtable.MessagesToEmit)) {
+func (fake *FakeRoutingTable) RemoveRoutesCalls(stub func(lager.Logger, *models.DesiredLRP) (routingtable.TCPRouteMappings, routingtable.MessagesToEmit)) {
 	fake.removeRoutesMutex.Lock()
 	defer fake.removeRoutesMutex.Unlock()
 	fake.RemoveRoutesStub = stub
 }
 
-func (fake *FakeRoutingTable) RemoveRoutesArgsForCall(i int) (lager.Logger, *models.DesiredLRPSchedulingInfo) {
+func (fake *FakeRoutingTable) RemoveRoutesArgsForCall(i int) (lager.Logger, *models.DesiredLRP) {
 	fake.removeRoutesMutex.RLock()
 	defer fake.removeRoutesMutex.RUnlock()
 	argsForCall := fake.removeRoutesArgsForCall[i]
@@ -627,13 +627,13 @@ func (fake *FakeRoutingTable) RemoveRoutesReturnsOnCall(i int, result1 routingta
 	}{result1, result2}
 }
 
-func (fake *FakeRoutingTable) SetRoutes(arg1 lager.Logger, arg2 *models.DesiredLRPSchedulingInfo, arg3 *models.DesiredLRPSchedulingInfo) (routingtable.TCPRouteMappings, routingtable.MessagesToEmit) {
+func (fake *FakeRoutingTable) SetRoutes(arg1 lager.Logger, arg2 *models.DesiredLRP, arg3 *models.DesiredLRP) (routingtable.TCPRouteMappings, routingtable.MessagesToEmit) {
 	fake.setRoutesMutex.Lock()
 	ret, specificReturn := fake.setRoutesReturnsOnCall[len(fake.setRoutesArgsForCall)]
 	fake.setRoutesArgsForCall = append(fake.setRoutesArgsForCall, struct {
 		arg1 lager.Logger
-		arg2 *models.DesiredLRPSchedulingInfo
-		arg3 *models.DesiredLRPSchedulingInfo
+		arg2 *models.DesiredLRP
+		arg3 *models.DesiredLRP
 	}{arg1, arg2, arg3})
 	fake.recordInvocation("SetRoutes", []interface{}{arg1, arg2, arg3})
 	fake.setRoutesMutex.Unlock()
@@ -653,13 +653,13 @@ func (fake *FakeRoutingTable) SetRoutesCallCount() int {
 	return len(fake.setRoutesArgsForCall)
 }
 
-func (fake *FakeRoutingTable) SetRoutesCalls(stub func(lager.Logger, *models.DesiredLRPSchedulingInfo, *models.DesiredLRPSchedulingInfo) (routingtable.TCPRouteMappings, routingtable.MessagesToEmit)) {
+func (fake *FakeRoutingTable) SetRoutesCalls(stub func(lager.Logger, *models.DesiredLRP, *models.DesiredLRP) (routingtable.TCPRouteMappings, routingtable.MessagesToEmit)) {
 	fake.setRoutesMutex.Lock()
 	defer fake.setRoutesMutex.Unlock()
 	fake.SetRoutesStub = stub
 }
 
-func (fake *FakeRoutingTable) SetRoutesArgsForCall(i int) (lager.Logger, *models.DesiredLRPSchedulingInfo, *models.DesiredLRPSchedulingInfo) {
+func (fake *FakeRoutingTable) SetRoutesArgsForCall(i int) (lager.Logger, *models.DesiredLRP, *models.DesiredLRP) {
 	fake.setRoutesMutex.RLock()
 	defer fake.setRoutesMutex.RUnlock()
 	argsForCall := fake.setRoutesArgsForCall[i]

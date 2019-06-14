@@ -1700,13 +1700,13 @@ var _ = Describe("Route Emitter", func() {
 					JustBeforeEach(func() {
 						// ensure it's seen the route at least once
 						blkChannel <- struct{}{}
-						Eventually(runner).Should(gbytes.Say("succeeded-getting-scheduling-infos"))
+						Eventually(runner).Should(gbytes.Say("succeeded-getting-desired-lrps"))
 						Eventually(internalRegisteredRoutes).Should(Receive(&msg1))
 						Eventually(internalRegisteredRoutes).Should(Receive(&msg2))
 
 						sqlRunner.Reset()
 						close(blkChannel)
-						Eventually(runner).Should(gbytes.Say("succeeded-getting-scheduling-infos"))
+						Eventually(runner).Should(gbytes.Say("succeeded-getting-desired-lrps"))
 
 						// Only start actual LRP, do not repopulate Desired
 						err := bbsClient.StartActualLRP(logger, &lrpKey, &instanceKey, &netInfo)

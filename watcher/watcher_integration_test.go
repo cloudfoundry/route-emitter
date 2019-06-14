@@ -94,7 +94,7 @@ var _ = Describe("Watcher Integration", func() {
 			errCh            chan error
 			eventCh          chan EventHolder
 			modTag           *models.ModificationTag
-			schedulingInfo1  *models.DesiredLRPSchedulingInfo
+			desiredLRP1      *models.DesiredLRP
 			actualLRP1       *models.ActualLRP
 			removedActualLRP *models.ActualLRP
 		)
@@ -115,17 +115,20 @@ var _ = Describe("Watcher Integration", func() {
 			endpoint1 := routingtable.Endpoint{InstanceGUID: "ig-1", Host: "1.1.1.1", Index: 0, Port: 11, ContainerPort: 8080, Presence: models.ActualLRP_Ordinary, ModificationTag: modTag}
 
 			hostname1 := "foo.example.com"
-			schedulingInfo1 = &models.DesiredLRPSchedulingInfo{
-				ModificationTag: *modTag,
-				DesiredLRPKey:   models.NewDesiredLRPKey("pg-1", "tests", "lg1"),
-				Routes: cfroutes.CFRoutes{
-					cfroutes.CFRoute{
-						Hostnames:       []string{hostname1},
-						Port:            8080,
-						RouteServiceUrl: "https://rs.example.com",
-					},
-				}.RoutingInfo(),
-				Instances: 1,
+			routingInfo1 := cfroutes.CFRoutes{
+				cfroutes.CFRoute{
+					Hostnames:       []string{hostname1},
+					Port:            8080,
+					RouteServiceUrl: "https://rs.example.com",
+				},
+			}.RoutingInfo()
+			desiredLRP1 = &models.DesiredLRP{
+				ModificationTag: modTag,
+				ProcessGuid:     "pg-1",
+				Domain:          "tests",
+				LogGuid:         "lg1",
+				Routes:          &routingInfo1,
+				Instances:       1,
 			}
 
 			actualLRP1 = &models.ActualLRP{
@@ -171,9 +174,9 @@ var _ = Describe("Watcher Integration", func() {
 				}, nil
 			}
 
-			bbsClient.DesiredLRPSchedulingInfosStub = func(logger lager.Logger, f models.DesiredLRPFilter) ([]*models.DesiredLRPSchedulingInfo, error) {
+			bbsClient.DesiredLRPsStub = func(logger lager.Logger, f models.DesiredLRPFilter) ([]*models.DesiredLRP, error) {
 				defer GinkgoRecover()
-				return []*models.DesiredLRPSchedulingInfo{schedulingInfo1}, nil
+				return []*models.DesiredLRP{desiredLRP1}, nil
 			}
 		})
 

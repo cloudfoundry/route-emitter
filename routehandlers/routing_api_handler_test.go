@@ -70,7 +70,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 				Expect(fakeRoutingTable.SetRoutesCallCount()).Should(Equal(1))
 				_, before, after := fakeRoutingTable.SetRoutesArgsForCall(0)
 				Expect(before).To(BeNil())
-				Expect(*after).Should(Equal(desiredLRP.DesiredLRPSchedulingInfo()))
+				Expect(after).Should(Equal(desiredLRP))
 			})
 
 			Context("when there are routing events", func() {
@@ -113,8 +113,8 @@ var _ = Describe("RoutingAPIHandler", func() {
 			It("invokes UpdateRoutes on RoutingTable", func() {
 				Expect(fakeRoutingTable.SetRoutesCallCount()).Should(Equal(1))
 				_, beforeLrp, afterLrp := fakeRoutingTable.SetRoutesArgsForCall(0)
-				Expect(*beforeLrp).Should(Equal(desiredLRP.DesiredLRPSchedulingInfo()))
-				Expect(*afterLrp).Should(Equal(after.DesiredLRPSchedulingInfo()))
+				Expect(beforeLrp).Should(Equal(desiredLRP))
+				Expect(afterLrp).Should(Equal(after))
 			})
 
 			Context("when there are routing events", func() {
@@ -145,7 +145,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 				Expect(fakeRoutingTable.RemoveRoutesCallCount()).Should(Equal(1))
 				Expect(fakeRoutingAPIEmitter.EmitCallCount()).Should(Equal(1))
 				_, lrp := fakeRoutingTable.RemoveRoutesArgsForCall(0)
-				Expect(*lrp).Should(Equal(desiredLRP.DesiredLRPSchedulingInfo()))
+				Expect(lrp).Should(Equal(desiredLRP))
 			})
 		})
 	})
@@ -479,19 +479,17 @@ var _ = Describe("RoutingAPIHandler", func() {
 					ContainerPort:   containerPort,
 				},
 			}
-			desiredInfo := &models.DesiredLRPSchedulingInfo{
-				DesiredLRPKey: models.DesiredLRPKey{
-					ProcessGuid: "process-guid-1",
-					LogGuid:     "log-guid",
-				},
-				Routes:          *tcpRoutes.RoutingInfo(),
-				ModificationTag: modificationTag,
+			desiredLRP := &models.DesiredLRP{
+				ProcessGuid:     "process-guid-1",
+				LogGuid:         "log-guid",
+				Routes:          tcpRoutes.RoutingInfo(),
+				ModificationTag: &modificationTag,
 			}
-			routeHandler.RefreshDesired(logger, []*models.DesiredLRPSchedulingInfo{desiredInfo})
+			routeHandler.RefreshDesired(logger, []*models.DesiredLRP{desiredLRP})
 
 			Expect(fakeRoutingTable.SetRoutesCallCount()).To(Equal(1))
 			_, _, after := fakeRoutingTable.SetRoutesArgsForCall(0)
-			Expect(after).To(Equal(desiredInfo))
+			Expect(after).To(Equal(desiredLRP))
 			Expect(fakeRoutingAPIEmitter.EmitCallCount()).Should(Equal(1))
 		})
 	})
@@ -499,7 +497,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 	Describe("Sync", func() {
 		Context("when bbs server returns desired and actual lrps", func() {
 			var (
-				desiredInfo     []*models.DesiredLRPSchedulingInfo
+				desiredLRPs     []*models.DesiredLRP
 				actualLRPs      []*models.ActualLRP
 				modificationTag models.ModificationTag
 			)
@@ -516,14 +514,12 @@ var _ = Describe("RoutingAPIHandler", func() {
 					},
 				}
 
-				desiredInfo = []*models.DesiredLRPSchedulingInfo{
-					&models.DesiredLRPSchedulingInfo{
-						DesiredLRPKey: models.DesiredLRPKey{
-							ProcessGuid: "process-guid-1",
-							LogGuid:     "log-guid",
-						},
-						Routes:          *tcpRoutes.RoutingInfo(),
-						ModificationTag: modificationTag,
+				desiredLRPs = []*models.DesiredLRP{
+					&models.DesiredLRP{
+						ProcessGuid:     "process-guid-1",
+						LogGuid:         "log-guid",
+						Routes:          tcpRoutes.RoutingInfo(),
+						ModificationTag: &modificationTag,
 					},
 				}
 
@@ -571,7 +567,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 				})
 
 				It("emits the TCPRouteCount", func() {
-					routeHandler.Sync(logger, desiredInfo, actualLRPs, nil, nil)
+					routeHandler.Sync(logger, desiredLRPs, actualLRPs, nil, nil)
 					Eventually(metricsChan).Should(Receive(Equal(metric{
 						name:  "TCPRouteCount",
 						value: 1,
@@ -582,7 +578,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 			It("updates the routing table", func() {
 				domains := models.DomainSet{}
 				domains.Add("foo")
-				routeHandler.Sync(logger, desiredInfo, actualLRPs, domains, nil)
+				routeHandler.Sync(logger, desiredLRPs, actualLRPs, domains, nil)
 				Expect(fakeRoutingTable.SwapCallCount()).Should(Equal(1))
 				_, tempRoutingTable, actualDomains := fakeRoutingTable.SwapArgsForCall(0)
 				Expect(actualDomains).To(Equal(domains))
@@ -636,7 +632,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 					}
 					routeHandler.Sync(
 						logger,
-						desiredInfo,
+						desiredLRPs,
 						actualLRPs,
 						nil,
 						cachedEvents,

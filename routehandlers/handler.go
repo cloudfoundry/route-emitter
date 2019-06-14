@@ -44,15 +44,11 @@ func (handler *Handler) HandleEvent(logger lager.Logger, event models.Event) {
 
 	switch event := event.(type) {
 	case *models.DesiredLRPCreatedEvent:
-		desiredInfo := event.DesiredLrp.DesiredLRPSchedulingInfo()
-		handler.handleDesiredCreate(logger, &desiredInfo)
+		handler.handleDesiredCreate(logger, event.DesiredLrp)
 	case *models.DesiredLRPChangedEvent:
-		before := event.Before.DesiredLRPSchedulingInfo()
-		after := event.After.DesiredLRPSchedulingInfo()
-		handler.handleDesiredUpdate(logger, &before, &after)
+		handler.handleDesiredUpdate(logger, event.Before, event.After)
 	case *models.DesiredLRPRemovedEvent:
-		desiredInfo := event.DesiredLrp.DesiredLRPSchedulingInfo()
-		handler.handleDesiredDelete(logger, &desiredInfo)
+		handler.handleDesiredDelete(logger, event.DesiredLrp)
 	case *models.ActualLRPInstanceCreatedEvent:
 		if event.ActualLrp == nil {
 			logger.Error("nil-actual-lrp", nil, lager.Data{"event-type": event.EventType()})
@@ -123,7 +119,7 @@ func (handler *Handler) EmitInternal(logger lager.Logger) {
 
 func (handler *Handler) Sync(
 	logger lager.Logger,
-	desired []*models.DesiredLRPSchedulingInfo,
+	desired []*models.DesiredLRP,
 	actuals []*models.ActualLRP,
 	domains models.DomainSet,
 	cachedEvents map[string]models.Event,
@@ -186,8 +182,8 @@ func (handler *Handler) Sync(
 	}
 }
 
-func (handler *Handler) RefreshDesired(logger lager.Logger, desiredInfo []*models.DesiredLRPSchedulingInfo) {
-	for _, desiredLRP := range desiredInfo {
+func (handler *Handler) RefreshDesired(logger lager.Logger, desiredLRPs []*models.DesiredLRP) {
+	for _, desiredLRP := range desiredLRPs {
 		routeMappings, messagesToEmit := handler.routingTable.SetRoutes(logger, nil, desiredLRP)
 		handler.emitMessages(logger, messagesToEmit, routeMappings)
 	}
@@ -197,18 +193,18 @@ func (handler *Handler) ShouldRefreshDesired(actualLRP *models.ActualLRP) bool {
 	return !handler.routingTable.HasExternalRoutes(actualLRP)
 }
 
-func (handler *Handler) handleDesiredCreate(logger lager.Logger, desiredLRP *models.DesiredLRPSchedulingInfo) {
+func (handler *Handler) handleDesiredCreate(logger lager.Logger, desiredLRP *models.DesiredLRP) {
 	routeMappings, messagesToEmit := handler.routingTable.SetRoutes(logger, nil, desiredLRP)
 	handler.emitMessages(logger, messagesToEmit, routeMappings)
 }
 
-func (handler *Handler) handleDesiredUpdate(logger lager.Logger, before, after *models.DesiredLRPSchedulingInfo) {
+func (handler *Handler) handleDesiredUpdate(logger lager.Logger, before, after *models.DesiredLRP) {
 	routeMappings, messagesToEmit := handler.routingTable.SetRoutes(logger, before, after)
 	handler.emitMessages(logger, messagesToEmit, routeMappings)
 }
 
-func (handler *Handler) handleDesiredDelete(logger lager.Logger, schedulingInfo *models.DesiredLRPSchedulingInfo) {
-	routeMappings, messagesToEmit := handler.routingTable.RemoveRoutes(logger, schedulingInfo)
+func (handler *Handler) handleDesiredDelete(logger lager.Logger, desiredLRP *models.DesiredLRP) {
+	routeMappings, messagesToEmit := handler.routingTable.RemoveRoutes(logger, desiredLRP)
 	handler.emitMessages(logger, messagesToEmit, routeMappings)
 }
 

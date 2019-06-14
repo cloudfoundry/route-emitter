@@ -26,11 +26,11 @@ type FakeRouteHandler struct {
 		arg1 lager.Logger
 		arg2 models.Event
 	}
-	RefreshDesiredStub        func(lager.Logger, []*models.DesiredLRPSchedulingInfo)
+	RefreshDesiredStub        func(lager.Logger, []*models.DesiredLRP)
 	refreshDesiredMutex       sync.RWMutex
 	refreshDesiredArgsForCall []struct {
 		arg1 lager.Logger
-		arg2 []*models.DesiredLRPSchedulingInfo
+		arg2 []*models.DesiredLRP
 	}
 	ShouldRefreshDesiredStub        func(*models.ActualLRP) bool
 	shouldRefreshDesiredMutex       sync.RWMutex
@@ -43,11 +43,11 @@ type FakeRouteHandler struct {
 	shouldRefreshDesiredReturnsOnCall map[int]struct {
 		result1 bool
 	}
-	SyncStub        func(lager.Logger, []*models.DesiredLRPSchedulingInfo, []*models.ActualLRP, models.DomainSet, map[string]models.Event)
+	SyncStub        func(lager.Logger, []*models.DesiredLRP, []*models.ActualLRP, models.DomainSet, map[string]models.Event)
 	syncMutex       sync.RWMutex
 	syncArgsForCall []struct {
 		arg1 lager.Logger
-		arg2 []*models.DesiredLRPSchedulingInfo
+		arg2 []*models.DesiredLRP
 		arg3 []*models.ActualLRP
 		arg4 models.DomainSet
 		arg5 map[string]models.Event
@@ -150,16 +150,16 @@ func (fake *FakeRouteHandler) HandleEventArgsForCall(i int) (lager.Logger, model
 	return argsForCall.arg1, argsForCall.arg2
 }
 
-func (fake *FakeRouteHandler) RefreshDesired(arg1 lager.Logger, arg2 []*models.DesiredLRPSchedulingInfo) {
-	var arg2Copy []*models.DesiredLRPSchedulingInfo
+func (fake *FakeRouteHandler) RefreshDesired(arg1 lager.Logger, arg2 []*models.DesiredLRP) {
+	var arg2Copy []*models.DesiredLRP
 	if arg2 != nil {
-		arg2Copy = make([]*models.DesiredLRPSchedulingInfo, len(arg2))
+		arg2Copy = make([]*models.DesiredLRP, len(arg2))
 		copy(arg2Copy, arg2)
 	}
 	fake.refreshDesiredMutex.Lock()
 	fake.refreshDesiredArgsForCall = append(fake.refreshDesiredArgsForCall, struct {
 		arg1 lager.Logger
-		arg2 []*models.DesiredLRPSchedulingInfo
+		arg2 []*models.DesiredLRP
 	}{arg1, arg2Copy})
 	fake.recordInvocation("RefreshDesired", []interface{}{arg1, arg2Copy})
 	fake.refreshDesiredMutex.Unlock()
@@ -174,13 +174,13 @@ func (fake *FakeRouteHandler) RefreshDesiredCallCount() int {
 	return len(fake.refreshDesiredArgsForCall)
 }
 
-func (fake *FakeRouteHandler) RefreshDesiredCalls(stub func(lager.Logger, []*models.DesiredLRPSchedulingInfo)) {
+func (fake *FakeRouteHandler) RefreshDesiredCalls(stub func(lager.Logger, []*models.DesiredLRP)) {
 	fake.refreshDesiredMutex.Lock()
 	defer fake.refreshDesiredMutex.Unlock()
 	fake.RefreshDesiredStub = stub
 }
 
-func (fake *FakeRouteHandler) RefreshDesiredArgsForCall(i int) (lager.Logger, []*models.DesiredLRPSchedulingInfo) {
+func (fake *FakeRouteHandler) RefreshDesiredArgsForCall(i int) (lager.Logger, []*models.DesiredLRP) {
 	fake.refreshDesiredMutex.RLock()
 	defer fake.refreshDesiredMutex.RUnlock()
 	argsForCall := fake.refreshDesiredArgsForCall[i]
@@ -247,10 +247,10 @@ func (fake *FakeRouteHandler) ShouldRefreshDesiredReturnsOnCall(i int, result1 b
 	}{result1}
 }
 
-func (fake *FakeRouteHandler) Sync(arg1 lager.Logger, arg2 []*models.DesiredLRPSchedulingInfo, arg3 []*models.ActualLRP, arg4 models.DomainSet, arg5 map[string]models.Event) {
-	var arg2Copy []*models.DesiredLRPSchedulingInfo
+func (fake *FakeRouteHandler) Sync(arg1 lager.Logger, arg2 []*models.DesiredLRP, arg3 []*models.ActualLRP, arg4 models.DomainSet, arg5 map[string]models.Event) {
+	var arg2Copy []*models.DesiredLRP
 	if arg2 != nil {
-		arg2Copy = make([]*models.DesiredLRPSchedulingInfo, len(arg2))
+		arg2Copy = make([]*models.DesiredLRP, len(arg2))
 		copy(arg2Copy, arg2)
 	}
 	var arg3Copy []*models.ActualLRP
@@ -261,7 +261,7 @@ func (fake *FakeRouteHandler) Sync(arg1 lager.Logger, arg2 []*models.DesiredLRPS
 	fake.syncMutex.Lock()
 	fake.syncArgsForCall = append(fake.syncArgsForCall, struct {
 		arg1 lager.Logger
-		arg2 []*models.DesiredLRPSchedulingInfo
+		arg2 []*models.DesiredLRP
 		arg3 []*models.ActualLRP
 		arg4 models.DomainSet
 		arg5 map[string]models.Event
@@ -279,13 +279,13 @@ func (fake *FakeRouteHandler) SyncCallCount() int {
 	return len(fake.syncArgsForCall)
 }
 
-func (fake *FakeRouteHandler) SyncCalls(stub func(lager.Logger, []*models.DesiredLRPSchedulingInfo, []*models.ActualLRP, models.DomainSet, map[string]models.Event)) {
+func (fake *FakeRouteHandler) SyncCalls(stub func(lager.Logger, []*models.DesiredLRP, []*models.ActualLRP, models.DomainSet, map[string]models.Event)) {
 	fake.syncMutex.Lock()
 	defer fake.syncMutex.Unlock()
 	fake.SyncStub = stub
 }
 
-func (fake *FakeRouteHandler) SyncArgsForCall(i int) (lager.Logger, []*models.DesiredLRPSchedulingInfo, []*models.ActualLRP, models.DomainSet, map[string]models.Event) {
+func (fake *FakeRouteHandler) SyncArgsForCall(i int) (lager.Logger, []*models.DesiredLRP, []*models.ActualLRP, models.DomainSet, map[string]models.Event) {
 	fake.syncMutex.RLock()
 	defer fake.syncMutex.RUnlock()
 	argsForCall := fake.syncArgsForCall[i]

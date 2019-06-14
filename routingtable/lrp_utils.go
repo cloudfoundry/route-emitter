@@ -8,15 +8,15 @@ import (
 	"code.cloudfoundry.org/routing-info/tcp_routes"
 )
 
-func DesiredLRPData(lrp *models.DesiredLRPSchedulingInfo) lager.Data {
-	if lrp == nil {
+func DesiredLRPData(lrp *models.DesiredLRP) lager.Data {
+	if lrp == nil || lrp.Routes == nil {
 		return lager.Data{}
 	}
 
 	logRoutes := make(models.Routes)
-	logRoutes[cfroutes.CF_ROUTER] = lrp.Routes[cfroutes.CF_ROUTER]
-	logRoutes[tcp_routes.TCP_ROUTER] = lrp.Routes[tcp_routes.TCP_ROUTER]
-	logRoutes[internalroutes.INTERNAL_ROUTER] = lrp.Routes[internalroutes.INTERNAL_ROUTER]
+	logRoutes[cfroutes.CF_ROUTER] = (*lrp.Routes)[cfroutes.CF_ROUTER]
+	logRoutes[tcp_routes.TCP_ROUTER] = (*lrp.Routes)[tcp_routes.TCP_ROUTER]
+	logRoutes[internalroutes.INTERNAL_ROUTER] = (*lrp.Routes)[internalroutes.INTERNAL_ROUTER]
 
 	return lager.Data{
 		"process-guid": lrp.ProcessGuid,

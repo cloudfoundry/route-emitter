@@ -24,7 +24,7 @@ type RouteHandler interface {
 	HandleEvent(logger lager.Logger, event models.Event)
 	Sync(
 		logger lager.Logger,
-		desired []*models.DesiredLRPSchedulingInfo,
+		desired []*models.DesiredLRP,
 		runningActual []*models.ActualLRP,
 		domains models.DomainSet,
 		cachedEvents map[string]models.Event,
@@ -32,7 +32,7 @@ type RouteHandler interface {
 	EmitExternal(logger lager.Logger)
 	EmitInternal(logger lager.Logger)
 	ShouldRefreshDesired(*models.ActualLRP) bool
-	RefreshDesired(lager.Logger, []*models.DesiredLRPSchedulingInfo)
+	RefreshDesired(lager.Logger, []*models.DesiredLRP)
 }
 
 type Watcher struct {
@@ -73,7 +73,7 @@ func NewWatcher(
 
 type syncEventResult struct {
 	startTime     time.Time
-	desired       []*models.DesiredLRPSchedulingInfo
+	desired       []*models.DesiredLRP
 	runningActual []*models.ActualLRP
 	domains       models.DomainSet
 	err           error
@@ -124,7 +124,7 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 				continue
 			}
 
-			var cachedDesired []*models.DesiredLRPSchedulingInfo
+			var cachedDesired []*models.DesiredLRP
 			for _, e := range cachedEvents {
 				desired := watcher.retrieveDesiredWhileSyncing(logger, e, syncEvent.desired)
 				if len(desired) > 0 {
@@ -184,7 +184,7 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 	}
 }
 
-func (w *Watcher) retrieveDesiredInternal(logger lager.Logger, event models.Event, currentDesireds []*models.DesiredLRPSchedulingInfo, syncing bool) []*models.DesiredLRPSchedulingInfo {
+func (w *Watcher) retrieveDesiredInternal(logger lager.Logger, event models.Event, currentDesireds []*models.DesiredLRP, syncing bool) []*models.DesiredLRP {
 	var err error
 	var actualLRP *models.ActualLRP
 	switch event := event.(type) {
@@ -199,13 +199,13 @@ func (w *Watcher) retrieveDesiredInternal(logger lager.Logger, event models.Even
 		logger.Error("nil-actual-lrp", nil, lager.Data{"event-type": event.EventType()})
 		return nil
 	}
-	var desiredLRPs []*models.DesiredLRPSchedulingInfo
+	var desiredLRPs []*models.DesiredLRP
 	if actualLRP.State != models.ActualLRPStateRunning {
 		return nil
 	}
 	if w.routeHandler.ShouldRefreshDesired(actualLRP) || (syncing && !foundInCurrentDesireds(actualLRP.ProcessGuid, currentDesireds)) {
 		logger.Info("refreshing-desired-lrp-info", lager.Data{"process-guid": actualLRP.ProcessGuid})
-		desiredLRPs, err = w.bbsClient.DesiredLRPSchedulingInfos(logger, models.DesiredLRPFilter{
+		desiredLRPs, err = w.bbsClient.DesiredLRPs(logger, models.DesiredLRPFilter{
 			ProcessGuids: []string{actualLRP.ProcessGuid},
 		})
 		if err != nil {
@@ -216,15 +216,15 @@ func (w *Watcher) retrieveDesiredInternal(logger lager.Logger, event models.Even
 	return desiredLRPs
 }
 
-func (w *Watcher) retrieveDesired(logger lager.Logger, event models.Event) []*models.DesiredLRPSchedulingInfo {
+func (w *Watcher) retrieveDesired(logger lager.Logger, event models.Event) []*models.DesiredLRP {
 	return w.retrieveDesiredInternal(logger, event, nil, false)
 }
 
-func (w *Watcher) retrieveDesiredWhileSyncing(logger lager.Logger, event models.Event, currentDesireds []*models.DesiredLRPSchedulingInfo) []*models.DesiredLRPSchedulingInfo {
+func (w *Watcher) retrieveDesiredWhileSyncing(logger lager.Logger, event models.Event, currentDesireds []*models.DesiredLRP) []*models.DesiredLRP {
 	return w.retrieveDesiredInternal(logger, event, currentDesireds, true)
 }
 
-func foundInCurrentDesireds(guid string, currentDesireds []*models.DesiredLRPSchedulingInfo) bool {
+func foundInCurrentDesireds(guid string, currentDesireds []*models.DesiredLRP) bool {
 	for _, d := range currentDesireds {
 		if d.ProcessGuid == guid {
 			return true
@@ -244,7 +244,7 @@ func (w *Watcher) handleEvent(logger lager.Logger, event models.Event) {
 
 func (w *Watcher) sync(logger lager.Logger, ch chan<- *syncEventResult) {
 	var runningActualLRPs []*models.ActualLRP
-	var desiredSchedulingInfo []*models.DesiredLRPSchedulingInfo
+	var desiredLRPs []*models.DesiredLRP
 	var domains models.DomainSet
 
 	var actualErr, desiredErr, domainsErr error
@@ -277,7 +277,7 @@ func (w *Watcher) sync(logger lager.Logger, ch chan<- *syncEventResult) {
 				guids = append(guids, actualLRP.ProcessGuid)
 			}
 			if len(guids) > 0 {
-				desiredSchedulingInfo, desiredErr = getSchedulingInfos(logger, w.bbsClient, guids)
+				desiredLRPs, desiredErr = getDesiredLRPs(logger, w.bbsClient, guids)
 			}
 		}
 	}()
@@ -286,7 +286,7 @@ func (w *Watcher) sync(logger lager.Logger, ch chan<- *syncEventResult) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			desiredSchedulingInfo, desiredErr = getSchedulingInfos(logger, w.bbsClient, nil)
+			desiredLRPs, desiredErr = getDesiredLRPs(logger, w.bbsClient, nil)
 		}()
 	}
 
@@ -314,7 +314,7 @@ func (w *Watcher) sync(logger lager.Logger, ch chan<- *syncEventResult) {
 
 	ch <- &syncEventResult{
 		startTime:     before,
-		desired:       desiredSchedulingInfo,
+		desired:       desiredLRPs,
 		runningActual: runningActualLRPs,
 		domains:       domains,
 		err:           err,
@@ -354,16 +354,16 @@ func (w *Watcher) checkForEvents(resubscribeChannel chan error, eventChan chan m
 	}
 }
 
-func getSchedulingInfos(logger lager.Logger, bbsClient bbs.Client, guids []string) ([]*models.DesiredLRPSchedulingInfo, error) {
-	logger.Debug("getting-scheduling-infos", lager.Data{"guids-length": len(guids)})
-	schedulingInfos, err := bbsClient.DesiredLRPSchedulingInfos(logger, models.DesiredLRPFilter{
+func getDesiredLRPs(logger lager.Logger, bbsClient bbs.Client, guids []string) ([]*models.DesiredLRP, error) {
+	logger.Debug("getting-desired-lrps", lager.Data{"guids-length": len(guids)})
+	desiredLRPs, err := bbsClient.DesiredLRPs(logger, models.DesiredLRPFilter{
 		ProcessGuids: guids,
 	})
 	if err != nil {
-		logger.Error("failed-getting-scheduling-infos", err)
+		logger.Error("failed-getting-desired-lrps", err)
 		return nil, err
 	}
 
-	logger.Debug("succeeded-getting-scheduling-infos", lager.Data{"num-desired-responses": len(schedulingInfos)})
-	return schedulingInfos, nil
+	logger.Debug("succeeded-getting-desired-lrps", lager.Data{"num-desired-responses": len(desiredLRPs)})
+	return desiredLRPs, nil
 }

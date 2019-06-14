@@ -199,9 +199,9 @@ func NewRoutingKeysFromActual(actualLRP *models.ActualLRP) RoutingKeys {
 	return keys
 }
 
-func NewRoutingKeysFromDesired(desired *models.DesiredLRPSchedulingInfo) RoutingKeys {
+func NewRoutingKeysFromDesired(desired *models.DesiredLRP) RoutingKeys {
 	keys := RoutingKeys{}
-	routes, err := tcp_routes.TCPRoutesFromRoutingInfo(&desired.Routes)
+	routes, err := tcp_routes.TCPRoutesFromRoutingInfo(desired.Routes)
 	if err != nil {
 		return keys
 	}

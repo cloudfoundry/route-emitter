@@ -28,6 +28,7 @@ func RegistryMessageFor(endpoint Endpoint, route Route, emitEndpointUpdatedAt bo
 	if !emitEndpointUpdatedAt {
 		since = 0
 	}
+	// route.MetricTags -> Populate Tags
 	return RegistryMessage{
 		URIs:                []string{route.Hostname},
 		Host:                endpoint.Host,

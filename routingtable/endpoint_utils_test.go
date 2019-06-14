@@ -162,15 +162,15 @@ var _ = Describe("LRP Utils", func() {
 				{ExternalPort: 61001, ContainerPort: 9090},
 			}
 
-			desired := (&models.DesiredLRP{
+			desired := &models.DesiredLRP{
 				Domain:      "tests",
 				ProcessGuid: "process-guid",
 				Ports:       []uint32{8080, 9090},
 				Routes:      routes.RoutingInfo(),
 				LogGuid:     "abc-guid",
-			}).DesiredLRPSchedulingInfo()
+			}
 
-			keys := routingtable.NewRoutingKeysFromDesired(&desired)
+			keys := routingtable.NewRoutingKeysFromDesired(desired)
 
 			Expect(keys).To(HaveLen(2))
 			Expect(keys).To(ContainElement(routingtable.NewRoutingKey("process-guid", 8080)))
@@ -181,14 +181,14 @@ var _ = Describe("LRP Utils", func() {
 			It("returns no keys", func() {
 				routes := tcp_routes.TCPRoutes{}
 
-				desired := (&models.DesiredLRP{
+				desired := &models.DesiredLRP{
 					Domain:      "tests",
 					ProcessGuid: "process-guid",
 					Routes:      routes.RoutingInfo(),
 					LogGuid:     "abc-guid",
-				}).DesiredLRPSchedulingInfo()
+				}
 
-				keys := routingtable.NewRoutingKeysFromDesired(&desired)
+				keys := routingtable.NewRoutingKeysFromDesired(desired)
 				Expect(keys).To(HaveLen(0))
 			})
 		})

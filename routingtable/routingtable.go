@@ -29,8 +29,8 @@ const addressCollisionsCounter = "AddressCollisions"
 //go:generate counterfeiter -o fakeroutingtable/fake_routingtable.go . RoutingTable
 type RoutingTable interface {
 	// table modification
-	SetRoutes(logger lager.Logger, beforeLRP, afterLRP *models.DesiredLRPSchedulingInfo) (TCPRouteMappings, MessagesToEmit)
-	RemoveRoutes(logger lager.Logger, desiredLRP *models.DesiredLRPSchedulingInfo) (TCPRouteMappings, MessagesToEmit)
+	SetRoutes(logger lager.Logger, beforeLRP, afterLRP *models.DesiredLRP) (TCPRouteMappings, MessagesToEmit)
+	RemoveRoutes(logger lager.Logger, desiredLRP *models.DesiredLRP) (TCPRouteMappings, MessagesToEmit)
 	AddEndpoint(logger lager.Logger, actualLRP *models.ActualLRP) (TCPRouteMappings, MessagesToEmit)
 	RemoveEndpoint(logger lager.Logger, actualLRP *models.ActualLRP) (TCPRouteMappings, MessagesToEmit)
 	Swap(logger lager.Logger, t RoutingTable, domains models.DomainSet) (TCPRouteMappings, MessagesToEmit)
@@ -48,7 +48,7 @@ type RoutingTable interface {
 
 type internalRoutingTable struct {
 	endpointGenerator        func(*models.ActualLRP) []Endpoint
-	routesGenerator          func(*models.DesiredLRPSchedulingInfo) map[RoutingKey][]routeMapping
+	routesGenerator          func(*models.DesiredLRP) map[RoutingKey][]routeMapping
 	entries                  map[RoutingKey]RoutableEndpoints
 	addressEntries           map[Address]EndpointKey
 	addressGenerator         func(endpoint Endpoint) Address
@@ -77,7 +77,7 @@ func NewRoutingTable(directInstanceRoute bool, metronClient loggingclient.Ingres
 
 	httpRoutingTable := &internalRoutingTable{
 		endpointGenerator:   NewEndpointsFromActual,
-		routesGenerator:     httpRoutesFromSchedulingInfo,
+		routesGenerator:     httpRoutesFrom,
 		entries:             make(map[RoutingKey]RoutableEndpoints),
 		addressEntries:      make(map[Address]EndpointKey),
 		directInstanceRoute: directInstanceRoute,
@@ -87,7 +87,7 @@ func NewRoutingTable(directInstanceRoute bool, metronClient loggingclient.Ingres
 	}
 	tcpRoutingTable := &internalRoutingTable{
 		endpointGenerator:        NewEndpointsFromActual,
-		routesGenerator:          tcpRoutesFromSchedulingInfo,
+		routesGenerator:          tcpRoutesFrom,
 		entries:                  make(map[RoutingKey]RoutableEndpoints),
 		addressEntries:           make(map[Address]EndpointKey),
 		directInstanceRoute:      directInstanceRoute,
@@ -98,7 +98,7 @@ func NewRoutingTable(directInstanceRoute bool, metronClient loggingclient.Ingres
 	}
 	internalRoutingTable := &internalRoutingTable{
 		endpointGenerator:        internalEndpointsFromActualLRP,
-		routesGenerator:          internalRoutesFromSchedulingInfo,
+		routesGenerator:          internalRoutesFrom,
 		entries:                  make(map[RoutingKey]RoutableEndpoints),
 		addressEntries:           make(map[Address]EndpointKey),
 		directInstanceRoute:      directInstanceRoute,
@@ -193,7 +193,7 @@ func (t *routingTable) GetInternalRoutingEvents() (TCPRouteMappings, MessagesToE
 	return t.internalRoutesRoutingTable.GetRoutingEvents()
 }
 
-func (t *routingTable) SetRoutes(logger lager.Logger, before, after *models.DesiredLRPSchedulingInfo) (TCPRouteMappings, MessagesToEmit) {
+func (t *routingTable) SetRoutes(logger lager.Logger, before, after *models.DesiredLRP) (TCPRouteMappings, MessagesToEmit) {
 	httpMappings, httpMessages, httpChanged := t.httpRoutesRoutingTable.SetRoutes(before, after)
 	tcpMappings, tcpMessages, tcpChanged := t.tcpRoutesRoutingTable.SetRoutes(before, after)
 	internalMappings, internalMessages, internalChanged := t.internalRoutesRoutingTable.SetRoutes(before, after)
@@ -208,7 +208,7 @@ func (t *routingTable) SetRoutes(logger lager.Logger, before, after *models.Desi
 	return mappings, messages
 }
 
-func (t *routingTable) RemoveRoutes(logger lager.Logger, desiredLRP *models.DesiredLRPSchedulingInfo) (TCPRouteMappings, MessagesToEmit) {
+func (t *routingTable) RemoveRoutes(logger lager.Logger, desiredLRP *models.DesiredLRP) (TCPRouteMappings, MessagesToEmit) {
 	httpMappings, httpMessages, httpChanged := t.httpRoutesRoutingTable.RemoveRoutes(desiredLRP)
 	tcpMappings, tcpMessages, tcpChanged := t.tcpRoutesRoutingTable.RemoveRoutes(desiredLRP)
 	internalMappings, internalMessages, internalChanged := t.internalRoutesRoutingTable.RemoveRoutes(desiredLRP)
@@ -427,12 +427,12 @@ type routeMapping interface {
 	MessageFor(endpoint Endpoint, directInstanceAddress, emitEndpointUpdatedAt bool) (*RegistryMessage, *tcpmodels.TcpRouteMapping, *RegistryMessage)
 }
 
-func httpRoutesFromSchedulingInfo(lrp *models.DesiredLRPSchedulingInfo) map[RoutingKey][]routeMapping {
-	if lrp == nil {
+func httpRoutesFrom(lrp *models.DesiredLRP) map[RoutingKey][]routeMapping {
+	if lrp == nil || lrp.Routes == nil {
 		return nil
 	}
 
-	routes, _ := cfroutes.CFRoutesFromRoutingInfo(lrp.Routes)
+	routes, _ := cfroutes.CFRoutesFromRoutingInfo(*lrp.Routes)
 	routeEntries := make(map[RoutingKey][]routeMapping)
 	for _, route := range routes {
 		key := RoutingKey{ProcessGUID: lrp.ProcessGuid, ContainerPort: route.Port}
@@ -452,12 +452,12 @@ func httpRoutesFromSchedulingInfo(lrp *models.DesiredLRPSchedulingInfo) map[Rout
 	return routeEntries
 }
 
-func tcpRoutesFromSchedulingInfo(lrp *models.DesiredLRPSchedulingInfo) map[RoutingKey][]routeMapping {
+func tcpRoutesFrom(lrp *models.DesiredLRP) map[RoutingKey][]routeMapping {
 	if lrp == nil {
 		return nil
 	}
 
-	routes, _ := tcp_routes.TCPRoutesFromRoutingInfo(&lrp.Routes)
+	routes, _ := tcp_routes.TCPRoutesFromRoutingInfo(lrp.Routes)
 
 	routeEntries := make(map[RoutingKey][]routeMapping)
 	for _, route := range routes {
@@ -471,12 +471,12 @@ func tcpRoutesFromSchedulingInfo(lrp *models.DesiredLRPSchedulingInfo) map[Routi
 	return routeEntries
 }
 
-func internalRoutesFromSchedulingInfo(lrp *models.DesiredLRPSchedulingInfo) map[RoutingKey][]routeMapping {
-	if lrp == nil {
+func internalRoutesFrom(lrp *models.DesiredLRP) map[RoutingKey][]routeMapping {
+	if lrp == nil || lrp.Routes == nil {
 		return nil
 	}
 
-	routes, _ := internalroutes.InternalRoutesFromRoutingInfo(lrp.Routes)
+	routes, _ := internalroutes.InternalRoutesFromRoutingInfo(*lrp.Routes)
 
 	routeEntries := make(map[RoutingKey][]routeMapping)
 	for _, route := range routes {
@@ -489,7 +489,7 @@ func internalRoutesFromSchedulingInfo(lrp *models.DesiredLRPSchedulingInfo) map[
 	return routeEntries
 }
 
-func (table *internalRoutingTable) SetRoutes(before, after *models.DesiredLRPSchedulingInfo) (TCPRouteMappings, MessagesToEmit, bool) {
+func (table *internalRoutingTable) SetRoutes(before, after *models.DesiredLRP) (TCPRouteMappings, MessagesToEmit, bool) {
 	table.Lock()
 	defer table.Unlock()
 
@@ -506,14 +506,14 @@ func (table *internalRoutingTable) SetRoutes(before, after *models.DesiredLRPSch
 	for key, routes := range routeEntries {
 		currentEntry := table.entries[key]
 		// if modification tag is old, ignore the new lrp
-		if !currentEntry.ModificationTag.SucceededBy(&after.ModificationTag) {
+		if !currentEntry.ModificationTag.SucceededBy(after.ModificationTag) {
 			continue
 		}
 
 		newEntry := currentEntry.copy()
 		newEntry.Domain = after.Domain
 		newEntry.Routes = routes
-		newEntry.ModificationTag = &after.ModificationTag
+		newEntry.ModificationTag = after.ModificationTag
 		newEntry.DesiredInstances = after.Instances
 
 		// check if scaling down
@@ -544,10 +544,10 @@ func (table *internalRoutingTable) SetRoutes(before, after *models.DesiredLRPSch
 		currentEntry := table.entries[key]
 		if after == nil {
 			// this is a delete (after == nil), then before lrp modification tag must be >=
-			if !currentEntry.ModificationTag.Equal(&before.ModificationTag) && !currentEntry.ModificationTag.SucceededBy(&before.ModificationTag) {
+			if !currentEntry.ModificationTag.Equal(before.ModificationTag) && !currentEntry.ModificationTag.SucceededBy(before.ModificationTag) {
 				continue
 			}
-		} else if !currentEntry.ModificationTag.SucceededBy(&after.ModificationTag) {
+		} else if !currentEntry.ModificationTag.SucceededBy(after.ModificationTag) {
 			// this is an update, then after lrp modification tag must be >
 			continue
 		}
@@ -556,7 +556,7 @@ func (table *internalRoutingTable) SetRoutes(before, after *models.DesiredLRPSch
 		newEntry.Routes = nil
 		if after != nil {
 			newEntry.Domain = after.Domain
-			newEntry.ModificationTag = &after.ModificationTag
+			newEntry.ModificationTag = after.ModificationTag
 			newEntry.DesiredInstances = after.Instances
 		}
 
@@ -775,7 +775,7 @@ func (table *internalRoutingTable) messages(routesDiff routesDiff, endpointDiff 
 	return mappings, messages
 }
 
-func (table *internalRoutingTable) RemoveRoutes(desiredLRP *models.DesiredLRPSchedulingInfo) (TCPRouteMappings, MessagesToEmit, bool) {
+func (table *internalRoutingTable) RemoveRoutes(desiredLRP *models.DesiredLRP) (TCPRouteMappings, MessagesToEmit, bool) {
 	return table.SetRoutes(desiredLRP, nil)
 }
 

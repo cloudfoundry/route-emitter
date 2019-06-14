@@ -37,7 +37,7 @@ var _ = Describe("TCPRoutingTable", func() {
 		processGuid, logGuid string,
 		tcpRoutes tcp_routes.TCPRoutes,
 		modificationTag *models.ModificationTag,
-	) *models.DesiredLRPSchedulingInfo {
+	) *models.DesiredLRP {
 		var desiredLRP models.DesiredLRP
 		portMap := map[uint32]struct{}{}
 		for _, tcpRoute := range tcpRoutes {
@@ -61,8 +61,7 @@ var _ = Describe("TCPRoutingTable", func() {
 		routingInfo := json.RawMessage([]byte(`{ "private_key": "fake-key" }`))
 		(*desiredLRP.Routes)["diego-ssh"] = &routingInfo
 
-		info := desiredLRP.DesiredLRPSchedulingInfo()
-		return &info
+		return &desiredLRP
 	}
 
 	getActualLRP := func(
@@ -200,8 +199,8 @@ var _ = Describe("TCPRoutingTable", func() {
 			BeforeEach(func() {
 				logGuid = "log-guid-1"
 				tempRoutingTable = routingtable.NewRoutingTable(false, fakeMetronClient)
-				beforeLRPSchedulingInfo := getDesiredLRP("process-guid-1", logGuid, tcpRoutes, modificationTag)
-				tempRoutingTable.SetRoutes(logger, nil, beforeLRPSchedulingInfo)
+				beforeLRP := getDesiredLRP("process-guid-1", logGuid, tcpRoutes, modificationTag)
+				tempRoutingTable.SetRoutes(logger, nil, beforeLRP)
 				tempRoutingTable.AddEndpoint(logger, getActualLRP("process-guid-1", "instance-guid-1", "some-ip-1", "container-ip-1", 62004, 5222, modificationTag))
 				tempRoutingTable.AddEndpoint(logger, getActualLRP("process-guid-1", "instance-guid-2", "some-ip-2", "container-ip-2", 62004, 5222, modificationTag))
 				Expect(tempRoutingTable.TCPAssociationsCount()).Should(Equal(2))
@@ -297,8 +296,8 @@ var _ = Describe("TCPRoutingTable", func() {
 		Describe("HasExternalRoutes", func() {
 			It("returns the associated desired state", func() {
 				routingTable = routingtable.NewRoutingTable(true, fakeMetronClient)
-				beforeLRPSchedulingInfo := getDesiredLRP("process-guid-1", logGuid, tcpRoutes, modificationTag)
-				routingTable.SetRoutes(logger, nil, beforeLRPSchedulingInfo)
+				beforeLRP := getDesiredLRP("process-guid-1", logGuid, tcpRoutes, modificationTag)
+				routingTable.SetRoutes(logger, nil, beforeLRP)
 				routingInfo := getActualLRP("process-guid-1", "instance-guid-2", "some-ip-2", "container-ip-2", 62004, 5222, modificationTag)
 				routingTable.AddEndpoint(logger, routingInfo)
 				Expect(routingTable.HasExternalRoutes(routingInfo)).To(BeTrue())
@@ -308,8 +307,8 @@ var _ = Describe("TCPRoutingTable", func() {
 		Describe("AddRoutes", func() {
 			BeforeEach(func() {
 				routingTable = routingtable.NewRoutingTable(false, fakeMetronClient)
-				beforeLRPSchedulingInfo := getDesiredLRP("process-guid-1", "log-guid-1", tcpRoutes, modificationTag)
-				routingTable.SetRoutes(logger, nil, beforeLRPSchedulingInfo)
+				beforeLRP := getDesiredLRP("process-guid-1", "log-guid-1", tcpRoutes, modificationTag)
+				routingTable.SetRoutes(logger, nil, beforeLRP)
 				routingTable.AddEndpoint(logger, getActualLRP("process-guid-1", "instance-guid-1", "some-ip-1", "container-ip-1", 62004, 5222, modificationTag))
 				routingTable.AddEndpoint(logger, getActualLRP("process-guid-1", "instance-guid-2", "some-ip-2", "container-ip-2", 62004, 5222, modificationTag))
 				Expect(routingTable.TCPAssociationsCount()).Should(Equal(2))
@@ -606,9 +605,9 @@ var _ = Describe("TCPRoutingTable", func() {
 
 			Context("when two disjoint (external port, container port) pairs are given", func() {
 				BeforeEach(func() {
-					beforeLRPSchedulingInfo := getDesiredLRP("process-guid-1", "log-guid-1", tcpRoutes, modificationTag)
+					beforeLRP := getDesiredLRP("process-guid-1", "log-guid-1", tcpRoutes, modificationTag)
 					routingTable = routingtable.NewRoutingTable(false, fakeMetronClient)
-					routingTable.SetRoutes(logger, nil, beforeLRPSchedulingInfo)
+					routingTable.SetRoutes(logger, nil, beforeLRP)
 					routingTable.AddEndpoint(logger, getActualLRP("process-guid-1", "instance-guid-1", "some-ip-1", "container-ip-1", 62004, 5222, modificationTag))
 					routingTable.AddEndpoint(logger, getActualLRP("process-guid-1", "instance-guid-1", "some-ip-1", "container-ip-1", 63004, 5223, modificationTag))
 					Expect(routingTable.TCPAssociationsCount()).Should(Equal(1))
@@ -690,16 +689,16 @@ var _ = Describe("TCPRoutingTable", func() {
 
 		Describe("Updating routes", func() {
 			var (
-				newTcpRoutes            tcp_routes.TCPRoutes
-				newModificationTag      *models.ModificationTag
-				beforeLRPSchedulingInfo *models.DesiredLRPSchedulingInfo
+				newTcpRoutes       tcp_routes.TCPRoutes
+				newModificationTag *models.ModificationTag
+				beforeLRP          *models.DesiredLRP
 			)
 
 			BeforeEach(func() {
 				newModificationTag = &models.ModificationTag{Epoch: "abc", Index: 2}
 				routingTable = routingtable.NewRoutingTable(false, fakeMetronClient)
-				beforeLRPSchedulingInfo = getDesiredLRP("process-guid-1", "log-guid-1", tcpRoutes, modificationTag)
-				routingTable.SetRoutes(logger, nil, beforeLRPSchedulingInfo)
+				beforeLRP = getDesiredLRP("process-guid-1", "log-guid-1", tcpRoutes, modificationTag)
+				routingTable.SetRoutes(logger, nil, beforeLRP)
 				routingTable.AddEndpoint(logger, getActualLRP("process-guid-1", "instance-guid-1", "some-ip-1", "container-ip-1", 62004, 5222, modificationTag))
 				Expect(routingTable.TCPAssociationsCount()).Should(Equal(1))
 			})
@@ -796,7 +795,7 @@ var _ = Describe("TCPRoutingTable", func() {
 				Context("when there is no change in external port", func() {
 					It("emits nothing", func() {
 						afterLRP := getDesiredLRP("process-guid-1", "log-guid-1", tcpRoutes, newModificationTag)
-						routingEvents, _ := routingTable.SetRoutes(logger, beforeLRPSchedulingInfo, afterLRP)
+						routingEvents, _ := routingTable.SetRoutes(logger, beforeLRP, afterLRP)
 						Expect(routingEvents.Registrations).To(HaveLen(0))
 						Expect(routingEvents.Unregistrations).To(HaveLen(0))
 						Expect(routingTable.TCPAssociationsCount()).Should(Equal(1))
@@ -824,7 +823,7 @@ var _ = Describe("TCPRoutingTable", func() {
 					Context("no backends for new container port", func() {
 						It("emits no routing events and adds to routing table entry", func() {
 							afterLRP := getDesiredLRP("process-guid-1", "log-guid-1", newTcpRoutes, newModificationTag)
-							routingEvents, _ := routingTable.SetRoutes(logger, beforeLRPSchedulingInfo, afterLRP)
+							routingEvents, _ := routingTable.SetRoutes(logger, beforeLRP, afterLRP)
 							Expect(routingEvents.Registrations).To(HaveLen(0))
 							Expect(routingEvents.Unregistrations).To(HaveLen(0))
 							Expect(routingTable.TCPAssociationsCount()).Should(Equal(1))
@@ -834,7 +833,7 @@ var _ = Describe("TCPRoutingTable", func() {
 							It("emits nothing but add the routing table entry", func() {
 								afterLRP := getDesiredLRP("process-guid-1", "log-guid-1", newTcpRoutes, modificationTag)
 								currentRoutesCount := routingTable.TCPAssociationsCount()
-								routingEvents, _ := routingTable.SetRoutes(logger, beforeLRPSchedulingInfo, afterLRP)
+								routingEvents, _ := routingTable.SetRoutes(logger, beforeLRP, afterLRP)
 								Expect(routingEvents.Registrations).To(HaveLen(0))
 								Expect(routingEvents.Unregistrations).To(HaveLen(0))
 								Expect(routingTable.TCPAssociationsCount()).Should(Equal(currentRoutesCount))
@@ -850,7 +849,7 @@ var _ = Describe("TCPRoutingTable", func() {
 						It("emits registration events for new container port", func() {
 							afterLRP := getDesiredLRP("process-guid-1", "log-guid-1", newTcpRoutes, newModificationTag)
 							currentRoutesCount := routingTable.TCPAssociationsCount()
-							routingEvents, _ := routingTable.SetRoutes(logger, beforeLRPSchedulingInfo, afterLRP)
+							routingEvents, _ := routingTable.SetRoutes(logger, beforeLRP, afterLRP)
 							ttl := 0
 							Expect(routingEvents.Registrations).To(ConsistOf(tcpmodels.TcpRouteMapping{
 								TcpMappingEntity: tcpmodels.TcpMappingEntity{
@@ -891,7 +890,7 @@ var _ = Describe("TCPRoutingTable", func() {
 
 						BeforeEach(func() {
 							afterLRP := getDesiredLRP("process-guid-1", "log-guid-1", newTcpRoutes, newModificationTag)
-							routingEvents, _ = routingTable.SetRoutes(logger, beforeLRPSchedulingInfo, afterLRP)
+							routingEvents, _ = routingTable.SetRoutes(logger, beforeLRP, afterLRP)
 						})
 
 						It("emits no routing events and adds to routing table entry", func() {
@@ -940,7 +939,7 @@ var _ = Describe("TCPRoutingTable", func() {
 							It("emits nothing but add the routing table entry", func() {
 								afterLRP := getDesiredLRP("process-guid-1", "log-guid-1", newTcpRoutes, modificationTag)
 								currentRoutesCount := routingTable.TCPAssociationsCount()
-								routingEvents, _ := routingTable.SetRoutes(logger, beforeLRPSchedulingInfo, afterLRP)
+								routingEvents, _ := routingTable.SetRoutes(logger, beforeLRP, afterLRP)
 								Expect(routingEvents.Registrations).To(HaveLen(0))
 								Expect(routingEvents.Unregistrations).To(HaveLen(0))
 								Expect(routingTable.TCPAssociationsCount()).Should(Equal(currentRoutesCount))
@@ -960,7 +959,7 @@ var _ = Describe("TCPRoutingTable", func() {
 							afterLRP := getDesiredLRP("process-guid-1", "log-guid-1", newTcpRoutes, newModificationTag)
 							expectedRoutesCount := len(newTcpRoutes) * numActualLRPs
 
-							routingEvents, _ := routingTable.SetRoutes(logger, beforeLRPSchedulingInfo, afterLRP)
+							routingEvents, _ := routingTable.SetRoutes(logger, beforeLRP, afterLRP)
 
 							ttl := 0
 							Expect(routingEvents.Registrations).To(ConsistOf(tcpmodels.TcpRouteMapping{
@@ -986,7 +985,7 @@ var _ = Describe("TCPRoutingTable", func() {
 
 					It("emits only unregistration events", func() {
 						afterLRP := getDesiredLRP("process-guid-1", "log-guid-1", newTcpRoutes, newModificationTag)
-						routingEvents, _ := routingTable.SetRoutes(logger, beforeLRPSchedulingInfo, afterLRP)
+						routingEvents, _ := routingTable.SetRoutes(logger, beforeLRP, afterLRP)
 						ttl := 0
 						Expect(routingEvents.Unregistrations).To(ConsistOf(tcpmodels.TcpRouteMapping{
 							TcpMappingEntity: tcpmodels.TcpMappingEntity{
@@ -1002,7 +1001,7 @@ var _ = Describe("TCPRoutingTable", func() {
 					Context("with older modification tag", func() {
 						It("emits nothing", func() {
 							afterLRP := getDesiredLRP("process-guid-1", "log-guid-1", newTcpRoutes, modificationTag)
-							routingEvents, _ := routingTable.SetRoutes(logger, beforeLRPSchedulingInfo, afterLRP)
+							routingEvents, _ := routingTable.SetRoutes(logger, beforeLRP, afterLRP)
 							Expect(routingEvents.Registrations).To(HaveLen(0))
 							Expect(routingEvents.Unregistrations).To(HaveLen(0))
 							Expect(routingTable.TCPAssociationsCount()).Should(Equal(1))
@@ -1024,7 +1023,7 @@ var _ = Describe("TCPRoutingTable", func() {
 					Context("no backends for new container port", func() {
 						It("only emits unregistration events and adds to routing table entry", func() {
 							afterLRP := getDesiredLRP("process-guid-1", "log-guid-1", newTcpRoutes, newModificationTag)
-							routingEvents, _ := routingTable.SetRoutes(logger, beforeLRPSchedulingInfo, afterLRP)
+							routingEvents, _ := routingTable.SetRoutes(logger, beforeLRP, afterLRP)
 							ttl := 0
 							Expect(routingEvents.Unregistrations).To(ConsistOf(tcpmodels.TcpRouteMapping{
 								TcpMappingEntity: tcpmodels.TcpMappingEntity{
@@ -1041,7 +1040,7 @@ var _ = Describe("TCPRoutingTable", func() {
 							It("emits nothing but add the routing table entry", func() {
 								afterLRP := getDesiredLRP("process-guid-1", "log-guid-1", newTcpRoutes, modificationTag)
 								Expect(routingTable.TCPAssociationsCount()).Should(Equal(1))
-								routingEvents, _ := routingTable.SetRoutes(logger, beforeLRPSchedulingInfo, afterLRP)
+								routingEvents, _ := routingTable.SetRoutes(logger, beforeLRP, afterLRP)
 								Expect(routingEvents.Registrations).To(HaveLen(0))
 								Expect(routingEvents.Unregistrations).To(HaveLen(0))
 								Expect(routingTable.TCPAssociationsCount()).Should(Equal(1))
@@ -1058,7 +1057,7 @@ var _ = Describe("TCPRoutingTable", func() {
 						It("emits registration events for new container port", func() {
 							afterLRP := getDesiredLRP("process-guid-1", "log-guid-1", newTcpRoutes, newModificationTag)
 							// currentRoutesCount := routingTable.RouteCount()
-							routingEvents, _ := routingTable.SetRoutes(logger, beforeLRPSchedulingInfo, afterLRP)
+							routingEvents, _ := routingTable.SetRoutes(logger, beforeLRP, afterLRP)
 							Expect(routingEvents.Registrations).To(HaveLen(1))
 							Expect(routingEvents.Unregistrations).To(HaveLen(1))
 
@@ -1102,15 +1101,15 @@ var _ = Describe("TCPRoutingTable", func() {
 						},
 					}
 					routingTable = routingtable.NewRoutingTable(false, fakeMetronClient)
-					beforeLRPSchedulingInfo = getDesiredLRP("process-guid-1", "log-guid-1", newTcpRoutes, modificationTag)
-					routingTable.SetRoutes(logger, nil, beforeLRPSchedulingInfo)
+					beforeLRP = getDesiredLRP("process-guid-1", "log-guid-1", newTcpRoutes, modificationTag)
+					routingTable.SetRoutes(logger, nil, beforeLRP)
 					routingTable.AddEndpoint(logger, getActualLRP("process-guid-1", "instance-guid-1", "some-ip-1", "container-ip-1", 62004, 5222, modificationTag))
 				})
 
 				It("emits an unregistration event and keeps the other route", func() {
 					afterLRP := getDesiredLRP("process-guid-1", "log-guid-1", tcpRoutes, newModificationTag)
 					// currentRoutesCount := routingTable.RouteCount()
-					routingEvents, _ := routingTable.SetRoutes(logger, beforeLRPSchedulingInfo, afterLRP)
+					routingEvents, _ := routingTable.SetRoutes(logger, beforeLRP, afterLRP)
 					Expect(routingEvents.Unregistrations).To(HaveLen(1))
 
 					ttl := 0
@@ -1133,7 +1132,7 @@ var _ = Describe("TCPRoutingTable", func() {
 		Describe("RemoveRoutes", func() {
 			Context("when entry does not have endpoints", func() {
 				var (
-					desiredLRP *models.DesiredLRPSchedulingInfo
+					desiredLRP *models.DesiredLRP
 				)
 
 				BeforeEach(func() {
@@ -1212,8 +1211,8 @@ var _ = Describe("TCPRoutingTable", func() {
 			Context("with no existing endpoints", func() {
 				BeforeEach(func() {
 					routingTable = routingtable.NewRoutingTable(false, fakeMetronClient)
-					beforeLRPSchedulingInfo := getDesiredLRP("process-guid-1", "log-guid-1", tcpRoutes, modificationTag)
-					routingTable.SetRoutes(logger, nil, beforeLRPSchedulingInfo)
+					beforeLRP := getDesiredLRP("process-guid-1", "log-guid-1", tcpRoutes, modificationTag)
+					routingTable.SetRoutes(logger, nil, beforeLRP)
 					Expect(routingTable.TCPAssociationsCount()).Should(Equal(0))
 				})
 
@@ -1239,8 +1238,8 @@ var _ = Describe("TCPRoutingTable", func() {
 			Context("with existing endpoints", func() {
 				BeforeEach(func() {
 					routingTable = routingtable.NewRoutingTable(false, fakeMetronClient)
-					beforeLRPSchedulingInfo := getDesiredLRP("process-guid-1", "log-guid-1", tcpRoutes, modificationTag)
-					routingTable.SetRoutes(logger, nil, beforeLRPSchedulingInfo)
+					beforeLRP := getDesiredLRP("process-guid-1", "log-guid-1", tcpRoutes, modificationTag)
+					routingTable.SetRoutes(logger, nil, beforeLRP)
 					routingTable.AddEndpoint(logger, getActualLRP("process-guid-1", "instance-guid-1", "some-ip-1", "container-ip-1", 62004, 5222, modificationTag))
 					routingTable.AddEndpoint(logger, getActualLRP("process-guid-1", "instance-guid-2", "some-ip-2", "container-ip-2", 62004, 5222, modificationTag))
 					Expect(routingTable.TCPAssociationsCount()).Should(Equal(2))
@@ -1302,8 +1301,8 @@ var _ = Describe("TCPRoutingTable", func() {
 			Context("with no existing endpoints", func() {
 				BeforeEach(func() {
 					routingTable = routingtable.NewRoutingTable(false, fakeMetronClient)
-					beforeLRPSchedulingInfo := getDesiredLRP("process-guid-1", "log-guid-1", tcpRoutes, modificationTag)
-					routingTable.SetRoutes(logger, nil, beforeLRPSchedulingInfo)
+					beforeLRP := getDesiredLRP("process-guid-1", "log-guid-1", tcpRoutes, modificationTag)
+					routingTable.SetRoutes(logger, nil, beforeLRP)
 					Expect(routingTable.TCPAssociationsCount()).Should(Equal(0))
 				})
 
@@ -1319,8 +1318,8 @@ var _ = Describe("TCPRoutingTable", func() {
 			Context("with existing endpoints", func() {
 				BeforeEach(func() {
 					routingTable = routingtable.NewRoutingTable(false, fakeMetronClient)
-					beforeLRPSchedulingInfo := getDesiredLRP("process-guid-1", "log-guid-1", tcpRoutes, modificationTag)
-					routingTable.SetRoutes(logger, nil, beforeLRPSchedulingInfo)
+					beforeLRP := getDesiredLRP("process-guid-1", "log-guid-1", tcpRoutes, modificationTag)
+					routingTable.SetRoutes(logger, nil, beforeLRP)
 					routingTable.AddEndpoint(logger, getActualLRP("process-guid-1", "instance-guid-1", "some-ip-1", "container-ip-1", 62004, 5222, modificationTag))
 					Expect(routingTable.TCPAssociationsCount()).Should(Equal(1))
 				})
@@ -1390,8 +1389,8 @@ var _ = Describe("TCPRoutingTable", func() {
 		Describe("GetRoutingEvents", func() {
 			BeforeEach(func() {
 				routingTable = routingtable.NewRoutingTable(false, fakeMetronClient)
-				beforeLRPSchedulingInfo := getDesiredLRP("process-guid-1", "log-guid-1", tcpRoutes, modificationTag)
-				routingTable.SetRoutes(logger, nil, beforeLRPSchedulingInfo)
+				beforeLRP := getDesiredLRP("process-guid-1", "log-guid-1", tcpRoutes, modificationTag)
+				routingTable.SetRoutes(logger, nil, beforeLRP)
 				routingTable.AddEndpoint(logger, getActualLRP("process-guid-1", "instance-guid-1", "some-ip-1", "container-ip-1", 62004, 5222, modificationTag))
 				Expect(routingTable.TCPAssociationsCount()).Should(Equal(1))
 			})
@@ -1424,8 +1423,8 @@ var _ = Describe("TCPRoutingTable", func() {
 				existingLogGuid = "log-guid-1"
 				newModificationTag = &models.ModificationTag{Epoch: "abc", Index: 2}
 				routingTable = routingtable.NewRoutingTable(false, fakeMetronClient)
-				beforeLRPSchedulingInfo := getDesiredLRP("process-guid-1", existingLogGuid, tcpRoutes, modificationTag)
-				routingTable.SetRoutes(logger, nil, beforeLRPSchedulingInfo)
+				beforeLRP := getDesiredLRP("process-guid-1", existingLogGuid, tcpRoutes, modificationTag)
+				routingTable.SetRoutes(logger, nil, beforeLRP)
 				routingTable.AddEndpoint(logger, getActualLRP("process-guid-1", "instance-guid-1", "some-ip-1", "container-ip-1", 62004, 5222, modificationTag))
 				routingTable.AddEndpoint(logger, getActualLRP("process-guid-1", "instance-guid-2", "some-ip-2", "container-ip-2", 62004, 5222, modificationTag))
 				Expect(routingTable.TCPAssociationsCount()).Should(Equal(2))
@@ -1436,8 +1435,8 @@ var _ = Describe("TCPRoutingTable", func() {
 				BeforeEach(func() {
 					logGuid = "log-guid-2"
 					tempRoutingTable = routingtable.NewRoutingTable(false, fakeMetronClient)
-					beforeLRPSchedulingInfo := getDesiredLRP("process-guid-2", logGuid, tcpRoutes, newModificationTag)
-					tempRoutingTable.SetRoutes(logger, nil, beforeLRPSchedulingInfo)
+					beforeLRP := getDesiredLRP("process-guid-2", logGuid, tcpRoutes, newModificationTag)
+					tempRoutingTable.SetRoutes(logger, nil, beforeLRP)
 					tempRoutingTable.AddEndpoint(logger, getActualLRP("process-guid-2", "instance-guid-1", "some-ip-3", "container-ip-3", 63004, 5222, newModificationTag))
 					tempRoutingTable.AddEndpoint(logger, getActualLRP("process-guid-2", "instance-guid-2", "some-ip-4", "container-ip-4", 63004, 5222, newModificationTag))
 					Expect(tempRoutingTable.TCPAssociationsCount()).Should(Equal(2))
@@ -1488,8 +1487,8 @@ var _ = Describe("TCPRoutingTable", func() {
 				BeforeEach(func() {
 					logGuid = "log-guid-2"
 					tempRoutingTable = routingtable.NewRoutingTable(false, fakeMetronClient)
-					beforeLRPSchedulingInfo := getDesiredLRP("process-guid-1", logGuid, tcpRoutes, newModificationTag)
-					tempRoutingTable.SetRoutes(logger, nil, beforeLRPSchedulingInfo)
+					beforeLRP := getDesiredLRP("process-guid-1", logGuid, tcpRoutes, newModificationTag)
+					tempRoutingTable.SetRoutes(logger, nil, beforeLRP)
 					tempRoutingTable.AddEndpoint(logger, getActualLRP("process-guid-1", "instance-guid-1", "some-ip-3", "container-ip-3", 63004, 5222, newModificationTag))
 					tempRoutingTable.AddEndpoint(logger, getActualLRP("process-guid-1", "instance-guid-2", "some-ip-4", "container-ip-4", 63004, 5222, newModificationTag))
 					Expect(tempRoutingTable.TCPAssociationsCount()).Should(Equal(2))
@@ -1548,9 +1547,9 @@ var _ = Describe("TCPRoutingTable", func() {
 							ContainerPort:   5222,
 						},
 					}
-					beforeLRPSchedulingInfo := getDesiredLRP("process-guid-1", existingLogGuid, newTcpRoutes, newModificationTag)
+					beforeLRP := getDesiredLRP("process-guid-1", existingLogGuid, newTcpRoutes, newModificationTag)
 					tempRoutingTable = routingtable.NewRoutingTable(false, fakeMetronClient)
-					tempRoutingTable.SetRoutes(logger, nil, beforeLRPSchedulingInfo)
+					tempRoutingTable.SetRoutes(logger, nil, beforeLRP)
 					tempRoutingTable.AddEndpoint(logger, getActualLRP("process-guid-1", "instance-guid-1", "some-ip-1", "container-ip-1", 62004, 5222, modificationTag))
 					tempRoutingTable.AddEndpoint(logger, getActualLRP("process-guid-1", "instance-guid-2", "some-ip-2", "container-ip-2", 62004, 5222, modificationTag))
 
