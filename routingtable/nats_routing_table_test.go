@@ -1,15 +1,8 @@
 package routingtable_test
 
+/*
 import (
-	"fmt"
-
-	mfakes "code.cloudfoundry.org/diego-logging-client/testhelpers"
-
-	"code.cloudfoundry.org/bbs/models"
-	"code.cloudfoundry.org/lager/lagertest"
-	"code.cloudfoundry.org/route-emitter/routingtable"
 	. "code.cloudfoundry.org/route-emitter/routingtable/matchers"
-	"code.cloudfoundry.org/routing-info/cfroutes"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	. "github.com/onsi/gomega/gbytes"
@@ -2133,3 +2126,4 @@ var _ = Describe("RoutingTable", func() {
 		})
 	})
 })
+*/

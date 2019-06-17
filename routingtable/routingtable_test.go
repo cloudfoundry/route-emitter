@@ -16,95 +16,215 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-func createDesiredLRP(
-	processGuid string, instances int32, port uint32, logGuid, rsURL string,
-	currentTag models.ModificationTag, runInfo models.DesiredLRPRunInfo,
-	hostnames ...string,
-) *models.DesiredLRP {
-	routingInfo := cfroutes.CFRoutes{
-		{
-			Hostnames:       hostnames,
-			Port:            port,
-			RouteServiceUrl: rsURL,
-		},
-	}.RoutingInfo()
+type desiredLRPOption func(*models.DesiredLRP) error
 
-	routes := models.Routes{}
-
-	for key, message := range routingInfo {
-		routes[key] = message
-	}
-
-	return createDesiredLRPWithRoutes(
-		processGuid, instances, routes, logGuid, currentTag, runInfo,
-	)
+type desiredLRPConfig struct {
+	opts []desiredLRPOption
 }
 
-func createRoutingInfo(port uint32, hostnames, internalHostnames []string, rsURL string, externalPorts []uint32, routerGroupGuid string) models.Routes {
-	routingInfo := cfroutes.CFRoutes{
-		{
-			Hostnames:       hostnames,
-			Port:            port,
-			RouteServiceUrl: rsURL,
-		},
-	}.RoutingInfo()
-
-	routes := models.Routes{}
-
-	for key, message := range routingInfo {
-		routes[key] = message
+func desiredLRPBuilder(opts ...desiredLRPOption) desiredLRPConfig {
+	return desiredLRPConfig{
+		opts: opts,
 	}
+}
 
-	for _, e := range externalPorts {
-		tcpRoutes := tcp_routes.TCPRoutes{
-			{
-				RouterGroupGuid: routerGroupGuid,
-				ExternalPort:    e,
-				ContainerPort:   port,
-			},
-		}.RoutingInfo()
-		for key, message := range *tcpRoutes {
-			routes[key] = message
+func (c desiredLRPConfig) build() *models.DesiredLRP {
+	defer GinkgoRecover()
+	config := &models.DesiredLRP{}
+	for _, opt := range c.opts {
+		if err := opt(config); err != nil {
+			ExpectWithOffset(1, err, Succeed())
 		}
 	}
-
-	internalRoutes := internalroutes.InternalRoutes{}
-
-	for _, host := range internalHostnames {
-		internalRoutes = append(internalRoutes,
-			internalroutes.InternalRoute{Hostname: host},
-		)
-	}
-	internalRoutingInfo := internalRoutes.RoutingInfo()
-	for key, message := range internalRoutingInfo {
-		routes[key] = message
-	}
-
-	return routes
+	return config
 }
 
-func createDesiredLRPWithRoutes(
-	processGuid string, instances int32, routes models.Routes, logGuid string,
-	currentTag models.ModificationTag, runInfo models.DesiredLRPRunInfo,
-) *models.DesiredLRP {
-	return &models.DesiredLRP{
-		ProcessGuid: processGuid,
-		Domain:      "domain",
-		LogGuid:     logGuid,
-		Annotation:  "",
-		Instances:   instances,
-
-		MemoryMb: 0,
-		DiskMb:   0,
-		RootFs:   "",
-		MaxPids:  0,
-
-		Routes:          &routes,
-		ModificationTag: &currentTag,
-		VolumeMounts:    nil,
-		PlacementTags:   nil,
+func withInstances(instances int32) desiredLRPOption {
+	return func(d *models.DesiredLRP) error {
+		d.Instances = instances
+		return nil
 	}
 }
+
+func withKey(processGuid string, domain string, logGuid string) desiredLRPOption {
+	return func(d *models.DesiredLRP) error {
+		d.ProcessGuid = processGuid
+		d.Domain = domain
+		d.LogGuid = logGuid
+		return nil
+	}
+}
+
+func withCFRoutes(port uint32, rsURL string, hostnames []string) desiredLRPOption {
+	return func(d *models.DesiredLRP) error {
+		if d.Routes == nil {
+			d.Routes = &models.Routes{}
+		}
+		routes := *d.Routes
+
+		routingInfo := cfroutes.CFRoutes{
+			{
+				Hostnames:       hostnames,
+				Port:            port,
+				RouteServiceUrl: rsURL,
+			},
+		}.RoutingInfo()
+
+		for key, message := range routingInfo {
+			routes[key] = message
+		}
+
+		d.Routes = &routes
+
+		return nil
+	}
+}
+
+func withExternalRoutes(port uint32, routerGroupGuid string, externalPorts []uint32) desiredLRPOption {
+	return func(d *models.DesiredLRP) error {
+		if d.Routes == nil {
+			d.Routes = &models.Routes{}
+		}
+		routes := *d.Routes
+
+		for _, e := range externalPorts {
+			tcpRoutes := tcp_routes.TCPRoutes{
+				{
+					RouterGroupGuid: routerGroupGuid,
+					ExternalPort:    e,
+					ContainerPort:   port,
+				},
+			}.RoutingInfo()
+
+			for key, message := range *tcpRoutes {
+				routes[key] = message
+			}
+
+		}
+		d.Routes = &routes
+		return nil
+	}
+
+}
+func withInternalRoutes(internalHostnames []string) desiredLRPOption {
+	return func(d *models.DesiredLRP) error {
+		if d.Routes == nil {
+			d.Routes = &models.Routes{}
+		}
+		routes := *d.Routes
+
+		internalRoutes := internalroutes.InternalRoutes{}
+
+		for _, host := range internalHostnames {
+			internalRoutes = append(internalRoutes,
+				internalroutes.InternalRoute{Hostname: host},
+			)
+		}
+		internalRoutingInfo := internalRoutes.RoutingInfo()
+		for key, message := range internalRoutingInfo {
+			routes[key] = message
+		}
+
+		d.Routes = &routes
+		return nil
+	}
+}
+
+func withModificationTag(tags *models.ModificationTag) desiredLRPOption {
+	return func(d *models.DesiredLRP) error {
+		d.ModificationTag = tags
+		return nil
+	}
+}
+
+// func createDesiredLRP(
+// 	processGuid string, instances int32, port uint32, logGuid, rsURL string,
+// 	currentTag models.ModificationTag, runInfo models.DesiredLRPRunInfo,
+// 	hostnames ...string,
+// ) *models.DesiredLRP {
+// 	routingInfo := cfroutes.CFRoutes{
+// 		{
+// 			Hostnames:       hostnames,
+// 			Port:            port,
+// 			RouteServiceUrl: rsURL,
+// 		},
+// 	}.RoutingInfo()
+//
+// 	routes := models.Routes{}
+//
+// 	for key, message := range routingInfo {
+// 		routes[key] = message
+// 	}
+//
+// 	return createDesiredLRPWithRoutes(
+// 		processGuid, instances, routes, logGuid, currentTag, runInfo,
+// 	)
+// }
+
+// func createRoutingInfo(port uint32, hostnames, internalHostnames []string, rsURL string, externalPorts []uint32, routerGroupGuid string) models.Routes {
+// 	routingInfo := cfroutes.CFRoutes{
+// 		{
+// 			Hostnames:       hostnames,
+// 			Port:            port,
+// 			RouteServiceUrl: rsURL,
+// 		},
+// 	}.RoutingInfo()
+//
+// 	routes := models.Routes{}
+//
+// 	for key, message := range routingInfo {
+// 		routes[key] = message
+// 	}
+//
+// 	for _, e := range externalPorts {
+// 		tcpRoutes := tcp_routes.TCPRoutes{
+// 			{
+// 				RouterGroupGuid: routerGroupGuid,
+// 				ExternalPort:    e,
+// 				ContainerPort:   port,
+// 			},
+// 		}.RoutingInfo()
+// 		for key, message := range *tcpRoutes {
+// 			routes[key] = message
+// 		}
+// 	}
+// 	internalRoutes := internalroutes.InternalRoutes{}
+//
+// 	for _, host := range internalHostnames {
+// 		internalRoutes = append(internalRoutes,
+// 			internalroutes.InternalRoute{Hostname: host},
+// 		)
+// 	}
+// 	internalRoutingInfo := internalRoutes.RoutingInfo()
+// 	for key, message := range internalRoutingInfo {
+// 		routes[key] = message
+// 	}
+//
+// 	return routes
+// }
+
+// func createDesiredLRPWithRoutes(
+// 	processGuid string, instances int32, routes models.Routes, logGuid string,
+// 	currentTag models.ModificationTag, runInfo models.DesiredLRPRunInfo,
+// ) *models.DesiredLRP {
+// 	return &models.DesiredLRP{
+// 		ProcessGuid: processGuid,
+// 		Domain:      "domain",
+// 		LogGuid:     logGuid,
+// 		Annotation:  "",
+// 		Instances:   instances,
+//
+// 		MemoryMb: 0,
+// 		DiskMb:   0,
+// 		RootFs:   "",
+// 		MaxPids:  0,
+//
+// 		Routes:          &routes,
+// 		ModificationTag: &currentTag,
+// 		VolumeMounts:    nil,
+// 		PlacementTags:   nil,
+// 	}
+// }
 
 func createActualLRP(
 	key routingtable.RoutingKey,
@@ -239,11 +359,18 @@ var _ = Describe("RoutingTable", func() {
 		JustBeforeEach(func() {
 			internalHostname = "internal"
 
-			// Add routes and internal routes
-			routes := createRoutingInfo(key.ContainerPort, []string{hostname1}, []string{internalHostname}, "", []uint32{}, logGuid)
-
-			// Set routes on desired lrp
-			beforeDesiredLRP = createDesiredLRPWithRoutes(key.ProcessGUID, instances, routes, logGuid, *currentTag, runInfo)
+			// // Add routes and internal routes
+			// routes := createRoutingInfo(key.ContainerPort, []string{hostname1}, []string{internalHostname}, "", []uint32{}, logGuid)
+			//
+			// // Set routes on desired lrp
+			// beforeDesiredLRP = createDesiredLRPWithRoutes(key.ProcessGUID, instances, routes, logGuid, *currentTag, runInfo)
+			beforeDesiredLRP = desiredLRPBuilder(
+				withKey(key.ProcessGUID, "", logGuid),
+				withCFRoutes(key.ContainerPort, "", []string{hostname1}),
+				withInternalRoutes([]string{internalHostname}),
+				withInstances(instances),
+				// withModificationTag(currentTag),
+			).build()
 			table.SetRoutes(logger, nil, beforeDesiredLRP)
 
 			actualLRP := createActualLRP(key, endpoint1, domain)
@@ -252,8 +379,13 @@ var _ = Describe("RoutingTable", func() {
 
 		Context("when the route is removed", func() {
 			JustBeforeEach(func() {
-				afterDesiredLRP := createDesiredLRP(key.ProcessGUID, instances, key.ContainerPort, logGuid, "", *newerTag, runInfo, "")
-				afterDesiredLRP.Routes = nil
+				afterDesiredLRP := desiredLRPBuilder(
+					withKey(key.ProcessGUID, "", logGuid),
+					withModificationTag(newerTag),
+					withInstances(instances),
+				).build()
+				// afterDesiredLRP := createDesiredLRP(key.ProcessGUID, instances, key.ContainerPort, logGuid, "", *newerTag, runInfo, "")
+				// afterDesiredLRP.Routes = nil
 				tcpRouteMappings, messagesToEmit = table.SetRoutes(logger, beforeDesiredLRP, afterDesiredLRP)
 			})
 
@@ -266,8 +398,14 @@ var _ = Describe("RoutingTable", func() {
 
 			Context("when the a new route is added", func() {
 				JustBeforeEach(func() {
+					// afterDesiredLRP := createDesiredLRP(key.ProcessGUID, instances, key.ContainerPort, logGuid, "", *newerTag, runInfo, "bar.example.com")
 					newerTag := &models.ModificationTag{Epoch: "ghi", Index: 0}
-					afterDesiredLRP := createDesiredLRP(key.ProcessGUID, instances, key.ContainerPort, logGuid, "", *newerTag, runInfo, "bar.example.com")
+					afterDesiredLRP := desiredLRPBuilder(
+						withKey(key.ProcessGUID, "", logGuid),
+						withCFRoutes(key.ContainerPort, "", []string{"bar.example.com"}),
+						withModificationTag(newerTag),
+						withInstances(1),
+					).build()
 					tcpRouteMappings, messagesToEmit = table.SetRoutes(logger, beforeDesiredLRP, afterDesiredLRP)
 				})
 
@@ -299,7 +437,13 @@ var _ = Describe("RoutingTable", func() {
 
 			Context("when an update is received with old modification tag", func() {
 				JustBeforeEach(func() {
-					afterDesiredLRP := createDesiredLRP(key.ProcessGUID, instances, key.ContainerPort, logGuid, "", *newerTag, runInfo, "bar.example.com")
+					// afterDesiredLRP := createDesiredLRP(key.ProcessGUID, instances, key.ContainerPort, logGuid, "", *newerTag, runInfo, "bar.example.com")
+					afterDesiredLRP := desiredLRPBuilder(
+						withKey(key.ProcessGUID, "", logGuid),
+						withCFRoutes(key.ContainerPort, "", []string{"bar.example.com"}),
+						withInstances(instances),
+						withModificationTag(newerTag),
+					).build()
 					tcpRouteMappings, messagesToEmit = table.SetRoutes(logger, beforeDesiredLRP, afterDesiredLRP)
 				})
 
@@ -311,7 +455,13 @@ var _ = Describe("RoutingTable", func() {
 
 		Context("when the internal route is removed", func() {
 			JustBeforeEach(func() {
-				afterDesiredLRP := createDesiredLRP(key.ProcessGUID, instances, key.ContainerPort, logGuid, "", *newerTag, runInfo, hostname1)
+				// afterDesiredLRP := createDesiredLRP(key.ProcessGUID, instances, key.ContainerPort, logGuid, "", *newerTag, runInfo, hostname1)
+				afterDesiredLRP := desiredLRPBuilder(
+					withKey(key.ProcessGUID, "", logGuid),
+					withCFRoutes(key.ContainerPort, "", []string{hostname1}),
+					withModificationTag(newerTag),
+					withInstances(instances),
+				).build()
 				tcpRouteMappings, messagesToEmit = table.SetRoutes(logger, beforeDesiredLRP, afterDesiredLRP)
 			})
 
@@ -332,9 +482,15 @@ var _ = Describe("RoutingTable", func() {
 
 			Context("when an update is received with old modification tag", func() {
 				JustBeforeEach(func() {
-					routes := createRoutingInfo(key.ContainerPort, []string{hostname1}, []string{}, "", []uint32{}, logGuid)
-
-					afterDesiredLRP := createDesiredLRPWithRoutes(key.ProcessGUID, instances, routes, logGuid, *newerTag, runInfo)
+					// routes := createRoutingInfo(key.ContainerPort, []string{hostname1}, []string{}, "", []uint32{}, logGuid)
+					//
+					// afterDesiredLRP := createDesiredLRPWithRoutes(key.ProcessGUID, instances, routes, logGuid, *newerTag, runInfo)
+					afterDesiredLRP := desiredLRPBuilder(
+						withKey(key.ProcessGUID, "", logGuid),
+						withCFRoutes(key.ContainerPort, "", []string{hostname1}),
+						withModificationTag(newerTag),
+						withInstances(instances),
+					).build()
 					tcpRouteMappings, messagesToEmit = table.SetRoutes(logger, beforeDesiredLRP, afterDesiredLRP)
 				})
 
@@ -349,10 +505,17 @@ var _ = Describe("RoutingTable", func() {
 			JustBeforeEach(func() {
 				internalHostname2 = "internal-2"
 				newerTag := &models.ModificationTag{Epoch: "ghi", Index: 0}
-				routes := createRoutingInfo(key.ContainerPort, []string{hostname1}, []string{internalHostname, internalHostname2}, "", []uint32{}, logGuid)
-
-				afterDesiredLRP := createDesiredLRPWithRoutes(key.ProcessGUID, instances, routes, logGuid, *newerTag, runInfo)
-
+				// routes := createRoutingInfo(key.ContainerPort, []string{hostname1}, []string{internalHostname, internalHostname2}, "", []uint32{}, logGuid)
+				//
+				// afterDesiredLRP := createDesiredLRPWithRoutes(key.ProcessGUID, instances, routes, logGuid, *newerTag, runInfo)
+				//
+				afterDesiredLRP := desiredLRPBuilder(
+					withKey(key.ProcessGUID, "", logGuid),
+					withCFRoutes(key.ContainerPort, "", []string{hostname1}),
+					withInternalRoutes([]string{internalHostname, internalHostname2}),
+					withModificationTag(newerTag),
+					withInstances(instances),
+				).build()
 				tcpRouteMappings, messagesToEmit = table.SetRoutes(logger, beforeDesiredLRP, afterDesiredLRP)
 			})
 
@@ -386,8 +549,15 @@ var _ = Describe("RoutingTable", func() {
 				table.AddEndpoint(logger, actualLRP)
 
 				//changedLRP
-				routes := createRoutingInfo(key.ContainerPort, []string{hostname1}, []string{internalHostname}, "", []uint32{}, logGuid)
-				afterDesiredLRP := createDesiredLRPWithRoutes(key.ProcessGUID, 1, routes, logGuid, *newerTag, runInfo)
+				// routes := createRoutingInfo(key.ContainerPort, []string{hostname1}, []string{internalHostname}, "", []uint32{}, logGuid)
+				// afterDesiredLRP := createDesiredLRPWithRoutes(key.ProcessGUID, 1, routes, logGuid, *newerTag, runInfo)
+				afterDesiredLRP := desiredLRPBuilder(
+					withKey(key.ProcessGUID, "", logGuid),
+					withCFRoutes(key.ContainerPort, "", []string{hostname1}),
+					withInternalRoutes([]string{internalHostname}),
+					withInstances(1),
+					withModificationTag(newerTag),
+				).build()
 
 				tcpRouteMappings, messagesToEmit = table.SetRoutes(logger, beforeDesiredLRP, afterDesiredLRP)
 			})
@@ -448,8 +618,14 @@ var _ = Describe("RoutingTable", func() {
 	Describe("Swap", func() {
 		It("preserves the desired LRP domain", func() {
 			By("creating a routing table with a route and endpoint")
-			routingInfo := createRoutingInfo(key.ContainerPort, []string{hostname1}, []string{}, "", []uint32{5222}, "router-group-guid")
-			beforeDesiredLRP := createDesiredLRPWithRoutes(key.ProcessGUID, 3, routingInfo, logGuid, *currentTag, runInfo)
+			// routingInfo := createRoutingInfo(key.ContainerPort, []string{hostname1}, []string{}, "", []uint32{5222}, "router-group-guid")
+			// beforeDesiredLRP := createDesiredLRPWithRoutes(key.ProcessGUID, 3, routingInfo, logGuid, *currentTag, runInfo)
+			beforeDesiredLRP := desiredLRPBuilder(
+				withKey(key.ProcessGUID, domain, logGuid),
+				withCFRoutes(key.ContainerPort, "", []string{hostname1}),
+				withExternalRoutes(key.ContainerPort, "router-group-guid", []uint32{5222}),
+				withInstances(3),
+			).build()
 			table.SetRoutes(logger, nil, beforeDesiredLRP)
 			actualLRP := createActualLRP(key, endpoint1, domain)
 			table.AddEndpoint(logger, actualLRP)
@@ -488,9 +664,17 @@ var _ = Describe("RoutingTable", func() {
 
 		Context("when there is internal routable endpoint", func() {
 			BeforeEach(func() {
-				// table = routingtable.NewRoutingTable(false, fakeMetronClient)
-				routingInfo := createRoutingInfo(key.ContainerPort, []string{}, []string{"internal"}, "", []uint32{5222}, "")
-				beforeDesiredLRP := createDesiredLRPWithRoutes(key.ProcessGUID, 3, routingInfo, logGuid, *currentTag, runInfo)
+				table = routingtable.NewRoutingTable(false, fakeMetronClient)
+				// routingInfo := createRoutingInfo(key.ContainerPort, []string{}, []string{"internal"}, "", []uint32{5222}, "")
+				// beforeDesiredLRP := createDesiredLRPWithRoutes(key.ProcessGUID, 3, routingInfo, logGuid, *currentTag, runInfo)
+
+				beforeDesiredLRP := desiredLRPBuilder(
+					withKey(key.ProcessGUID, "", logGuid),
+					withInternalRoutes([]string{"internal"}),
+					withExternalRoutes(key.ContainerPort, "", []uint32{5222}),
+					withModificationTag(currentTag),
+					withInstances(3),
+				).build()
 				table.SetRoutes(logger, nil, beforeDesiredLRP)
 
 				actualLRP := createActualLRP(key, endpoint1, domain)
@@ -522,8 +706,14 @@ var _ = Describe("RoutingTable", func() {
 
 		Context("when the table has a routable endpoint", func() {
 			BeforeEach(func() {
-				routingInfo := createRoutingInfo(key.ContainerPort, []string{hostname1}, []string{}, "", []uint32{5222}, "router-group-guid")
-				beforeDesiredLRP := createDesiredLRPWithRoutes(key.ProcessGUID, 3, routingInfo, logGuid, *currentTag, runInfo)
+				// routingInfo := createRoutingInfo(key.ContainerPort, []string{hostname1}, []string{}, "", []uint32{5222}, "router-group-guid")
+				// beforeDesiredLRP := createDesiredLRPWithRoutes(key.ProcessGUID, 3, routingInfo, logGuid, *currentTag, runInfo)
+				beforeDesiredLRP := desiredLRPBuilder(
+					withKey(key.ProcessGUID, "", logGuid),
+					withCFRoutes(key.ContainerPort, "", []string{hostname1}),
+					withExternalRoutes(key.ContainerPort, "router-group-guid", []uint32{5222}),
+					withInstances(3),
+				).build()
 				table.SetRoutes(logger, nil, beforeDesiredLRP)
 
 				actualLRP := createActualLRP(key, endpoint1, domain)
@@ -595,8 +785,14 @@ var _ = Describe("RoutingTable", func() {
 		)
 
 		BeforeEach(func() {
-			routes := createRoutingInfo(key.ContainerPort, []string{hostname1}, []string{"internal-hostname"}, "", []uint32{5222}, "router-group-guid")
-			desiredLRP = createDesiredLRPWithRoutes(key.ProcessGUID, 1, routes, logGuid, *currentTag, runInfo)
+			// routes := createRoutingInfo(key.ContainerPort, []string{hostname1}, []string{"internal-hostname"}, "", []uint32{5222}, "router-group-guid")
+			// desiredLRP = createDesiredLRPWithRoutes(key.ProcessGUID, 1, routes, logGuid, *currentTag, runInfo)
+			desiredLRP = desiredLRPBuilder(
+				withKey(key.ProcessGUID, domain, logGuid),
+				withCFRoutes(key.ContainerPort, "", []string{hostname1}),
+				withInternalRoutes([]string{"internal-hostname"}),
+				withExternalRoutes(key.ContainerPort, "router-group-guid", []uint32{5222}),
+			).build()
 			table.SetRoutes(logger, nil, desiredLRP)
 			actualLRP = createActualLRP(key, endpoint1, domain)
 			table.AddEndpoint(logger, actualLRP)
@@ -606,7 +802,10 @@ var _ = Describe("RoutingTable", func() {
 
 		Context("when routes are deleted", func() {
 			BeforeEach(func() {
-				newDesiredLRP := createDesiredLRPWithRoutes(key.ProcessGUID, 1, nil, logGuid, *newerTag, runInfo)
+				// newDesiredLRP := createDesiredLRPWithRoutes(key.ProcessGUID, 1, nil, logGuid, *newerTag, runInfo)
+				newDesiredLRP := desiredLRPBuilder(
+					withKey(key.ProcessGUID, "", logGuid),
+				).build()
 				table.SetRoutes(logger, desiredLRP, newDesiredLRP)
 			})
 
@@ -636,7 +835,10 @@ var _ = Describe("RoutingTable", func() {
 
 			Context("and endpoints are deleted", func() {
 				BeforeEach(func() {
-					newDesiredLRP := createDesiredLRPWithRoutes(key.ProcessGUID, 1, nil, logGuid, *newerTag, runInfo)
+					// newDesiredLRP := createDesiredLRPWithRoutes(key.ProcessGUID, 1, nil, logGuid, *newerTag, runInfo)
+					newDesiredLRP := desiredLRPBuilder(
+						withKey(key.ProcessGUID, "", logGuid),
+					).build()
 					table.SetRoutes(logger, desiredLRP, newDesiredLRP)
 				})
 
@@ -661,8 +863,14 @@ var _ = Describe("RoutingTable", func() {
 	Describe("RouteCounts", func() {
 		BeforeEach(func() {
 			internalHostname := "internal"
-			routes := createRoutingInfo(key.ContainerPort, []string{hostname1}, []string{internalHostname}, "", []uint32{5222}, "router-group-guid")
-			afterDesiredLRP := createDesiredLRPWithRoutes(key.ProcessGUID, 1, routes, logGuid, *currentTag, runInfo)
+			// routes := createRoutingInfo(key.ContainerPort, []string{hostname1}, []string{internalHostname}, "", []uint32{5222}, "router-group-guid")
+			// afterDesiredLRP := createDesiredLRPWithRoutes(key.ProcessGUID, 1, routes, logGuid, *currentTag, runInfo)
+			afterDesiredLRP := desiredLRPBuilder(
+				withKey(key.ProcessGUID, "", logGuid),
+				withCFRoutes(key.ContainerPort, "", []string{hostname1}),
+				withInternalRoutes([]string{internalHostname}),
+				withExternalRoutes(key.ContainerPort, "router-group-guid", []uint32{5222}),
+			).build()
 			table.SetRoutes(logger, nil, afterDesiredLRP)
 			actualLRP1 := createActualLRP(key, endpoint1, domain)
 			table.AddEndpoint(logger, actualLRP1)
@@ -686,11 +894,17 @@ var _ = Describe("RoutingTable", func() {
 			var internalHostname string
 			BeforeEach(func() {
 				internalHostname = "internal-hostname"
-				// Add internal routes
-				routes := createRoutingInfo(key.ContainerPort, []string{hostname1}, []string{internalHostname}, "", []uint32{}, "")
-
-				// Set routes on desired lrp
-				afterDesiredLRP := createDesiredLRPWithRoutes(key.ProcessGUID, 1, routes, logGuid, *currentTag, runInfo)
+				// // Add internal routes
+				// routes := createRoutingInfo(key.ContainerPort, []string{hostname1}, []string{internalHostname}, "", []uint32{}, "")
+				//
+				// // Set routes on desired lrp
+				// afterDesiredLRP := createDesiredLRPWithRoutes(key.ProcessGUID, 1, routes, logGuid, *currentTag, runInfo)
+				afterDesiredLRP := desiredLRPBuilder(
+					withKey(key.ProcessGUID, "", logGuid),
+					withCFRoutes(key.ContainerPort, "", []string{hostname1}),
+					withInternalRoutes([]string{internalHostname}),
+					withInstances(1),
+				).build()
 				table.SetRoutes(logger, nil, afterDesiredLRP)
 			})
 
@@ -740,10 +954,14 @@ var _ = Describe("RoutingTable", func() {
 		})
 
 		Context("when the table has routes but no endpoints", func() {
-			var beforeLRP *models.DesiredLRP
 			BeforeEach(func() {
-				routes := createRoutingInfo(key.ContainerPort, []string{}, []string{"internal"}, "https://rs.example.com", []uint32{}, "")
-				beforeLRP = createDesiredLRPWithRoutes(key.ProcessGUID, 3, routes, logGuid, *currentTag, runInfo)
+				// routes := createRoutingInfo(key.ContainerPort, []string{}, []string{"internal"}, "https://rs.example.com", []uint32{}, "")
+				// beforeLRP = createDesiredLRPWithRoutes(key.ProcessGUID, 3, routes, logGuid, *currentTag, runInfo)
+				beforeLRP := desiredLRPBuilder(
+					withKey(key.ProcessGUID, "", logGuid),
+					withCFRoutes(key.ContainerPort, "https://rs.example.com", []string{}),
+					withInternalRoutes([]string{"internal"}),
+				).build()
 				table.SetRoutes(logger, nil, beforeLRP)
 			})
 
@@ -777,8 +995,13 @@ var _ = Describe("RoutingTable", func() {
 			BeforeEach(func() {
 				hostname2 = "bar.example.com"
 				internalHostname1 = "internal"
-				routes := createRoutingInfo(key.ContainerPort, []string{hostname1, hostname2}, []string{internalHostname1}, "", []uint32{}, "")
-				beforeLRP = createDesiredLRPWithRoutes(key.ProcessGUID, 3, routes, logGuid, *currentTag, runInfo)
+				// routes := createRoutingInfo(key.ContainerPort, []string{hostname1, hostname2}, []string{internalHostname1}, "", []uint32{}, "")
+				// beforeLRP = createDesiredLRPWithRoutes(key.ProcessGUID, 3, routes, logGuid, *currentTag, runInfo)
+				beforeLRP = desiredLRPBuilder(
+					withKey(key.ProcessGUID, "", logGuid),
+					withCFRoutes(key.ContainerPort, "", []string{hostname1, hostname2}),
+					withInternalRoutes([]string{internalHostname1}),
+				).build()
 				table.SetRoutes(logger, nil, beforeLRP)
 				lrp1 = createActualLRP(key, endpoint1, domain)
 				lrp2 = createActualLRP(key, endpoint2, domain)
@@ -826,8 +1049,12 @@ var _ = Describe("RoutingTable", func() {
 		Context("when the table has routes but no endpoints", func() {
 			var beforeLRP *models.DesiredLRP
 			BeforeEach(func() {
-				routes := createRoutingInfo(key.ContainerPort, []string{}, []string{}, "https://rs.example.com", []uint32{}, "")
-				beforeLRP = createDesiredLRPWithRoutes(key.ProcessGUID, 3, routes, logGuid, *currentTag, runInfo)
+				// routes := createRoutingInfo(key.ContainerPort, []string{}, []string{}, "https://rs.example.com", []uint32{}, "")
+				// beforeLRP = createDesiredLRPWithRoutes(key.ProcessGUID, 3, routes, logGuid, *currentTag, runInfo)
+				beforeLRP = desiredLRPBuilder(
+					withKey(key.ProcessGUID, "", logGuid),
+					withCFRoutes(key.ContainerPort, "https://rs.example.com", []string{}),
+				).build()
 				table.SetRoutes(logger, nil, beforeLRP)
 			})
 
@@ -861,8 +1088,13 @@ var _ = Describe("RoutingTable", func() {
 			BeforeEach(func() {
 				hostname2 = "bar.example.com"
 				internalHostname1 = "internal"
-				routes := createRoutingInfo(key.ContainerPort, []string{hostname1, hostname2}, []string{internalHostname1}, "", []uint32{}, "")
-				beforeLRP = createDesiredLRPWithRoutes(key.ProcessGUID, 3, routes, logGuid, *currentTag, runInfo)
+				// routes := createRoutingInfo(key.ContainerPort, []string{hostname1, hostname2}, []string{internalHostname1}, "", []uint32{}, "")
+				// beforeLRP = createDesiredLRPWithRoutes(key.ProcessGUID, 3, routes, logGuid, *currentTag, runInfo)
+				beforeLRP = desiredLRPBuilder(
+					withKey(key.ProcessGUID, "", logGuid),
+					withCFRoutes(key.ContainerPort, "", []string{hostname1, hostname2}),
+					withInternalRoutes([]string{internalHostname1}),
+				).build()
 				table.SetRoutes(logger, nil, beforeLRP)
 				lrp1 = createActualLRP(key, endpoint1, domain)
 				lrp2 = createActualLRP(key, endpoint2, domain)
@@ -893,11 +1125,17 @@ var _ = Describe("RoutingTable", func() {
 			BeforeEach(func() {
 				internalHostname = "internal"
 
-				// Add routes and internal routes
-				routes := createRoutingInfo(key.ContainerPort, []string{hostname1}, []string{internalHostname}, "", []uint32{9999}, logGuid)
-
-				// Set routes on desired lrp
-				beforeDesiredLRP := createDesiredLRPWithRoutes(key.ProcessGUID, 2, routes, logGuid, *currentTag, runInfo)
+				// // Add routes and internal routes
+				// routes := createRoutingInfo(key.ContainerPort, []string{hostname1}, []string{internalHostname}, "", []uint32{9999}, logGuid)
+				//
+				// // Set routes on desired lrp
+				// beforeDesiredLRP := createDesiredLRPWithRoutes(key.ProcessGUID, 2, routes, logGuid, *currentTag, runInfo)
+				beforeDesiredLRP := desiredLRPBuilder(
+					withKey(key.ProcessGUID, "", logGuid),
+					withCFRoutes(key.ContainerPort, "", []string{hostname1}),
+					withInternalRoutes([]string{internalHostname}),
+					withExternalRoutes(key.ContainerPort, logGuid, []uint32{9999}),
+				).build()
 				table.SetRoutes(logger, nil, beforeDesiredLRP)
 
 				actualLRP := createActualLRP(key, endpoint1, domain)
