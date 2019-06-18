@@ -71,6 +71,10 @@ type ExternalEndpointInfo struct {
 	Port            uint32
 }
 
+func (info ExternalEndpointInfo) Hash() interface{} {
+	return info
+}
+
 func (info ExternalEndpointInfo) MessageFor(e Endpoint, directInstanceRoute, _ bool) (*RegistryMessage, *tcpmodels.TcpRouteMapping, *RegistryMessage) {
 	mapping := tcpmodels.NewTcpRouteMapping(
 		info.RouterGroupGUID,
@@ -105,6 +109,25 @@ type Route struct {
 	RouteServiceUrl  string
 	IsolationSegment string
 	LogGUID          string
+	MetricTags       map[string]*models.MetricTagValue
+}
+
+type routeHash struct {
+	Hostname         string
+	RouteServiceUrl  string
+	IsolationSegment string
+	LogGUID          string
+}
+
+// route hash is used to find route differences
+// it needs to be dereferenced so that it can be used as a key in a hash map
+func (r Route) Hash() interface{} {
+	return routeHash{
+		Hostname:         r.Hostname,
+		RouteServiceUrl:  r.RouteServiceUrl,
+		IsolationSegment: r.IsolationSegment,
+		LogGUID:          r.LogGUID,
+	}
 }
 
 func (r Route) MessageFor(endpoint Endpoint, directInstanceAddress, emitEndpointUpdatedAt bool) (*RegistryMessage, *tcpmodels.TcpRouteMapping, *RegistryMessage) {
@@ -120,6 +143,10 @@ type InternalRoute struct {
 	Hostname    string
 	ContainerIP string
 	LogGUID     string
+}
+
+func (r InternalRoute) Hash() interface{} {
+	return r
 }
 
 func (r InternalRoute) MessageFor(endpoint Endpoint, _, emitEndpointUpdatedAt bool) (*RegistryMessage, *tcpmodels.TcpRouteMapping, *RegistryMessage) {

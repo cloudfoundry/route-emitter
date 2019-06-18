@@ -3,6 +3,7 @@ package routingtable_test
 import (
 	"encoding/json"
 
+	"code.cloudfoundry.org/bbs/models"
 	"code.cloudfoundry.org/route-emitter/routingtable"
 
 	. "github.com/onsi/ginkgo"
@@ -23,7 +24,7 @@ var _ = Describe("RegistryMessage", func() {
 			PrivateInstanceIndex: "0",
 			RouteServiceUrl:      "https://hello.com",
 			EndpointUpdatedAtNs:  1000,
-			Tags:                 map[string]string{"component": "route-emitter"},
+			Tags:                 map[string]string{"component": "route-emitter", "foo": "bar", "doo": "0", "goo": "instance-guid"},
 		}
 	})
 
@@ -41,7 +42,7 @@ var _ = Describe("RegistryMessage", func() {
 				"private_instance_index": "0",
 				"route_service_url": "https://hello.com",
 				"endpoint_updated_at_ns": 1000,
-				"tags": {"component":"route-emitter"}
+				"tags": {"component":"route-emitter", "doo": "0", "foo": "bar", "goo": "instance-guid"}
 			}`
 		})
 
@@ -75,7 +76,7 @@ var _ = Describe("RegistryMessage", func() {
 				"server_cert_domain_san": "instance-guid",
 				"route_service_url": "https://hello.com",
 				"endpoint_updated_at_ns": 1000,
-				"tags": {"component":"route-emitter"}
+				"tags": {"component":"route-emitter", "doo": "0", "foo": "bar", "goo": "instance-guid"}
 			}`
 			})
 
@@ -107,6 +108,11 @@ var _ = Describe("RegistryMessage", func() {
 				Hostname:        "host-1.example.com",
 				LogGUID:         "app-guid",
 				RouteServiceUrl: "https://hello.com",
+				MetricTags: map[string]*models.MetricTagValue{
+					"foo": &models.MetricTagValue{Static: "bar"},
+					"doo": &models.MetricTagValue{Dynamic: models.MetricTagDynamicValueIndex},
+					"goo": &models.MetricTagValue{Dynamic: models.MetricTagDynamicValueInstanceGuid},
+				},
 			}
 
 			expectedMessage.EndpointUpdatedAtNs = 2000
@@ -131,12 +137,17 @@ var _ = Describe("RegistryMessage", func() {
 			Expect(message).To(Equal(expectedMessage))
 		})
 
-		It("creates a valid message when instance index is greater than 0", func() {
-			expectedMessage.PrivateInstanceIndex = "2"
-			endpoint.Index = 2
+		Context("when instance index is greater than 0", func() {
+			BeforeEach(func() {
+				expectedMessage.PrivateInstanceIndex = "2"
+				expectedMessage.Tags["doo"] = "2"
+				endpoint.Index = 2
+			})
 
-			message := routingtable.RegistryMessageFor(endpoint, route, true)
-			Expect(message).To(Equal(expectedMessage))
+			It("creates a valid message when instance index is greater than 0", func() {
+				message := routingtable.RegistryMessageFor(endpoint, route, true)
+				Expect(message).To(Equal(expectedMessage))
+			})
 		})
 	})
 
@@ -155,7 +166,7 @@ var _ = Describe("RegistryMessage", func() {
 				ServerCertDomainSAN:  "instance-guid",
 				RouteServiceUrl:      "https://hello.com",
 				EndpointUpdatedAtNs:  2000,
-				Tags:                 map[string]string{"component": "route-emitter"},
+				Tags:                 map[string]string{"component": "route-emitter", "foo": "bar", "doo": "0"},
 			}
 
 			endpoint = routingtable.Endpoint{
@@ -171,6 +182,10 @@ var _ = Describe("RegistryMessage", func() {
 				Hostname:        "host-1.example.com",
 				LogGUID:         "app-guid",
 				RouteServiceUrl: "https://hello.com",
+				MetricTags: map[string]*models.MetricTagValue{
+					"foo": &models.MetricTagValue{Static: "bar"},
+					"doo": &models.MetricTagValue{Dynamic: models.MetricTagDynamicValueIndex},
+				},
 			}
 
 		})
@@ -196,6 +211,7 @@ var _ = Describe("RegistryMessage", func() {
 
 		It("creates a valid message when instance index is greater than 0", func() {
 			expectedMessage.PrivateInstanceIndex = "2"
+			expectedMessage.Tags["doo"] = "2"
 			endpoint.Index = 2
 
 			message := routingtable.InternalAddressRegistryMessageFor(endpoint, route, true)

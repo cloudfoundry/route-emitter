@@ -307,6 +307,46 @@ var _ = Describe("RoutingTable", func() {
 					Expect(messagesToEmit).To(BeZero())
 				})
 			})
+
+			Context("when the route metric tags are updated", func() {
+				var afterDesiredLRP *models.DesiredLRP
+
+				JustBeforeEach(func() {
+					newerTag := &models.ModificationTag{Epoch: "ghi", Index: 0}
+					afterDesiredLRP = createDesiredLRP(key.ProcessGUID, instances, key.ContainerPort, logGuid, "", *newerTag, runInfo, "bar.example.com")
+					tcpRouteMappings, messagesToEmit = table.SetRoutes(logger, beforeDesiredLRP, afterDesiredLRP)
+				})
+
+				It("emits a registration message with new tags", func() {
+					expected := routingtable.MessagesToEmit{
+						RegistrationMessages: []routingtable.RegistryMessage{
+							routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: "bar.example.com", LogGUID: logGuid}, false),
+						},
+					}
+					Expect(messagesToEmit).To(Equal(expected))
+
+					afterDesiredLRP.MetricTags = map[string]*models.MetricTagValue{"foo": &models.MetricTagValue{Static: "bar"}, "doo": &models.MetricTagValue{Dynamic: models.MetricTagDynamicValueIndex}}
+					afterDesiredLRP.ModificationTag = &models.ModificationTag{Epoch: "lmn", Index: 0}
+					table.SetRoutes(logger, beforeDesiredLRP, afterDesiredLRP)
+
+					tcpRouteMappings, messagesToEmit = table.GetExternalRoutingEvents()
+					Expect(tcpRouteMappings).To(BeZero())
+					expected = routingtable.MessagesToEmit{
+						RegistrationMessages: []routingtable.RegistryMessage{
+							routingtable.RegistryMessageFor(
+								endpoint1,
+								routingtable.Route{
+									Hostname:   "bar.example.com",
+									LogGUID:    logGuid,
+									MetricTags: afterDesiredLRP.MetricTags,
+								},
+								false,
+							),
+						},
+					}
+					Expect(messagesToEmit).To(Equal(expected))
+				})
+			})
 		})
 
 		Context("when the internal route is removed", func() {
@@ -729,6 +769,37 @@ var _ = Describe("RoutingTable", func() {
 				tcpRouteMappings, messagesToEmit = table.AddEndpoint(logger, actualLRP3)
 				Expect(tcpRouteMappings).To(BeZero())
 				Expect(messagesToEmit).To(BeZero())
+			})
+		})
+
+		Context("when a desired LRP has metric tags", func() {
+			BeforeEach(func() {
+				routes := createRoutingInfo(key.ContainerPort, []string{hostname1}, []string{}, "", []uint32{}, "")
+				desiredLRP := createDesiredLRPWithRoutes(key.ProcessGUID, 1, routes, logGuid, *currentTag, runInfo)
+				desiredLRP.MetricTags = map[string]*models.MetricTagValue{"foo": &models.MetricTagValue{Static: "bar"}, "doo": &models.MetricTagValue{Dynamic: models.MetricTagDynamicValueIndex}}
+				table.SetRoutes(logger, nil, desiredLRP)
+			})
+
+			It("emits registration messages with the appropriate tags", func() {
+				actualLRP1 := createActualLRP(key, endpoint1, domain)
+				tcpRouteMappings, messagesToEmit = table.AddEndpoint(logger, actualLRP1)
+				expected := routingtable.MessagesToEmit{
+					RegistrationMessages: []routingtable.RegistryMessage{
+						routingtable.RegistryMessageFor(
+							endpoint1,
+							routingtable.Route{
+								Hostname: hostname1,
+								LogGUID:  logGuid,
+								MetricTags: map[string]*models.MetricTagValue{
+									"foo": &models.MetricTagValue{Static: "bar"},
+									"doo": &models.MetricTagValue{Dynamic: models.MetricTagDynamicValueIndex},
+								},
+							},
+							true,
+						),
+					},
+				}
+				Expect(messagesToEmit).To(MatchMessagesToEmit(expected))
 			})
 		})
 	})

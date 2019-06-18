@@ -195,6 +195,7 @@ var _ = Describe("RoutingTable", func() {
 		BeforeEach(func() {
 			table = routingtable.NewRoutingTable(true, fakeMetronClient)
 			desiredLRP := createDesiredLRP(key.ProcessGUID, int32(3), key.ContainerPort, logGuid, "", *currentTag, models.DesiredLRPRunInfo{}, hostname1)
+			desiredLRP.MetricTags = map[string]*models.MetricTagValue{"foo": &models.MetricTagValue{Static: "bar"}, "doo": &models.MetricTagValue{Dynamic: models.MetricTagDynamicValueIndex}}
 			table.SetRoutes(logger, nil, desiredLRP)
 		})
 
@@ -226,7 +227,7 @@ var _ = Describe("RoutingTable", func() {
 							Port:             8080,
 							App:              logGuid,
 							IsolationSegment: "",
-							Tags:             map[string]string{"component": "route-emitter"},
+							Tags:             map[string]string{"component": "route-emitter", "foo": "bar", "doo": "0"},
 
 							EndpointUpdatedAtNs:  endpoint1.Since,
 							ServerCertDomainSAN:  "ig-1",
@@ -263,7 +264,7 @@ var _ = Describe("RoutingTable", func() {
 								App:                 logGuid,
 								IsolationSegment:    "",
 								EndpointUpdatedAtNs: 0,
-								Tags:                map[string]string{"component": "route-emitter"},
+								Tags:                map[string]string{"component": "route-emitter", "foo": "bar", "doo": "0"},
 
 								ServerCertDomainSAN:  "ig-1",
 								PrivateInstanceId:    "ig-1",

@@ -2,6 +2,9 @@ package routingtable
 
 import (
 	"fmt"
+	"strconv"
+
+	"code.cloudfoundry.org/bbs/models"
 )
 
 type RegistryMessage struct {
@@ -36,7 +39,7 @@ func RegistryMessageFor(endpoint Endpoint, route Route, emitEndpointUpdatedAt bo
 		TlsPort:             endpoint.TlsProxyPort,
 		App:                 route.LogGUID,
 		IsolationSegment:    route.IsolationSegment,
-		Tags:                map[string]string{"component": "route-emitter"},
+		Tags:                populateMetricTags(route.MetricTags, endpoint),
 		EndpointUpdatedAtNs: since,
 
 		PrivateInstanceId:    endpoint.InstanceGUID,
@@ -63,7 +66,7 @@ func InternalAddressRegistryMessageFor(endpoint Endpoint, route Route, emitEndpo
 		TlsPort:          endpoint.ContainerTlsProxyPort,
 		App:              route.LogGUID,
 		IsolationSegment: route.IsolationSegment,
-		Tags:             map[string]string{"component": "route-emitter"},
+		Tags:             populateMetricTags(route.MetricTags, endpoint),
 
 		ServerCertDomainSAN:  endpoint.InstanceGUID,
 		PrivateInstanceId:    endpoint.InstanceGUID,
@@ -97,4 +100,26 @@ func InternalEndpointRegistryMessageFor(endpoint Endpoint, route InternalRoute, 
 type ExternalServiceGreetingMessage struct {
 	MinimumRegisterInterval int `json:"minimumRegisterIntervalInSeconds"`
 	PruneThresholdInSeconds int `json:"pruneThresholdInSeconds"`
+}
+
+func populateMetricTags(input map[string]*models.MetricTagValue, endpoint Endpoint) map[string]string {
+	tags := map[string]string{}
+	if input != nil {
+		for k, v := range input {
+			var value string
+			if v.Dynamic > 0 {
+				switch v.Dynamic {
+				case models.MetricTagDynamicValueIndex:
+					value = strconv.FormatInt(int64(endpoint.Index), 10)
+				case models.MetricTagDynamicValueInstanceGuid:
+					value = endpoint.InstanceGUID
+				}
+			} else {
+				value = v.Static
+			}
+			tags[k] = value
+		}
+	}
+	tags["component"] = "route-emitter"
+	return tags
 }
