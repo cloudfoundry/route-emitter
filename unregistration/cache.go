@@ -7,6 +7,7 @@ import (
 	"github.com/mitchellh/hashstructure"
 )
 
+//go:generate counterfeiter -o fakes/fake_cache.go . Cache
 type Cache interface {
 	Add([]routingtable.RegistryMessage) error
 	Remove([]routingtable.RegistryMessage) error
