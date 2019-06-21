@@ -53,6 +53,8 @@ type RouteEmitterConfig struct {
 	EnableTCPEmitter                   bool                  `json:"enable_tcp_emitter"`
 	LoggregatorConfig                  loggingclient.Config  `json:"loggregator"`
 	ReportInterval                     durationjson.Duration `json:"report_interval,omitempty"`
+	UnregistrationInterval             durationjson.Duration `json:"unregistration_interval,omitempty"`
+	UnregistrationSendCount            int                   `json:"unregistration_send_count,omitempty"`
 	EnableInternalEmitter              bool                  `json:"enable_internal_emitter"`
 	ConsulEnabled                      bool                  `json:"consul_enabled"`
 	LocketEnabled                      bool                  `json:"locket_enabled"`

@@ -30,6 +30,7 @@ import (
 	"code.cloudfoundry.org/route-emitter/routingtable"
 	"code.cloudfoundry.org/route-emitter/scheduler"
 	"code.cloudfoundry.org/route-emitter/syncer"
+	"code.cloudfoundry.org/route-emitter/unregistration"
 	"code.cloudfoundry.org/route-emitter/watcher"
 	"code.cloudfoundry.org/routing-api"
 	uaaclient "code.cloudfoundry.org/uaa-go-client"
@@ -105,7 +106,9 @@ func main() {
 		routingAPIEmitter = emitter.NewRoutingAPIEmitter(tcpLogger, routingAPIClient, uaaClient, int(routeTTL.Seconds()))
 	}
 
-	handler := routehandlers.NewHandler(table, natsEmitter, routingAPIEmitter, localMode, metronClient)
+	unregistrationCache := unregistration.NewCache()
+
+	handler := routehandlers.NewHandler(table, natsEmitter, routingAPIEmitter, localMode, metronClient, unregistrationCache)
 
 	watcher := watcher.NewWatcher(
 		cfg.CellID,
@@ -123,9 +126,11 @@ func main() {
 		resp.WriteHeader(http.StatusOK)
 	}
 	healthCheckServer := http_server.New(cfg.HealthCheckAddress, http.HandlerFunc(healthHandler))
+	unregistrationSender := unregistration.NewSender(logger, clock, unregistrationCache, natsEmitter, time.Duration(cfg.UnregistrationInterval), cfg.UnregistrationSendCount)
 	members := grouper.Members{
 		{"nats-client", natsClientRunner},
 		{"healthcheck", healthCheckServer},
+		{"unregistration", unregistrationSender},
 	}
 
 	lockMembers := []grouper.Member{}

@@ -16,6 +16,7 @@ import (
 	"code.cloudfoundry.org/route-emitter/emitter"
 	"code.cloudfoundry.org/route-emitter/routehandlers"
 	"code.cloudfoundry.org/route-emitter/routingtable"
+	"code.cloudfoundry.org/route-emitter/unregistration"
 	"code.cloudfoundry.org/route-emitter/watcher"
 	"code.cloudfoundry.org/routing-api/fake_routing_api"
 	"code.cloudfoundry.org/routing-info/cfroutes"
@@ -65,7 +66,8 @@ var _ = Describe("Watcher Integration", func() {
 
 		uaaClient := uaaclient.NewNoOpUaaClient()
 		routingAPIEmitter := emitter.NewRoutingAPIEmitter(logger, routingApiClient, uaaClient, 100)
-		handler := routehandlers.NewHandler(natsTable, natsEmitter, routingAPIEmitter, false, fakeMetronClient)
+		unregistrationCache := unregistration.NewCache()
+		handler := routehandlers.NewHandler(natsTable, natsEmitter, routingAPIEmitter, false, fakeMetronClient, unregistrationCache)
 		clock := fakeclock.NewFakeClock(time.Now())
 		testWatcher = watcher.NewWatcher(
 			cellID,

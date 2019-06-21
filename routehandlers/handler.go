@@ -8,6 +8,7 @@ import (
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/route-emitter/emitter"
 	"code.cloudfoundry.org/route-emitter/routingtable"
+	"code.cloudfoundry.org/route-emitter/unregistration"
 	"code.cloudfoundry.org/route-emitter/watcher"
 )
 
@@ -21,22 +22,31 @@ const (
 )
 
 type Handler struct {
-	routingTable      routingtable.RoutingTable
-	natsEmitter       emitter.NATSEmitter
-	routingAPIEmitter emitter.RoutingAPIEmitter
-	localMode         bool
-	metronClient      loggingclient.IngressClient
+	routingTable        routingtable.RoutingTable
+	natsEmitter         emitter.NATSEmitter
+	routingAPIEmitter   emitter.RoutingAPIEmitter
+	localMode           bool
+	metronClient        loggingclient.IngressClient
+	unregistrationCache unregistration.Cache
 }
 
 var _ watcher.RouteHandler = new(Handler)
 
-func NewHandler(routingTable routingtable.RoutingTable, natsEmitter emitter.NATSEmitter, routingAPIEmitter emitter.RoutingAPIEmitter, localMode bool, metronClient loggingclient.IngressClient) *Handler {
+func NewHandler(
+	routingTable routingtable.RoutingTable,
+	natsEmitter emitter.NATSEmitter,
+	routingAPIEmitter emitter.RoutingAPIEmitter,
+	localMode bool,
+	metronClient loggingclient.IngressClient,
+	unregistrationCache unregistration.Cache,
+) *Handler {
 	return &Handler{
-		routingTable:      routingTable,
-		natsEmitter:       natsEmitter,
-		routingAPIEmitter: routingAPIEmitter,
-		localMode:         localMode,
-		metronClient:      metronClient,
+		routingTable:        routingTable,
+		natsEmitter:         natsEmitter,
+		routingAPIEmitter:   routingAPIEmitter,
+		localMode:           localMode,
+		metronClient:        metronClient,
+		unregistrationCache: unregistrationCache,
 	}
 }
 
@@ -46,7 +56,10 @@ func (handler *Handler) HandleEvent(logger lager.Logger, event models.Event) {
 	case *models.DesiredLRPCreatedEvent:
 		handler.handleDesiredCreate(logger, event.DesiredLrp)
 	case *models.DesiredLRPChangedEvent:
-		handler.handleDesiredUpdate(logger, event.Before, event.After)
+		err := handler.handleDesiredUpdate(logger, event.Before, event.After)
+		if err != nil {
+			logger.Error("failed-to-handle-desired-update", err)
+		}
 	case *models.DesiredLRPRemovedEvent:
 		handler.handleDesiredDelete(logger, event.DesiredLrp)
 	case *models.ActualLRPInstanceCreatedEvent:
@@ -198,9 +211,18 @@ func (handler *Handler) handleDesiredCreate(logger lager.Logger, desiredLRP *mod
 	handler.emitMessages(logger, messagesToEmit, routeMappings)
 }
 
-func (handler *Handler) handleDesiredUpdate(logger lager.Logger, before, after *models.DesiredLRP) {
+func (handler *Handler) handleDesiredUpdate(logger lager.Logger, before, after *models.DesiredLRP) error {
 	routeMappings, messagesToEmit := handler.routingTable.SetRoutes(logger, before, after)
+	err := handler.unregistrationCache.Add(messagesToEmit.UnregistrationMessages)
+	if err != nil {
+		return err
+	}
+	err = handler.unregistrationCache.Remove(messagesToEmit.RegistrationMessages)
+	if err != nil {
+		return err
+	}
 	handler.emitMessages(logger, messagesToEmit, routeMappings)
+	return nil
 }
 
 func (handler *Handler) handleDesiredDelete(logger lager.Logger, desiredLRP *models.DesiredLRP) {

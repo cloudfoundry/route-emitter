@@ -10,6 +10,8 @@ import (
 	"code.cloudfoundry.org/route-emitter/routehandlers"
 	"code.cloudfoundry.org/route-emitter/routingtable"
 	"code.cloudfoundry.org/route-emitter/routingtable/fakeroutingtable"
+	"code.cloudfoundry.org/route-emitter/unregistration"
+	ufakes "code.cloudfoundry.org/route-emitter/unregistration/fakes"
 	tcpmodels "code.cloudfoundry.org/routing-api/models"
 	"code.cloudfoundry.org/routing-info/tcp_routes"
 	. "github.com/onsi/ginkgo"
@@ -18,12 +20,13 @@ import (
 
 var _ = Describe("RoutingAPIHandler", func() {
 	var (
-		logger                lager.Logger
-		fakeRoutingTable      *fakeroutingtable.FakeRoutingTable
-		fakeRoutingAPIEmitter *emitterfakes.FakeRoutingAPIEmitter
-		routeHandler          *routehandlers.Handler
-		emptyNatsMessages     routingtable.MessagesToEmit
-		fakeMetronClient      *mfakes.FakeIngressClient
+		logger                  lager.Logger
+		fakeRoutingTable        *fakeroutingtable.FakeRoutingTable
+		fakeRoutingAPIEmitter   *emitterfakes.FakeRoutingAPIEmitter
+		routeHandler            *routehandlers.Handler
+		emptyNatsMessages       routingtable.MessagesToEmit
+		fakeMetronClient        *mfakes.FakeIngressClient
+		fakeUnregistrationCache unregistration.Cache
 	)
 
 	BeforeEach(func() {
@@ -32,7 +35,8 @@ var _ = Describe("RoutingAPIHandler", func() {
 		fakeRoutingTable = new(fakeroutingtable.FakeRoutingTable)
 		fakeRoutingAPIEmitter = new(emitterfakes.FakeRoutingAPIEmitter)
 		fakeMetronClient = &mfakes.FakeIngressClient{}
-		routeHandler = routehandlers.NewHandler(fakeRoutingTable, nil, fakeRoutingAPIEmitter, false, fakeMetronClient)
+		fakeUnregistrationCache = &ufakes.FakeCache{}
+		routeHandler = routehandlers.NewHandler(fakeRoutingTable, nil, fakeRoutingAPIEmitter, false, fakeMetronClient, fakeUnregistrationCache)
 	})
 
 	Describe("DesiredLRP Event", func() {
@@ -562,7 +566,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 						}
 						return nil
 					}
-					routeHandler = routehandlers.NewHandler(fakeRoutingTable, nil, fakeRoutingAPIEmitter, true, fakeMetronClient)
+					routeHandler = routehandlers.NewHandler(fakeRoutingTable, nil, fakeRoutingAPIEmitter, true, fakeMetronClient, fakeUnregistrationCache)
 					fakeRoutingTable.TCPAssociationsCountReturns(1)
 				})
 

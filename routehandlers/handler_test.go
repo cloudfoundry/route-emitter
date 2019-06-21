@@ -7,6 +7,7 @@ import (
 	mfakes "code.cloudfoundry.org/diego-logging-client/testhelpers"
 	loggregator "code.cloudfoundry.org/go-loggregator"
 	"code.cloudfoundry.org/lager"
+	ufakes "code.cloudfoundry.org/route-emitter/unregistration/fakes"
 
 	"code.cloudfoundry.org/bbs/models"
 	"code.cloudfoundry.org/lager/lagertest"
@@ -75,10 +76,14 @@ var _ = Describe("Handler", func() {
 
 		routeHandler *routehandlers.Handler
 
+		fakeUnregistrationCache *ufakes.FakeCache
+
 		emptyTCPRouteMappings routingtable.TCPRouteMappings
 
 		counterChan chan counter
 		metricChan  chan metric
+
+		dummyMessageFoo, dummyMessageBar routingtable.RegistryMessage
 	)
 
 	BeforeEach(func() {
@@ -93,8 +98,8 @@ var _ = Describe("Handler", func() {
 			Host:         expectedHost,
 			Port:         expectedContainerPort,
 		}
-		dummyMessageFoo := routingtable.RegistryMessageFor(dummyEndpoint, routingtable.Route{Hostname: "foo.com", LogGUID: logGuid}, true)
-		dummyMessageBar := routingtable.RegistryMessageFor(dummyEndpoint, routingtable.Route{Hostname: "bar.com", LogGUID: logGuid}, true)
+		dummyMessageFoo = routingtable.RegistryMessageFor(dummyEndpoint, routingtable.Route{Hostname: "foo.com", LogGUID: logGuid}, true)
+		dummyMessageBar = routingtable.RegistryMessageFor(dummyEndpoint, routingtable.Route{Hostname: "bar.com", LogGUID: logGuid}, true)
 		dummyMessagesToEmit = routingtable.MessagesToEmit{
 			RegistrationMessages: []routingtable.RegistryMessage{dummyMessageFoo, dummyMessageBar},
 		}
@@ -114,7 +119,9 @@ var _ = Describe("Handler", func() {
 			return nil
 		}
 
-		routeHandler = routehandlers.NewHandler(fakeTable, natsEmitter, fakeRoutingAPIEmitter, false, fakeMetronClient)
+		fakeUnregistrationCache = &ufakes.FakeCache{}
+
+		routeHandler = routehandlers.NewHandler(fakeTable, natsEmitter, fakeRoutingAPIEmitter, false, fakeMetronClient, fakeUnregistrationCache)
 	})
 
 	Context("when an unrecognized event is received", func() {
@@ -268,6 +275,37 @@ var _ = Describe("Handler", func() {
 				Expect(natsEmitter.EmitCallCount()).To(Equal(1))
 				messagesToEmit := natsEmitter.EmitArgsForCall(0)
 				Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
+			})
+
+			Context("when messages to emit contain unregistraions", func() {
+				BeforeEach(func() {
+					messagesToEmit := routingtable.MessagesToEmit{
+						UnregistrationMessages: []routingtable.RegistryMessage{dummyMessageFoo, dummyMessageBar},
+					}
+					fakeTable.SetRoutesReturns(emptyTCPRouteMappings, messagesToEmit)
+				})
+
+				It("adds unregistration messages to unregistration cache", func() {
+					Eventually(fakeUnregistrationCache.AddCallCount).Should(Equal(1))
+					Expect(fakeUnregistrationCache.AddArgsForCall(0)).Should(ConsistOf(dummyMessageFoo, dummyMessageBar))
+				})
+			})
+
+			Context("when messages to emit contain unregistraions and registrations", func() {
+				BeforeEach(func() {
+					messagesToEmit := routingtable.MessagesToEmit{
+						UnregistrationMessages: []routingtable.RegistryMessage{dummyMessageFoo, dummyMessageBar},
+						RegistrationMessages:   []routingtable.RegistryMessage{dummyMessageFoo},
+					}
+					fakeTable.SetRoutesReturns(emptyTCPRouteMappings, messagesToEmit)
+				})
+
+				It("adds unregistration messages to unregistration cache and removes registration messages from unregistraion cache", func() {
+					Eventually(fakeUnregistrationCache.AddCallCount).Should(Equal(1))
+					Eventually(fakeUnregistrationCache.RemoveCallCount).Should(Equal(1))
+					Expect(fakeUnregistrationCache.AddArgsForCall(0)).Should(ConsistOf(dummyMessageFoo, dummyMessageBar))
+					Expect(fakeUnregistrationCache.RemoveArgsForCall(0)).Should(ConsistOf(dummyMessageFoo))
+				})
 			})
 
 			Context("when there are diego ssh-keys on the route", func() {
@@ -588,14 +626,6 @@ var _ = Describe("Handler", func() {
 				)
 
 				BeforeEach(func() {
-					dummyEndpoint := routingtable.Endpoint{
-						InstanceGUID: expectedInstanceGUID,
-						Index:        expectedIndex,
-						Host:         expectedHost,
-						Port:         expectedContainerPort,
-					}
-					dummyMessageFoo := routingtable.RegistryMessageFor(dummyEndpoint, routingtable.Route{Hostname: "foo.com", LogGUID: logGuid}, true)
-					dummyMessageBar := routingtable.RegistryMessageFor(dummyEndpoint, routingtable.Route{Hostname: "bar.com", LogGUID: logGuid}, true)
 					addMessagesToEmit = routingtable.MessagesToEmit{
 						RegistrationMessages: []routingtable.RegistryMessage{dummyMessageFoo},
 					}
@@ -1033,7 +1063,7 @@ var _ = Describe("Handler", func() {
 
 			Context("when emitting metrics in localMode", func() {
 				BeforeEach(func() {
-					routeHandler = routehandlers.NewHandler(fakeTable, natsEmitter, nil, true, fakeMetronClient)
+					routeHandler = routehandlers.NewHandler(fakeTable, natsEmitter, nil, true, fakeMetronClient, fakeUnregistrationCache)
 					fakeTable.HTTPAssociationsCountReturns(5)
 				})
 

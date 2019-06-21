@@ -101,6 +101,7 @@ var _ = Describe("Route Emitter", func() {
 		logger                                *lagertest.TestLogger
 		caFile, clientCertFile, clientKeyFile string
 		serverCertFile, serverKeyFile         string
+		unregistrationSendCount               int
 	)
 
 	bbsProxy := func(f func(w http.ResponseWriter, r *http.Request)) *httptest.Server {
@@ -257,6 +258,8 @@ var _ = Describe("Route Emitter", func() {
 
 		internalRegisteredRoutes = listenForRoutes("service-discovery.register")
 
+		unregistrationSendCount = 3
+
 		natsClient.Subscribe("router.greet", func(msg *nats.Msg) {
 			defer GinkgoRecover()
 
@@ -318,6 +321,8 @@ var _ = Describe("Route Emitter", func() {
 			cfg.BBSAddress = bbsURL.String()
 			cfg.RoutingAPI.URL = "http://127.0.0.1"
 			cfg.RoutingAPI.Port = routingAPIRunner.Config.Port
+			cfg.UnregistrationInterval = durationjson.Duration(10 * time.Millisecond)
+			cfg.UnregistrationSendCount = unregistrationSendCount
 		})
 	})
 
@@ -804,6 +809,7 @@ var _ = Describe("Route Emitter", func() {
 								return nil
 							}).Should(Succeed())
 						})
+
 					})
 				})
 
@@ -2137,6 +2143,33 @@ var _ = Describe("Route Emitter", func() {
 			})
 
 			Context("and a route is removed", func() {
+				var (
+					expectedUnregistrationForRoute1, expectedUnregistrationForRoute2 routingtable.RegistryMessage
+				)
+
+				BeforeEach(func() {
+					expectedUnregistrationForRoute1 = routingtable.RegistryMessage{
+						URIs:                 []string{"route-1"},
+						Host:                 "1.2.3.4",
+						Port:                 65100,
+						App:                  "some-log-guid",
+						PrivateInstanceId:    "iguid1",
+						ServerCertDomainSAN:  "iguid1",
+						PrivateInstanceIndex: "0",
+						RouteServiceUrl:      "https://awesome.com",
+						Tags:                 map[string]string{"component": "route-emitter"},
+					}
+					expectedUnregistrationForRoute2 = routingtable.RegistryMessage{
+						URIs:                 []string{"route-2"},
+						Host:                 "1.2.3.4",
+						Port:                 65100,
+						App:                  "some-log-guid",
+						PrivateInstanceId:    "iguid1",
+						ServerCertDomainSAN:  "iguid1",
+						PrivateInstanceIndex: "0",
+						Tags:                 map[string]string{"component": "route-emitter"},
+					}
+				})
 				JustBeforeEach(func() {
 					updateRequest := &models.DesiredLRPUpdate{
 						Routes: newRoutes([]string{"route-2"}, containerPort, ""),
@@ -2150,29 +2183,22 @@ var _ = Describe("Route Emitter", func() {
 				It("immediately emits router.unregister when domain is fresh", func() {
 					bbsClient.UpsertDomain(logger, domain, 2*time.Second)
 					Eventually(unregisteredRoutes, msgReceiveTimeout).Should(Receive(
-						MatchRegistryMessage(routingtable.RegistryMessage{
-							URIs:                 []string{"route-1"},
-							Host:                 "1.2.3.4",
-							Port:                 65100,
-							App:                  "some-log-guid",
-							PrivateInstanceId:    "iguid1",
-							ServerCertDomainSAN:  "iguid1",
-							PrivateInstanceIndex: "0",
-							RouteServiceUrl:      "https://awesome.com",
-							Tags:                 map[string]string{"component": "route-emitter"},
-						}),
+						MatchRegistryMessage(expectedUnregistrationForRoute1),
 					))
 					Eventually(registeredRoutes, msgReceiveTimeout).Should(Receive(
-						MatchRegistryMessage(routingtable.RegistryMessage{
-							URIs:                 []string{"route-2"},
-							Host:                 "1.2.3.4",
-							Port:                 65100,
-							App:                  "some-log-guid",
-							PrivateInstanceId:    "iguid1",
-							ServerCertDomainSAN:  "iguid1",
-							PrivateInstanceIndex: "0",
-							Tags:                 map[string]string{"component": "route-emitter"},
-						}),
+						MatchRegistryMessage(expectedUnregistrationForRoute2),
+					))
+				})
+
+				It("repeatedly sends unregistration messages specified in UnregistrationSendCount number of times", func() {
+					bbsClient.UpsertDomain(logger, domain, 2*time.Second)
+					for i := 0; i < unregistrationSendCount+1; i++ {
+						Eventually(unregisteredRoutes, msgReceiveTimeout).Should(Receive(
+							MatchRegistryMessage(expectedUnregistrationForRoute1),
+						))
+					}
+					Consistently(unregisteredRoutes).ShouldNot(Receive(
+						MatchRegistryMessage(expectedUnregistrationForRoute1),
 					))
 				})
 			})
