@@ -20,7 +20,6 @@ type Config struct {
 	apiconfig.Config
 	DevMode bool
 	IP      string
-	Port    int
 }
 
 type RoutingAPIRunner struct {
@@ -36,9 +35,8 @@ type SQLConfig struct {
 	Password   string
 }
 
-func NewRoutingAPIRunner(binPath, consulURL string, port, adminPort int, sqlConfig SQLConfig, fs ...func(*Config)) (*RoutingAPIRunner, error) {
+func NewRoutingAPIRunner(binPath string, adminPort int, sqlConfig SQLConfig, fs ...func(*Config)) (*RoutingAPIRunner, error) {
 	cfg := Config{
-		Port:    port,
 		DevMode: true,
 		Config: apiconfig.Config{
 			AdminPort: adminPort,
@@ -55,10 +53,6 @@ func NewRoutingAPIRunner(binPath, consulURL string, port, adminPort int, sqlConf
 				},
 			},
 			// end of required fields
-			ConsulCluster: apiconfig.ConsulCluster{
-				Servers:       consulURL,
-				RetryInterval: 50 * time.Millisecond,
-			},
 			SqlDB: apiconfig.SqlDB{
 				Host:     "localhost",
 				Port:     sqlConfig.Port,
@@ -101,7 +95,6 @@ func (runner *RoutingAPIRunner) Run(signals <-chan os.Signal, ready chan<- struc
 	// the same runner without having to worry about messing the state of the
 	// ginkgomon Runner
 	args := []string{
-		"-port", strconv.Itoa(int(runner.Config.Port)),
 		"-ip", "localhost",
 		"-config", runner.configPath,
 		"-logLevel=debug",
@@ -117,7 +110,7 @@ func (runner *RoutingAPIRunner) Run(signals <-chan os.Signal, ready chan<- struc
 }
 
 func (runner *RoutingAPIRunner) GetGUID() (string, error) {
-	client := routing_api.NewClient(fmt.Sprintf("http://127.0.0.1:%d", runner.Config.Port), false)
+	client := routing_api.NewClient(fmt.Sprintf("http://127.0.0.1:%d", runner.Config.API.ListenPort), false)
 	routerGroups, err := client.RouterGroups()
 	if err != nil {
 		return "", err
@@ -127,5 +120,5 @@ func (runner *RoutingAPIRunner) GetGUID() (string, error) {
 }
 
 func (runner *RoutingAPIRunner) GetClient() routing_api.Client {
-	return routing_api.NewClient(fmt.Sprintf("http://127.0.0.1:%d", runner.Config.Port), false)
+	return routing_api.NewClient(fmt.Sprintf("http://127.0.0.1:%d", runner.Config.API.ListenPort), false)
 }

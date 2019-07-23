@@ -7,6 +7,7 @@ import (
 	"code.cloudfoundry.org/bbs"
 	"code.cloudfoundry.org/clock"
 	"code.cloudfoundry.org/diego-logging-client/testhelpers"
+	"code.cloudfoundry.org/inigo/helpers/certauthority"
 	locketconfig "code.cloudfoundry.org/locket/cmd/locket/config"
 	locketrunner "code.cloudfoundry.org/locket/cmd/locket/testrunner"
 	"code.cloudfoundry.org/locket/lock"
@@ -36,6 +37,7 @@ import (
 	"code.cloudfoundry.org/route-emitter/cmd/route-emitter/runners"
 	"code.cloudfoundry.org/route-emitter/routingtable"
 	. "code.cloudfoundry.org/route-emitter/routingtable/matchers"
+	routinapiconfig "code.cloudfoundry.org/routing-api/config"
 	apimodels "code.cloudfoundry.org/routing-api/models"
 	"code.cloudfoundry.org/routing-info/cfroutes"
 	"code.cloudfoundry.org/routing-info/internalroutes"
@@ -90,9 +92,12 @@ var _ = Describe("Route Emitter", func() {
 		containerPort uint32
 		routes        *models.Routes
 
-		routingApiProcess ifrit.Process
-		routingAPIRunner  *runners.RoutingAPIRunner
-		routerGUID        string
+		depotDir string
+
+		routingApiProcess       ifrit.Process
+		routingAPIRunner        *runners.RoutingAPIRunner
+		routerGUID              string
+		routingAPILocketProcess ifrit.Process
 
 		emitInterval uint64
 
@@ -298,11 +303,41 @@ var _ = Describe("Route Emitter", func() {
 			Password:   sqlRunner.Password(),
 		}
 
-		port, err := portAllocator.ClaimPorts(2)
+		port, err := portAllocator.ClaimPorts(3)
 		Expect(err).NotTo(HaveOccurred())
 
-		routingAPIRunner, err = runners.NewRoutingAPIRunner(routingAPIPath, consulRunner.URL(), int(port), int(port+1), sqlConfig, func(cfg *runners.Config) {
-			cfg.ConsulCluster.LockTTL = 5 * time.Second
+		depotDir, err = ioutil.TempDir("", "certauthority")
+		Expect(err).NotTo(HaveOccurred())
+
+		certAuthority, err := certauthority.NewCertAuthority(depotDir, "ca")
+		Expect(err).NotTo(HaveOccurred())
+
+		_, caCert := certAuthority.CAAndKey()
+		routingAPIServerKey, routingAPIServerCert, err := certAuthority.GenerateSelfSignedCertAndKey("routing_api", nil, false)
+		Expect(err).NotTo(HaveOccurred())
+
+		routingAPILocketPort, err := portAllocator.ClaimPorts(1)
+		Expect(err).NotTo(HaveOccurred())
+		routingAPILocketAddress := fmt.Sprintf("localhost:%d", routingAPILocketPort)
+
+		routingAPILocketRunner := locketrunner.NewLocketRunner(locketPath, func(cfg *locketconfig.LocketConfig) {
+			cfg.ConsulCluster = consulRunner.ConsulCluster()
+			cfg.DatabaseConnectionString = sqlRunner.ConnectionString()
+			cfg.DatabaseDriver = sqlRunner.DriverName()
+			cfg.ListenAddress = routingAPILocketAddress
+		})
+		routingAPILocketProcess = ginkgomon.Invoke(routingAPILocketRunner)
+		routingAPIRunner, err = runners.NewRoutingAPIRunner(routingAPIPath, int(port+1), sqlConfig, func(cfg *runners.Config) {
+			cfg.API = routinapiconfig.APIConfig{
+				ListenPort:         int(port),
+				HTTPEnabled:        true,
+				MTLSListenPort:     int(port + 2),
+				MTLSClientCAPath:   caCert,
+				MTLSServerCertPath: routingAPIServerCert,
+				MTLSServerKeyPath:  routingAPIServerKey,
+			}
+			cfg.Locket = locketrunner.ClientLocketConfig()
+			cfg.Locket.LocketAddress = routingAPILocketAddress
 		})
 
 		Expect(err).NotTo(HaveOccurred())
@@ -320,7 +355,7 @@ var _ = Describe("Route Emitter", func() {
 		cfgs = append(cfgs, func(cfg *config.RouteEmitterConfig) {
 			cfg.BBSAddress = bbsURL.String()
 			cfg.RoutingAPI.URL = "http://127.0.0.1"
-			cfg.RoutingAPI.Port = routingAPIRunner.Config.Port
+			cfg.RoutingAPI.Port = routingAPIRunner.Config.API.ListenPort
 			cfg.UnregistrationInterval = durationjson.Duration(10 * time.Millisecond)
 			cfg.UnregistrationSendCount = unregistrationSendCount
 		})
@@ -329,6 +364,8 @@ var _ = Describe("Route Emitter", func() {
 	AfterEach(func() {
 		logger.Info("shutting-down")
 		ginkgomon.Kill(routingApiProcess, routingAPIInterruptTimeout)
+		ginkgomon.Kill(routingAPILocketProcess)
+		Expect(os.RemoveAll(depotDir)).To(Succeed())
 	})
 
 	Context("Ping interval for nats client", func() {
@@ -604,7 +641,7 @@ var _ = Describe("Route Emitter", func() {
 					cfgs = append(cfgs, func(cfg *config.RouteEmitterConfig) {
 						cfg.BBSAddress = fakeBBS.URL
 						cfg.RoutingAPI.URL = "http://127.0.0.1"
-						cfg.RoutingAPI.Port = routingAPIRunner.Config.Port
+						cfg.RoutingAPI.Port = routingAPIRunner.Config.API.ListenPort
 					})
 
 					desiredLRP.Instances = 1
@@ -674,7 +711,7 @@ var _ = Describe("Route Emitter", func() {
 						cfg.BBSAddress = bbsURL.String()
 						cfg.SyncInterval = durationjson.Duration(1 * time.Second)
 						cfg.RoutingAPI.URL = "http://127.0.0.1"
-						cfg.RoutingAPI.Port = routingAPIRunner.Config.Port
+						cfg.RoutingAPI.Port = routingAPIRunner.Config.API.ListenPort
 					})
 
 					expectedTCPProcessGUID = "some-guid"
@@ -850,7 +887,7 @@ var _ = Describe("Route Emitter", func() {
 						cfgs = append(cfgs, func(cfg *config.RouteEmitterConfig) {
 							cfg.BBSAddress = fakeBBS.URL
 							cfg.RoutingAPI.URL = "http://127.0.0.1"
-							cfg.RoutingAPI.Port = routingAPIRunner.Config.Port
+							cfg.RoutingAPI.Port = routingAPIRunner.Config.API.ListenPort
 							cfg.SyncInterval = durationjson.Duration(1 * time.Hour)
 						})
 
@@ -2219,7 +2256,7 @@ var _ = Describe("Route Emitter", func() {
 			cfgs = append(cfgs, func(cfg *config.RouteEmitterConfig) {
 				cfg.BBSAddress = fakeBBS.URL
 				cfg.RoutingAPI.URL = "http://127.0.0.1"
-				cfg.RoutingAPI.Port = routingAPIRunner.Config.Port
+				cfg.RoutingAPI.Port = routingAPIRunner.Config.API.ListenPort
 				cfg.SyncInterval = durationjson.Duration(1 * time.Hour)
 			})
 
