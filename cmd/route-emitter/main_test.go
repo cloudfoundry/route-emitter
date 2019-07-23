@@ -365,7 +365,7 @@ var _ = Describe("Route Emitter", func() {
 		logger.Info("shutting-down")
 		ginkgomon.Kill(routingApiProcess, routingAPIInterruptTimeout)
 		ginkgomon.Kill(routingAPILocketProcess)
-		Expect(os.RemoveAll(depotDir)).To(Succeed())
+		Eventually(func() error { return os.RemoveAll(depotDir) }).Should(Succeed())
 	})
 
 	Context("Ping interval for nats client", func() {
