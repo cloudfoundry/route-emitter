@@ -54,7 +54,10 @@ func (handler *Handler) HandleEvent(logger lager.Logger, event models.Event) {
 
 	switch event := event.(type) {
 	case *models.DesiredLRPCreatedEvent:
-		handler.handleDesiredCreate(logger, event.DesiredLrp)
+		err := handler.handleDesiredCreate(logger, event.DesiredLrp)
+		if err != nil {
+			logger.Error("failed-to-handle-desired-create", err)
+		}
 	case *models.DesiredLRPChangedEvent:
 		err := handler.handleDesiredUpdate(logger, event.Before, event.After)
 		if err != nil {
@@ -206,9 +209,14 @@ func (handler *Handler) ShouldRefreshDesired(actualLRP *models.ActualLRP) bool {
 	return !handler.routingTable.HasExternalRoutes(actualLRP)
 }
 
-func (handler *Handler) handleDesiredCreate(logger lager.Logger, desiredLRP *models.DesiredLRP) {
+func (handler *Handler) handleDesiredCreate(logger lager.Logger, desiredLRP *models.DesiredLRP) error {
 	routeMappings, messagesToEmit := handler.routingTable.SetRoutes(logger, nil, desiredLRP)
+	err := handler.unregistrationCache.Remove(messagesToEmit.RegistrationMessages)
+	if err != nil {
+		return err
+	}
 	handler.emitMessages(logger, messagesToEmit, routeMappings)
+	return nil
 }
 
 func (handler *Handler) handleDesiredUpdate(logger lager.Logger, before, after *models.DesiredLRP) error {
