@@ -106,7 +106,7 @@ func main() {
 		routingAPIEmitter = emitter.NewRoutingAPIEmitter(tcpLogger, routingAPIClient, uaaClient, int(routeTTL.Seconds()))
 	}
 
-	unregistrationCache := unregistration.NewCache()
+	unregistrationCache := unregistration.NewCache(logger)
 
 	handler := routehandlers.NewHandler(table, natsEmitter, routingAPIEmitter, localMode, metronClient, unregistrationCache)
 

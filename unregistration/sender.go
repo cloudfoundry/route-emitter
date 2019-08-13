@@ -53,6 +53,7 @@ func (s Sender) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
 
 		case <-sendTicker.C():
 			messages := s.cache.List()
+			s.logger.Debug("messages", lager.Data{"cache": messages})
 			for _, message := range messages {
 				s.natsEmitter.Emit(routingtable.MessagesToEmit{
 					UnregistrationMessages: []routingtable.RegistryMessage{message.RegistryMessage},

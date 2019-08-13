@@ -3,6 +3,7 @@ package unregistration
 import (
 	"sync"
 
+	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/route-emitter/routingtable"
 	"github.com/mitchellh/hashstructure"
 )
@@ -17,18 +18,22 @@ type Cache interface {
 type cache struct {
 	messages map[uint64]*Message
 	mux      *sync.Mutex
+	logger   lager.Logger
 }
 
-func NewCache() Cache {
+func NewCache(logger lager.Logger) Cache {
+	cacheLogger := logger.Session("unregistration-cache")
 	return &cache{
 		messages: map[uint64]*Message{},
 		mux:      &sync.Mutex{},
+		logger:   cacheLogger,
 	}
 }
 
 func (c *cache) Add(registryMessages []routingtable.RegistryMessage) error {
 	c.mux.Lock()
 	defer c.mux.Unlock()
+	c.logger.Debug("add", lager.Data{"cache": registryMessages})
 	for _, registryMessage := range registryMessages {
 		registryMessageHash, err := hashstructure.Hash(registryMessage, nil)
 		if err != nil {
@@ -44,6 +49,7 @@ func (c *cache) Add(registryMessages []routingtable.RegistryMessage) error {
 func (c *cache) Remove(registryMessages []routingtable.RegistryMessage) error {
 	c.mux.Lock()
 	defer c.mux.Unlock()
+	c.logger.Debug("remove", lager.Data{"cache": registryMessages})
 	for _, registryMessage := range registryMessages {
 		registryMessageHash, err := hashstructure.Hash(registryMessage, nil)
 		if err != nil {
