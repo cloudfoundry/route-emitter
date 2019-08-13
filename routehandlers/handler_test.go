@@ -199,20 +199,6 @@ var _ = Describe("Handler", func() {
 					Expect(logger.Buffer()).NotTo(gbytes.Say("diego-ssh"))
 				})
 			})
-
-			Context("when messages to emit contain registraions", func() {
-				BeforeEach(func() {
-					messagesToEmit := routingtable.MessagesToEmit{
-						RegistrationMessages: []routingtable.RegistryMessage{dummyMessageFoo},
-					}
-					fakeTable.SetRoutesReturns(emptyTCPRouteMappings, messagesToEmit)
-				})
-
-				It("removes registration messages from unregistraion cache", func() {
-					Eventually(fakeUnregistrationCache.RemoveCallCount).Should(Equal(1))
-					Expect(fakeUnregistrationCache.RemoveArgsForCall(0)).Should(ConsistOf(dummyMessageFoo))
-				})
-			})
 		})
 
 		Context("DesiredLRPChanged Event", func() {
@@ -583,6 +569,20 @@ var _ = Describe("Handler", func() {
 							routeHandler.HandleEvent(logger, models.NewActualLRPInstanceChangedEvent(beforeActualLRP, afterActualLRP))
 							Expect(logger).To(gbytes.Say("nil-actual-lrp"))
 						})
+					})
+				})
+
+				Context("when messages to emit contain registraions", func() {
+					BeforeEach(func() {
+						messagesToEmit := routingtable.MessagesToEmit{
+							RegistrationMessages: []routingtable.RegistryMessage{dummyMessageFoo},
+						}
+						fakeTable.AddEndpointReturns(emptyTCPRouteMappings, messagesToEmit)
+					})
+
+					It("removes registration messages from unregistraion cache", func() {
+						Eventually(fakeUnregistrationCache.RemoveCallCount).Should(Equal(1))
+						Expect(fakeUnregistrationCache.RemoveArgsForCall(0)).Should(ConsistOf(dummyMessageFoo))
 					})
 				})
 			})

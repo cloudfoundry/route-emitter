@@ -54,10 +54,7 @@ func (handler *Handler) HandleEvent(logger lager.Logger, event models.Event) {
 
 	switch event := event.(type) {
 	case *models.DesiredLRPCreatedEvent:
-		err := handler.handleDesiredCreate(logger, event.DesiredLrp)
-		if err != nil {
-			logger.Error("failed-to-handle-desired-create", err)
-		}
+		handler.handleDesiredCreate(logger, event.DesiredLrp)
 	case *models.DesiredLRPChangedEvent:
 		err := handler.handleDesiredUpdate(logger, event.Before, event.After)
 		if err != nil {
@@ -79,7 +76,10 @@ func (handler *Handler) HandleEvent(logger lager.Logger, event models.Event) {
 			logger.Error("nil-actual-lrp", nil, lager.Data{"event-type": event.EventType()})
 			return
 		}
-		handler.handleActualUpdate(logger, before, after)
+		err := handler.handleActualUpdate(logger, before, after)
+		if err != nil {
+			logger.Error("failed-to-handle-actual-update", err)
+		}
 	case *models.ActualLRPInstanceRemovedEvent:
 		logger.Debug("received-actual-lrp-instance-removed-event", lager.Data{"lrp": event.ActualLrp})
 		if event.ActualLrp == nil {
@@ -209,14 +209,9 @@ func (handler *Handler) ShouldRefreshDesired(actualLRP *models.ActualLRP) bool {
 	return !handler.routingTable.HasExternalRoutes(actualLRP)
 }
 
-func (handler *Handler) handleDesiredCreate(logger lager.Logger, desiredLRP *models.DesiredLRP) error {
+func (handler *Handler) handleDesiredCreate(logger lager.Logger, desiredLRP *models.DesiredLRP) {
 	routeMappings, messagesToEmit := handler.routingTable.SetRoutes(logger, nil, desiredLRP)
-	err := handler.unregistrationCache.Remove(messagesToEmit.RegistrationMessages)
-	if err != nil {
-		return err
-	}
 	handler.emitMessages(logger, messagesToEmit, routeMappings)
-	return nil
 }
 
 func (handler *Handler) handleDesiredUpdate(logger lager.Logger, before, after *models.DesiredLRP) error {
@@ -246,7 +241,7 @@ func (handler *Handler) handleActualCreate(logger lager.Logger, actualLRP *model
 	handler.emitMessages(logger, messagesToEmit, routeMappings)
 }
 
-func (handler *Handler) handleActualUpdate(logger lager.Logger, before, after *models.ActualLRP) {
+func (handler *Handler) handleActualUpdate(logger lager.Logger, before, after *models.ActualLRP) error {
 	var (
 		messagesToEmit routingtable.MessagesToEmit
 		routeMappings  routingtable.TCPRouteMappings
@@ -263,7 +258,12 @@ func (handler *Handler) handleActualUpdate(logger lager.Logger, before, after *m
 	case before.State == models.ActualLRPStateRunning && after.State != models.ActualLRPStateRunning:
 		routeMappings, messagesToEmit = handler.routingTable.RemoveEndpoint(logger, before)
 	}
+	err := handler.unregistrationCache.Remove(messagesToEmit.RegistrationMessages)
+	if err != nil {
+		return err
+	}
 	handler.emitMessages(logger, messagesToEmit, routeMappings)
+	return nil
 }
 
 func (handler *Handler) handleActualDelete(logger lager.Logger, actualLRP *models.ActualLRP) {

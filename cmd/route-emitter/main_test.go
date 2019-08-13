@@ -2,6 +2,7 @@ package main_test
 
 import (
 	"context"
+	"math"
 	"path"
 
 	"code.cloudfoundry.org/bbs"
@@ -2235,6 +2236,97 @@ var _ = Describe("Route Emitter", func() {
 						))
 					}
 					Consistently(unregisteredRoutes).ShouldNot(Receive(
+						MatchRegistryMessage(expectedUnregistrationForRoute1),
+					))
+				})
+			})
+
+			Context("and a route is removed and added back", func() {
+				var (
+					expectedUnregistrationForRoute1 routingtable.RegistryMessage
+					newDesiredLRP                   *models.DesiredLRP
+				)
+
+				BeforeEach(func() {
+					cfgs = append(cfgs, func(cfg *config.RouteEmitterConfig) {
+						cfg.UnregistrationSendCount = math.MaxInt32
+					})
+					expectedUnregistrationForRoute1 = routingtable.RegistryMessage{
+						URIs:                 []string{"route-1"},
+						Host:                 "1.2.3.4",
+						Port:                 65100,
+						App:                  "some-log-guid",
+						PrivateInstanceId:    "iguid1",
+						ServerCertDomainSAN:  "iguid1",
+						PrivateInstanceIndex: "0",
+						RouteServiceUrl:      "https://awesome.com",
+						Tags:                 map[string]string{"component": "route-emitter"},
+					}
+				})
+
+				JustBeforeEach(func() {
+					// route-1 and route-2 are originally registered for desiredLRP at the top level
+					// this will deregister route-1
+					updateRequest := &models.DesiredLRPUpdate{
+						Routes: newRoutes([]string{"route-2"}, containerPort, "https://awesome.com"),
+					}
+					updateRequest.SetInstances(desiredLRP.Instances)
+					updateRequest.SetAnnotation(desiredLRP.Annotation)
+					err := bbsClient.UpdateDesiredLRP(logger, processGuid, updateRequest)
+					Expect(err).NotTo(HaveOccurred())
+
+					newDesiredLRP = &models.DesiredLRP{}
+					*newDesiredLRP = *desiredLRP
+					newDesiredLRP.Routes = newRoutes([]string{"route-1", "route-2"}, containerPort, "https://awesome.com")
+					newDesiredLRP.ProcessGuid = "some-other-guid"
+					newDesiredLRP.LogGuid = "some-other-guid"
+				})
+
+				It("repeatedly sends unregistration messages specified in UnregistrationSendCount number of times", func() {
+					bbsClient.UpsertDomain(logger, domain, 2*time.Second)
+
+					Consistently(unregisteredRoutes, 3*msgReceiveTimeout).Should(Receive(
+						MatchRegistryMessage(expectedUnregistrationForRoute1),
+					))
+					// this will re-register route-1 and route-2
+					err := bbsClient.DesireLRP(logger, newDesiredLRP)
+					Expect(err).NotTo(HaveOccurred())
+					lrpKey := models.NewActualLRPKey("some-other-guid", 0, domain)
+					instanceKey := models.NewActualLRPInstanceKey("instance-guid", "cell-id")
+					netInfo := models.NewActualLRPNetInfo("1.2.3.4", "container-ip", models.ActualLRPNetInfo_PreferredAddressHost, models.NewPortMapping(65100, 8080))
+					Expect(bbsClient.StartActualLRP(logger, &lrpKey, &instanceKey, &netInfo)).To(Succeed())
+
+					// keep reading unregistration messages until route-1 is re-registered
+					done := make(chan struct{})
+					go func() {
+						for {
+							select {
+							case <-unregisteredRoutes:
+							case <-done:
+								return
+							}
+						}
+					}()
+
+					Eventually(registeredRoutes, 3*msgReceiveTimeout).Should(Receive(MatchRegistryMessage(routingtable.RegistryMessage{
+						Host:                 "1.2.3.4",
+						Port:                 65100,
+						TlsPort:              0,
+						URIs:                 []string{"route-1"},
+						App:                  "some-other-guid",
+						RouteServiceUrl:      "https://awesome.com",
+						PrivateInstanceId:    "instance-guid",
+						PrivateInstanceIndex: "0",
+						ServerCertDomainSAN:  "instance-guid",
+						IsolationSegment:     "",
+						EndpointUpdatedAtNs:  0,
+						Tags: map[string]string{
+							"component": "route-emitter",
+						},
+					})))
+					done <- struct{}{}
+
+					Consistently(unregisteredRoutes, 3*msgReceiveTimeout).ShouldNot(Receive(
 						MatchRegistryMessage(expectedUnregistrationForRoute1),
 					))
 				})

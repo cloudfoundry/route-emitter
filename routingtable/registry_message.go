@@ -12,14 +12,14 @@ type RegistryMessage struct {
 	Port                 uint32            `json:"port"`
 	TlsPort              uint32            `json:"tls_port,omitempty"`
 	URIs                 []string          `json:"uris"`
-	App                  string            `json:"app,omitempty"`
+	App                  string            `json:"app,omitempty" hash:"ignore"`
 	RouteServiceUrl      string            `json:"route_service_url,omitempty"`
-	PrivateInstanceId    string            `json:"private_instance_id,omitempty"`
-	PrivateInstanceIndex string            `json:"private_instance_index,omitempty"`
-	ServerCertDomainSAN  string            `json:"server_cert_domain_san,omitempty"`
-	IsolationSegment     string            `json:"isolation_segment,omitempty"`
-	EndpointUpdatedAtNs  int64             `json:"endpoint_updated_at_ns,omitempty"`
-	Tags                 map[string]string `json:"tags,omitempty"`
+	PrivateInstanceId    string            `json:"private_instance_id,omitempty" hash:"ignore"`
+	PrivateInstanceIndex string            `json:"private_instance_index,omitempty" hash:"ignore"`
+	ServerCertDomainSAN  string            `json:"server_cert_domain_san,omitempty" hash:"ignore"`
+	IsolationSegment     string            `json:"isolation_segment,omitempty" hash:"ignore"`
+	EndpointUpdatedAtNs  int64             `json:"endpoint_updated_at_ns,omitempty" hash:"ignore"`
+	Tags                 map[string]string `json:"tags,omitempty" hash:"ignore"`
 }
 
 func RegistryMessageFor(endpoint Endpoint, route Route, emitEndpointUpdatedAt bool) RegistryMessage {
