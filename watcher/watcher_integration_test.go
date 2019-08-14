@@ -66,7 +66,7 @@ var _ = Describe("Watcher Integration", func() {
 
 		uaaClient := uaaclient.NewNoOpUaaClient()
 		routingAPIEmitter := emitter.NewRoutingAPIEmitter(logger, routingApiClient, uaaClient, 100)
-		unregistrationCache := unregistration.NewCache()
+		unregistrationCache := unregistration.NewCache(logger)
 		handler := routehandlers.NewHandler(natsTable, natsEmitter, routingAPIEmitter, false, fakeMetronClient, unregistrationCache)
 		clock := fakeclock.NewFakeClock(time.Now())
 		testWatcher = watcher.NewWatcher(

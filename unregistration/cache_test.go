@@ -3,6 +3,8 @@ package unregistration_test
 import (
 	"sync"
 
+	"code.cloudfoundry.org/lager"
+	"code.cloudfoundry.org/lager/lagertest"
 	"code.cloudfoundry.org/route-emitter/routingtable"
 	"code.cloudfoundry.org/route-emitter/unregistration"
 
@@ -14,6 +16,7 @@ var _ = Describe("Cache", func() {
 	var (
 		cache                              unregistration.Cache
 		registryMessage1, registryMessage2 routingtable.RegistryMessage
+		logger                             lager.Logger
 	)
 
 	BeforeEach(func() {
@@ -36,7 +39,9 @@ var _ = Describe("Cache", func() {
 		route2 := routingtable.Route{
 			Hostname: "host-2.example.com",
 		}
-		cache = unregistration.NewCache()
+
+		logger = lagertest.NewTestLogger("test")
+		cache = unregistration.NewCache(logger)
 
 		registryMessage1 = routingtable.RegistryMessageFor(endpoint1, route1, false)
 		registryMessage2 = routingtable.RegistryMessageFor(endpoint2, route2, false)

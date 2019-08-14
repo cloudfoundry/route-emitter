@@ -28,7 +28,7 @@ var _ = Describe("Sender", func() {
 
 	BeforeEach(func() {
 		logger := lagertest.NewTestLogger("sender")
-		cache = unregistration.NewCache()
+		cache = unregistration.NewCache(logger)
 		natsEmitter = &fakes.FakeNATSEmitter{}
 		clock = fakeclock.NewFakeClock(time.Now())
 		sendInterval = 500 * time.Millisecond
