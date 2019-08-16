@@ -18,11 +18,12 @@ type RoutingAPIConfig struct {
 }
 
 type OAuthConfig struct {
-	UaaURL         string `json:"uaa_url"`
-	ClientName     string `json:"client_name"`
-	ClientSecret   string `json:"client_secret"`
-	CACerts        string `json:"ca_certs"`
-	SkipCertVerify bool   `json:"skip_cert_verify"`
+	UaaURL            string                `json:"uaa_url"`
+	UaaRequestTimeout durationjson.Duration `json:"uaa_request_timeout"`
+	ClientName        string                `json:"client_name"`
+	ClientSecret      string                `json:"client_secret"`
+	CACerts           string                `json:"ca_certs"`
+	SkipCertVerify    bool                  `json:"skip_cert_verify"`
 }
 
 type RouteEmitterConfig struct {

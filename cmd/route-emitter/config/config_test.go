@@ -57,6 +57,7 @@ var _ = Describe("Config", func() {
 			"locket_client_key_file": "locket-client-key",
 			"oauth": {
 				"uaa_url": "https://uaa.cf.service.internal:8443",
+				"uaa_request_timeout": "4s",
 				"client_name": "someclient",
 				"client_secret": "somesecret",
 				"ca_certs": "some-cert",
@@ -134,11 +135,12 @@ var _ = Describe("Config", func() {
 				LogLevel: "debug",
 			},
 			OAuth: config.OAuthConfig{
-				UaaURL:         "https://uaa.cf.service.internal:8443",
-				ClientName:     "someclient",
-				ClientSecret:   "somesecret",
-				CACerts:        "some-cert",
-				SkipCertVerify: true,
+				UaaURL:            "https://uaa.cf.service.internal:8443",
+				UaaRequestTimeout: durationjson.Duration(time.Second * 4),
+				ClientName:        "someclient",
+				ClientSecret:      "somesecret",
+				CACerts:           "some-cert",
+				SkipCertVerify:    true,
 			},
 			LoggregatorConfig: loggingclient.Config{
 				UseV2API:      true,

@@ -589,6 +589,23 @@ var _ = Describe("Route Emitter", func() {
 					verifyEmitterIsUP()
 				})
 
+				Context("and the uaa server does not respond with the request timeout", func() {
+					BeforeEach(func() {
+						cfgs = append(cfgs, func(cfg *config.RouteEmitterConfig) {
+							cfg.OAuth.UaaRequestTimeout = durationjson.Duration(time.Millisecond * 500)
+						})
+
+						oauthServer.RouteToHandler("GET", "/token_key", func(http.ResponseWriter, *http.Request) {
+							time.Sleep(time.Second * 2)
+						})
+					})
+
+					It("the emitter fails to fetch a token and does not start", func() {
+						Expect(runner).To(gbytes.Say("failed-fetching-uaa-key"))
+						Expect(runner).To(gbytes.Say("Client.Timeout"))
+						Expect(runner).ToNot(gbytes.Say("emitter1.started"))
+					})
+				})
 			})
 		})
 

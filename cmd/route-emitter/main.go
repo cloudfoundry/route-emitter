@@ -299,6 +299,7 @@ func newUaaClient(logger lager.Logger, c *config.RouteEmitterConfig, klok clock.
 		ClientSecret:     c.OAuth.ClientSecret,
 		SkipVerification: c.OAuth.SkipCertVerify,
 		CACerts:          c.OAuth.CACerts,
+		RequestTimeout:   time.Duration(c.OAuth.UaaRequestTimeout),
 	}
 	uaaClient, err := uaaclient.NewClient(logger, &cfg, klok)
 	if err != nil {
