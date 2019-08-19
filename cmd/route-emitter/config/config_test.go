@@ -48,6 +48,13 @@ var _ = Describe("Config", func() {
 			"enable_tcp_emitter": true,
 			"enable_internal_emitter": true,
 			"register_direct_instance_routes": true,
+			"routing_api": {
+				"url": "https://routing-api.cf.service.internal",
+				"port": 443,
+				"ca_cert_file": "/tmp/routing_api_ca_cert_file",
+				"client_cert_file": "/tmp/routing_api_client_cert_file",
+				"client_key_file": "/tmp/routing_api_client_key_file"
+			},
 			"consul_enabled": true,
 			"locket_enabled": true,
 			"locket_address": "127.0.0.1:18018",
@@ -128,6 +135,13 @@ var _ = Describe("Config", func() {
 			RegisterDirectInstanceRoutes:       true,
 			ConsulEnabled:                      true,
 			LocketEnabled:                      true,
+			RoutingAPI: config.RoutingAPIConfig{
+				URL:            "https://routing-api.cf.service.internal",
+				Port:           443,
+				CACertFile:     "/tmp/routing_api_ca_cert_file",
+				ClientCertFile: "/tmp/routing_api_client_cert_file",
+				ClientKeyFile:  "/tmp/routing_api_client_key_file",
+			},
 			DebugServerConfig: debugserver.DebugServerConfig{
 				DebugAddress: "127.0.0.1:9999",
 			},

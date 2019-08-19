@@ -33,6 +33,7 @@ import (
 	"code.cloudfoundry.org/route-emitter/unregistration"
 	"code.cloudfoundry.org/route-emitter/watcher"
 	"code.cloudfoundry.org/routing-api"
+	"code.cloudfoundry.org/tlsconfig"
 	uaaclient "code.cloudfoundry.org/uaa-go-client"
 	uaaconfig "code.cloudfoundry.org/uaa-go-client/config"
 	"code.cloudfoundry.org/workpool"
@@ -100,9 +101,26 @@ func main() {
 	if cfg.EnableTCPEmitter {
 		tcpLogger := logger.Session("tcp")
 		uaaClient := newUaaClient(tcpLogger, &cfg, clock)
+
 		routingAPIAddress := fmt.Sprintf("%s:%d", cfg.RoutingAPI.URL, cfg.RoutingAPI.Port)
 		logger.Debug("creating-routing-api-client", lager.Data{"api-location": routingAPIAddress})
-		routingAPIClient := routing_api.NewClient(routingAPIAddress, false)
+
+		var routingAPIClient routing_api.Client
+		if cfg.RoutingAPI.ClientCertFile != "" && cfg.RoutingAPI.ClientKeyFile != "" && cfg.RoutingAPI.CACertFile != "" {
+			tlsConfig, err := tlsconfig.Build(
+				tlsconfig.WithInternalServiceDefaults(),
+				tlsconfig.WithIdentityFromFile(cfg.RoutingAPI.ClientCertFile, cfg.RoutingAPI.ClientKeyFile),
+			).Client(
+				tlsconfig.WithAuthorityFromFile(cfg.RoutingAPI.CACertFile),
+			)
+			if err != nil {
+				logger.Fatal("failed-to-create-routing-api-tls-config", err)
+			}
+			routingAPIClient = routing_api.NewClientWithTLSConfig(routingAPIAddress, tlsConfig)
+		} else {
+			routingAPIClient = routing_api.NewClient(routingAPIAddress, false)
+		}
+
 		routingAPIEmitter = emitter.NewRoutingAPIEmitter(tcpLogger, routingAPIClient, uaaClient, int(routeTTL.Seconds()))
 	}
 

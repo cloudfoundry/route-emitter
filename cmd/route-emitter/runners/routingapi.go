@@ -13,6 +13,7 @@ import (
 	"code.cloudfoundry.org/routing-api"
 	apiconfig "code.cloudfoundry.org/routing-api/config"
 	"code.cloudfoundry.org/routing-api/models"
+	"code.cloudfoundry.org/tlsconfig"
 	"github.com/tedsuo/ifrit/ginkgomon"
 )
 
@@ -109,16 +110,26 @@ func (runner *RoutingAPIRunner) Run(signals <-chan os.Signal, ready chan<- struc
 	return r.Run(signals, ready)
 }
 
-func (runner *RoutingAPIRunner) GetGUID() (string, error) {
-	client := routing_api.NewClient(fmt.Sprintf("http://127.0.0.1:%d", runner.Config.API.ListenPort), false)
-	routerGroups, err := client.RouterGroups()
-	if err != nil {
-		return "", err
-	}
-
-	return routerGroups[0].Guid, nil
+type RoutingAPIClientConfig struct {
+	Port           int
+	CACertFile     string
+	ClientCertFile string
+	ClientKeyFile  string
 }
 
-func (runner *RoutingAPIRunner) GetClient() routing_api.Client {
-	return routing_api.NewClient(fmt.Sprintf("http://127.0.0.1:%d", runner.Config.API.ListenPort), false)
+func NewRoutingAPIClient(config RoutingAPIClientConfig) (routing_api.Client, error) {
+	if config.CACertFile != "" && config.ClientCertFile != "" && config.ClientKeyFile != "" {
+		tlsConfig, err := tlsconfig.Build(
+			tlsconfig.WithInternalServiceDefaults(),
+			tlsconfig.WithIdentityFromFile(config.ClientCertFile, config.ClientKeyFile),
+		).Client(
+			tlsconfig.WithAuthorityFromFile(config.CACertFile),
+		)
+		if err != nil {
+			return nil, err
+		}
+		return routing_api.NewClientWithTLSConfig(fmt.Sprintf("https://127.0.0.1:%d", config.Port), tlsConfig), nil
+	}
+
+	return routing_api.NewClient(fmt.Sprintf("http://127.0.0.1:%d", config.Port), false), nil
 }

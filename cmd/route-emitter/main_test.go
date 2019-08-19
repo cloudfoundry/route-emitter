@@ -38,6 +38,7 @@ import (
 	"code.cloudfoundry.org/route-emitter/cmd/route-emitter/runners"
 	"code.cloudfoundry.org/route-emitter/routingtable"
 	. "code.cloudfoundry.org/route-emitter/routingtable/matchers"
+	"code.cloudfoundry.org/routing-api"
 	routinapiconfig "code.cloudfoundry.org/routing-api/config"
 	apimodels "code.cloudfoundry.org/routing-api/models"
 	"code.cloudfoundry.org/routing-info/cfroutes"
@@ -97,6 +98,7 @@ var _ = Describe("Route Emitter", func() {
 
 		routingApiProcess       ifrit.Process
 		routingAPIRunner        *runners.RoutingAPIRunner
+		routingAPIClient        routing_api.Client
 		routerGUID              string
 		routingAPILocketProcess ifrit.Process
 
@@ -316,6 +318,8 @@ var _ = Describe("Route Emitter", func() {
 		_, caCert := certAuthority.CAAndKey()
 		routingAPIServerKey, routingAPIServerCert, err := certAuthority.GenerateSelfSignedCertAndKey("routing_api", nil, false)
 		Expect(err).NotTo(HaveOccurred())
+		routingAPIClientKey, routingAPIClientCert, err := certAuthority.GenerateSelfSignedCertAndKey("routing_api_client", nil, false)
+		Expect(err).NotTo(HaveOccurred())
 
 		routingAPILocketPort, err := portAllocator.ClaimPorts(1)
 		Expect(err).NotTo(HaveOccurred())
@@ -328,11 +332,12 @@ var _ = Describe("Route Emitter", func() {
 			cfg.ListenAddress = routingAPILocketAddress
 		})
 		routingAPILocketProcess = ginkgomon.Invoke(routingAPILocketRunner)
+		routingAPIPort := int(port + 2)
 		routingAPIRunner, err = runners.NewRoutingAPIRunner(routingAPIPath, int(port+1), sqlConfig, func(cfg *runners.Config) {
 			cfg.API = routinapiconfig.APIConfig{
 				ListenPort:         int(port),
-				HTTPEnabled:        true,
-				MTLSListenPort:     int(port + 2),
+				HTTPEnabled:        false,
+				MTLSListenPort:     routingAPIPort,
 				MTLSClientCAPath:   caCert,
 				MTLSServerCertPath: routingAPIServerCert,
 				MTLSServerKeyPath:  routingAPIServerKey,
@@ -343,20 +348,30 @@ var _ = Describe("Route Emitter", func() {
 
 		Expect(err).NotTo(HaveOccurred())
 		routingApiProcess = ginkgomon.Invoke(routingAPIRunner)
+		routingAPIClient, err = runners.NewRoutingAPIClient(runners.RoutingAPIClientConfig{
+			Port:           routingAPIPort,
+			CACertFile:     caCert,
+			ClientCertFile: routingAPIClientCert,
+			ClientKeyFile:  routingAPIClientKey,
+		})
+		Expect(err).NotTo(HaveOccurred())
 
 		Eventually(func() error {
-			guid, err := routingAPIRunner.GetGUID()
+			routerGroups, err := routingAPIClient.RouterGroups()
 			if err != nil {
 				return err
 			}
-			routerGUID = guid
+			routerGUID = routerGroups[0].Guid
 			return nil
 		}).Should(Succeed())
 		logger.Info("started-routing-api-server")
 		cfgs = append(cfgs, func(cfg *config.RouteEmitterConfig) {
 			cfg.BBSAddress = bbsURL.String()
-			cfg.RoutingAPI.URL = "http://127.0.0.1"
-			cfg.RoutingAPI.Port = routingAPIRunner.Config.API.ListenPort
+			cfg.RoutingAPI.URL = "https://127.0.0.1"
+			cfg.RoutingAPI.Port = routingAPIRunner.Config.API.MTLSListenPort
+			cfg.RoutingAPI.CACertFile = caCert
+			cfg.RoutingAPI.ClientCertFile = routingAPIClientCert
+			cfg.RoutingAPI.ClientKeyFile = routingAPIClientKey
 			cfg.UnregistrationInterval = durationjson.Duration(10 * time.Millisecond)
 			cfg.UnregistrationSendCount = unregistrationSendCount
 		})
@@ -658,8 +673,6 @@ var _ = Describe("Route Emitter", func() {
 
 					cfgs = append(cfgs, func(cfg *config.RouteEmitterConfig) {
 						cfg.BBSAddress = fakeBBS.URL
-						cfg.RoutingAPI.URL = "http://127.0.0.1"
-						cfg.RoutingAPI.Port = routingAPIRunner.Config.API.ListenPort
 					})
 
 					desiredLRP.Instances = 1
@@ -698,7 +711,7 @@ var _ = Describe("Route Emitter", func() {
 
 							expectedTcpRouteMapping = apimodels.NewTcpRouteMapping(routerGUID, 5222, "some-ip", 5222, 120)
 
-							Eventually(routingAPIRunner.GetClient().TcpRouteMappings, 5*time.Second).Should(
+							Eventually(routingAPIClient.TcpRouteMappings, 5*time.Second).Should(
 								ContainElement(matchTCPRouteMapping(expectedTcpRouteMapping)),
 							)
 						})
@@ -728,8 +741,6 @@ var _ = Describe("Route Emitter", func() {
 					cfgs = append(cfgs, func(cfg *config.RouteEmitterConfig) {
 						cfg.BBSAddress = bbsURL.String()
 						cfg.SyncInterval = durationjson.Duration(1 * time.Second)
-						cfg.RoutingAPI.URL = "http://127.0.0.1"
-						cfg.RoutingAPI.Port = routingAPIRunner.Config.API.ListenPort
 					})
 
 					expectedTCPProcessGUID = "some-guid"
@@ -749,7 +760,7 @@ var _ = Describe("Route Emitter", func() {
 					})
 
 					It("emits its routes immediately", func() {
-						Eventually(routingAPIRunner.GetClient().TcpRouteMappings, 5*time.Second).Should(
+						Eventually(routingAPIClient.TcpRouteMappings, 5*time.Second).Should(
 							ContainElement(matchTCPRouteMapping(expectedTcpRouteMapping)),
 						)
 					})
@@ -764,7 +775,7 @@ var _ = Describe("Route Emitter", func() {
 						It("contains the container host and port", func() {
 							expectedTcpRouteMapping.HostIP = netInfo.InstanceAddress
 							expectedTcpRouteMapping.HostPort = uint16(netInfo.Ports[0].ContainerPort)
-							Eventually(routingAPIRunner.GetClient().TcpRouteMappings, 5*time.Second).Should(
+							Eventually(routingAPIClient.TcpRouteMappings, 5*time.Second).Should(
 								ContainElement(matchTCPRouteMapping(expectedTcpRouteMapping)),
 							)
 						})
@@ -799,7 +810,7 @@ var _ = Describe("Route Emitter", func() {
 						})
 
 						It("does not emit the route", func() {
-							Consistently(routingAPIRunner.GetClient().TcpRouteMappings, 5*time.Second).ShouldNot(
+							Consistently(routingAPIClient.TcpRouteMappings, 5*time.Second).ShouldNot(
 								ContainElement(matchTCPRouteMapping(expectedTcpRouteMapping)),
 							)
 						})
@@ -816,7 +827,7 @@ var _ = Describe("Route Emitter", func() {
 						})
 
 						JustBeforeEach(func() {
-							Consistently(routingAPIRunner.GetClient().TcpRouteMappings, 5*time.Second).ShouldNot(
+							Consistently(routingAPIClient.TcpRouteMappings, 5*time.Second).ShouldNot(
 								ContainElement(matchTCPRouteMapping(expectedTcpRouteMapping)),
 							)
 						})
@@ -831,7 +842,7 @@ var _ = Describe("Route Emitter", func() {
 							})
 
 							It("immediately registers the route", func() {
-								Eventually(routingAPIRunner.GetClient().TcpRouteMappings, 5*time.Second).Should(
+								Eventually(routingAPIClient.TcpRouteMappings, 5*time.Second).Should(
 									ContainElement(matchTCPRouteMapping(expectedTcpRouteMapping)),
 								)
 							})
@@ -840,7 +851,7 @@ var _ = Describe("Route Emitter", func() {
 
 					Context("and routes are removed", func() {
 						JustBeforeEach(func() {
-							Eventually(routingAPIRunner.GetClient().TcpRouteMappings, 5*time.Second).Should(
+							Eventually(routingAPIClient.TcpRouteMappings, 5*time.Second).Should(
 								ContainElement(matchTCPRouteMapping(expectedTcpRouteMapping)),
 							)
 							update := &models.DesiredLRPUpdate{
@@ -852,7 +863,7 @@ var _ = Describe("Route Emitter", func() {
 
 						It("immediately unregisters the route", func() {
 							Eventually(func() error {
-								mappings, err := routingAPIRunner.GetClient().TcpRouteMappings()
+								mappings, err := routingAPIClient.TcpRouteMappings()
 								if err != nil {
 									return err
 								}
@@ -880,7 +891,7 @@ var _ = Describe("Route Emitter", func() {
 
 					It("does not emit routes", func() {
 						Consistently(func() []apimodels.TcpRouteMapping {
-							mappings, _ := routingAPIRunner.GetClient().TcpRouteMappings()
+							mappings, _ := routingAPIClient.TcpRouteMappings()
 							return mappings
 						}).Should(BeEmpty())
 					})
@@ -904,8 +915,6 @@ var _ = Describe("Route Emitter", func() {
 
 						cfgs = append(cfgs, func(cfg *config.RouteEmitterConfig) {
 							cfg.BBSAddress = fakeBBS.URL
-							cfg.RoutingAPI.URL = "http://127.0.0.1"
-							cfg.RoutingAPI.Port = routingAPIRunner.Config.API.ListenPort
 							cfg.SyncInterval = durationjson.Duration(1 * time.Hour)
 						})
 
@@ -931,7 +940,7 @@ var _ = Describe("Route Emitter", func() {
 
 						expectedTcpRouteMapping = apimodels.NewTcpRouteMapping(routerGUID, 5222, "some-ip", 5222, 120)
 
-						Eventually(routingAPIRunner.GetClient().TcpRouteMappings, 5*time.Second).Should(
+						Eventually(routingAPIClient.TcpRouteMappings, 5*time.Second).Should(
 							ContainElement(matchTCPRouteMapping(expectedTcpRouteMapping)),
 						)
 					})
@@ -974,12 +983,12 @@ var _ = Describe("Route Emitter", func() {
 					By("starting routing api server")
 					routingApiProcess = ginkgomon.Invoke(routingAPIRunner)
 					Eventually(func() error {
-						guid, err := routingAPIRunner.GetGUID()
+						routerGroups, err := routingAPIClient.RouterGroups()
 						if err != nil {
 							return err
 						}
-						expectedTcpRouteMapping.RouterGroupGuid = guid
-						notExpectedTcpRouteMapping.RouterGroupGuid = guid
+						expectedTcpRouteMapping.RouterGroupGuid = routerGroups[0].Guid
+						notExpectedTcpRouteMapping.RouterGroupGuid = routerGroups[0].Guid
 						return nil
 					}).Should(Succeed())
 					logger.Info("started-routing-api-server")
@@ -1754,7 +1763,6 @@ var _ = Describe("Route Emitter", func() {
 
 						cfgs = append(cfgs, func(cfg *config.RouteEmitterConfig) {
 							cfg.BBSAddress = fakeBBS.URL
-							cfg.RoutingAPI.URL = "http://127.0.0.1"
 						})
 					})
 
@@ -2364,8 +2372,6 @@ var _ = Describe("Route Emitter", func() {
 
 			cfgs = append(cfgs, func(cfg *config.RouteEmitterConfig) {
 				cfg.BBSAddress = fakeBBS.URL
-				cfg.RoutingAPI.URL = "http://127.0.0.1"
-				cfg.RoutingAPI.Port = routingAPIRunner.Config.API.ListenPort
 				cfg.SyncInterval = durationjson.Duration(1 * time.Hour)
 			})
 
