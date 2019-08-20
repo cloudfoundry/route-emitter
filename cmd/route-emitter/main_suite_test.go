@@ -100,8 +100,6 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 
 	return payload
 }, func(payload []byte) {
-	oauthServer = startOAuthServer()
-
 	binaries := map[string]string{}
 
 	err := json.Unmarshal(payload, &binaries)
@@ -235,6 +233,8 @@ func startOAuthServer() *ghttp.Server {
 var _ = BeforeEach(func() {
 	cfgs = nil
 	useLoggregatorV2 = false
+
+	oauthServer = startOAuthServer()
 
 	consulRunner.Start()
 	consulRunner.WaitUntilReady()
