@@ -2307,7 +2307,7 @@ var _ = Describe("Route Emitter", func() {
 					newDesiredLRP.LogGuid = "some-other-guid"
 				})
 
-				It("repeatedly sends unregistration messages specified in UnregistrationSendCount number of times", func() {
+				It("sends unregistration messages unless there is re-registration", func() {
 					bbsClient.UpsertDomain(logger, domain, 2*time.Second)
 
 					Consistently(unregisteredRoutes, 3*msgReceiveTimeout).Should(Receive(
