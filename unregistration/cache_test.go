@@ -64,6 +64,25 @@ var _ = Describe("Cache", func() {
 				registryMessage2,
 			))
 		})
+
+		It("uses only the relevant ip/port fields in the cache key", func() {
+			registryMessage2 = registryMessage1
+			registryMessage2.App = "some-unique-app-id"
+			registryMessage2.PrivateInstanceId = "some-unique-instance-id"
+			registryMessage2.PrivateInstanceIndex = "some-unique-instance-index"
+			registryMessage2.ServerCertDomainSAN = "some-unique-cert-domain-san"
+			registryMessage2.IsolationSegment = "some-unique-isolation-segment"
+			registryMessage2.EndpointUpdatedAtNs = 999
+			registryMessage2.Tags = map[string]string{"foo": "some-unique-tag"}
+
+			err := cache.Add([]routingtable.RegistryMessage{
+				registryMessage1,
+				registryMessage2,
+			})
+			Expect(err).NotTo(HaveOccurred())
+			cachedMessages := cache.List()
+			Expect(cachedMessages).To(HaveLen(1))
+		})
 	})
 
 	Describe("Remove", func() {
@@ -85,6 +104,28 @@ var _ = Describe("Cache", func() {
 			}).To(ConsistOf(
 				registryMessage2,
 			))
+		})
+
+		It("uses only the relevant ip/port fields in the cache key", func() {
+			registryMessage2 = registryMessage1
+			registryMessage2.App = "some-unique-app-id"
+			registryMessage2.PrivateInstanceId = "some-unique-instance-id"
+			registryMessage2.PrivateInstanceIndex = "some-unique-instance-index"
+			registryMessage2.ServerCertDomainSAN = "some-unique-cert-domain-san"
+			registryMessage2.IsolationSegment = "some-unique-isolation-segment"
+			registryMessage2.EndpointUpdatedAtNs = 999
+			registryMessage2.Tags = map[string]string{"foo": "some-unique-tag"}
+
+			err := cache.Add([]routingtable.RegistryMessage{
+				registryMessage1,
+			})
+			Expect(err).NotTo(HaveOccurred())
+			err = cache.Remove([]routingtable.RegistryMessage{
+				registryMessage2,
+			})
+			Expect(err).NotTo(HaveOccurred())
+			cachedMessages := cache.List()
+			Expect(cachedMessages).To(HaveLen(0))
 		})
 	})
 
