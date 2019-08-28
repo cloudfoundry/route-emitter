@@ -2310,9 +2310,15 @@ var _ = Describe("Route Emitter", func() {
 				It("sends unregistration messages unless there is re-registration", func() {
 					bbsClient.UpsertDomain(logger, domain, 2*time.Second)
 
-					Consistently(unregisteredRoutes, 3*msgReceiveTimeout).Should(Receive(
+					var receivedMessage routingtable.RegistryMessage
+					unregisteredRouteMessage := func() routingtable.RegistryMessage {
+						receivedMessage = <-unregisteredRoutes
+						return receivedMessage
+					}
+
+					Consistently(unregisteredRouteMessage, 3*msgReceiveTimeout).Should(
 						MatchRegistryMessage(expectedUnregistrationForRoute1),
-					))
+						fmt.Sprintf("Failed to receive expected message, received: %#v, expected: %#v", receivedMessage, expectedUnregistrationForRoute1))
 					// this will re-register route-1 and route-2
 					err := bbsClient.DesireLRP(logger, newDesiredLRP)
 					Expect(err).NotTo(HaveOccurred())
