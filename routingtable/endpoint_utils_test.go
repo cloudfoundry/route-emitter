@@ -32,8 +32,8 @@ var _ = Describe("LRP Utils", func() {
 				endpoints := routingtable.NewEndpointsFromActual(actualInfo)
 
 				Expect(endpoints).To(ConsistOf([]routingtable.Endpoint{
-					routingtable.NewEndpoint("instance-guid", models.ActualLRP_Ordinary, "1.1.1.1", "2.2.2.2", 11, 44, &tag),
-					routingtable.NewEndpoint("instance-guid", models.ActualLRP_Ordinary, "1.1.1.1", "2.2.2.2", 66, 99, &tag),
+					routingtable.NewEndpoint("instance-guid", models.ActualLRP_Ordinary, "1.1.1.1", "2.2.2.2", 11, 44, models.ActualLRPNetInfo_PreferredAddressHost, &tag),
+					routingtable.NewEndpoint("instance-guid", models.ActualLRP_Ordinary, "1.1.1.1", "2.2.2.2", 66, 99, models.ActualLRPNetInfo_PreferredAddressHost, &tag),
 				}))
 			})
 
@@ -46,7 +46,7 @@ var _ = Describe("LRP Utils", func() {
 						ActualLRPNetInfo: models.NewActualLRPNetInfo(
 							"1.1.1.1",
 							"2.2.2.2",
-							models.ActualLRPNetInfo_PreferredAddressHost,
+							models.ActualLRPNetInfo_PreferredAddressInstance,
 							models.NewPortMappingWithTLSProxy(11, 44, 61004, 61005),
 							models.NewPortMappingWithTLSProxy(66, 99, 61006, 61007),
 						),
@@ -58,8 +58,8 @@ var _ = Describe("LRP Utils", func() {
 					endpoints := routingtable.NewEndpointsFromActual(actualInfo)
 
 					Expect(endpoints).To(ConsistOf([]routingtable.Endpoint{
-						newEndpointWithTlsProxyPort("instance-guid", models.ActualLRP_Ordinary, "1.1.1.1", "2.2.2.2", 11, 44, 61004, 61005, &tag),
-						newEndpointWithTlsProxyPort("instance-guid", models.ActualLRP_Ordinary, "1.1.1.1", "2.2.2.2", 66, 99, 61006, 61007, &tag),
+						newEndpointWithTlsProxyPort("instance-guid", models.ActualLRP_Ordinary, "1.1.1.1", "2.2.2.2", 11, 44, 61004, 61005, models.ActualLRPNetInfo_PreferredAddressInstance, &tag),
+						newEndpointWithTlsProxyPort("instance-guid", models.ActualLRP_Ordinary, "1.1.1.1", "2.2.2.2", 66, 99, 61006, 61007, models.ActualLRPNetInfo_PreferredAddressInstance, &tag),
 					}))
 				})
 			})
@@ -87,8 +87,8 @@ var _ = Describe("LRP Utils", func() {
 				endpoints := routingtable.NewEndpointsFromActual(actualInfo)
 
 				Expect(endpoints).To(ConsistOf([]routingtable.Endpoint{
-					routingtable.NewEndpoint("instance-guid", models.ActualLRP_Evacuating, "1.1.1.1", "2.2.2.2", 11, 44, &tag),
-					routingtable.NewEndpoint("instance-guid", models.ActualLRP_Evacuating, "1.1.1.1", "2.2.2.2", 66, 99, &tag),
+					routingtable.NewEndpoint("instance-guid", models.ActualLRP_Evacuating, "1.1.1.1", "2.2.2.2", 11, 44, models.ActualLRPNetInfo_PreferredAddressHost, &tag),
+					routingtable.NewEndpoint("instance-guid", models.ActualLRP_Evacuating, "1.1.1.1", "2.2.2.2", 66, 99, models.ActualLRPNetInfo_PreferredAddressHost, &tag),
 				}))
 			})
 		})
@@ -199,6 +199,7 @@ func newEndpointWithTlsProxyPort(
 	instanceGUID string, presence models.ActualLRP_Presence,
 	host, containerIP string,
 	port, containerPort, tlsProxyPort, containerTlsProxyPort uint32,
+	preferredAddress models.ActualLRPNetInfo_PreferredAddress,
 	modificationTag *models.ModificationTag,
 ) routingtable.Endpoint {
 	return routingtable.Endpoint{
@@ -210,6 +211,7 @@ func newEndpointWithTlsProxyPort(
 		ContainerPort:         containerPort,
 		TlsProxyPort:          tlsProxyPort,
 		ContainerTlsProxyPort: containerTlsProxyPort,
+		PreferredAddress:      preferredAddress,
 		ModificationTag:       modificationTag,
 	}
 }

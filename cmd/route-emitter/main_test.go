@@ -260,7 +260,7 @@ var _ = Describe("Route Emitter", func() {
 		lrpKey = models.NewActualLRPKey(processGuid, index, domain)
 		instanceKey = models.NewActualLRPInstanceKey("iguid1", "cell-id")
 
-		netInfo = models.NewActualLRPNetInfo("1.2.3.4", "2.2.2.2", models.ActualLRPNetInfo_PreferredAddressHost, models.NewPortMapping(65100, 8080))
+		netInfo = models.NewActualLRPNetInfo("1.2.3.4", "2.2.2.2", models.ActualLRPNetInfo_PreferredAddressUnknown, models.NewPortMapping(65100, 8080))
 		registeredRoutes = listenForRoutes("router.register")
 		unregisteredRoutes = listenForRoutes("router.unregister")
 
@@ -755,7 +755,10 @@ var _ = Describe("Route Emitter", func() {
 					BeforeEach(func() {
 						lrpKey = models.NewActualLRPKey(expectedTCPProcessGUID, 0, domain)
 						instanceKey = models.NewActualLRPInstanceKey("instance-guid", "cell-id")
-						netInfo = models.NewActualLRPNetInfo("some-ip", "container-ip", models.ActualLRPNetInfo_PreferredAddressHost, models.NewPortMapping(62003, 5222))
+						netInfo = models.NewActualLRPNetInfo("some-ip", "container-ip", models.ActualLRPNetInfo_PreferredAddressUnknown, models.NewPortMapping(62003, 5222))
+					})
+
+					JustBeforeEach(func() {
 						Expect(bbsClient.StartActualLRP(logger, &lrpKey, &instanceKey, &netInfo))
 					})
 
@@ -778,6 +781,20 @@ var _ = Describe("Route Emitter", func() {
 							Eventually(routingAPIClient.TcpRouteMappings, 5*time.Second).Should(
 								ContainElement(matchTCPRouteMapping(expectedTcpRouteMapping)),
 							)
+						})
+
+						Context("when instance prefers host address", func() {
+							BeforeEach(func() {
+								netInfo = models.NewActualLRPNetInfo("some-ip", "container-ip", models.ActualLRPNetInfo_PreferredAddressHost, models.NewPortMapping(62003, 5222))
+							})
+
+							It("contains the host ip and port", func() {
+								expectedTcpRouteMapping.HostIP = netInfo.Address
+								expectedTcpRouteMapping.HostPort = uint16(netInfo.Ports[0].HostPort)
+								Eventually(routingAPIClient.TcpRouteMappings, 5*time.Second).Should(
+									ContainElement(matchTCPRouteMapping(expectedTcpRouteMapping)),
+								)
+							})
 						})
 					})
 
@@ -1431,7 +1448,7 @@ var _ = Describe("Route Emitter", func() {
 
 					Context("and the TLS proxy port is set on the Actual LRP", func() {
 						BeforeEach(func() {
-							netInfo = models.NewActualLRPNetInfo("1.2.3.4", "2.2.2.2", models.ActualLRPNetInfo_PreferredAddressHost, models.NewPortMappingWithTLSProxy(65100, 8080, 61006, 61007))
+							netInfo = models.NewActualLRPNetInfo("1.2.3.4", "2.2.2.2", models.ActualLRPNetInfo_PreferredAddressUnknown, models.NewPortMappingWithTLSProxy(65100, 8080, 61006, 61007))
 						})
 
 						It("emits a route with the container TLS proxy port set", func() {
@@ -1465,6 +1482,45 @@ var _ = Describe("Route Emitter", func() {
 									Tags:                 map[string]string{"component": "route-emitter"},
 								}),
 							))
+						})
+
+						Context("and instance prefers host address", func() {
+							BeforeEach(func() {
+								netInfo = models.NewActualLRPNetInfo("1.2.3.4", "2.2.2.2", models.ActualLRPNetInfo_PreferredAddressHost, models.NewPortMappingWithTLSProxy(65100, 8080, 61006, 61007))
+							})
+
+							It("emits a route with the host TLS proxy port set", func() {
+								var msg1, msg2 routingtable.RegistryMessage
+								Eventually(registeredRoutes).Should(Receive(&msg1))
+								Eventually(registeredRoutes).Should(Receive(&msg2))
+
+								Expect([]routingtable.RegistryMessage{msg1, msg2}).To(ConsistOf(
+									MatchRegistryMessage(routingtable.RegistryMessage{
+										URIs:                 []string{hostnames[1]},
+										Host:                 netInfo.Address,
+										Port:                 netInfo.Ports[0].HostPort,
+										TlsPort:              netInfo.Ports[0].HostTlsProxyPort,
+										App:                  desiredLRP.LogGuid,
+										PrivateInstanceId:    instanceKey.InstanceGuid,
+										ServerCertDomainSAN:  instanceKey.InstanceGuid,
+										PrivateInstanceIndex: "0",
+										RouteServiceUrl:      "https://awesome.com",
+										Tags:                 map[string]string{"component": "route-emitter"},
+									}),
+									MatchRegistryMessage(routingtable.RegistryMessage{
+										URIs:                 []string{hostnames[0]},
+										Host:                 netInfo.Address,
+										Port:                 netInfo.Ports[0].HostPort,
+										TlsPort:              netInfo.Ports[0].HostTlsProxyPort,
+										App:                  desiredLRP.LogGuid,
+										PrivateInstanceId:    instanceKey.InstanceGuid,
+										ServerCertDomainSAN:  instanceKey.InstanceGuid,
+										PrivateInstanceIndex: "0",
+										RouteServiceUrl:      "https://awesome.com",
+										Tags:                 map[string]string{"component": "route-emitter"},
+									}),
+								))
+							})
 						})
 					})
 				})

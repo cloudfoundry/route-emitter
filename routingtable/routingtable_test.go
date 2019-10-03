@@ -126,7 +126,7 @@ func createActualLRP(
 		ActualLRPNetInfo: models.NewActualLRPNetInfo(
 			instance.Host,
 			instance.ContainerIP,
-			models.ActualLRPNetInfo_PreferredAddressHost,
+			instance.PreferredAddress,
 			portMapping,
 		),
 		Presence:        instance.Presence,
@@ -189,37 +189,40 @@ var _ = Describe("RoutingTable", func() {
 		table = routingtable.NewRoutingTable(false, fakeMetronClient)
 
 		endpoint1 = routingtable.Endpoint{
-			InstanceGUID:    "ig-1",
-			Host:            "1.1.1.1",
-			ContainerIP:     "1.2.3.4",
-			Index:           0,
-			Port:            11,
-			ContainerPort:   8080,
-			Presence:        models.ActualLRP_Ordinary,
-			Since:           1,
-			ModificationTag: currentTag,
+			InstanceGUID:     "ig-1",
+			Host:             "1.1.1.1",
+			ContainerIP:      "1.2.3.4",
+			Index:            0,
+			Port:             11,
+			ContainerPort:    8080,
+			Presence:         models.ActualLRP_Ordinary,
+			PreferredAddress: models.ActualLRPNetInfo_PreferredAddressInstance,
+			Since:            1,
+			ModificationTag:  currentTag,
 		}
 		endpoint2 = routingtable.Endpoint{
-			InstanceGUID:    "ig-2",
-			Host:            "2.2.2.2",
-			ContainerIP:     "2.3.4.5",
-			Index:           1,
-			Port:            22,
-			ContainerPort:   8080,
-			Presence:        models.ActualLRP_Ordinary,
-			Since:           2,
-			ModificationTag: currentTag,
+			InstanceGUID:     "ig-2",
+			Host:             "2.2.2.2",
+			ContainerIP:      "2.3.4.5",
+			Index:            1,
+			Port:             22,
+			ContainerPort:    8080,
+			Presence:         models.ActualLRP_Ordinary,
+			PreferredAddress: models.ActualLRPNetInfo_PreferredAddressHost,
+			Since:            2,
+			ModificationTag:  currentTag,
 		}
 		endpoint3 = routingtable.Endpoint{
-			InstanceGUID:    "ig-3",
-			Host:            "3.3.3.3",
-			ContainerIP:     "3.4.5.6",
-			Index:           2,
-			Port:            33,
-			ContainerPort:   8080,
-			Presence:        models.ActualLRP_Ordinary,
-			Since:           3,
-			ModificationTag: currentTag,
+			InstanceGUID:     "ig-3",
+			Host:             "3.3.3.3",
+			ContainerIP:      "3.4.5.6",
+			Index:            2,
+			Port:             33,
+			ContainerPort:    8080,
+			Presence:         models.ActualLRP_Ordinary,
+			PreferredAddress: models.ActualLRPNetInfo_PreferredAddressUnknown,
+			Since:            3,
+			ModificationTag:  currentTag,
 		}
 
 		key = routingtable.RoutingKey{ProcessGUID: "some-process-guid", ContainerPort: 8080}
@@ -259,7 +262,7 @@ var _ = Describe("RoutingTable", func() {
 
 			It("emits an unregistration", func() {
 				expectedUnregistrationMessages := []routingtable.RegistryMessage{
-					routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGUID: logGuid}, false),
+					routingtable.InternalAddressRegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGUID: logGuid}, false),
 				}
 				Expect(messagesToEmit.UnregistrationMessages).To(Equal(expectedUnregistrationMessages))
 			})
@@ -274,7 +277,7 @@ var _ = Describe("RoutingTable", func() {
 				It("emits a registration", func() {
 					expected := routingtable.MessagesToEmit{
 						RegistrationMessages: []routingtable.RegistryMessage{
-							routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: "bar.example.com", LogGUID: logGuid}, false),
+							routingtable.InternalAddressRegistryMessageFor(endpoint1, routingtable.Route{Hostname: "bar.example.com", LogGUID: logGuid}, false),
 						},
 					}
 					Expect(messagesToEmit).To(Equal(expected))
@@ -289,7 +292,7 @@ var _ = Describe("RoutingTable", func() {
 					It("emits a registration", func() {
 						expected := routingtable.MessagesToEmit{
 							RegistrationMessages: []routingtable.RegistryMessage{
-								routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: "bar.example.com", LogGUID: logGuid}, false),
+								routingtable.InternalAddressRegistryMessageFor(endpoint1, routingtable.Route{Hostname: "bar.example.com", LogGUID: logGuid}, false),
 							},
 						}
 						Expect(messagesToEmit).To(Equal(expected))
@@ -320,7 +323,7 @@ var _ = Describe("RoutingTable", func() {
 				It("emits a registration message with new tags", func() {
 					expected := routingtable.MessagesToEmit{
 						RegistrationMessages: []routingtable.RegistryMessage{
-							routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: "bar.example.com", LogGUID: logGuid}, false),
+							routingtable.InternalAddressRegistryMessageFor(endpoint1, routingtable.Route{Hostname: "bar.example.com", LogGUID: logGuid}, false),
 						},
 					}
 					Expect(messagesToEmit).To(Equal(expected))
@@ -333,7 +336,7 @@ var _ = Describe("RoutingTable", func() {
 					Expect(tcpRouteMappings).To(BeZero())
 					expected = routingtable.MessagesToEmit{
 						RegistrationMessages: []routingtable.RegistryMessage{
-							routingtable.RegistryMessageFor(
+							routingtable.InternalAddressRegistryMessageFor(
 								endpoint1,
 								routingtable.Route{
 									Hostname:   "bar.example.com",
@@ -467,7 +470,7 @@ var _ = Describe("RoutingTable", func() {
 				Expect(tcpRouteMappings).To(BeZero())
 				expected := routingtable.MessagesToEmit{
 					RegistrationMessages: []routingtable.RegistryMessage{
-						routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGUID: logGuid}, false),
+						routingtable.InternalAddressRegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGUID: logGuid}, false),
 					},
 					InternalRegistrationMessages: []routingtable.RegistryMessage{
 						{
@@ -508,7 +511,7 @@ var _ = Describe("RoutingTable", func() {
 
 			expectedHTTP := routingtable.MessagesToEmit{
 				UnregistrationMessages: []routingtable.RegistryMessage{
-					routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGUID: logGuid}, false),
+					routingtable.InternalAddressRegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGUID: logGuid}, false),
 				},
 			}
 			Expect(messagesToEmit).To(MatchMessagesToEmit(expectedHTTP))
@@ -517,8 +520,8 @@ var _ = Describe("RoutingTable", func() {
 			expectedTCP := tcpmodels.TcpRouteMapping{
 				TcpMappingEntity: tcpmodels.TcpMappingEntity{
 					RouterGroupGuid: "router-group-guid",
-					HostPort:        uint16(endpoint1.Port),
-					HostIP:          endpoint1.Host,
+					HostPort:        uint16(endpoint1.ContainerPort),
+					HostIP:          endpoint1.ContainerIP,
 					ExternalPort:    5222,
 					TTL:             &ttl,
 				},
@@ -528,7 +531,6 @@ var _ = Describe("RoutingTable", func() {
 
 		Context("when there is internal routable endpoint", func() {
 			BeforeEach(func() {
-				// table = routingtable.NewRoutingTable(false, fakeMetronClient)
 				routingInfo := createRoutingInfo(key.ContainerPort, []string{}, []string{"internal"}, "", []uint32{5222}, "")
 				beforeDesiredLRP := createDesiredLRPWithRoutes(key.ProcessGUID, 3, routingInfo, logGuid, *currentTag, runInfo)
 				table.SetRoutes(logger, nil, beforeDesiredLRP)
@@ -580,7 +582,7 @@ var _ = Describe("RoutingTable", func() {
 					It("unregisters non-existent endpoints", func() {
 						expectedHTTP := routingtable.MessagesToEmit{
 							UnregistrationMessages: []routingtable.RegistryMessage{
-								routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGUID: logGuid}, false),
+								routingtable.InternalAddressRegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGUID: logGuid}, false),
 							},
 						}
 						Expect(messagesToEmit).To(MatchMessagesToEmit(expectedHTTP))
@@ -589,8 +591,8 @@ var _ = Describe("RoutingTable", func() {
 						expectedTCP := tcpmodels.TcpRouteMapping{
 							TcpMappingEntity: tcpmodels.TcpMappingEntity{
 								RouterGroupGuid: "router-group-guid",
-								HostPort:        uint16(endpoint1.Port),
-								HostIP:          endpoint1.Host,
+								HostPort:        uint16(endpoint1.ContainerPort),
+								HostIP:          endpoint1.ContainerIP,
 								ExternalPort:    5222,
 								TTL:             &ttl,
 							},
@@ -606,7 +608,7 @@ var _ = Describe("RoutingTable", func() {
 
 						expectedHTTP := routingtable.MessagesToEmit{
 							RegistrationMessages: []routingtable.RegistryMessage{
-								routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGUID: logGuid}, true),
+								routingtable.InternalAddressRegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGUID: logGuid}, true),
 							},
 						}
 						Expect(messagesToEmit).To(MatchMessagesToEmit(expectedHTTP))
@@ -615,8 +617,8 @@ var _ = Describe("RoutingTable", func() {
 						expectedTCP := tcpmodels.TcpRouteMapping{
 							TcpMappingEntity: tcpmodels.TcpMappingEntity{
 								RouterGroupGuid: "router-group-guid",
-								HostPort:        uint16(endpoint1.Port),
-								HostIP:          endpoint1.Host,
+								HostPort:        uint16(endpoint1.ContainerPort),
+								HostIP:          endpoint1.ContainerIP,
 								ExternalPort:    5222,
 								TTL:             &ttl,
 							},
@@ -722,10 +724,157 @@ var _ = Describe("RoutingTable", func() {
 	})
 
 	Describe("AddEndpoint", func() {
-		Context("when a desired LRP has instances field less than number of actual LRP instances", func() {
-			var internalHostname string
+		var (
+			internalHostname                                                                    string
+			actualLRPWithInstanceAddress, actualLRPWithHostAddress, actualLRPWithUnknownAddress *models.ActualLRP
+		)
+
+		BeforeEach(func() {
+			internalHostname = "internal-hostname"
+			actualLRPWithInstanceAddress = createActualLRP(key, endpoint1, domain)
+			actualLRPWithHostAddress = createActualLRP(key, endpoint2, domain)
+			actualLRPWithUnknownAddress = createActualLRP(key, endpoint3, domain)
+		})
+
+		Context("when the routing table is configured to use direct instance route", func() {
 			BeforeEach(func() {
-				internalHostname = "internal-hostname"
+				table = routingtable.NewRoutingTable(true, fakeMetronClient)
+				routes := createRoutingInfo(key.ContainerPort, []string{hostname1}, []string{internalHostname}, "", []uint32{9999}, "")
+				afterDesiredLRP := createDesiredLRPWithRoutes(key.ProcessGUID, 3, routes, logGuid, *currentTag, runInfo)
+				table.SetRoutes(logger, nil, afterDesiredLRP)
+			})
+
+			Context("when endpoint preferred address is instance", func() {
+				BeforeEach(func() {
+					tcpRouteMappings, messagesToEmit = table.AddEndpoint(logger, actualLRPWithInstanceAddress)
+				})
+
+				It("is using container IP in registration message", func() {
+					Expect(tcpRouteMappings.Registrations).To(HaveLen(1))
+					Expect(tcpRouteMappings.Registrations[0].HostIP).To(Equal(endpoint1.ContainerIP))
+					Expect(tcpRouteMappings.Registrations[0].HostPort).To(Equal(uint16(endpoint1.ContainerPort)))
+					Expect(messagesToEmit.RegistrationMessages).To(HaveLen(1))
+					Expect(messagesToEmit.RegistrationMessages[0].Host).To(Equal(endpoint1.ContainerIP))
+					Expect(messagesToEmit.RegistrationMessages[0].Port).To(Equal(endpoint1.ContainerPort))
+				})
+
+				It("is using container IP in internal registration message", func() {
+					Expect(messagesToEmit.InternalRegistrationMessages).To(HaveLen(1))
+					Expect(messagesToEmit.InternalRegistrationMessages[0].Host).To(Equal(endpoint1.ContainerIP))
+				})
+			})
+
+			Context("when endpoint preferred address is host", func() {
+				BeforeEach(func() {
+					tcpRouteMappings, messagesToEmit = table.AddEndpoint(logger, actualLRPWithHostAddress)
+				})
+
+				It("is using host IP in registration message", func() {
+					Expect(tcpRouteMappings.Registrations).To(HaveLen(1))
+					Expect(tcpRouteMappings.Registrations[0].HostIP).To(Equal(endpoint2.Host))
+					Expect(tcpRouteMappings.Registrations[0].HostPort).To(Equal(uint16(endpoint2.Port)))
+					Expect(messagesToEmit.RegistrationMessages).To(HaveLen(1))
+					Expect(messagesToEmit.RegistrationMessages[0].Host).To(Equal(endpoint2.Host))
+					Expect(messagesToEmit.RegistrationMessages[0].Port).To(Equal(endpoint2.Port))
+				})
+
+				It("is using container IP in internal registration message", func() {
+					Expect(messagesToEmit.InternalRegistrationMessages).To(HaveLen(1))
+					Expect(messagesToEmit.InternalRegistrationMessages[0].Host).To(Equal(endpoint2.ContainerIP))
+				})
+			})
+
+			Context("when endpoint preferred address is unknown", func() {
+				BeforeEach(func() {
+					tcpRouteMappings, messagesToEmit = table.AddEndpoint(logger, actualLRPWithUnknownAddress)
+				})
+
+				It("is using container IP in registration message", func() {
+					Expect(tcpRouteMappings.Registrations).To(HaveLen(1))
+					Expect(tcpRouteMappings.Registrations[0].HostIP).To(Equal(endpoint3.ContainerIP))
+					Expect(tcpRouteMappings.Registrations[0].HostPort).To(Equal(uint16(endpoint3.ContainerPort)))
+					Expect(messagesToEmit.RegistrationMessages).To(HaveLen(1))
+					Expect(messagesToEmit.RegistrationMessages[0].Host).To(Equal(endpoint3.ContainerIP))
+					Expect(messagesToEmit.RegistrationMessages[0].Port).To(Equal(endpoint3.ContainerPort))
+				})
+
+				It("is using container IP in internal registration message", func() {
+					Expect(messagesToEmit.InternalRegistrationMessages).To(HaveLen(1))
+					Expect(messagesToEmit.InternalRegistrationMessages[0].Host).To(Equal(endpoint3.ContainerIP))
+				})
+			})
+		})
+
+		Context("when the routing table is configured not to use direct instance route", func() {
+			BeforeEach(func() {
+				table = routingtable.NewRoutingTable(false, fakeMetronClient)
+				routes := createRoutingInfo(key.ContainerPort, []string{hostname1}, []string{internalHostname}, "", []uint32{9999}, "")
+				afterDesiredLRP := createDesiredLRPWithRoutes(key.ProcessGUID, 3, routes, logGuid, *currentTag, runInfo)
+				table.SetRoutes(logger, nil, afterDesiredLRP)
+			})
+
+			Context("when endpoint preferred address is instance", func() {
+				BeforeEach(func() {
+					tcpRouteMappings, messagesToEmit = table.AddEndpoint(logger, actualLRPWithInstanceAddress)
+				})
+
+				It("is using container IP in registration message", func() {
+					Expect(tcpRouteMappings.Registrations).To(HaveLen(1))
+					Expect(tcpRouteMappings.Registrations[0].HostIP).To(Equal(endpoint1.ContainerIP))
+					Expect(tcpRouteMappings.Registrations[0].HostPort).To(Equal(uint16(endpoint1.ContainerPort)))
+					Expect(messagesToEmit.RegistrationMessages).To(HaveLen(1))
+					Expect(messagesToEmit.RegistrationMessages[0].Host).To(Equal(endpoint1.ContainerIP))
+				})
+
+				It("is using container IP in internal registration message", func() {
+					Expect(messagesToEmit.InternalRegistrationMessages).To(HaveLen(1))
+					Expect(messagesToEmit.InternalRegistrationMessages[0].Host).To(Equal(endpoint1.ContainerIP))
+				})
+			})
+
+			Context("when endpoint preferred address is host", func() {
+				BeforeEach(func() {
+					tcpRouteMappings, messagesToEmit = table.AddEndpoint(logger, actualLRPWithHostAddress)
+				})
+
+				It("is using host IP in registration message", func() {
+					Expect(tcpRouteMappings.Registrations).To(HaveLen(1))
+					Expect(tcpRouteMappings.Registrations[0].HostIP).To(Equal(endpoint2.Host))
+					Expect(tcpRouteMappings.Registrations[0].HostPort).To(Equal(uint16(endpoint2.Port)))
+					Expect(messagesToEmit.RegistrationMessages).To(HaveLen(1))
+					Expect(messagesToEmit.RegistrationMessages[0].Host).To(Equal(endpoint2.Host))
+					Expect(messagesToEmit.RegistrationMessages[0].Port).To(Equal(endpoint2.Port))
+				})
+
+				It("is using container IP in internal registration message", func() {
+					Expect(messagesToEmit.InternalRegistrationMessages).To(HaveLen(1))
+					Expect(messagesToEmit.InternalRegistrationMessages[0].Host).To(Equal(endpoint2.ContainerIP))
+				})
+			})
+
+			Context("when endpoint preferred address is unknown", func() {
+				BeforeEach(func() {
+					tcpRouteMappings, messagesToEmit = table.AddEndpoint(logger, actualLRPWithUnknownAddress)
+				})
+
+				It("is using host IP in registration message", func() {
+					Expect(tcpRouteMappings.Registrations).To(HaveLen(1))
+					Expect(tcpRouteMappings.Registrations[0].HostIP).To(Equal(endpoint3.Host))
+					Expect(tcpRouteMappings.Registrations[0].HostPort).To(Equal(uint16(endpoint3.Port)))
+					Expect(messagesToEmit.RegistrationMessages).To(HaveLen(1))
+					Expect(messagesToEmit.RegistrationMessages[0].Host).To(Equal(endpoint3.Host))
+					Expect(messagesToEmit.RegistrationMessages[0].Port).To(Equal(endpoint3.Port))
+				})
+
+				It("is using container IP in internal registration message", func() {
+					Expect(messagesToEmit.InternalRegistrationMessages).To(HaveLen(1))
+					Expect(messagesToEmit.InternalRegistrationMessages[0].Host).To(Equal(endpoint3.ContainerIP))
+				})
+			})
+		})
+
+		Context("when a desired LRP has instances field less than number of actual LRP instances", func() {
+			BeforeEach(func() {
 				// Add internal routes
 				routes := createRoutingInfo(key.ContainerPort, []string{hostname1}, []string{internalHostname}, "", []uint32{}, "")
 
@@ -742,7 +891,7 @@ var _ = Describe("RoutingTable", func() {
 				Expect(tcpRouteMappings).To(BeZero())
 				expected := routingtable.MessagesToEmit{
 					RegistrationMessages: []routingtable.RegistryMessage{
-						routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGUID: logGuid}, true),
+						routingtable.InternalAddressRegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGUID: logGuid}, true),
 					},
 					InternalRegistrationMessages: []routingtable.RegistryMessage{
 						routingtable.RegistryMessage{
@@ -785,7 +934,7 @@ var _ = Describe("RoutingTable", func() {
 				tcpRouteMappings, messagesToEmit = table.AddEndpoint(logger, actualLRP1)
 				expected := routingtable.MessagesToEmit{
 					RegistrationMessages: []routingtable.RegistryMessage{
-						routingtable.RegistryMessageFor(
+						routingtable.InternalAddressRegistryMessageFor(
 							endpoint1,
 							routingtable.Route{
 								Hostname: hostname1,
@@ -947,8 +1096,8 @@ var _ = Describe("RoutingTable", func() {
 				Expect(tcpRouteMappings).To(BeZero())
 				expected := routingtable.MessagesToEmit{
 					RegistrationMessages: []routingtable.RegistryMessage{
-						routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGUID: logGuid}, false),
-						routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname2, LogGUID: logGuid}, false),
+						routingtable.InternalAddressRegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGUID: logGuid}, false),
+						routingtable.InternalAddressRegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname2, LogGUID: logGuid}, false),
 						routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname1, LogGUID: logGuid}, false),
 						routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname2, LogGUID: logGuid}, false),
 					},
@@ -987,8 +1136,8 @@ var _ = Describe("RoutingTable", func() {
 					{
 						TcpMappingEntity: tcpmodels.TcpMappingEntity{
 							RouterGroupGuid: logGuid,
-							HostPort:        uint16(endpoint1.Port),
-							HostIP:          endpoint1.Host,
+							HostPort:        uint16(endpoint1.ContainerPort),
+							HostIP:          endpoint1.ContainerIP,
 							ExternalPort:    9999,
 							TTL:             &ttl,
 						},
@@ -1007,7 +1156,7 @@ var _ = Describe("RoutingTable", func() {
 
 				expected := routingtable.MessagesToEmit{
 					RegistrationMessages: []routingtable.RegistryMessage{
-						routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGUID: logGuid}, false),
+						routingtable.InternalAddressRegistryMessageFor(endpoint1, routingtable.Route{Hostname: hostname1, LogGUID: logGuid}, false),
 						routingtable.RegistryMessageFor(endpoint2, routingtable.Route{Hostname: hostname1, LogGUID: logGuid}, false),
 					},
 				}

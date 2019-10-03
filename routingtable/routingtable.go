@@ -66,13 +66,10 @@ type routingTable struct {
 
 func NewRoutingTable(directInstanceRoute bool, metronClient loggingclient.IngressClient) RoutingTable {
 	addressGenerator := func(endpoint Endpoint) Address {
-		return Address{Host: endpoint.Host, Port: endpoint.Port}
-	}
-
-	if directInstanceRoute {
-		addressGenerator = func(endpoint Endpoint) Address {
+		if endpoint.IsDirectInstanceRoute(directInstanceRoute) {
 			return Address{Host: endpoint.ContainerIP, Port: endpoint.ContainerPort}
 		}
+		return Address{Host: endpoint.Host, Port: endpoint.Port}
 	}
 
 	httpRoutingTable := &internalRoutingTable{

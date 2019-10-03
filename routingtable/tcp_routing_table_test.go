@@ -75,7 +75,7 @@ var _ = Describe("TCPRoutingTable", func() {
 			ActualLRPNetInfo: models.NewActualLRPNetInfo(
 				hostAddress,
 				instanceAddress,
-				models.ActualLRPNetInfo_PreferredAddressHost,
+				models.ActualLRPNetInfo_PreferredAddressUnknown,
 				models.NewPortMapping(hostPort, containerPort),
 			),
 			Presence:        models.ActualLRP_Ordinary,
@@ -259,6 +259,33 @@ var _ = Describe("TCPRoutingTable", func() {
 							TTL:             &ttl,
 						},
 					}))
+				})
+
+				Context("when instance prefers host address", func() {
+					It("emits routing events for new routes", func() {
+						tempRoutingTable = routingtable.NewRoutingTable(false, fakeMetronClient)
+						beforeLRP := getDesiredLRP("process-guid-1", logGuid, tcpRoutes, modificationTag)
+						tempRoutingTable.SetRoutes(logger, nil, beforeLRP)
+						actualLRP := getActualLRP("process-guid-1", "instance-guid-1", "some-ip-1", "container-ip-1", 62004, 5222, modificationTag)
+						actualLRP.PreferredAddress = models.ActualLRPNetInfo_PreferredAddressHost
+						tempRoutingTable.AddEndpoint(logger, actualLRP)
+						Expect(tempRoutingTable.TCPAssociationsCount()).Should(Equal(1))
+						Expect(routingTable.TCPAssociationsCount()).Should(Equal(0))
+						routingEvents, _ := routingTable.Swap(logger, tempRoutingTable, models.DomainSet{})
+						Expect(routingTable.TCPAssociationsCount()).Should(Equal(1))
+
+						ttl := 0
+						Expect(routingEvents.Registrations).To(ConsistOf(tcpmodels.TcpRouteMapping{
+							TcpMappingEntity: tcpmodels.TcpMappingEntity{
+								RouterGroupGuid: "router-group-guid",
+								HostPort:        62004,
+								HostIP:          "some-ip-1",
+								ExternalPort:    61000,
+								TTL:             &ttl,
+							},
+						}))
+					})
+
 				})
 			})
 		})

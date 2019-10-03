@@ -43,26 +43,43 @@ type Endpoint struct {
 	IsolationSegment      string
 	Since                 int64
 	ModificationTag       *models.ModificationTag
+	PreferredAddress      models.ActualLRPNetInfo_PreferredAddress
 }
 
 func (e Endpoint) key() EndpointKey {
 	return EndpointKey{InstanceGUID: e.InstanceGUID, Evacuating: e.Presence == models.ActualLRP_Evacuating}
 }
 
+func (e Endpoint) IsDirectInstanceRoute(defaultIsDirectInstanceRoute bool) bool {
+	switch e.PreferredAddress {
+	case models.ActualLRPNetInfo_PreferredAddressInstance:
+		return true
+	case models.ActualLRPNetInfo_PreferredAddressHost:
+		return false
+	case models.ActualLRPNetInfo_PreferredAddressUnknown:
+		if defaultIsDirectInstanceRoute {
+			return true
+		}
+	}
+	return false
+}
+
 func NewEndpoint(
 	instanceGUID string, presence models.ActualLRP_Presence,
 	host, containerIP string,
 	port, containerPort uint32,
+	preferredAddress models.ActualLRPNetInfo_PreferredAddress,
 	modificationTag *models.ModificationTag,
 ) Endpoint {
 	return Endpoint{
-		InstanceGUID:    instanceGUID,
-		Presence:        presence,
-		Host:            host,
-		ContainerIP:     containerIP,
-		Port:            port,
-		ContainerPort:   containerPort,
-		ModificationTag: modificationTag,
+		InstanceGUID:     instanceGUID,
+		Presence:         presence,
+		Host:             host,
+		ContainerIP:      containerIP,
+		Port:             port,
+		ContainerPort:    containerPort,
+		PreferredAddress: preferredAddress,
+		ModificationTag:  modificationTag,
 	}
 }
 
@@ -83,7 +100,7 @@ func (info ExternalEndpointInfo) MessageFor(e Endpoint, directInstanceRoute, _ b
 		uint16(e.Port),
 		0,
 	)
-	if directInstanceRoute {
+	if e.IsDirectInstanceRoute(directInstanceRoute) {
 		mapping = tcpmodels.NewTcpRouteMapping(
 			info.RouterGroupGUID,
 			uint16(info.Port),
@@ -132,7 +149,7 @@ func (r Route) Hash() interface{} {
 
 func (r Route) MessageFor(endpoint Endpoint, directInstanceAddress, emitEndpointUpdatedAt bool) (*RegistryMessage, *tcpmodels.TcpRouteMapping, *RegistryMessage) {
 	generator := RegistryMessageFor
-	if directInstanceAddress {
+	if endpoint.IsDirectInstanceRoute(directInstanceAddress) {
 		generator = InternalAddressRegistryMessageFor
 	}
 	msg := generator(endpoint, r, emitEndpointUpdatedAt)
@@ -205,6 +222,7 @@ func NewEndpointsFromActual(actualLRP *models.ActualLRP) []Endpoint {
 				TlsProxyPort:          portMapping.HostTlsProxyPort,
 				ContainerTlsProxyPort: portMapping.ContainerTlsProxyPort,
 				Since:                 actualLRP.Since,
+				PreferredAddress:      actualLRP.PreferredAddress,
 			}
 			endpoints = append(endpoints, endpoint)
 		}
