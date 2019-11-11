@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"code.cloudfoundry.org/inigo/helpers/portauthority"
-	"code.cloudfoundry.org/route-emitter/diegonats/gnatsdrunner"
+	"code.cloudfoundry.org/route-emitter/diegonats/natsserverrunner"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -18,9 +18,9 @@ func TestDiegoNATS(t *testing.T) {
 }
 
 var (
-	natsPort      uint16
-	gnatsdProcess ifrit.Process
-	portAllocator portauthority.PortAllocator
+	natsPort          uint16
+	natsServerProcess ifrit.Process
+	portAllocator     portauthority.PortAllocator
 )
 
 var _ = BeforeSuite(func() {
@@ -40,9 +40,9 @@ var _ = AfterSuite(func() {
 })
 
 func startNATS() {
-	gnatsdProcess = ginkgomon.Invoke(gnatsdrunner.NewGnatsdTestRunner(int(natsPort)))
+	natsServerProcess = ginkgomon.Invoke(natsserverrunner.NewNatsServerTestRunner(int(natsPort)))
 }
 
 func stopNATS() {
-	ginkgomon.Kill(gnatsdProcess)
+	ginkgomon.Kill(natsServerProcess)
 }

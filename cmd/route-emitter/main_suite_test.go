@@ -25,7 +25,7 @@ import (
 	"code.cloudfoundry.org/locket"
 	"code.cloudfoundry.org/route-emitter/cmd/route-emitter/config"
 	"code.cloudfoundry.org/route-emitter/diegonats"
-	"code.cloudfoundry.org/route-emitter/diegonats/gnatsdrunner"
+	"code.cloudfoundry.org/route-emitter/diegonats/natsserverrunner"
 	"code.cloudfoundry.org/tlsconfig"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -54,7 +54,7 @@ var (
 	routingAPIPath string
 
 	consulRunner         *consulrunner.ClusterRunner
-	gnatsdRunner         ifrit.Process
+	natsServerProcess    ifrit.Process
 	natsClient           diegonats.NATSClient
 	syncInterval         time.Duration
 	consulClusterAddress string
@@ -244,7 +244,7 @@ var _ = BeforeEach(func() {
 
 	startBBS()
 
-	gnatsdRunner, natsClient = gnatsdrunner.StartGnatsd(int(natsPort))
+	natsServerProcess, natsClient = natsserverrunner.StartNatsServer(int(natsPort))
 
 	healthCheckPort, err := portAllocator.ClaimPorts(1)
 	Expect(err).NotTo(HaveOccurred())
@@ -278,8 +278,8 @@ var _ = JustBeforeEach(func() {
 var _ = AfterEach(func() {
 	stopBBS()
 	consulRunner.Stop()
-	gnatsdRunner.Signal(os.Kill)
-	Eventually(gnatsdRunner.Wait(), 5).Should(Receive())
+	natsServerProcess.Signal(os.Kill)
+	Eventually(natsServerProcess.Wait(), 5).Should(Receive())
 
 	testIngressServer.Stop()
 	close(signalMetricsChan)
