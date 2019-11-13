@@ -49,6 +49,10 @@ type RouteEmitterConfig struct {
 	NATSAddresses                      string                `json:"nats_addresses,omitempty"`
 	NATSUsername                       string                `json:"nats_username,omitempty"`
 	NATSPassword                       string                `json:"nats_password,omitempty"`
+	NATSTLSEnabled                     bool                  `json:"nats_tls_enabled"`
+	NATSCACertFile                     string                `json:"nats_ca_cert_file"`
+	NATSClientCertFile                 string                `json:"nats_client_cert_file"`
+	NATSClientKeyFile                  string                `json:"nats_client_key_file"`
 	RouteEmittingWorkers               int                   `json:"route_emitting_workers,omitempty"`
 	SyncInterval                       durationjson.Duration `json:"sync_interval,omitempty"`
 	TCPRouteTTL                        durationjson.Duration `json:"tcp_route_ttl,omitempty"`

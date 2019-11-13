@@ -1,6 +1,7 @@
 package diegonats
 
 import (
+	"crypto/tls"
 	"time"
 
 	"github.com/nats-io/nats.go"
@@ -24,11 +25,19 @@ type NATSClient interface {
 type natsClient struct {
 	*nats.Conn
 	pingInterval time.Duration
+	tlsConfig    *tls.Config
 }
 
 func NewClient() NATSClient {
 	return &natsClient{
 		pingInterval: nats.DefaultPingInterval,
+	}
+}
+
+func NewClientWithTLSConfig(tlsConfig *tls.Config) NATSClient {
+	return &natsClient{
+		pingInterval: nats.DefaultPingInterval,
+		tlsConfig:    tlsConfig,
 	}
 }
 
@@ -42,6 +51,7 @@ func (nc *natsClient) Connect(urls []string) (chan struct{}, error) {
 	options.ReconnectWait = 500 * time.Millisecond
 	options.MaxReconnect = -1
 	options.PingInterval = nc.pingInterval
+	options.TLSConfig = nc.tlsConfig
 
 	closedChan := make(chan struct{})
 	options.ClosedCB = func(*nats.Conn) {

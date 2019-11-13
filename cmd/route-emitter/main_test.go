@@ -4,6 +4,7 @@ import (
 	"context"
 	"math"
 	"path"
+	"path/filepath"
 
 	"code.cloudfoundry.org/bbs"
 	"code.cloudfoundry.org/clock"
@@ -36,9 +37,10 @@ import (
 	"code.cloudfoundry.org/locket"
 	"code.cloudfoundry.org/route-emitter/cmd/route-emitter/config"
 	"code.cloudfoundry.org/route-emitter/cmd/route-emitter/runners"
+	"code.cloudfoundry.org/route-emitter/diegonats/natsserverrunner"
 	"code.cloudfoundry.org/route-emitter/routingtable"
 	. "code.cloudfoundry.org/route-emitter/routingtable/matchers"
-	"code.cloudfoundry.org/routing-api"
+	routing_api "code.cloudfoundry.org/routing-api"
 	routinapiconfig "code.cloudfoundry.org/routing-api/config"
 	apimodels "code.cloudfoundry.org/routing-api/models"
 	"code.cloudfoundry.org/routing-info/cfroutes"
@@ -1239,13 +1241,15 @@ var _ = Describe("Route Emitter", func() {
 
 	Context("when only the nats emitter is running", func() {
 		var (
-			emitter ifrit.Process
-			runner  *ginkgomon.Runner
-			cellID  string
+			emitter                   ifrit.Process
+			runner                    *ginkgomon.Runner
+			cellID                    string
+			startEmitterShouldSucceed bool
 		)
 
 		BeforeEach(func() {
 			cellID = ""
+			startEmitterShouldSucceed = true
 		})
 
 		JustBeforeEach(func() {
@@ -1255,12 +1259,125 @@ var _ = Describe("Route Emitter", func() {
 			})
 			runner = createEmitterRunner("emitter1", cellID, cfgs...)
 			runner.StartCheck = "emitter1.started"
-			emitter = ginkgomon.Invoke(runner)
+			if startEmitterShouldSucceed {
+				emitter = ginkgomon.Invoke(runner)
+			} else {
+				emitter = ifrit.Background(runner)
+			}
 		})
 
 		AfterEach(func() {
 			By("killing the route-emitter")
 			ginkgomon.Kill(emitter, emitterInterruptTimeout)
+		})
+
+		Context("when configured to communicate with nats over TLS", func() {
+			var certDepot string
+
+			BeforeEach(func() {
+				natsServerProcess.Signal(os.Kill)
+				Eventually(natsServerProcess.Wait(), 5).Should(Receive())
+				natsClient.Close()
+
+				var err error
+				certDepot, err = ioutil.TempDir("", "")
+				Expect(err).NotTo(HaveOccurred())
+				certAuthority, err := certauthority.NewCertAuthority(certDepot, "nats")
+				Expect(err).NotTo(HaveOccurred())
+				_, caFile := certAuthority.CAAndKey()
+				keyFile, certFile, err := certAuthority.GenerateSelfSignedCertAndKey("nats", []string{}, false)
+				Expect(err).NotTo(HaveOccurred())
+
+				natsServerProcess, natsClient = natsserverrunner.StartNatsServerWithTLS(int(natsPort), caFile, certFile, keyFile)
+				registeredRoutes = listenForRoutes("router.register")
+
+				cfgs = append(cfgs, func(cfg *config.RouteEmitterConfig) {
+					cfg.NATSTLSEnabled = true
+					cfg.NATSCACertFile = caFile
+					cfg.NATSClientCertFile = certFile
+					cfg.NATSClientKeyFile = keyFile
+				})
+			})
+
+			AfterEach(func() {
+				Expect(os.RemoveAll(certDepot)).To(Succeed())
+			})
+
+			It("enables the healthcheck server", func() {
+				client := http.Client{
+					Timeout: time.Second,
+				}
+				Eventually(func() error {
+					resp, err := client.Get("http://" + healthCheckAddress)
+					if err != nil {
+						return err
+					}
+					if resp.StatusCode != http.StatusOK {
+						return errors.New("received a non-200 status code")
+					}
+					return nil
+				}, 6*time.Second).ShouldNot(HaveOccurred(), "healthcheck server didn't start")
+			})
+
+			It("emits routes", func() {
+				err := bbsClient.DesireLRP(logger, desiredLRP)
+				Expect(err).NotTo(HaveOccurred())
+				err = bbsClient.StartActualLRP(logger, &lrpKey, &instanceKey, &netInfo)
+				Expect(err).NotTo(HaveOccurred())
+				var msg1, msg2 routingtable.RegistryMessage
+				Eventually(registeredRoutes).Should(Receive(&msg1))
+				Eventually(registeredRoutes).Should(Receive(&msg2))
+
+				Expect([]routingtable.RegistryMessage{msg1, msg2}).To(ConsistOf(
+					MatchRegistryMessage(routingtable.RegistryMessage{
+						URIs:                 []string{hostnames[1]},
+						Host:                 netInfo.Address,
+						Port:                 netInfo.Ports[0].HostPort,
+						App:                  desiredLRP.LogGuid,
+						PrivateInstanceId:    instanceKey.InstanceGuid,
+						ServerCertDomainSAN:  instanceKey.InstanceGuid,
+						PrivateInstanceIndex: "0",
+						RouteServiceUrl:      "https://awesome.com",
+						Tags:                 map[string]string{"component": "route-emitter"},
+					}),
+					MatchRegistryMessage(routingtable.RegistryMessage{
+						URIs:                 []string{hostnames[0]},
+						Host:                 netInfo.Address,
+						Port:                 netInfo.Ports[0].HostPort,
+						App:                  desiredLRP.LogGuid,
+						ServerCertDomainSAN:  instanceKey.InstanceGuid,
+						PrivateInstanceId:    instanceKey.InstanceGuid,
+						PrivateInstanceIndex: "0",
+						RouteServiceUrl:      "https://awesome.com",
+						Tags:                 map[string]string{"component": "route-emitter"},
+					}),
+				))
+			})
+
+			Context("when configured with invalid certs", func() {
+				BeforeEach(func() {
+					startEmitterShouldSucceed = false
+					invalidCAFile := filepath.Join(certDepot, "invalid-ca.crt")
+					Expect(ioutil.WriteFile(invalidCAFile, []byte("invalid-ca-content"), 0666)).To(Succeed())
+					invalidCertFile := filepath.Join(certDepot, "invalid-cert.crt")
+					Expect(ioutil.WriteFile(invalidCertFile, []byte("invalid-cert-content"), 0666)).To(Succeed())
+					invalidKeyFile := filepath.Join(certDepot, "invalid-key.crt")
+					Expect(ioutil.WriteFile(invalidKeyFile, []byte("invalid-key-content"), 0666)).To(Succeed())
+
+					cfgs = append(cfgs, func(cfg *config.RouteEmitterConfig) {
+						cfg.NATSCACertFile = invalidCAFile
+						cfg.NATSClientCertFile = invalidCertFile
+						cfg.NATSClientKeyFile = invalidKeyFile
+					})
+				})
+
+				It("logs an error and exits", func() {
+					var err error
+					Eventually(emitter.Wait()).Should(Receive(&err))
+					Expect(err).To(HaveOccurred())
+					Expect(runner.Buffer()).To(gbytes.Say("failed-to-initialize-nats-client"))
+				})
+			})
 		})
 
 		It("enables the healthcheck server", func() {

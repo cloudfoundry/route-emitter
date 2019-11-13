@@ -43,6 +43,10 @@ func startNATS() {
 	natsServerProcess = ginkgomon.Invoke(natsserverrunner.NewNatsServerTestRunner(int(natsPort)))
 }
 
+func startNATSWithTLS(caFile, certFile, keyFile string) {
+	natsServerProcess = ginkgomon.Invoke(natsserverrunner.NewNatsServerWithTLSTestRunner(int(natsPort), caFile, certFile, keyFile))
+}
+
 func stopNATS() {
 	ginkgomon.Kill(natsServerProcess)
 }

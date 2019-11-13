@@ -32,12 +32,12 @@ import (
 	"code.cloudfoundry.org/route-emitter/syncer"
 	"code.cloudfoundry.org/route-emitter/unregistration"
 	"code.cloudfoundry.org/route-emitter/watcher"
-	"code.cloudfoundry.org/routing-api"
+	routing_api "code.cloudfoundry.org/routing-api"
 	"code.cloudfoundry.org/tlsconfig"
 	uaaclient "code.cloudfoundry.org/uaa-go-client"
 	uaaconfig "code.cloudfoundry.org/uaa-go-client/config"
 	"code.cloudfoundry.org/workpool"
-	"github.com/nu7hatch/gouuid"
+	uuid "github.com/nu7hatch/gouuid"
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/ifrit/grouper"
 	"github.com/tedsuo/ifrit/http_server"
@@ -64,11 +64,12 @@ func main() {
 	}
 
 	logger, reconfigurableSink := lagerflags.NewFromConfig(cfg.ConsulSessionName, cfg.LagerConfig)
-	natsClient := diegonats.NewClient()
 
-	natsPingDuration := 20 * time.Second
-	logger.Info("setting-nats-ping-interval", lager.Data{"duration-in-seconds": natsPingDuration.Seconds()})
-	natsClient.SetPingInterval(natsPingDuration)
+	natsClient, err := initializeNATSClient(logger, cfg.NATSTLSEnabled, cfg.NATSCACertFile, cfg.NATSClientCertFile, cfg.NATSClientKeyFile)
+	if err != nil {
+		logger.Error("failed-to-initialize-nats-client", err)
+		os.Exit(1)
+	}
 
 	clock := clock.NewClock()
 
@@ -405,4 +406,28 @@ func initializeBBSClient(
 		logger.Fatal("Failed to configure secure BBS client", err)
 	}
 	return bbsClient
+}
+
+func initializeNATSClient(logger lager.Logger, tlsEnabled bool, caFile, certFile, keyFile string) (diegonats.NATSClient, error) {
+	var natsClient diegonats.NATSClient
+	if tlsEnabled {
+		tlsConfig, err := tlsconfig.Build(
+			tlsconfig.WithInternalServiceDefaults(),
+			tlsconfig.WithIdentityFromFile(certFile, keyFile),
+		).Client(
+			tlsconfig.WithAuthorityFromFile(caFile),
+		)
+		if err != nil {
+			return nil, err
+		}
+		natsClient = diegonats.NewClientWithTLSConfig(tlsConfig)
+	} else {
+		natsClient = diegonats.NewClient()
+	}
+
+	natsPingDuration := 20 * time.Second
+	logger.Info("setting-nats-ping-interval", lager.Data{"duration-in-seconds": natsPingDuration.Seconds()})
+	natsClient.SetPingInterval(natsPingDuration)
+
+	return natsClient, nil
 }
