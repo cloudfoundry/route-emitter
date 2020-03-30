@@ -13,7 +13,7 @@ type RegistryMessage struct {
 	TlsPort              uint32            `json:"tls_port,omitempty"`
 	URIs                 []string          `json:"uris"`
 	App                  string            `json:"app,omitempty" hash:"ignore"`
-	RouteServiceUrl      string            `json:"route_service_url,omitempty"`
+	RouteServiceUrl      string            `json:"route_service_url,omitempty" hash:"ignore"`
 	PrivateInstanceId    string            `json:"private_instance_id,omitempty" hash:"ignore"`
 	PrivateInstanceIndex string            `json:"private_instance_index,omitempty" hash:"ignore"`
 	ServerCertDomainSAN  string            `json:"server_cert_domain_san,omitempty" hash:"ignore"`

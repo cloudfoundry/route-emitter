@@ -73,6 +73,7 @@ var _ = Describe("Cache", func() {
 			registryMessage2.ServerCertDomainSAN = "some-unique-cert-domain-san"
 			registryMessage2.IsolationSegment = "some-unique-isolation-segment"
 			registryMessage2.EndpointUpdatedAtNs = 999
+			registryMessage2.RouteServiceUrl = "some-unique-route-service-url"
 			registryMessage2.Tags = map[string]string{"foo": "some-unique-tag"}
 
 			err := cache.Add([]routingtable.RegistryMessage{
@@ -114,6 +115,7 @@ var _ = Describe("Cache", func() {
 			registryMessage2.ServerCertDomainSAN = "some-unique-cert-domain-san"
 			registryMessage2.IsolationSegment = "some-unique-isolation-segment"
 			registryMessage2.EndpointUpdatedAtNs = 999
+			registryMessage2.RouteServiceUrl = "some-unique-route-service-url"
 			registryMessage2.Tags = map[string]string{"foo": "some-unique-tag"}
 
 			err := cache.Add([]routingtable.RegistryMessage{
