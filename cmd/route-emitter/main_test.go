@@ -2530,9 +2530,7 @@ var _ = Describe("Route Emitter", func() {
 					})))
 					done <- struct{}{}
 
-					Consistently(unregisteredRoutes, 3*msgReceiveTimeout).ShouldNot(Receive(
-						MatchRegistryMessage(expectedUnregistrationForRoute1),
-					))
+					Consistently(unregisteredRoutes, 3*msgReceiveTimeout).ShouldNot(Receive())
 				})
 			})
 		})
