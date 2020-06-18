@@ -2502,11 +2502,13 @@ var _ = Describe("Route Emitter", func() {
 
 					// keep reading unregistration messages until route-1 is re-registered
 					done := make(chan struct{})
+					stopReading:= make(chan struct{})
 					go func() {
 						for {
 							select {
 							case <-unregisteredRoutes:
-							case <-done:
+							case <-stopReading:
+								done <- struct{}{}
 								return
 							}
 						}
@@ -2528,7 +2530,8 @@ var _ = Describe("Route Emitter", func() {
 							"component": "route-emitter",
 						},
 					})))
-					done <- struct{}{}
+					stopReading <- struct{}{}
+					<- done
 
 					Consistently(unregisteredRoutes, 3*msgReceiveTimeout).ShouldNot(Receive())
 				})
