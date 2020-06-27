@@ -1075,6 +1075,65 @@ var _ = Describe("Handler", func() {
 				Expect(natsEmitter.EmitCallCount()).Should(Equal(1))
 			})
 
+			Context("swapping the new route table", func() {
+				var (
+					registrationMessages, unregistrationMessages []routingtable.RegistryMessage
+					route                                        = routingtable.Route{
+						Hostname: "test-hostname",
+						LogGUID:  "test-guid",
+					}
+				)
+
+				JustBeforeEach(func() {
+					fakeTable.SwapStub = func(l lager.Logger, t routingtable.RoutingTable, d models.DomainSet) (routingtable.TCPRouteMappings, routingtable.MessagesToEmit) {
+						return emptyTCPRouteMappings, routingtable.MessagesToEmit{
+							RegistrationMessages:   registrationMessages,
+							UnregistrationMessages: unregistrationMessages,
+						}
+					}
+				})
+
+				Context("Swapping the route tables removes routes", func() {
+					BeforeEach(func() {
+						unregistrationMessages = []routingtable.RegistryMessage{
+							routingtable.RegistryMessageFor(endpoint1, route, true),
+						}
+					})
+
+					It("removes unregistration messages for new routes", func() {
+						routeHandler.Sync(logger, desiredLRPs, actualLRPs, domains, nil)
+						Eventually(fakeUnregistrationCache.RemoveCallCount).Should(Equal(1))
+						Expect(fakeUnregistrationCache.RemoveArgsForCall(0)).Should(BeEmpty())
+					})
+
+					It("add unregistration messages for removed routes", func() {
+						routeHandler.Sync(logger, desiredLRPs, actualLRPs, domains, nil)
+						Eventually(fakeUnregistrationCache.AddCallCount).Should(Equal(1))
+						Expect(fakeUnregistrationCache.AddArgsForCall(0)).Should(HaveLen(1))
+					})
+				})
+
+				Context("Swapping the route tables adds routes", func() {
+					BeforeEach(func() {
+						registrationMessages = []routingtable.RegistryMessage{
+							routingtable.RegistryMessageFor(endpoint1, route, true),
+						}
+					})
+
+					It("removes unregistration messages for new routes from the unregistration cache", func() {
+						routeHandler.Sync(logger, desiredLRPs, actualLRPs, domains, nil)
+						Eventually(fakeUnregistrationCache.RemoveCallCount).Should(Equal(1))
+						Expect(fakeUnregistrationCache.RemoveArgsForCall(0)).Should(HaveLen(1))
+					})
+
+					It("add no unregistration messages to the unregistration cache", func() {
+						routeHandler.Sync(logger, desiredLRPs, actualLRPs, domains, nil)
+						Eventually(fakeUnregistrationCache.AddCallCount).Should(Equal(1))
+						Expect(fakeUnregistrationCache.AddArgsForCall(0)).Should(BeEmpty())
+					})
+				})
+			})
+
 			Context("when emitting metrics in localMode", func() {
 				BeforeEach(func() {
 					routeHandler = routehandlers.NewHandler(fakeTable, natsEmitter, nil, true, fakeMetronClient, fakeUnregistrationCache)

@@ -178,6 +178,14 @@ func (handler *Handler) Sync(
 		"num-internal-registration-messages":   len(messages.InternalRegistrationMessages),
 		"num-internal-unregistration-messages": len(messages.InternalUnregistrationMessages),
 	})
+	err := handler.unregistrationCache.Add(messages.UnregistrationMessages)
+	if err != nil {
+		logger.Error("failed-to-add-messages-to-cache", err, lager.Data{"messages": messages.UnregistrationMessages})
+	}
+	err = handler.unregistrationCache.Remove(messages.RegistrationMessages)
+	if err != nil {
+		logger.Error("failed-to-remove-messages-from-cache", err, lager.Data{"messages": messages.RegistrationMessages})
+	}
 	handler.emitMessages(logger, messages, routeMappings)
 	logger.Debug("done-emitting-messages", lager.Data{
 		"num-registration-messages":            len(messages.RegistrationMessages),
