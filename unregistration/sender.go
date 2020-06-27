@@ -53,6 +53,7 @@ func (s Sender) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
 
 		case <-sendTicker.C():
 			messages := s.cache.List()
+			time.Sleep(time.Second)
 			if len(messages) > 0 {
 				s.logger.Debug("messages", lager.Data{"cache": messages})
 			}

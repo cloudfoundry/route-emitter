@@ -2480,7 +2480,7 @@ var _ = Describe("Route Emitter", func() {
 					newDesiredLRP.LogGuid = "some-other-guid"
 				})
 
-				It("sends unregistration messages unless there is re-registration", func() {
+				FIt("sends unregistration messages unless there is re-registration", func() {
 					bbsClient.UpsertDomain(logger, domain, 2*time.Second)
 
 					var receivedMessage routingtable.RegistryMessage
