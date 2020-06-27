@@ -144,7 +144,7 @@ func (handler *Handler) Sync(
 	logger.Debug("starting")
 	defer logger.Debug("completed")
 
-	nullLogger := lager.NewLogger("") // ignore log messsages from the routing table
+	nullLogger := lager.NewLogger("null-logger") // ignore log messsages from the routing table
 	newTable := routingtable.NewRoutingTable(false, handler.metronClient)
 
 	for _, lrp := range desired {
