@@ -1095,6 +1095,7 @@ var _ = Describe("Handler", func() {
 
 				Context("Swapping the route tables removes routes", func() {
 					BeforeEach(func() {
+						registrationMessages = nil
 						unregistrationMessages = []routingtable.RegistryMessage{
 							routingtable.RegistryMessageFor(endpoint1, route, true),
 						}
@@ -1118,6 +1119,7 @@ var _ = Describe("Handler", func() {
 						registrationMessages = []routingtable.RegistryMessage{
 							routingtable.RegistryMessageFor(endpoint1, route, true),
 						}
+						unregistrationMessages = nil
 					})
 
 					It("removes unregistration messages for new routes from the unregistration cache", func() {
