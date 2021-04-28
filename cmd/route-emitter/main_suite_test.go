@@ -284,7 +284,7 @@ var _ = AfterEach(func() {
 	testIngressServer.Stop()
 	close(signalMetricsChan)
 
-	ginkgomon.Kill(sqlProcess, 5*time.Second)
+	ginkgomon.Kill(sqlProcess, 10*time.Second)
 })
 
 var _ = SynchronizedAfterSuite(func() {
