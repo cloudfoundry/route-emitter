@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	mfakes "code.cloudfoundry.org/diego-logging-client/testhelpers"
-	loggregator "code.cloudfoundry.org/go-loggregator"
+	loggregator "code.cloudfoundry.org/go-loggregator/v8"
 	"code.cloudfoundry.org/lager"
 	ufakes "code.cloudfoundry.org/route-emitter/unregistration/fakes"
 
