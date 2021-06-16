@@ -170,7 +170,13 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 		AuctioneerRequireTLS:            false,
 		RepClientSessionCacheSize:       0,
 		RepRequireTLS:                   false,
-		LagerConfig:                     lagerflags.DefaultLagerConfig(),
+		LagerConfig: lagerflags.LagerConfig{
+			LogLevel:            string(lagerflags.DEBUG),
+			RedactSecrets:       false,
+			RedactPatterns:      nil,
+			TimeFormat:          lagerflags.FormatRFC3339,
+			MaxDataStringLength: 0,
+		},
 
 		ListenAddress:            bbsAddress,
 		AdvertiseURL:             bbsURL.String(),
