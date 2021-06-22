@@ -376,6 +376,13 @@ var _ = Describe("Route Emitter", func() {
 			cfg.RoutingAPI.ClientKeyFile = routingAPIClientKey
 			cfg.UnregistrationInterval = durationjson.Duration(10 * time.Millisecond)
 			cfg.UnregistrationSendCount = unregistrationSendCount
+			cfg.LagerConfig = lagerflags.LagerConfig{
+				LogLevel:            string(lagerflags.DEBUG),
+				RedactSecrets:       false,
+				RedactPatterns:      nil,
+				TimeFormat:          lagerflags.FormatRFC3339,
+				MaxDataStringLength: 0,
+			}
 		})
 	})
 
@@ -709,7 +716,7 @@ var _ = Describe("Route Emitter", func() {
 							Eventually(runner).Should(gbytes.Say("caching-event"))
 
 							By("unblocking the sync loop")
-							Eventually(blkChannel).Should(BeSent(struct{}{}))
+							close(blkChannel)
 
 							expectedTcpRouteMapping = apimodels.NewTcpRouteMapping(routerGUID, 5222, "some-ip", 5222, 120)
 
