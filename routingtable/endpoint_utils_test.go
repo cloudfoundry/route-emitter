@@ -10,6 +10,46 @@ import (
 )
 
 var _ = Describe("LRP Utils", func() {
+	Describe("Hash", func() {
+		var (
+			routeA routingtable.Route
+			routeB routingtable.Route
+			routeC routingtable.Route
+		)
+		BeforeEach(func() {
+			routeA = routingtable.Route{
+				Hostname:         "routeA.com",
+				RouteServiceUrl:  "routeA-service-url",
+				IsolationSegment: "routeA-iso-seg",
+				LogGUID:          "routeA-log-guid",
+				Protocol:         "protocolA",
+			}
+			routeB = routingtable.Route{
+				Hostname:         "routeA.com",
+				RouteServiceUrl:  "routeA-service-url",
+				IsolationSegment: "routeA-iso-seg",
+				LogGUID:          "routeA-log-guid",
+				Protocol:         "protocolA",
+			}
+			routeC = routingtable.Route{
+				Hostname:         "routeA.com",
+				RouteServiceUrl:  "routeA-service-url",
+				IsolationSegment: "routeC-iso-seg",
+				LogGUID:          "routeA-log-guid",
+				Protocol:         "protocolC",
+			}
+		})
+
+		It("uniquely identifies a route", func() {
+			hashA := routeA.Hash()
+			hashB := routeB.Hash()
+			hashC := routeC.Hash()
+
+			Expect(hashA).To(Equal(hashB))
+			Expect(hashA).NotTo(Equal(hashC))
+		})
+	})
+
 	Describe("NewEndpointsFromActual", func() {
 		Context("when actual is not evacuating", func() {
 			It("builds a map of container port to endpoint", func() {
