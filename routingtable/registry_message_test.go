@@ -108,7 +108,7 @@ var _ = Describe("RegistryMessage", func() {
 			}`
 			})
 
-			It("correctly marshals the TLS port", func() {
+			It("correctly marshals the protocol", func() {
 				message := routingtable.RegistryMessage{}
 
 				err := json.Unmarshal([]byte(expectedJSON), &message)
