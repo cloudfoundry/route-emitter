@@ -12,6 +12,7 @@ type RegistryMessage struct {
 	Port                 uint32            `json:"port"`
 	TlsPort              uint32            `json:"tls_port,omitempty"`
 	URIs                 []string          `json:"uris"`
+	Protocol             string            `json:"protocol,omitempty"`
 	App                  string            `json:"app,omitempty" hash:"ignore"`
 	RouteServiceUrl      string            `json:"route_service_url,omitempty" hash:"ignore"`
 	PrivateInstanceId    string            `json:"private_instance_id,omitempty" hash:"ignore"`
@@ -37,6 +38,7 @@ func RegistryMessageFor(endpoint Endpoint, route Route, emitEndpointUpdatedAt bo
 		Host:                endpoint.Host,
 		Port:                endpoint.Port,
 		TlsPort:             endpoint.TlsProxyPort,
+		Protocol:            route.Protocol,
 		App:                 route.LogGUID,
 		IsolationSegment:    route.IsolationSegment,
 		Tags:                populateMetricTags(route.MetricTags, endpoint),
@@ -64,6 +66,7 @@ func InternalAddressRegistryMessageFor(endpoint Endpoint, route Route, emitEndpo
 		Host:             endpoint.ContainerIP,
 		Port:             endpoint.ContainerPort,
 		TlsPort:          endpoint.ContainerTlsProxyPort,
+		Protocol:         route.Protocol,
 		App:              route.LogGUID,
 		IsolationSegment: route.IsolationSegment,
 		Tags:             populateMetricTags(route.MetricTags, endpoint),

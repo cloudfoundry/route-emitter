@@ -253,6 +253,48 @@ var _ = Describe("RoutingTable", func() {
 			table.AddEndpoint(logger, actualLRP)
 		})
 
+		Context("when a http2 route is added", func() {
+			var createDesiredLRPWithProtocol = func(
+				processGuid string, instances int32, port uint32, logGuid, rsURL string,
+				currentTag models.ModificationTag, runInfo models.DesiredLRPRunInfo, protocol string, hostnames ...string,
+			) *models.DesiredLRP {
+				routingInfo := cfroutes.CFRoutes{
+					{
+						Hostnames:       hostnames,
+						Port:            port,
+						RouteServiceUrl: rsURL,
+						Protocol:        protocol,
+					},
+				}.RoutingInfo()
+
+				routes := models.Routes{}
+
+				for key, message := range routingInfo {
+					routes[key] = message
+				}
+
+				return createDesiredLRPWithRoutes(
+					processGuid, instances, routes, logGuid, currentTag, runInfo,
+				)
+			}
+
+			BeforeEach(func() {
+				endpoint1.PreferredAddress = 0
+			})
+
+			JustBeforeEach(func() {
+				afterDesiredLRP := createDesiredLRPWithProtocol(key.ProcessGUID, instances, key.ContainerPort, logGuid, "", *newerTag, runInfo, "http2", "grpc.example.com")
+				_, messagesToEmit = table.SetRoutes(logger, beforeDesiredLRP, afterDesiredLRP)
+			})
+
+			It("emits a registration", func() {
+				expectedRegistrationMessage := []routingtable.RegistryMessage{
+					routingtable.RegistryMessageFor(endpoint1, routingtable.Route{Hostname: "grpc.example.com", LogGUID: logGuid, Protocol: "http2"}, false),
+				}
+				Expect(messagesToEmit.RegistrationMessages).To(Equal(expectedRegistrationMessage))
+			})
+		})
+
 		Context("when the route is removed", func() {
 			JustBeforeEach(func() {
 				afterDesiredLRP := createDesiredLRP(key.ProcessGUID, instances, key.ContainerPort, logGuid, "", *newerTag, runInfo, "")

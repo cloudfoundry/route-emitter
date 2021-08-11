@@ -88,6 +88,34 @@ var _ = Describe("RegistryMessage", func() {
 				Expect(message).To(Equal(expectedMessage))
 			})
 		})
+
+		Context("when protocol is set", func() {
+			BeforeEach(func() {
+				expectedMessage.Protocol = "http2"
+
+				expectedJSON = `{
+				"host": "1.1.1.1",
+				"port": 61001,
+				"protocol": "http2",
+				"uris": ["host-1.example.com"],
+				"app" : "app-guid",
+				"private_instance_id": "instance-guid",
+				"private_instance_index": "0",
+				"server_cert_domain_san": "instance-guid",
+				"route_service_url": "https://hello.com",
+				"endpoint_updated_at_ns": 1000,
+				"tags": {"component":"route-emitter", "doo": "0", "foo": "bar", "goo": "instance-guid"}
+			}`
+			})
+
+			It("correctly marshals the TLS port", func() {
+				message := routingtable.RegistryMessage{}
+
+				err := json.Unmarshal([]byte(expectedJSON), &message)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(message).To(Equal(expectedMessage))
+			})
+		})
 	})
 
 	Describe("RegistryMessageFor", func() {

@@ -443,6 +443,7 @@ func httpRoutesFrom(lrp *models.DesiredLRP) map[RoutingKey][]routeMapping {
 				RouteServiceUrl:  route.RouteServiceUrl,
 				IsolationSegment: route.IsolationSegment,
 				MetricTags:       lrp.MetricTags,
+				Protocol:         route.Protocol,
 			}
 			routes = append(routes, route)
 		}

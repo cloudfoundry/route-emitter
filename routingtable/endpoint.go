@@ -126,6 +126,7 @@ type Route struct {
 	RouteServiceUrl  string
 	IsolationSegment string
 	LogGUID          string
+	Protocol         string
 	MetricTags       map[string]*models.MetricTagValue
 }
 
@@ -134,6 +135,7 @@ type routeHash struct {
 	RouteServiceUrl  string
 	IsolationSegment string
 	LogGUID          string
+	Protocol         string
 }
 
 // route hash is used to find route differences
@@ -144,6 +146,7 @@ func (r Route) Hash() interface{} {
 		RouteServiceUrl:  r.RouteServiceUrl,
 		IsolationSegment: r.IsolationSegment,
 		LogGUID:          r.LogGUID,
+		Protocol:         r.Protocol,
 	}
 }
 
