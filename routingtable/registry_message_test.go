@@ -18,7 +18,6 @@ var _ = Describe("RegistryMessage", func() {
 			Host:                 "1.1.1.1",
 			Port:                 61001,
 			URIs:                 []string{"host-1.example.com"},
-			Protocol:             "http2",
 			App:                  "app-guid",
 			ServerCertDomainSAN:  "instance-guid",
 			PrivateInstanceId:    "instance-guid",
@@ -37,7 +36,6 @@ var _ = Describe("RegistryMessage", func() {
 				"host": "1.1.1.1",
 				"port": 61001,
 				"uris": ["host-1.example.com"],
-				"protocol": "http2",
 				"app" : "app-guid",
 				"private_instance_id": "instance-guid",
 				"server_cert_domain_san": "instance-guid",
@@ -72,7 +70,34 @@ var _ = Describe("RegistryMessage", func() {
 				"port": 61001,
 				"tls_port": 61007,
 				"uris": ["host-1.example.com"],
+				"app" : "app-guid",
+				"private_instance_id": "instance-guid",
+				"private_instance_index": "0",
+				"server_cert_domain_san": "instance-guid",
+				"route_service_url": "https://hello.com",
+				"endpoint_updated_at_ns": 1000,
+				"tags": {"component":"route-emitter", "doo": "0", "foo": "bar", "goo": "instance-guid"}
+			}`
+			})
+
+			It("correctly marshals the TLS port", func() {
+				message := routingtable.RegistryMessage{}
+
+				err := json.Unmarshal([]byte(expectedJSON), &message)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(message).To(Equal(expectedMessage))
+			})
+		})
+
+		Context("when protocol is set", func() {
+			BeforeEach(func() {
+				expectedMessage.Protocol = "http2"
+
+				expectedJSON = `{
+				"host": "1.1.1.1",
+				"port": 61001,
 				"protocol": "http2",
+				"uris": ["host-1.example.com"],
 				"app" : "app-guid",
 				"private_instance_id": "instance-guid",
 				"private_instance_index": "0",
@@ -111,7 +136,6 @@ var _ = Describe("RegistryMessage", func() {
 				Hostname:        "host-1.example.com",
 				LogGUID:         "app-guid",
 				RouteServiceUrl: "https://hello.com",
-				Protocol:        "http2",
 				MetricTags: map[string]*models.MetricTagValue{
 					"foo": &models.MetricTagValue{Static: "bar"},
 					"doo": &models.MetricTagValue{Dynamic: models.MetricTagDynamicValueIndex},
@@ -164,7 +188,6 @@ var _ = Describe("RegistryMessage", func() {
 				Host:                 "1.2.3.4",
 				Port:                 11,
 				URIs:                 []string{"host-1.example.com"},
-				Protocol:             "http2",
 				App:                  "app-guid",
 				PrivateInstanceId:    "instance-guid",
 				PrivateInstanceIndex: "0",
@@ -187,7 +210,6 @@ var _ = Describe("RegistryMessage", func() {
 				Hostname:        "host-1.example.com",
 				LogGUID:         "app-guid",
 				RouteServiceUrl: "https://hello.com",
-				Protocol:        "http2",
 				MetricTags: map[string]*models.MetricTagValue{
 					"foo": &models.MetricTagValue{Static: "bar"},
 					"doo": &models.MetricTagValue{Dynamic: models.MetricTagDynamicValueIndex},
