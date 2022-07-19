@@ -24,7 +24,7 @@ var (
 )
 
 var _ = BeforeSuite(func() {
-	node := GinkgoParallelNode()
+	node := GinkgoParallelProcess()
 	startPort := 1050 * node
 	portRange := 1000
 	endPort := startPort + portRange

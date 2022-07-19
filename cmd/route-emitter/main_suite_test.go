@@ -107,10 +107,10 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 
 	emitterPath = string(binaries["emitter"])
 
-	dbName := fmt.Sprintf("diego_%d", GinkgoParallelNode())
+	dbName := fmt.Sprintf("diego_%d", GinkgoParallelProcess())
 	sqlRunner = test_helpers.NewSQLRunner(dbName)
 
-	node := GinkgoParallelNode()
+	node := GinkgoParallelProcess()
 	startPort := 1050 * node
 	portRange := 1000
 	endPort := startPort + portRange
