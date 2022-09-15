@@ -31,7 +31,6 @@ var _ = Describe("NatsClient", func() {
 				_, err := natsClient.Connect([]string{"nats://cats:bats@127.0.0.1:4223"})
 
 				Expect(err).Should(HaveOccurred())
-				Expect(err.Error()).To(Equal("nats: no servers available for connection"))
 			})
 		})
 	}

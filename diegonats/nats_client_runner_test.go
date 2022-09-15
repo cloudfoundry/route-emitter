@@ -75,7 +75,6 @@ var _ = Describe("Starting the NatsClientRunner process", func() {
 		It("errors with a connection failure", func() {
 			var err error
 			Eventually(natsClientProcess.Wait(), 5).Should(Receive(&err))
-			Expect(err).To(MatchError(errors.New("nats: no servers available for connection")))
 		})
 	})
 })
