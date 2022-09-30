@@ -13,7 +13,6 @@ import (
 
 	"code.cloudfoundry.org/bbs"
 	"code.cloudfoundry.org/clock"
-	"code.cloudfoundry.org/consuladapter"
 	"code.cloudfoundry.org/debugserver"
 	loggingclient "code.cloudfoundry.org/diego-logging-client"
 	"code.cloudfoundry.org/go-loggregator/v8/runtimeemitter"
@@ -23,10 +22,7 @@ import (
 	"code.cloudfoundry.org/locket/jointlock"
 	"code.cloudfoundry.org/locket/lock"
 	locketmodels "code.cloudfoundry.org/locket/models"
-	route_emitter "code.cloudfoundry.org/route-emitter"
 	"code.cloudfoundry.org/route-emitter/cmd/route-emitter/config"
-	"code.cloudfoundry.org/route-emitter/consuldownchecker"
-	"code.cloudfoundry.org/route-emitter/consuldownmodenotifier"
 	"code.cloudfoundry.org/route-emitter/diegonats"
 	"code.cloudfoundry.org/route-emitter/emitter"
 	"code.cloudfoundry.org/route-emitter/routehandlers"
@@ -39,7 +35,6 @@ import (
 	"code.cloudfoundry.org/routing-api/uaaclient"
 	"code.cloudfoundry.org/tlsconfig"
 	"code.cloudfoundry.org/workpool"
-	uuid "github.com/nu7hatch/gouuid"
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/ifrit/grouper"
 	"github.com/tedsuo/ifrit/http_server"
@@ -65,7 +60,7 @@ func main() {
 		logger.Fatal("failed-to-parse-config", err)
 	}
 
-	logger, reconfigurableSink := lagerflags.NewFromConfig(cfg.ConsulSessionName, cfg.LagerConfig)
+	logger, reconfigurableSink := lagerflags.NewFromConfig(cfg.LocketSessionName, cfg.LagerConfig)
 
 	natsClient, err := initializeNATSClient(logger, cfg.NATSTLSEnabled, cfg.NATSCACertFile, cfg.NATSClientCertFile, cfg.NATSClientKeyFile)
 	if err != nil {
@@ -154,60 +149,32 @@ func main() {
 		{"unregistration", unregistrationSender},
 	}
 
-	lockMembers := []grouper.Member{}
-	if cfg.CellID == "" {
-		if cfg.ConsulEnabled {
-			consulClient := initializeConsulClient(logger, cfg.ConsulCluster)
-
-			lockMaintainer := initializeLockMaintainer(
-				logger,
-				consulClient,
-				cfg.ConsulSessionName,
-				time.Duration(cfg.LockTTL),
-				time.Duration(cfg.LockRetryInterval),
-				clock,
-				metronClient,
-			)
-
-			consulDownModeNotifier := consuldownmodenotifier.NewConsulDownModeNotifier(
-				logger,
-				0,
-				clock,
-				time.Duration(cfg.ConsulDownModeNotificationInterval),
-				metronClient,
-			)
-
-			// we are running in global mode
-			lockMembers = append(lockMembers, grouper.Member{"lock-maintainer", lockMaintainer})
-			lockMembers = append(lockMembers, grouper.Member{"consul-down-mode-notifier", consulDownModeNotifier})
+	if cfg.CellID == "" && cfg.LocketEnabled {
+		locketClient, err := locket.NewClient(logger, cfg.ClientLocketConfig)
+		if err != nil {
+			logger.Fatal("failed-to-create-locket-client", err)
 		}
 
-		if cfg.LocketEnabled {
-			locketClient, err := locket.NewClient(logger, cfg.ClientLocketConfig)
-			if err != nil {
-				logger.Fatal("failed-to-create-locket-client", err)
-			}
-
-			if cfg.UUID == "" {
-				logger.Fatal("invalid-uuid", errors.New("invalid-uuid-from-config"))
-			}
-
-			lockIdentifier := &locketmodels.Resource{
-				Key:      routeEmitterLockKey,
-				Owner:    cfg.UUID,
-				TypeCode: locketmodels.LOCK,
-				Type:     locketmodels.LockType,
-			}
-
-			lockMembers = append(lockMembers, grouper.Member{"sql-lock", lock.NewLockRunner(
-				logger,
-				locketClient,
-				lockIdentifier,
-				locket.DefaultSessionTTLInSeconds,
-				clock,
-				locket.SQLRetryInterval,
-			)})
+		if cfg.UUID == "" {
+			logger.Fatal("invalid-uuid", errors.New("invalid-uuid-from-config"))
 		}
+
+		lockIdentifier := &locketmodels.Resource{
+			Key:      routeEmitterLockKey,
+			Owner:    cfg.UUID,
+			TypeCode: locketmodels.LOCK,
+			Type:     locketmodels.LockType,
+		}
+
+		lockMembers := []grouper.Member{}
+		lockMembers = append(lockMembers, grouper.Member{"sql-lock", lock.NewLockRunner(
+			logger,
+			locketClient,
+			lockIdentifier,
+			locket.DefaultSessionTTLInSeconds,
+			clock,
+			locket.SQLRetryInterval,
+		)})
 
 		members = append(members,
 			grouper.Member{"lock", lockRunner(logger, clock, lockMembers)},
@@ -242,55 +209,6 @@ func main() {
 	} else {
 		logger.Info("finished")
 	}
-
-	if cfg.ConsulEnabled && cfg.CellID == "" {
-		// ConsulDown mode
-		logger = logger.Session("consul-down-mode")
-
-		consulClient := initializeConsulClient(logger, cfg.ConsulCluster)
-		consulDownChecker := consuldownchecker.NewConsulDownChecker(
-			logger,
-			clock,
-			consulClient,
-			time.Duration(cfg.LockRetryInterval),
-		)
-
-		consulDownModeNotifier := consuldownmodenotifier.NewConsulDownModeNotifier(
-			logger,
-			1,
-			clock,
-			time.Duration(cfg.ConsulDownModeNotificationInterval),
-			metronClient,
-		)
-
-		// we are running in global mode
-		members = grouper.Members{
-			{"nats-client", natsClientRunner},
-			{"consul-down-checker", consulDownChecker},
-			{"consul-down-mode-notifier", consulDownModeNotifier},
-			{"watcher", watcher},
-			{"external-scheduler", externalScheduler},
-			{"syncer", syncer},
-		}
-
-		if cfg.EnableInternalEmitter {
-			members = append(members, grouper.Member{"internal-scheduler", internalScheduler})
-		}
-
-		group = grouper.NewOrdered(os.Interrupt, members)
-
-		logger.Info("starting")
-
-		monitor = ifrit.Invoke(sigmon.New(group))
-
-		logger.Info("started")
-		err = <-monitor.Wait()
-		if err != nil {
-			logger.Error("exited-with-failure", err)
-			os.Exit(1)
-		}
-	}
-
 	logger.Info("exited")
 }
 
@@ -369,32 +287,6 @@ func initializeNatsEmitter(
 	}
 
 	return emitter.NewNATSEmitter(natsClient, workPool, logger, metronClient, emitInternalRoutes)
-}
-
-func initializeConsulClient(logger lager.Logger, consulCluster string) consuladapter.Client {
-	consulClient, err := consuladapter.NewClientFromUrl(consulCluster)
-	if err != nil {
-		logger.Fatal("new-client-failed", err)
-	}
-	return consulClient
-}
-
-func initializeLockMaintainer(
-	logger lager.Logger,
-	consulClient consuladapter.Client,
-	sessionName string,
-	lockTTL, lockRetryInterval time.Duration,
-	clock clock.Clock,
-	metronClient loggingclient.IngressClient,
-) ifrit.Runner {
-	uuid, err := uuid.NewV4()
-	if err != nil {
-		logger.Fatal("Couldn't generate uuid", err)
-	}
-
-	serviceClient := route_emitter.NewServiceClient(consulClient, clock)
-
-	return serviceClient.NewRouteEmitterLockRunner(logger, uuid.String(), lockRetryInterval, lockTTL, metronClient)
 }
 
 func initializeBBSClient(

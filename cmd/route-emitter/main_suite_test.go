@@ -16,13 +16,14 @@ import (
 	"code.cloudfoundry.org/bbs/encryption"
 	"code.cloudfoundry.org/bbs/test_helpers"
 	"code.cloudfoundry.org/bbs/test_helpers/sqlrunner"
-	"code.cloudfoundry.org/consuladapter/consulrunner"
 	"code.cloudfoundry.org/diego-logging-client/testhelpers"
 	"code.cloudfoundry.org/durationjson"
 	"code.cloudfoundry.org/go-loggregator/v8/rpc/loggregator_v2"
 	"code.cloudfoundry.org/inigo/helpers/portauthority"
 	"code.cloudfoundry.org/lager/lagerflags"
 	"code.cloudfoundry.org/locket"
+	locketconfig "code.cloudfoundry.org/locket/cmd/locket/config"
+	locketrunner "code.cloudfoundry.org/locket/cmd/locket/testrunner"
 	"code.cloudfoundry.org/route-emitter/cmd/route-emitter/config"
 	"code.cloudfoundry.org/route-emitter/diegonats"
 	"code.cloudfoundry.org/route-emitter/diegonats/natsserverrunner"
@@ -39,7 +40,6 @@ var (
 	cfgs []func(*config.RouteEmitterConfig)
 
 	emitterPath        string
-	locketPath         string
 	natsPort           uint16
 	healthCheckAddress string
 
@@ -53,13 +53,15 @@ var (
 
 	routingAPIPath string
 
-	consulRunner         *consulrunner.ClusterRunner
-	natsServerProcess    ifrit.Process
-	natsClient           diegonats.NATSClient
-	syncInterval         time.Duration
-	consulClusterAddress string
-	testMetricsChan      chan *loggregator_v2.Envelope
-	signalMetricsChan    chan struct{}
+	natsServerProcess ifrit.Process
+	natsClient        diegonats.NATSClient
+	syncInterval      time.Duration
+	testMetricsChan   chan *loggregator_v2.Envelope
+	signalMetricsChan chan struct{}
+
+	locketProcess ifrit.Process
+	locketPath    string
+	locketAddress string
 
 	sqlProcess        ifrit.Process
 	sqlRunner         sqlrunner.SQLRunner
@@ -118,16 +120,10 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 	portAllocator, err = portauthority.New(startPort, endPort)
 	Expect(err).NotTo(HaveOccurred())
 
-	port, err := portAllocator.ClaimPorts(consulrunner.PortOffsetLength)
+	locketPort, err := portAllocator.ClaimPorts(1)
 	Expect(err).NotTo(HaveOccurred())
 
-	consulRunner = consulrunner.NewClusterRunner(
-		consulrunner.ClusterRunnerConfig{
-			StartingPort: int(port),
-			NumNodes:     1,
-			Scheme:       "http",
-		},
-	)
+	locketAddress = fmt.Sprintf("localhost:%d", locketPort)
 
 	natsPort, err = portAllocator.ClaimPorts(1)
 	Expect(err).NotTo(HaveOccurred())
@@ -150,26 +146,26 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 	basePath := path.Join(os.Getenv("DIEGO_RELEASE_DIR"), "src/code.cloudfoundry.org/route-emitter/cmd/route-emitter/fixtures")
 
 	bbsConfig = bbsconfig.BBSConfig{
-		SessionName:                     "bbs",
-		CommunicationTimeout:            durationjson.Duration(10 * time.Second),
-		RequireSSL:                      true,
-		DesiredLRPCreationTimeout:       durationjson.Duration(1 * time.Minute),
-		ExpireCompletedTaskDuration:     durationjson.Duration(2 * time.Minute),
-		ExpirePendingTaskDuration:       durationjson.Duration(30 * time.Minute),
-		EnableConsulServiceRegistration: false,
-		ConvergeRepeatInterval:          durationjson.Duration(30 * time.Second),
-		KickTaskDuration:                durationjson.Duration(30 * time.Second),
-		LockTTL:                         durationjson.Duration(locket.DefaultSessionTTL),
-		LockRetryInterval:               durationjson.Duration(locket.RetryInterval),
-		ReportInterval:                  durationjson.Duration(1 * time.Minute),
-		ConvergenceWorkers:              20,
-		UpdateWorkers:                   1000,
-		TaskCallbackWorkers:             1000,
-		MaxOpenDatabaseConnections:      200,
-		MaxIdleDatabaseConnections:      200,
-		AuctioneerRequireTLS:            false,
-		RepClientSessionCacheSize:       0,
-		RepRequireTLS:                   false,
+		UUID:                        "bbs",
+		SessionName:                 "bbs",
+		CommunicationTimeout:        durationjson.Duration(10 * time.Second),
+		RequireSSL:                  true,
+		DesiredLRPCreationTimeout:   durationjson.Duration(1 * time.Minute),
+		ExpireCompletedTaskDuration: durationjson.Duration(2 * time.Minute),
+		ExpirePendingTaskDuration:   durationjson.Duration(30 * time.Minute),
+		ConvergeRepeatInterval:      durationjson.Duration(30 * time.Second),
+		KickTaskDuration:            durationjson.Duration(30 * time.Second),
+		LockTTL:                     durationjson.Duration(locket.DefaultSessionTTL),
+		LockRetryInterval:           durationjson.Duration(locket.RetryInterval),
+		ReportInterval:              durationjson.Duration(1 * time.Minute),
+		ConvergenceWorkers:          20,
+		UpdateWorkers:               1000,
+		TaskCallbackWorkers:         1000,
+		MaxOpenDatabaseConnections:  200,
+		MaxIdleDatabaseConnections:  200,
+		AuctioneerRequireTLS:        false,
+		RepClientSessionCacheSize:   0,
+		RepRequireTLS:               false,
 		LagerConfig: lagerflags.LagerConfig{
 			LogLevel:            string(lagerflags.DEBUG),
 			RedactSecrets:       false,
@@ -183,7 +179,6 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 		AuctioneerAddress:        "http://some-address",
 		DatabaseDriver:           sqlRunner.DriverName(),
 		DatabaseConnectionString: sqlRunner.ConnectionString(),
-		ConsulCluster:            consulRunner.ConsulCluster(),
 		HealthAddress:            bbsHealthAddress,
 
 		EncryptionConfig: encryption.EncryptionConfig{
@@ -242,12 +237,17 @@ var _ = BeforeEach(func() {
 
 	oauthServer = startOAuthServer()
 
-	consulRunner.Start()
-	consulRunner.WaitUntilReady()
-	consulClusterAddress = consulRunner.ConsulCluster()
-
 	sqlProcess = ginkgomon.Invoke(sqlRunner)
 
+	locketRunner := locketrunner.NewLocketRunner(locketPath, func(cfg *locketconfig.LocketConfig) {
+		cfg.DatabaseConnectionString = sqlRunner.ConnectionString()
+		cfg.DatabaseDriver = sqlRunner.DriverName()
+		cfg.ListenAddress = locketAddress
+	})
+	locketProcess = ginkgomon.Invoke(locketRunner)
+
+	bbsConfig.ClientLocketConfig = locketrunner.ClientLocketConfig()
+	bbsConfig.ClientLocketConfig.LocketAddress = locketAddress
 	startBBS()
 
 	natsServerProcess, natsClient = natsserverrunner.StartNatsServer(int(natsPort))
@@ -283,9 +283,11 @@ var _ = JustBeforeEach(func() {
 
 var _ = AfterEach(func() {
 	stopBBS()
-	consulRunner.Stop()
 	natsServerProcess.Signal(os.Kill)
 	Eventually(natsServerProcess.Wait(), 5).Should(Receive())
+
+	ginkgomon.Kill(locketProcess)
+	Eventually(locketProcess.Wait()).Should(Receive())
 
 	testIngressServer.Stop()
 	close(signalMetricsChan)

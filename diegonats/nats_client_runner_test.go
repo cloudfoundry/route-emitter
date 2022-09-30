@@ -63,7 +63,7 @@ var _ = Describe("Starting the NatsClientRunner process", func() {
 			Eventually(natsClient.Ping).Should(BeFalse())
 
 			startNATS()
-			Expect(natsClient.Ping()).To(BeTrue())
+			Eventually(natsClient.Ping, 60).Should(BeTrue())
 		})
 	})
 

@@ -4,7 +4,6 @@ import (
 	"time"
 
 	"code.cloudfoundry.org/clock"
-	"code.cloudfoundry.org/consuladapter"
 	loggingclient "code.cloudfoundry.org/diego-logging-client"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/locket"
@@ -22,17 +21,15 @@ type ServiceClient interface {
 }
 
 type serviceClient struct {
-	consulClient consuladapter.Client
-	clock        clock.Clock
+	clock clock.Clock
 }
 
-func NewServiceClient(consulClient consuladapter.Client, clock clock.Clock) ServiceClient {
+func NewServiceClient(clock clock.Clock) ServiceClient {
 	return serviceClient{
-		consulClient: consulClient,
-		clock:        clock,
+		clock: clock,
 	}
 }
 
 func (c serviceClient) NewRouteEmitterLockRunner(logger lager.Logger, emitterID string, retryInterval, lockTTL time.Duration, metronClient loggingclient.IngressClient) ifrit.Runner {
-	return locket.NewLock(logger, c.consulClient, RouteEmitterLockSchemaPath(), []byte(emitterID), c.clock, retryInterval, lockTTL, locket.WithMetronClient(metronClient))
+	return locket.NewLock(logger, RouteEmitterLockSchemaPath(), []byte(emitterID), c.clock, retryInterval, lockTTL, locket.WithMetronClient(metronClient))
 }

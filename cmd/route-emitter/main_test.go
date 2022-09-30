@@ -1,7 +1,6 @@
 package main_test
 
 import (
-	"context"
 	"math"
 	"path"
 	"path/filepath"
@@ -23,10 +22,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/http/httputil"
-	"net/url"
 	"os"
 	"os/exec"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -144,8 +141,8 @@ var _ = Describe("Route Emitter", func() {
 
 	createEmitterRunner := func(sessionName string, cellID string, modifyConfig ...func(*config.RouteEmitterConfig)) *ginkgomon.Runner {
 		cfg := config.RouteEmitterConfig{
+			LocketSessionName:    sessionName,
 			CellID:               cellID,
-			ConsulSessionName:    sessionName,
 			HealthCheckAddress:   healthCheckAddress,
 			NATSAddresses:        fmt.Sprintf("127.0.0.1:%d", natsPort),
 			BBSAddress:           bbsURL.String(),
@@ -153,25 +150,25 @@ var _ = Describe("Route Emitter", func() {
 			SyncInterval:         durationjson.Duration(syncInterval),
 			LockRetryInterval:    durationjson.Duration(time.Second),
 			LockTTL:              durationjson.Duration(5 * time.Second),
-			ConsulEnabled:        true,
-			ConsulCluster:        consulClusterAddress,
 			UUID:                 "route-emitter-uuid",
 			ReportInterval:       durationjson.Duration(1 * time.Second),
 			LagerConfig: lagerflags.LagerConfig{
 				LogLevel: lagerflags.DEBUG,
 			},
-			BBSCACertFile:                      caFile,
-			BBSClientCertFile:                  clientCertFile,
-			BBSClientKeyFile:                   clientKeyFile,
-			ConsulDownModeNotificationInterval: durationjson.Duration(time.Minute),
-			NATSUsername:                       "nats",
-			NATSPassword:                       "nats",
-			RouteEmittingWorkers:               20,
-			TCPRouteTTL:                        durationjson.Duration(2 * time.Minute),
-			EnableTCPEmitter:                   false,
-			EnableInternalEmitter:              false,
-			RegisterDirectInstanceRoutes:       false,
+			BBSCACertFile:                caFile,
+			BBSClientCertFile:            clientCertFile,
+			BBSClientKeyFile:             clientKeyFile,
+			NATSUsername:                 "nats",
+			NATSPassword:                 "nats",
+			RouteEmittingWorkers:         20,
+			TCPRouteTTL:                  durationjson.Duration(2 * time.Minute),
+			EnableTCPEmitter:             false,
+			EnableInternalEmitter:        false,
+			RegisterDirectInstanceRoutes: false,
 		}
+		cfg.ClientLocketConfig = locketrunner.ClientLocketConfig()
+		cfg.ClientLocketConfig.LocketAddress = locketAddress
+
 		for _, f := range modifyConfig {
 			f(&cfg)
 		}
@@ -194,7 +191,7 @@ var _ = Describe("Route Emitter", func() {
 
 			Name: sessionName,
 
-			StartCheck: "route-emitter.watcher.sync.complete",
+			StartCheck: fmt.Sprint(sessionName, ".watcher.sync.complete"),
 
 			AnsiColorCode: "97m",
 			Cleanup: func() {
@@ -328,7 +325,6 @@ var _ = Describe("Route Emitter", func() {
 		routingAPILocketAddress := fmt.Sprintf("localhost:%d", routingAPILocketPort)
 
 		routingAPILocketRunner := locketrunner.NewLocketRunner(locketPath, func(cfg *locketconfig.LocketConfig) {
-			cfg.ConsulCluster = consulRunner.ConsulCluster()
 			cfg.DatabaseConnectionString = sqlRunner.ConnectionString()
 			cfg.DatabaseDriver = sqlRunner.DriverName()
 			cfg.ListenAddress = routingAPILocketAddress
@@ -807,7 +803,6 @@ var _ = Describe("Route Emitter", func() {
 
 					Context("when running in local mode", func() {
 						BeforeEach(func() {
-							consulClusterAddress = ""
 							cellID = "cell-id"
 						})
 
@@ -1041,9 +1036,9 @@ var _ = Describe("Route Emitter", func() {
 			ginkgomon.Kill(emitter, emitterInterruptTimeout)
 		})
 
-		It("exits with non zero exit code", func() {
+		It("logs the failure and exits", func() {
 			Eventually(emitter.Wait(), 6*time.Second).Should(Receive())
-			Expect(runner.ExitCode()).NotTo(Equal(0))
+			Eventually(runner.Buffer, 5*time.Second).Should(gbytes.Say("emitter1.finished-with-failure"))
 		})
 
 		It("doesn't enable the healthcheck server", func() {
@@ -1073,7 +1068,6 @@ var _ = Describe("Route Emitter", func() {
 			locketAddress = fmt.Sprintf("localhost:%d", locketPort)
 
 			locketRunner = locketrunner.NewLocketRunner(locketPath, func(cfg *locketconfig.LocketConfig) {
-				cfg.ConsulCluster = consulRunner.ConsulCluster()
 				cfg.DatabaseConnectionString = sqlRunner.ConnectionString()
 				cfg.DatabaseDriver = sqlRunner.DriverName()
 				cfg.ListenAddress = locketAddress
@@ -1108,73 +1102,6 @@ var _ = Describe("Route Emitter", func() {
 
 			It("exits", func() {
 				Eventually(emitter.Wait()).Should(Receive())
-			})
-		})
-
-		Context("when the consul lock is not required", func() {
-			var (
-				competingLockProcess ifrit.Process
-			)
-
-			BeforeEach(func() {
-				cfgs = append(cfgs, func(cfg *config.RouteEmitterConfig) {
-					cfg.ConsulEnabled = false
-				})
-
-				consulClient := consulRunner.NewClient()
-				path := locket.LockSchemaPath("route_emitter_lock")
-				competingLock := locket.NewLock(logger, consulClient, path, nil, clock.NewClock(), 500*time.Millisecond, 10*time.Second)
-				competingLockProcess = ifrit.Invoke(competingLock)
-			})
-
-			AfterEach(func() {
-				ginkgomon.Interrupt(competingLockProcess)
-			})
-
-			It("only grabs the sql lock and starts succesfully", func() {
-				Eventually(runner.Buffer, 5*time.Second).Should(gbytes.Say("emitter1.started"))
-			})
-		})
-
-		Context("when the consul lock is not available", func() {
-			var competingProcess ifrit.Process
-
-			BeforeEach(func() {
-				consulClient := consulRunner.NewClient()
-				path := locket.LockSchemaPath("route_emitter_lock")
-				competingLock := locket.NewLock(logger, consulClient, path, nil, clock.NewClock(), 500*time.Millisecond, 10*time.Second)
-				competingProcess = ifrit.Invoke(competingLock)
-			})
-
-			AfterEach(func() {
-				ginkgomon.Interrupt(competingProcess)
-			})
-
-			It("does not acquire the locket lock", func() {
-				cfg := locketrunner.ClientLocketConfig()
-				cfg.LocketAddress = locketAddress
-				locketClient, err := locket.NewClient(logger, cfg)
-				Expect(err).NotTo(HaveOccurred())
-				Consistently(func() error {
-					_, err := locketClient.Fetch(context.Background(), &locketmodels.FetchRequest{
-						Key: "route_emitter",
-					})
-					return err
-				}).Should(HaveOccurred())
-			})
-
-			It("starts but waits for the lock", func() {
-				Consistently(runner.Buffer).ShouldNot(gbytes.Say("emitter1.started"))
-			})
-
-			Context("and the lock becomes available", func() {
-				JustBeforeEach(func() {
-					ginkgomon.Interrupt(competingProcess)
-				})
-
-				It("acquires the lock and becomes active", func() {
-					Eventually(runner.Buffer).Should(gbytes.Say("emitter1.started"))
-				})
 			})
 		})
 
@@ -1222,19 +1149,6 @@ var _ = Describe("Route Emitter", func() {
 			BeforeEach(func() {
 				cfgs = append(cfgs, func(cfg *config.RouteEmitterConfig) {
 					cfg.UUID = ""
-				})
-			})
-
-			It("exits with an error", func() {
-				Eventually(emitter.Wait()).Should(Receive())
-			})
-		})
-
-		Context("when neither lock is configured", func() {
-			BeforeEach(func() {
-				cfgs = append(cfgs, func(cfg *config.RouteEmitterConfig) {
-					cfg.ConsulEnabled = false
-					cfg.LocketEnabled = false
 				})
 			})
 
@@ -1416,7 +1330,6 @@ var _ = Describe("Route Emitter", func() {
 				Context("when running in local mode", func() {
 					BeforeEach(func() {
 						cellID = "cell-id"
-						consulClusterAddress = ""
 					})
 
 					Context("when using loggregator v2 api", func() {
@@ -1788,7 +1701,7 @@ var _ = Describe("Route Emitter", func() {
 					cfg.HealthCheckAddress = fmt.Sprintf("127.0.0.1:%d", port)
 				})
 				secondRunner = createEmitterRunner("emitter2", "", secondEmitterConfig...)
-				secondRunner.StartCheck = "consul-lock.acquiring-lock"
+				secondRunner.StartCheck = "emitter2.started"
 			})
 
 			JustBeforeEach(func() {
@@ -1801,25 +1714,8 @@ var _ = Describe("Route Emitter", func() {
 			})
 
 			Describe("the second emitter", func() {
-				It("does not become active", func() {
-					Consistently(secondRunner.Buffer, 5*time.Second).ShouldNot(gbytes.Say("emitter2.started"))
-				})
-
-				Context("runs in local mode", func() {
-					BeforeEach(func() {
-						port, err := portAllocator.ClaimPorts(1)
-						Expect(err).NotTo(HaveOccurred())
-						secondEmitterConfig = append(cfgs, func(cfg *config.RouteEmitterConfig) {
-							cfg.ConsulCluster = ""
-							cfg.HealthCheckAddress = fmt.Sprintf("127.0.0.1:%d", port)
-						})
-						secondRunner = createEmitterRunner("emitter2", "some-cell-id", secondEmitterConfig...)
-						secondRunner.StartCheck = "emitter2.watcher.sync.complete"
-					})
-
-					It("becomes active and does not connect to consul to acquire the lock", func() {
-						Eventually(secondRunner.Buffer).Should(gbytes.Say("emitter2.started"))
-					})
+				It("becomes active", func() {
+					Eventually(secondRunner.Buffer).Should(gbytes.Say("emitter2.started"))
 				})
 			})
 
@@ -1829,7 +1725,7 @@ var _ = Describe("Route Emitter", func() {
 				})
 
 				Describe("the second emitter", func() {
-					It("becomes active", func() {
+					It("eventually becomes active", func() {
 						Eventually(secondRunner.Buffer, locket.DefaultSessionTTL*2).Should(gbytes.Say("emitter2.started"))
 					})
 				})
@@ -1843,24 +1739,6 @@ var _ = Describe("Route Emitter", func() {
 
 			It("does not explode", func() {
 				Consistently(emitter.Wait(), 5).ShouldNot(Receive())
-			})
-		})
-
-		Context("not in consul down mode metric", func() {
-			Context("when using loggregator v2 api", func() {
-				BeforeEach(func() {
-					useLoggregatorV2 = true
-				})
-
-				It("emits not in consul down mode", func() {
-					Eventually(testMetricsChan).Should(Receive(testhelpers.MatchV2MetricAndValue(testhelpers.MetricAndValue{Name: "ConsulDownMode", Value: 0})))
-				})
-			})
-
-			Context("when not using the loggregator v2 api", func() {
-				It("doesn't emit any metrics", func() {
-					Consistently(testMetricsChan).ShouldNot(Receive())
-				})
 			})
 		})
 
@@ -2131,159 +2009,6 @@ var _ = Describe("Route Emitter", func() {
 
 			It("does not explode", func() {
 				Consistently(emitter.Wait(), 5).ShouldNot(Receive())
-			})
-		})
-
-		It("emits a metric to say that it is not in consul down mode", func() {
-			Eventually(testMetricsChan).Should(Receive(testhelpers.MatchV2MetricAndValue(testhelpers.MetricAndValue{Name: "ConsulDownMode", Value: 0})))
-		})
-	})
-
-	Describe("consul down mode", func() {
-		var (
-			emitter           ifrit.Process
-			runner            *ginkgomon.Runner
-			fakeConsul        *httptest.Server
-			fakeConsulHandler http.HandlerFunc
-			handlerWriteLock  *sync.Mutex
-			cellID            string
-		)
-
-		BeforeEach(func() {
-			cellID = ""
-			consulClusterURL, err := url.Parse(consulRunner.ConsulCluster())
-			Expect(err).NotTo(HaveOccurred())
-			fakeConsulHandler = nil
-
-			handlerWriteLock = &sync.Mutex{}
-			proxy := httputil.NewSingleHostReverseProxy(consulClusterURL)
-			fakeConsul = httptest.NewUnstartedServer(
-				http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					handlerWriteLock.Lock()
-					defer handlerWriteLock.Unlock()
-					if fakeConsulHandler != nil {
-						fakeConsulHandler(w, r)
-					} else {
-						proxy.ServeHTTP(w, r)
-					}
-				}),
-			)
-			fakeConsul.Start()
-
-			consulClusterAddress = fakeConsul.URL
-		})
-
-		JustBeforeEach(func() {
-			runner = createEmitterRunner("emitter1", cellID, cfgs...)
-			runner.StartCheck = "emitter1.started"
-			emitter = ginkgomon.Invoke(runner)
-		})
-
-		AfterEach(func() {
-			fakeConsul.Close()
-			ginkgomon.Kill(emitter, emitterInterruptTimeout)
-		})
-
-		Context("when consul goes down", func() {
-			var (
-				msg1 routingtable.RegistryMessage
-				msg2 routingtable.RegistryMessage
-			)
-
-			JustBeforeEach(func() {
-				err := bbsClient.DesireLRP(logger, desiredLRP)
-				Expect(err).NotTo(HaveOccurred())
-
-				err = bbsClient.StartActualLRP(logger, &lrpKey, &instanceKey, &netInfo, []*models.ActualLRPInternalRoute{})
-				Expect(err).NotTo(HaveOccurred())
-
-				Eventually(registeredRoutes).Should(Receive(&msg1))
-				Eventually(registeredRoutes).Should(Receive(&msg2))
-				Expect(append(msg1.URIs, msg2.URIs...)).To(ConsistOf("route-1", "route-2"))
-
-				handlerWriteLock.Lock()
-				fakeConsulHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					w.WriteHeader(500)
-					w.Write([]byte(`"No known Consul servers"`))
-				})
-				handlerWriteLock.Unlock()
-				consulRunner.Stop()
-			})
-
-			Context("when in local mode", func() {
-				var receiveCh chan struct{}
-
-				BeforeEach(func() {
-					cellID = "cell-local"
-					instanceKey.CellId = cellID
-				})
-
-				JustBeforeEach(func() {
-
-					receiveCh = make(chan struct{}, 1)
-					handlerWriteLock.Lock()
-					fakeConsulHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-						receiveCh <- struct{}{}
-					})
-					handlerWriteLock.Unlock()
-				})
-
-				It("does not connect to consul", func() {
-					Consistently(receiveCh, 5*time.Second).ShouldNot(Receive())
-				})
-			})
-
-			It("enters consul down mode and exits when consul comes back up", func() {
-				lockTTL := 5
-				retryInterval := 1
-				Eventually(runner, lockTTL+3*retryInterval+1).Should(gbytes.Say("consul-down-mode.started"))
-				consulRunner.Start()
-				handlerWriteLock.Lock()
-				fakeConsulHandler = nil
-				handlerWriteLock.Unlock()
-				Eventually(runner, 6*retryInterval+1).Should(gbytes.Say("consul-down-mode.exited"))
-				var err error
-				Eventually(emitter.Wait()).Should(Receive(&err))
-				Expect(err).NotTo(HaveOccurred())
-			})
-
-			Context("when in consul down mode", func() {
-				const (
-					lockTTL       = 5
-					retryInterval = 1
-				)
-
-				JustBeforeEach(func() {
-					Eventually(runner, lockTTL+3*retryInterval+1).Should(gbytes.Say("consul-down-mode.started"))
-				})
-
-				Context("when using loggregator v2 api", func() {
-					BeforeEach(func() {
-						useLoggregatorV2 = true
-					})
-
-					It("emits consul down mode", func() {
-						Eventually(testMetricsChan, 3*retryInterval+1, time.Millisecond).Should(Receive(testhelpers.MatchV2MetricAndValue(testhelpers.MetricAndValue{Name: "ConsulDownMode", Value: 1})))
-					})
-				})
-
-				Context("when not using the loggregator v2 api", func() {
-					It("doesn't emit any metrics", func() {
-						Consistently(testMetricsChan).ShouldNot(Receive())
-					})
-				})
-			})
-
-			It("repeats the route message at the interval given by the router", func() {
-				var msg3 routingtable.RegistryMessage
-				var msg4 routingtable.RegistryMessage
-				Eventually(registeredRoutes, 5).Should(Receive(&msg3))
-				Eventually(registeredRoutes, 5).Should(Receive(&msg4))
-
-				Expect([]routingtable.RegistryMessage{msg3, msg4}).To(ConsistOf(
-					MatchRegistryMessage(msg1),
-					MatchRegistryMessage(msg2),
-				))
 			})
 		})
 	})
