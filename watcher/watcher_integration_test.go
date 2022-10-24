@@ -19,8 +19,8 @@ import (
 	"code.cloudfoundry.org/route-emitter/unregistration"
 	"code.cloudfoundry.org/route-emitter/watcher"
 	"code.cloudfoundry.org/routing-api/fake_routing_api"
+	"code.cloudfoundry.org/routing-api/uaaclient"
 	"code.cloudfoundry.org/routing-info/cfroutes"
-	uaaclient "code.cloudfoundry.org/uaa-go-client"
 	"code.cloudfoundry.org/workpool"
 	"github.com/nats-io/nats.go"
 	. "github.com/onsi/ginkgo"
@@ -64,11 +64,12 @@ var _ = Describe("Watcher Integration", func() {
 		natsEmitter := emitter.NewNATSEmitter(natsClient, workPool, logger, fakeMetronClient, false)
 		natsTable := routingtable.NewRoutingTable(false, fakeMetronClient)
 
-		uaaClient := uaaclient.NewNoOpUaaClient()
-		routingAPIEmitter := emitter.NewRoutingAPIEmitter(logger, routingApiClient, uaaClient, 100)
+		clock := fakeclock.NewFakeClock(time.Now())
+		uaaTokenFetcher, err := uaaclient.NewTokenFetcher(true, uaaclient.Config{}, clock, 0, 0, 0, logger)
+		Expect(err).NotTo(HaveOccurred())
+		routingAPIEmitter := emitter.NewRoutingAPIEmitter(logger, routingApiClient, uaaTokenFetcher, 100)
 		unregistrationCache := unregistration.NewCache(logger)
 		handler := routehandlers.NewHandler(natsTable, natsEmitter, routingAPIEmitter, false, fakeMetronClient, unregistrationCache)
-		clock := fakeclock.NewFakeClock(time.Now())
 		testWatcher = watcher.NewWatcher(
 			cellID,
 			bbsClient,

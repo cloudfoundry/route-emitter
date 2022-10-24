@@ -538,7 +538,7 @@ var _ = Describe("Route Emitter", func() {
 				It("fails", func() {
 					Eventually(emitter.Wait()).Should(Receive())
 					Expect(runner.ExitCode()).NotTo(Equal(0))
-					Expect(runner).To(gbytes.Say("initialize-token-fetcher-error"))
+					Expect(runner).To(gbytes.Say("failed-parsing-uaa-host"))
 				})
 			})
 
@@ -625,7 +625,6 @@ var _ = Describe("Route Emitter", func() {
 
 					It("the emitter fails to fetch a token and does not start", func() {
 						Expect(runner).To(gbytes.Say("failed-fetching-uaa-key"))
-						Expect(runner).To(gbytes.Say("Client.Timeout"))
 						Expect(runner).ToNot(gbytes.Say("emitter1.started"))
 					})
 				})
@@ -655,7 +654,7 @@ var _ = Describe("Route Emitter", func() {
 			})
 
 			It("starts successfully without oauth config", func() {
-				Expect(runner).To(gbytes.Say("creating-noop-uaa-client"))
+				Expect(runner).To(gbytes.Say("using-noop-token-fetcher"))
 			})
 
 			Context("and the initial sync loop is finished", func() {

@@ -1,11 +1,13 @@
 package emitter
 
 import (
+	"context"
+
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/route-emitter/routingtable"
-	"code.cloudfoundry.org/routing-api"
+	routing_api "code.cloudfoundry.org/routing-api"
 	"code.cloudfoundry.org/routing-api/models"
-	uaaclient "code.cloudfoundry.org/uaa-go-client"
+	"code.cloudfoundry.org/routing-api/uaaclient"
 )
 
 //go:generate counterfeiter -o fakes/fake_routing_api_emitter.go . RoutingAPIEmitter
@@ -17,15 +19,15 @@ type routingAPIEmitter struct {
 	logger           lager.Logger
 	routingAPIClient routing_api.Client
 	ttl              int
-	uaaClient        uaaclient.Client
+	uaaTokenFetcher  uaaclient.TokenFetcher
 }
 
-func NewRoutingAPIEmitter(logger lager.Logger, routingAPIClient routing_api.Client, uaaClient uaaclient.Client, routeTTL int) RoutingAPIEmitter {
+func NewRoutingAPIEmitter(logger lager.Logger, routingAPIClient routing_api.Client, uaaTokenFetcher uaaclient.TokenFetcher, routeTTL int) RoutingAPIEmitter {
 	return &routingAPIEmitter{
 		logger:           logger,
 		routingAPIClient: routingAPIClient,
 		ttl:              routeTTL,
-		uaaClient:        uaaClient,
+		uaaTokenFetcher:  uaaTokenFetcher,
 	}
 }
 
@@ -49,7 +51,7 @@ func (t *routingAPIEmitter) emit(registrationMappingRequests, unregistrationMapp
 
 	for count := 0; count < 2; count++ {
 		forceUpdate = count > 0
-		token, err := t.uaaClient.FetchToken(forceUpdate)
+		token, err := t.uaaTokenFetcher.FetchToken(context.Background(), forceUpdate)
 		if err != nil {
 			return err
 		}
