@@ -4,8 +4,11 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"net"
 	"net/http"
+	"net/url"
 	"os"
+	"strconv"
 	"time"
 
 	"code.cloudfoundry.org/bbs"
@@ -33,9 +36,8 @@ import (
 	"code.cloudfoundry.org/route-emitter/unregistration"
 	"code.cloudfoundry.org/route-emitter/watcher"
 	routing_api "code.cloudfoundry.org/routing-api"
+	"code.cloudfoundry.org/routing-api/uaaclient"
 	"code.cloudfoundry.org/tlsconfig"
-	uaaclient "code.cloudfoundry.org/uaa-go-client"
-	uaaconfig "code.cloudfoundry.org/uaa-go-client/config"
 	"code.cloudfoundry.org/workpool"
 	uuid "github.com/nu7hatch/gouuid"
 	"github.com/tedsuo/ifrit"
@@ -101,7 +103,7 @@ func main() {
 	var routingAPIEmitter emitter.RoutingAPIEmitter
 	if cfg.EnableTCPEmitter {
 		tcpLogger := logger.Session("tcp")
-		uaaClient := newUaaClient(tcpLogger, &cfg, clock)
+		uaaTokenFetcher := newUaaTokenFetcher(tcpLogger, &cfg, clock)
 
 		routingAPIAddress := fmt.Sprintf("%s:%d", cfg.RoutingAPI.URL, cfg.RoutingAPI.Port)
 		logger.Debug("creating-routing-api-client", lager.Data{"api-location": routingAPIAddress})
@@ -122,7 +124,7 @@ func main() {
 			routingAPIClient = routing_api.NewClient(routingAPIAddress, false)
 		}
 
-		routingAPIEmitter = emitter.NewRoutingAPIEmitter(tcpLogger, routingAPIClient, uaaClient, int(routeTTL.Seconds()))
+		routingAPIEmitter = emitter.NewRoutingAPIEmitter(tcpLogger, routingAPIClient, uaaTokenFetcher, int(routeTTL.Seconds()))
 	}
 
 	unregistrationCache := unregistration.NewCache(logger)
@@ -304,33 +306,40 @@ func lockRunner(logger lager.Logger, clk clock.Clock, locks []grouper.Member) if
 	}
 }
 
-func newUaaClient(logger lager.Logger, c *config.RouteEmitterConfig, klok clock.Clock) uaaclient.Client {
-	if !c.RoutingAPI.AuthEnabled {
-		logger.Debug("creating-noop-uaa-client")
-		client := uaaclient.NewNoOpUaaClient()
-		return client
+func newUaaTokenFetcher(logger lager.Logger, c *config.RouteEmitterConfig, klok clock.Clock) uaaclient.TokenFetcher {
+	cfg := uaaclient.Config{}
+	if c.RoutingAPI.AuthEnabled {
+		u, err := url.Parse(c.OAuth.UaaURL)
+		if err != nil {
+			logger.Fatal("failed-parsing-uaa-url", err)
+		}
+		host, port, err := net.SplitHostPort(u.Host)
+		if err != nil {
+			logger.Fatal("failed-parsing-uaa-host", err, lager.Data{"url": c.OAuth.UaaURL, "host": u.Host})
+		}
+		portI, err := strconv.Atoi(port)
+		if err != nil {
+			logger.Fatal("failed-parsing-uaa-port", err)
+		}
+		cfg.Port = portI
+		cfg.SkipSSLValidation = c.OAuth.SkipCertVerify
+		cfg.ClientName = c.OAuth.ClientName
+		cfg.ClientSecret = c.OAuth.ClientSecret
+		cfg.CACerts = c.OAuth.CACerts
+		cfg.TokenEndpoint = host
+		cfg.RequestTimeout = time.Duration(c.OAuth.UaaRequestTimeout)
 	}
-
-	logger.Debug("creating-uaa-client")
-	cfg := uaaconfig.Config{
-		UaaEndpoint:      c.OAuth.UaaURL,
-		ClientName:       c.OAuth.ClientName,
-		ClientSecret:     c.OAuth.ClientSecret,
-		SkipVerification: c.OAuth.SkipCertVerify,
-		CACerts:          c.OAuth.CACerts,
-		RequestTimeout:   time.Duration(c.OAuth.UaaRequestTimeout),
-	}
-	uaaClient, err := uaaclient.NewClient(logger, &cfg, klok)
+	uaaTokenFetcher, err := uaaclient.NewTokenFetcher(!c.RoutingAPI.AuthEnabled, cfg, klok, 0, 0, 0, logger)
 	if err != nil {
-		logger.Fatal("initialize-token-fetcher-error", err)
+		logger.Fatal("failed-initializing-uaa-token-fetcher", err)
 	}
 
-	_, err = uaaClient.FetchKey()
+	_, err = uaaTokenFetcher.FetchKey()
 	if err != nil {
 		logger.Fatal("failed-fetching-uaa-key", err)
 	}
 
-	return uaaClient
+	return uaaTokenFetcher
 }
 
 func initializeMetron(logger lager.Logger, locketConfig config.RouteEmitterConfig) (loggingclient.IngressClient, error) {

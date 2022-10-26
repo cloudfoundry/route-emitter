@@ -2,6 +2,7 @@ package emitter_test
 
 import (
 	"errors"
+	"golang.org/x/oauth2"
 
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/lager/lagertest"
@@ -9,8 +10,7 @@ import (
 	"code.cloudfoundry.org/route-emitter/routingtable"
 	"code.cloudfoundry.org/routing-api/fake_routing_api"
 	apimodels "code.cloudfoundry.org/routing-api/models"
-	fakeuaa "code.cloudfoundry.org/uaa-go-client/fakes"
-	"code.cloudfoundry.org/uaa-go-client/schema"
+	fakeuaa "code.cloudfoundry.org/routing-api/uaaclient/fakes"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -21,7 +21,7 @@ var _ = Describe("RoutingAPIEmitter", func() {
 
 	var (
 		routingApiClient      *fake_routing_api.FakeClient
-		uaaClient             *fakeuaa.FakeClient
+		uaaTokenFetcher       *fakeuaa.FakeTokenFetcher
 		routingEvents         routingtable.TCPRouteMappings
 		expectedRoutingEvents routingtable.TCPRouteMappings
 		routingAPIEmitter     emitter.RoutingAPIEmitter
@@ -33,8 +33,8 @@ var _ = Describe("RoutingAPIEmitter", func() {
 		routingApiClient = new(fake_routing_api.FakeClient)
 		ttl = 60
 		logger = lagertest.NewTestLogger("test")
-		uaaClient = &fakeuaa.FakeClient{}
-		routingAPIEmitter = emitter.NewRoutingAPIEmitter(logger, routingApiClient, uaaClient, ttl)
+		uaaTokenFetcher = &fakeuaa.FakeTokenFetcher{}
+		routingAPIEmitter = emitter.NewRoutingAPIEmitter(logger, routingApiClient, uaaTokenFetcher, ttl)
 
 		routingEvents = routingtable.TCPRouteMappings{
 			Registrations: []apimodels.TcpRouteMapping{apimodels.NewTcpRouteMapping("123", 61000, "some-ip-1", 62003, 0)},
@@ -44,23 +44,24 @@ var _ = Describe("RoutingAPIEmitter", func() {
 			Registrations: []apimodels.TcpRouteMapping{apimodels.NewTcpRouteMapping("123", 61000, "some-ip-1", 62003, int(ttl))},
 		}
 
-		token := &schema.Token{
+		token := &oauth2.Token{
 			AccessToken: "accesstoken",
 		}
-		uaaClient.FetchTokenReturns(token, nil)
+		uaaTokenFetcher.FetchTokenReturns(token, nil)
 	})
 
 	It("fetches a client token from UAA", func() {
 		err := routingAPIEmitter.Emit(routingEvents)
 		Expect(err).ShouldNot(HaveOccurred())
-		Expect(uaaClient.FetchTokenCallCount()).To(Equal(1))
+		Expect(uaaTokenFetcher.FetchTokenCallCount()).To(Equal(1))
 	})
 
 	It("uses a cached token if available", func() {
 		err := routingAPIEmitter.Emit(routingEvents)
 		Expect(err).ShouldNot(HaveOccurred())
-		Expect(uaaClient.FetchTokenCallCount()).To(Equal(1))
-		Expect(uaaClient.FetchTokenArgsForCall(0)).To(BeFalse())
+		Expect(uaaTokenFetcher.FetchTokenCallCount()).To(Equal(1))
+		_, forceUpdate := uaaTokenFetcher.FetchTokenArgsForCall(0)
+		Expect(forceUpdate).To(BeFalse())
 	})
 
 	It("authorizes the routing API call with its bearer token", func() {
@@ -71,7 +72,7 @@ var _ = Describe("RoutingAPIEmitter", func() {
 
 	Context("when UAA communication fails", func() {
 		BeforeEach(func() {
-			uaaClient.FetchTokenReturns(nil, errors.New("blam"))
+			uaaTokenFetcher.FetchTokenReturns(nil, errors.New("blam"))
 		})
 
 		It("returns an error and emits nothing", func() {
@@ -130,8 +131,9 @@ var _ = Describe("RoutingAPIEmitter", func() {
 				err := routingAPIEmitter.Emit(routingEvents)
 				Expect(err).To(HaveOccurred())
 
-				Expect(uaaClient.FetchTokenCallCount()).To(Equal(2))
-				Expect(uaaClient.FetchTokenArgsForCall(1)).To(BeTrue())
+				Expect(uaaTokenFetcher.FetchTokenCallCount()).To(Equal(2))
+				_, forceUpdate := uaaTokenFetcher.FetchTokenArgsForCall(1)
+				Expect(forceUpdate).To(BeTrue())
 			})
 
 			Context("when refreshing the cached token authorizes the emitter", func() {
@@ -153,7 +155,7 @@ var _ = Describe("RoutingAPIEmitter", func() {
 					err := routingAPIEmitter.Emit(routingEvents)
 					Expect(err).ToNot(HaveOccurred())
 
-					Expect(uaaClient.FetchTokenCallCount()).To(Equal(2))
+					Expect(uaaTokenFetcher.FetchTokenCallCount()).To(Equal(2))
 					Expect(routingApiClient.UpsertTcpRouteMappingsCallCount()).To(Equal(2))
 				})
 			})
@@ -177,8 +179,9 @@ var _ = Describe("RoutingAPIEmitter", func() {
 				err := routingAPIEmitter.Emit(routingEvents)
 				Expect(err).To(HaveOccurred())
 
-				Expect(uaaClient.FetchTokenCallCount()).To(Equal(2))
-				Expect(uaaClient.FetchTokenArgsForCall(1)).To(BeTrue())
+				Expect(uaaTokenFetcher.FetchTokenCallCount()).To(Equal(2))
+				_, forceUpdate := uaaTokenFetcher.FetchTokenArgsForCall(1)
+				Expect(forceUpdate).To(BeTrue())
 			})
 
 			Context("when refreshing the cached token authorizes the emitter", func() {
@@ -200,7 +203,7 @@ var _ = Describe("RoutingAPIEmitter", func() {
 					err := routingAPIEmitter.Emit(routingEvents)
 					Expect(err).ToNot(HaveOccurred())
 
-					Expect(uaaClient.FetchTokenCallCount()).To(Equal(2))
+					Expect(uaaTokenFetcher.FetchTokenCallCount()).To(Equal(2))
 					Expect(routingApiClient.DeleteTcpRouteMappingsCallCount()).To(Equal(2))
 				})
 			})
