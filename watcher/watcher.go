@@ -358,6 +358,7 @@ func getDesiredLRPs(logger lager.Logger, bbsClient bbs.Client, guids []string) (
 	logger.Debug("getting-desired-lrps", lager.Data{"guids-length": len(guids)})
 	desiredLRPs, err := bbsClient.DesiredLRPs(logger, models.DesiredLRPFilter{
 		ProcessGuids: guids,
+		SkipEgressRules: true,
 	})
 	if err != nil {
 		logger.Error("failed-getting-desired-lrps", err)
