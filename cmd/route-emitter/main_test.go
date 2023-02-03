@@ -253,6 +253,7 @@ var _ = Describe("Route Emitter", func() {
 				User: "me",
 				Path: "ls",
 			}),
+			MetricTags: map[string]*models.MetricTagValue{"some-tag": {Static: "some-value"}},
 		}
 
 		index = 0
@@ -504,6 +505,7 @@ var _ = Describe("Route Emitter", func() {
 					User: "me",
 					Path: "ls",
 				}),
+				MetricTags: map[string]*models.MetricTagValue{"some-tag": {Static: "some-value"}},
 			}
 		}
 
@@ -1257,7 +1259,10 @@ var _ = Describe("Route Emitter", func() {
 						ServerCertDomainSAN:  instanceKey.InstanceGuid,
 						PrivateInstanceIndex: "0",
 						RouteServiceUrl:      "https://awesome.com",
-						Tags:                 map[string]string{"component": "route-emitter"},
+						Tags: map[string]string{
+							"component": "route-emitter",
+							"some-tag":  "some-value",
+						},
 					}),
 					MatchRegistryMessage(routingtable.RegistryMessage{
 						URIs:                 []string{hostnames[0]},
@@ -1268,7 +1273,10 @@ var _ = Describe("Route Emitter", func() {
 						PrivateInstanceId:    instanceKey.InstanceGuid,
 						PrivateInstanceIndex: "0",
 						RouteServiceUrl:      "https://awesome.com",
-						Tags:                 map[string]string{"component": "route-emitter"},
+						Tags: map[string]string{
+							"component": "route-emitter",
+							"some-tag":  "some-value",
+						},
 					}),
 				))
 			})
@@ -1388,7 +1396,10 @@ var _ = Describe("Route Emitter", func() {
 							ServerCertDomainSAN:  instanceKey.InstanceGuid,
 							PrivateInstanceIndex: "0",
 							RouteServiceUrl:      "https://awesome.com",
-							Tags:                 map[string]string{"component": "route-emitter"},
+							Tags: map[string]string{
+								"component": "route-emitter",
+								"some-tag":  "some-value",
+							},
 						}),
 						MatchRegistryMessage(routingtable.RegistryMessage{
 							URIs:                 []string{hostnames[0]},
@@ -1399,7 +1410,10 @@ var _ = Describe("Route Emitter", func() {
 							PrivateInstanceId:    instanceKey.InstanceGuid,
 							PrivateInstanceIndex: "0",
 							RouteServiceUrl:      "https://awesome.com",
-							Tags:                 map[string]string{"component": "route-emitter"},
+							Tags: map[string]string{
+								"component": "route-emitter",
+								"some-tag":  "some-value",
+							},
 						}),
 					))
 				})
@@ -1425,7 +1439,10 @@ var _ = Describe("Route Emitter", func() {
 								ServerCertDomainSAN:  instanceKey.InstanceGuid,
 								PrivateInstanceIndex: "0",
 								RouteServiceUrl:      "https://awesome.com",
-								Tags:                 map[string]string{"component": "route-emitter"},
+								Tags: map[string]string{
+									"component": "route-emitter",
+									"some-tag":  "some-value",
+								},
 							}),
 							MatchRegistryMessage(routingtable.RegistryMessage{
 								URIs:                 []string{hostnames[0]},
@@ -1437,7 +1454,10 @@ var _ = Describe("Route Emitter", func() {
 								ServerCertDomainSAN:  instanceKey.InstanceGuid,
 								PrivateInstanceIndex: "0",
 								RouteServiceUrl:      "https://awesome.com",
-								Tags:                 map[string]string{"component": "route-emitter"},
+								Tags: map[string]string{
+									"component": "route-emitter",
+									"some-tag":  "some-value",
+								},
 							}),
 						))
 					})
@@ -1465,7 +1485,10 @@ var _ = Describe("Route Emitter", func() {
 								ServerCertDomainSAN:  instanceKey.InstanceGuid,
 								PrivateInstanceIndex: "0",
 								RouteServiceUrl:      "https://awesome.com",
-								Tags:                 map[string]string{"component": "route-emitter"},
+								Tags: map[string]string{
+									"component": "route-emitter",
+									"some-tag":  "some-value",
+								},
 							}),
 							MatchRegistryMessage(routingtable.RegistryMessage{
 								URIs:                 []string{hostnames[0]},
@@ -1476,7 +1499,10 @@ var _ = Describe("Route Emitter", func() {
 								ServerCertDomainSAN:  instanceKey.InstanceGuid,
 								PrivateInstanceIndex: "0",
 								RouteServiceUrl:      "https://awesome.com",
-								Tags:                 map[string]string{"component": "route-emitter"},
+								Tags: map[string]string{
+									"component": "route-emitter",
+									"some-tag":  "some-value",
+								},
 							}),
 						))
 					})
@@ -1502,7 +1528,10 @@ var _ = Describe("Route Emitter", func() {
 									ServerCertDomainSAN:  instanceKey.InstanceGuid,
 									PrivateInstanceIndex: "0",
 									RouteServiceUrl:      "https://awesome.com",
-									Tags:                 map[string]string{"component": "route-emitter"},
+									Tags: map[string]string{
+										"component": "route-emitter",
+										"some-tag":  "some-value",
+									},
 								}),
 								MatchRegistryMessage(routingtable.RegistryMessage{
 									URIs:                 []string{hostnames[0]},
@@ -1514,7 +1543,10 @@ var _ = Describe("Route Emitter", func() {
 									ServerCertDomainSAN:  instanceKey.InstanceGuid,
 									PrivateInstanceIndex: "0",
 									RouteServiceUrl:      "https://awesome.com",
-									Tags:                 map[string]string{"component": "route-emitter"},
+									Tags: map[string]string{
+										"component": "route-emitter",
+										"some-tag":  "some-value",
+									},
 								}),
 							))
 						})
@@ -1540,7 +1572,10 @@ var _ = Describe("Route Emitter", func() {
 										ServerCertDomainSAN:  instanceKey.InstanceGuid,
 										PrivateInstanceIndex: "0",
 										RouteServiceUrl:      "https://awesome.com",
-										Tags:                 map[string]string{"component": "route-emitter"},
+										Tags: map[string]string{
+											"component": "route-emitter",
+											"some-tag":  "some-value",
+										},
 									}),
 									MatchRegistryMessage(routingtable.RegistryMessage{
 										URIs:                 []string{hostnames[0]},
@@ -1552,7 +1587,10 @@ var _ = Describe("Route Emitter", func() {
 										ServerCertDomainSAN:  instanceKey.InstanceGuid,
 										PrivateInstanceIndex: "0",
 										RouteServiceUrl:      "https://awesome.com",
-										Tags:                 map[string]string{"component": "route-emitter"},
+										Tags: map[string]string{
+											"component": "route-emitter",
+											"some-tag":  "some-value",
+										},
 									}),
 								))
 							})
@@ -1621,7 +1659,10 @@ var _ = Describe("Route Emitter", func() {
 							PrivateInstanceId:    instanceKey.InstanceGuid,
 							PrivateInstanceIndex: "0",
 							RouteServiceUrl:      "https://awesome.com",
-							Tags:                 map[string]string{"component": "route-emitter"},
+							Tags: map[string]string{
+								"component": "route-emitter",
+								"some-tag":  "some-value",
+							},
 						}),
 						MatchRegistryMessage(routingtable.RegistryMessage{
 							URIs:                 []string{hostnames[0]},
@@ -1632,7 +1673,10 @@ var _ = Describe("Route Emitter", func() {
 							PrivateInstanceId:    instanceKey.InstanceGuid,
 							PrivateInstanceIndex: "0",
 							RouteServiceUrl:      "https://awesome.com",
-							Tags:                 map[string]string{"component": "route-emitter"},
+							Tags: map[string]string{
+								"component": "route-emitter",
+								"some-tag":  "some-value",
+							},
 						}),
 					))
 				})
@@ -1848,14 +1892,18 @@ var _ = Describe("Route Emitter", func() {
 								Host:                 netInfo.InstanceAddress,
 								PrivateInstanceIndex: "0",
 								App:                  desiredLRP.LogGuid,
-								Tags:                 map[string]string{"component": "route-emitter"},
+								Tags: map[string]string{
+									"component": "route-emitter",
+								},
 							}),
 							MatchRegistryMessage(routingtable.RegistryMessage{
 								URIs:                 []string{internalHostnames[0], fmt.Sprintf("%d.%s", 0, internalHostnames[0])},
 								Host:                 netInfo.InstanceAddress,
 								PrivateInstanceIndex: "0",
 								App:                  desiredLRP.LogGuid,
-								Tags:                 map[string]string{"component": "route-emitter"},
+								Tags: map[string]string{
+									"component": "route-emitter",
+								},
 							}),
 						))
 					})
@@ -2048,7 +2096,10 @@ var _ = Describe("Route Emitter", func() {
 						ServerCertDomainSAN:  "iguid1",
 						PrivateInstanceIndex: "0",
 						RouteServiceUrl:      "https://awesome.com",
-						Tags:                 map[string]string{"component": "route-emitter"},
+						Tags: map[string]string{
+							"component": "route-emitter",
+							"some-tag":  "some-value",
+						},
 					}),
 					MatchRegistryMessage(routingtable.RegistryMessage{
 						URIs:                 []string{"route-2"},
@@ -2059,7 +2110,10 @@ var _ = Describe("Route Emitter", func() {
 						ServerCertDomainSAN:  "iguid1",
 						PrivateInstanceIndex: "0",
 						RouteServiceUrl:      "https://awesome.com",
-						Tags:                 map[string]string{"component": "route-emitter"},
+						Tags: map[string]string{
+							"component": "route-emitter",
+							"some-tag":  "some-value",
+						},
 					}),
 				))
 			})
@@ -2097,7 +2151,10 @@ var _ = Describe("Route Emitter", func() {
 							PrivateInstanceId:    "iguid1",
 							ServerCertDomainSAN:  "iguid1",
 							PrivateInstanceIndex: "0",
-							Tags:                 map[string]string{"component": "route-emitter"},
+							Tags: map[string]string{
+								"component": "route-emitter",
+								"some-tag":  "some-value",
+							},
 						})
 					}
 					Expect([]routingtable.RegistryMessage{msg1, msg2, msg3}).To(ConsistOf(
@@ -2123,7 +2180,10 @@ var _ = Describe("Route Emitter", func() {
 						ServerCertDomainSAN:  "iguid1",
 						PrivateInstanceIndex: "0",
 						RouteServiceUrl:      "https://awesome.com",
-						Tags:                 map[string]string{"component": "route-emitter"},
+						Tags: map[string]string{
+							"component": "route-emitter",
+							"some-tag":  "some-value",
+						},
 					}
 					expectedUnregistrationForRoute2 = routingtable.RegistryMessage{
 						URIs:                 []string{"route-2"},
@@ -2133,7 +2193,10 @@ var _ = Describe("Route Emitter", func() {
 						PrivateInstanceId:    "iguid1",
 						ServerCertDomainSAN:  "iguid1",
 						PrivateInstanceIndex: "0",
-						Tags:                 map[string]string{"component": "route-emitter"},
+						Tags: map[string]string{
+							"component": "route-emitter",
+							"some-tag":  "some-value",
+						},
 					}
 				})
 				JustBeforeEach(func() {
@@ -2188,7 +2251,10 @@ var _ = Describe("Route Emitter", func() {
 						ServerCertDomainSAN:  "iguid1",
 						PrivateInstanceIndex: "0",
 						RouteServiceUrl:      "https://awesome.com",
-						Tags:                 map[string]string{"component": "route-emitter"},
+						Tags: map[string]string{
+							"component": "route-emitter",
+							"some-tag":  "some-value",
+						},
 					}
 				})
 
@@ -2256,6 +2322,7 @@ var _ = Describe("Route Emitter", func() {
 						EndpointUpdatedAtNs:  0,
 						Tags: map[string]string{
 							"component": "route-emitter",
+							"some-tag":  "some-value",
 						},
 					})))
 					done <- struct{}{}
