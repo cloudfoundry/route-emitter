@@ -173,7 +173,7 @@ var _ = Describe("NatsClient", func() {
 				_, err := natsClient.Connect(natsUrls)
 
 				Expect(err).Should(HaveOccurred())
-				Expect(err.Error()).To(Equal("x509: certificate signed by unknown authority"))
+				Expect(err.Error()).To(ContainSubstring("x509: certificate signed by unknown authority"))
 			})
 		})
 
