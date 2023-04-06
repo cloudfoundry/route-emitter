@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"code.cloudfoundry.org/bbs/models"
-	"code.cloudfoundry.org/lager"
+	"code.cloudfoundry.org/lager/v3"
 	tcpmodels "code.cloudfoundry.org/routing-api/models"
 	"code.cloudfoundry.org/routing-info/tcp_routes"
 )

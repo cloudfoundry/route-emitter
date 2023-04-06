@@ -3,7 +3,7 @@ package routingtable_test
 import (
 	"code.cloudfoundry.org/route-emitter/routingtable"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 

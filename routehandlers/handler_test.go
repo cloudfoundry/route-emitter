@@ -6,11 +6,11 @@ import (
 
 	mfakes "code.cloudfoundry.org/diego-logging-client/testhelpers"
 	loggregator "code.cloudfoundry.org/go-loggregator/v8"
-	"code.cloudfoundry.org/lager"
+	"code.cloudfoundry.org/lager/v3"
 	ufakes "code.cloudfoundry.org/route-emitter/unregistration/fakes"
 
 	"code.cloudfoundry.org/bbs/models"
-	"code.cloudfoundry.org/lager/lagertest"
+	"code.cloudfoundry.org/lager/v3/lagertest"
 	"code.cloudfoundry.org/route-emitter/emitter/fakes"
 	"code.cloudfoundry.org/route-emitter/routehandlers"
 	"code.cloudfoundry.org/route-emitter/routingtable"
@@ -19,7 +19,7 @@ import (
 	"code.cloudfoundry.org/routing-info/cfroutes"
 	"github.com/gogo/protobuf/proto"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gbytes"
 )

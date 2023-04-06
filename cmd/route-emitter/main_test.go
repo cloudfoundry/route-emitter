@@ -29,8 +29,8 @@ import (
 
 	"code.cloudfoundry.org/bbs/models"
 	"code.cloudfoundry.org/durationjson"
-	"code.cloudfoundry.org/lager/lagerflags"
-	"code.cloudfoundry.org/lager/lagertest"
+	"code.cloudfoundry.org/lager/v3/lagerflags"
+	"code.cloudfoundry.org/lager/v3/lagertest"
 	"code.cloudfoundry.org/locket"
 	"code.cloudfoundry.org/route-emitter/cmd/route-emitter/config"
 	"code.cloudfoundry.org/route-emitter/cmd/route-emitter/runners"
@@ -44,13 +44,13 @@ import (
 	"code.cloudfoundry.org/routing-info/internalroutes"
 	"code.cloudfoundry.org/routing-info/tcp_routes"
 	"github.com/nats-io/nats.go"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gbytes"
 	"github.com/onsi/gomega/gstruct"
 	"github.com/onsi/gomega/types"
 	"github.com/tedsuo/ifrit"
-	"github.com/tedsuo/ifrit/ginkgomon"
+	ginkgomon "github.com/tedsuo/ifrit/ginkgomon_v2"
 )
 
 const (
@@ -569,7 +569,7 @@ var _ = Describe("Route Emitter", func() {
 							lrpKey := models.NewActualLRPKey("some-guid", 0, domain)
 							instanceKey := models.NewActualLRPInstanceKey("instance-guid", "cell-id")
 							netInfo := models.NewActualLRPNetInfo("some-ip", "container-ip", models.ActualLRPNetInfo_PreferredAddressHost, models.NewPortMapping(62003, 5222))
-							Expect(bbsClient.StartActualLRP(logger, &lrpKey, &instanceKey, &netInfo, []*models.ActualLRPInternalRoute{}, map[string]string{}))
+							Expect(bbsClient.StartActualLRP(logger, &lrpKey, &instanceKey, &netInfo, []*models.ActualLRPInternalRoute{}, map[string]string{})).To(Succeed())
 						})
 
 						It("requests a token from the server", func() {
@@ -764,7 +764,7 @@ var _ = Describe("Route Emitter", func() {
 					})
 
 					JustBeforeEach(func() {
-						Expect(bbsClient.StartActualLRP(logger, &lrpKey, &instanceKey, &netInfo, []*models.ActualLRPInternalRoute{}, map[string]string{}))
+						Expect(bbsClient.StartActualLRP(logger, &lrpKey, &instanceKey, &netInfo, []*models.ActualLRPInternalRoute{}, map[string]string{})).To(Succeed())
 					})
 
 					It("emits its routes immediately", func() {
@@ -989,7 +989,7 @@ var _ = Describe("Route Emitter", func() {
 					key := models.NewActualLRPKey("some-guid-1", 0, domain)
 					instanceKey := models.NewActualLRPInstanceKey("instance-guid-1", "cell-id")
 					netInfo := models.NewActualLRPNetInfo("some-ip-1", "container-ip-1", models.ActualLRPNetInfo_PreferredAddressHost, models.NewPortMapping(62003, 1883))
-					Expect(bbsClient.StartActualLRP(logger, &key, &instanceKey, &netInfo, []*models.ActualLRPInternalRoute{}, map[string]string{}))
+					Expect(bbsClient.StartActualLRP(logger, &key, &instanceKey, &netInfo, []*models.ActualLRPInternalRoute{}, map[string]string{})).To(Succeed())
 				})
 
 				It("starts an SSE connection to the bbs and continues to try to emit to routing api", func() {

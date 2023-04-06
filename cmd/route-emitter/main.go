@@ -16,8 +16,8 @@ import (
 	"code.cloudfoundry.org/debugserver"
 	loggingclient "code.cloudfoundry.org/diego-logging-client"
 	"code.cloudfoundry.org/go-loggregator/v8/runtimeemitter"
-	"code.cloudfoundry.org/lager"
-	"code.cloudfoundry.org/lager/lagerflags"
+	"code.cloudfoundry.org/lager/v3"
+	"code.cloudfoundry.org/lager/v3/lagerflags"
 	"code.cloudfoundry.org/locket"
 	"code.cloudfoundry.org/locket/jointlock"
 	"code.cloudfoundry.org/locket/lock"
@@ -144,9 +144,9 @@ func main() {
 	healthCheckServer := http_server.New(cfg.HealthCheckAddress, http.HandlerFunc(healthHandler))
 	unregistrationSender := unregistration.NewSender(logger, clock, unregistrationCache, natsEmitter, time.Duration(cfg.UnregistrationInterval), cfg.UnregistrationSendCount)
 	members := grouper.Members{
-		{"nats-client", natsClientRunner},
-		{"healthcheck", healthCheckServer},
-		{"unregistration", unregistrationSender},
+		{Name: "nats-client", Runner: natsClientRunner},
+		{Name: "healthcheck", Runner: healthCheckServer},
+		{Name: "unregistration", Runner: unregistrationSender},
 	}
 
 	if cfg.CellID == "" && cfg.LocketEnabled {
@@ -167,7 +167,7 @@ func main() {
 		}
 
 		lockMembers := []grouper.Member{}
-		lockMembers = append(lockMembers, grouper.Member{"sql-lock", lock.NewLockRunner(
+		lockMembers = append(lockMembers, grouper.Member{Name: "sql-lock", Runner: lock.NewLockRunner(
 			logger,
 			locketClient,
 			lockIdentifier,
@@ -177,23 +177,23 @@ func main() {
 		)})
 
 		members = append(members,
-			grouper.Member{"lock", lockRunner(logger, clock, lockMembers)},
+			grouper.Member{Name: "lock", Runner: lockRunner(logger, clock, lockMembers)},
 		)
 	}
 
 	members = append(members,
-		grouper.Member{"watcher", watcher},
-		grouper.Member{"external-scheduler", externalScheduler},
-		grouper.Member{"syncer", syncer},
+		grouper.Member{Name: "watcher", Runner: watcher},
+		grouper.Member{Name: "external-scheduler", Runner: externalScheduler},
+		grouper.Member{Name: "syncer", Runner: syncer},
 	)
 
 	if cfg.EnableInternalEmitter {
-		members = append(members, grouper.Member{"internal-scheduler", internalScheduler})
+		members = append(members, grouper.Member{Name: "internal-scheduler", Runner: internalScheduler})
 	}
 
 	if cfg.DebugAddress != "" {
 		members = append(grouper.Members{
-			{"debug-server", debugserver.Runner(cfg.DebugAddress, reconfigurableSink)},
+			{Name: "debug-server", Runner: debugserver.Runner(cfg.DebugAddress, reconfigurableSink)},
 		}, members...)
 	}
 

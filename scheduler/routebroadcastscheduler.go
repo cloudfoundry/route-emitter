@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"code.cloudfoundry.org/clock"
-	"code.cloudfoundry.org/lager"
+	"code.cloudfoundry.org/lager/v3"
 	"code.cloudfoundry.org/route-emitter/diegonats"
 	"code.cloudfoundry.org/route-emitter/routingtable"
 	"github.com/nats-io/nats.go"
@@ -109,8 +109,6 @@ GREET_LOOP:
 			return nil
 		}
 	}
-
-	return nil
 }
 
 func (s *RouteBroadcastScheduler) emit() {

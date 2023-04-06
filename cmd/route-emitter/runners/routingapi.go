@@ -14,7 +14,7 @@ import (
 	apiconfig "code.cloudfoundry.org/routing-api/config"
 	"code.cloudfoundry.org/routing-api/models"
 	"code.cloudfoundry.org/tlsconfig"
-	"github.com/tedsuo/ifrit/ginkgomon"
+	ginkgomon "github.com/tedsuo/ifrit/ginkgomon_v2"
 )
 
 type Config struct {
