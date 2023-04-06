@@ -5,7 +5,7 @@ import (
 
 	"code.cloudfoundry.org/bbs/models"
 	loggingclient "code.cloudfoundry.org/diego-logging-client"
-	"code.cloudfoundry.org/lager"
+	"code.cloudfoundry.org/lager/v3"
 	"code.cloudfoundry.org/route-emitter/emitter"
 	"code.cloudfoundry.org/route-emitter/routingtable"
 	"code.cloudfoundry.org/route-emitter/unregistration"

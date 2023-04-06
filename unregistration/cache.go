@@ -3,7 +3,7 @@ package unregistration
 import (
 	"sync"
 
-	"code.cloudfoundry.org/lager"
+	"code.cloudfoundry.org/lager/v3"
 	"code.cloudfoundry.org/route-emitter/routingtable"
 	"github.com/mitchellh/hashstructure"
 )

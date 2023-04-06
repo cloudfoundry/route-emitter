@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"os"
 
-	"code.cloudfoundry.org/lager/lagertest"
+	"code.cloudfoundry.org/lager/v3/lagertest"
 	. "code.cloudfoundry.org/route-emitter/diegonats"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/tedsuo/ifrit"
 )

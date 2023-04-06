@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"code.cloudfoundry.org/clock"
-	"code.cloudfoundry.org/lager"
+	"code.cloudfoundry.org/lager/v3"
 )
 
 type NatsSyncer struct {
@@ -52,8 +52,6 @@ func (s *NatsSyncer) Run(signals <-chan os.Signal, ready chan<- struct{}) error 
 			return nil
 		}
 	}
-
-	return nil
 }
 
 func (s *NatsSyncer) SyncCh() chan struct{} {

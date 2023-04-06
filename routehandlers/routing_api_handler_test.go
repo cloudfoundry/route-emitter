@@ -4,8 +4,8 @@ import (
 	"code.cloudfoundry.org/bbs/models"
 	mfakes "code.cloudfoundry.org/diego-logging-client/testhelpers"
 	loggregator "code.cloudfoundry.org/go-loggregator/v8"
-	"code.cloudfoundry.org/lager"
-	"code.cloudfoundry.org/lager/lagertest"
+	"code.cloudfoundry.org/lager/v3"
+	"code.cloudfoundry.org/lager/v3/lagertest"
 	emitterfakes "code.cloudfoundry.org/route-emitter/emitter/fakes"
 	"code.cloudfoundry.org/route-emitter/routehandlers"
 	"code.cloudfoundry.org/route-emitter/routingtable"
@@ -14,7 +14,7 @@ import (
 	ufakes "code.cloudfoundry.org/route-emitter/unregistration/fakes"
 	tcpmodels "code.cloudfoundry.org/routing-api/models"
 	"code.cloudfoundry.org/routing-info/tcp_routes"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 

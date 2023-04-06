@@ -5,14 +5,14 @@ import (
 
 	"code.cloudfoundry.org/bbs/models"
 	mfakes "code.cloudfoundry.org/diego-logging-client/testhelpers"
-	"code.cloudfoundry.org/lager/lagertest"
+	"code.cloudfoundry.org/lager/v3/lagertest"
 	"code.cloudfoundry.org/route-emitter/routingtable"
 	. "code.cloudfoundry.org/route-emitter/routingtable/matchers"
 	tcpmodels "code.cloudfoundry.org/routing-api/models"
 	"code.cloudfoundry.org/routing-info/cfroutes"
 	"code.cloudfoundry.org/routing-info/internalroutes"
 	"code.cloudfoundry.org/routing-info/tcp_routes"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 

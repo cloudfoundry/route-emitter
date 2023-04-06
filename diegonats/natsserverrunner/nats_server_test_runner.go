@@ -11,7 +11,7 @@ import (
 
 	. "github.com/onsi/gomega"
 	"github.com/tedsuo/ifrit"
-	"github.com/tedsuo/ifrit/ginkgomon"
+	ginkgomon "github.com/tedsuo/ifrit/ginkgomon_v2"
 )
 
 func StartNatsServer(natsPort int) (ifrit.Process, diegonats.NATSClient) {

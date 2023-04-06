@@ -3,7 +3,7 @@ package emitter
 import (
 	"context"
 
-	"code.cloudfoundry.org/lager"
+	"code.cloudfoundry.org/lager/v3"
 	"code.cloudfoundry.org/route-emitter/routingtable"
 	routing_api "code.cloudfoundry.org/routing-api"
 	"code.cloudfoundry.org/routing-api/models"

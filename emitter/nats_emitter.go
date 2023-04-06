@@ -5,7 +5,7 @@ import (
 	"sync"
 
 	loggingclient "code.cloudfoundry.org/diego-logging-client"
-	"code.cloudfoundry.org/lager"
+	"code.cloudfoundry.org/lager/v3"
 	"code.cloudfoundry.org/route-emitter/diegonats"
 	"code.cloudfoundry.org/route-emitter/routingtable"
 	"code.cloudfoundry.org/workpool"
