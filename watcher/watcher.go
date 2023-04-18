@@ -355,15 +355,15 @@ func (w *Watcher) checkForEvents(resubscribeChannel chan error, eventChan chan m
 }
 
 func getDesiredLRPs(logger lager.Logger, bbsClient bbs.Client, guids []string) ([]*models.DesiredLRP, error) {
-	logger.Debug("getting-desired-lrps", lager.Data{"guids-length": len(guids)})
-	desiredLRPs, err := bbsClient.DesiredLRPs(logger, models.DesiredLRPFilter{
+	logger.Debug("getting-desired-lrps-routing-info", lager.Data{"guids-length": len(guids)})
+	desiredLRPs, err := bbsClient.DesiredLRPRoutingInfos(logger, models.DesiredLRPFilter{
 		ProcessGuids: guids,
 	})
 	if err != nil {
-		logger.Error("failed-getting-desired-lrps", err)
+		logger.Error("failed-getting-desired-lrps-routing-info", err)
 		return nil, err
 	}
 
-	logger.Debug("succeeded-getting-desired-lrps", lager.Data{"num-desired-responses": len(desiredLRPs)})
+	logger.Debug("succeeded-getting-desired-lrps-routing-info", lager.Data{"num-desired-responses": len(desiredLRPs)})
 	return desiredLRPs, nil
 }
