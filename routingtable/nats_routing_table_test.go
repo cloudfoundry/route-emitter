@@ -211,7 +211,7 @@ var _ = Describe("RoutingTable", func() {
 
 			It("should log the added LRP net info", func() {
 				Expect(logger).To(Say(
-					`"address":"%s".*"ports":\[{"container_port":%d,"host_port":%d}\]`,
+					`"address":"%s".*"ports":\[{"container_port":%d,"host_port":%d,"host_tls_proxy_port":0}\]`,
 					endpoint1.Host,
 					endpoint1.ContainerPort,
 					endpoint1.Port,
@@ -247,7 +247,7 @@ var _ = Describe("RoutingTable", func() {
 
 				It("should log the removed LRP net info", func() {
 					Expect(logger).To(Say(
-						`"address":"%s".*"ports":\[{"container_port":%d,"host_port":%d}\]`,
+						`"address":"%s".*"ports":\[{"container_port":%d,"host_port":%d,"host_tls_proxy_port":0}\]`,
 						endpoint1.Host,
 						endpoint1.ContainerPort,
 						endpoint1.Port,
