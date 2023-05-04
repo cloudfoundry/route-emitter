@@ -565,11 +565,11 @@ var _ = Describe("Route Emitter", func() {
 					Context("when an lrp is desired", func() {
 						BeforeEach(func() {
 							desiredLRP := getDesiredLRP("some-guid", routerGUID, 5222, 5222)
-							Expect(bbsClient.DesireLRP(logger, &desiredLRP)).NotTo(HaveOccurred())
+							Expect(bbsClient.DesireLRP(logger, "", &desiredLRP)).NotTo(HaveOccurred())
 							lrpKey := models.NewActualLRPKey("some-guid", 0, domain)
 							instanceKey := models.NewActualLRPInstanceKey("instance-guid", "cell-id")
 							netInfo := models.NewActualLRPNetInfo("some-ip", "container-ip", models.ActualLRPNetInfo_PreferredAddressHost, models.NewPortMapping(62003, 5222))
-							Expect(bbsClient.StartActualLRP(logger, &lrpKey, &instanceKey, &netInfo, []*models.ActualLRPInternalRoute{}, map[string]string{})).To(Succeed())
+							Expect(bbsClient.StartActualLRP(logger, "", &lrpKey, &instanceKey, &netInfo, []*models.ActualLRPInternalRoute{}, map[string]string{})).To(Succeed())
 						})
 
 						It("requests a token from the server", func() {
@@ -688,7 +688,7 @@ var _ = Describe("Route Emitter", func() {
 				})
 
 				JustBeforeEach(func() {
-					Expect(bbsClient.UpsertDomain(logger, domain, time.Hour)).To(Succeed())
+					Expect(bbsClient.UpsertDomain(logger, "", domain, time.Hour)).To(Succeed())
 					Eventually(blkChannel).Should(BeSent(struct{}{}))
 					Eventually(runner).Should(gbytes.Say("sync.complete"))
 				})
@@ -696,7 +696,7 @@ var _ = Describe("Route Emitter", func() {
 				Context("then a desired lrp event is received", func() {
 					JustBeforeEach(func() {
 						Eventually(runner).Should(gbytes.Say("succeeded-getting-actual-lrps"))
-						Expect(bbsClient.DesireLRP(logger, &desiredLRP)).NotTo(HaveOccurred())
+						Expect(bbsClient.DesireLRP(logger, "", &desiredLRP)).NotTo(HaveOccurred())
 						Eventually(runner).Should(gbytes.Say("caching-event"))
 						Eventually(blkChannel).Should(BeSent(struct{}{}))
 					})
@@ -708,7 +708,7 @@ var _ = Describe("Route Emitter", func() {
 							lrpKey = models.NewActualLRPKey(processGUID, 0, domain)
 							instanceKey = models.NewActualLRPInstanceKey("instance-guid", "cell-id")
 							netInfo = models.NewActualLRPNetInfo("some-ip", "container-ip", models.ActualLRPNetInfo_PreferredAddressHost, models.NewPortMapping(5222, 5222))
-							Expect(bbsClient.StartActualLRP(logger, &lrpKey, &instanceKey, &netInfo, []*models.ActualLRPInternalRoute{}, map[string]string{})).To(Succeed())
+							Expect(bbsClient.StartActualLRP(logger, "", &lrpKey, &instanceKey, &netInfo, []*models.ActualLRPInternalRoute{}, map[string]string{})).To(Succeed())
 							Eventually(runner).Should(gbytes.Say("caching-event"))
 
 							By("unblocking the sync loop")
@@ -753,7 +753,7 @@ var _ = Describe("Route Emitter", func() {
 				})
 
 				JustBeforeEach(func() {
-					Expect(bbsClient.DesireLRP(logger, &desiredLRP)).NotTo(HaveOccurred())
+					Expect(bbsClient.DesireLRP(logger, "", &desiredLRP)).NotTo(HaveOccurred())
 				})
 
 				Context("and an instance is started", func() {
@@ -764,7 +764,7 @@ var _ = Describe("Route Emitter", func() {
 					})
 
 					JustBeforeEach(func() {
-						Expect(bbsClient.StartActualLRP(logger, &lrpKey, &instanceKey, &netInfo, []*models.ActualLRPInternalRoute{}, map[string]string{})).To(Succeed())
+						Expect(bbsClient.StartActualLRP(logger, "", &lrpKey, &instanceKey, &netInfo, []*models.ActualLRPInternalRoute{}, map[string]string{})).To(Succeed())
 					})
 
 					It("emits its routes immediately", func() {
@@ -858,7 +858,7 @@ var _ = Describe("Route Emitter", func() {
 								update := &models.DesiredLRPUpdate{
 									Routes: routes,
 								}
-								err := bbsClient.UpdateDesiredLRP(logger, desiredLRP.ProcessGuid, update)
+								err := bbsClient.UpdateDesiredLRP(logger, "", desiredLRP.ProcessGuid, update)
 								Expect(err).NotTo(HaveOccurred())
 							})
 
@@ -878,7 +878,7 @@ var _ = Describe("Route Emitter", func() {
 							update := &models.DesiredLRPUpdate{
 								Routes: &models.Routes{},
 							}
-							err := bbsClient.UpdateDesiredLRP(logger, desiredLRP.ProcessGuid, update)
+							err := bbsClient.UpdateDesiredLRP(logger, "", desiredLRP.ProcessGuid, update)
 							Expect(err).NotTo(HaveOccurred())
 						})
 
@@ -906,7 +906,7 @@ var _ = Describe("Route Emitter", func() {
 							ProcessGuid: expectedTCPProcessGUID,
 							Index:       index,
 						}
-						err := bbsClient.ClaimActualLRP(logger, &key, &instanceKey)
+						err := bbsClient.ClaimActualLRP(logger, "", &key, &instanceKey)
 						Expect(err).NotTo(HaveOccurred())
 					})
 
@@ -945,7 +945,7 @@ var _ = Describe("Route Emitter", func() {
 					})
 
 					JustBeforeEach(func() {
-						Expect(bbsClient.UpsertDomain(logger, domain, time.Hour)).To(Succeed())
+						Expect(bbsClient.UpsertDomain(logger, "", domain, time.Hour)).To(Succeed())
 					})
 
 					It("should emit a route registration", func() {
@@ -953,7 +953,7 @@ var _ = Describe("Route Emitter", func() {
 						lrpKey = models.NewActualLRPKey(expectedTCPProcessGUID, 0, domain)
 						instanceKey = models.NewActualLRPInstanceKey("instance-guid", "cell-id")
 						netInfo = models.NewActualLRPNetInfo("some-ip", "container-ip", models.ActualLRPNetInfo_PreferredAddressHost, models.NewPortMapping(5222, 5222))
-						Expect(bbsClient.StartActualLRP(logger, &lrpKey, &instanceKey, &netInfo, []*models.ActualLRPInternalRoute{}, map[string]string{})).To(Succeed())
+						Expect(bbsClient.StartActualLRP(logger, "", &lrpKey, &instanceKey, &netInfo, []*models.ActualLRPInternalRoute{}, map[string]string{})).To(Succeed())
 						Eventually(runner).Should(gbytes.Say("caching-event"))
 
 						By("unblocking the sync loop")
@@ -984,12 +984,12 @@ var _ = Describe("Route Emitter", func() {
 				JustBeforeEach(func() {
 					ginkgomon.Kill(routingApiProcess, routingAPIInterruptTimeout)
 					desiredLRP := getDesiredLRP("some-guid-1", "some-guid", 1883, 1883)
-					Expect(bbsClient.DesireLRP(logger, &desiredLRP)).NotTo(HaveOccurred())
+					Expect(bbsClient.DesireLRP(logger, "", &desiredLRP)).NotTo(HaveOccurred())
 
 					key := models.NewActualLRPKey("some-guid-1", 0, domain)
 					instanceKey := models.NewActualLRPInstanceKey("instance-guid-1", "cell-id")
 					netInfo := models.NewActualLRPNetInfo("some-ip-1", "container-ip-1", models.ActualLRPNetInfo_PreferredAddressHost, models.NewPortMapping(62003, 1883))
-					Expect(bbsClient.StartActualLRP(logger, &key, &instanceKey, &netInfo, []*models.ActualLRPInternalRoute{}, map[string]string{})).To(Succeed())
+					Expect(bbsClient.StartActualLRP(logger, "", &key, &instanceKey, &netInfo, []*models.ActualLRPInternalRoute{}, map[string]string{})).To(Succeed())
 				})
 
 				It("starts an SSE connection to the bbs and continues to try to emit to routing api", func() {
@@ -1241,9 +1241,9 @@ var _ = Describe("Route Emitter", func() {
 			})
 
 			It("emits routes", func() {
-				err := bbsClient.DesireLRP(logger, desiredLRP)
+				err := bbsClient.DesireLRP(logger, "", desiredLRP)
 				Expect(err).NotTo(HaveOccurred())
-				err = bbsClient.StartActualLRP(logger, &lrpKey, &instanceKey, &netInfo, []*models.ActualLRPInternalRoute{}, map[string]string{})
+				err = bbsClient.StartActualLRP(logger, "", &lrpKey, &instanceKey, &netInfo, []*models.ActualLRPInternalRoute{}, map[string]string{})
 				Expect(err).NotTo(HaveOccurred())
 				var msg1, msg2 routingtable.RegistryMessage
 				Eventually(registeredRoutes).Should(Receive(&msg1))
@@ -1325,13 +1325,13 @@ var _ = Describe("Route Emitter", func() {
 
 		Context("and an lrp with routes is desired", func() {
 			BeforeEach(func() {
-				err := bbsClient.DesireLRP(logger, desiredLRP)
+				err := bbsClient.DesireLRP(logger, "", desiredLRP)
 				Expect(err).NotTo(HaveOccurred())
 			})
 
 			Context("and an instance starts", func() {
 				JustBeforeEach(func() {
-					err := bbsClient.StartActualLRP(logger, &lrpKey, &instanceKey, &netInfo, []*models.ActualLRPInternalRoute{}, map[string]string{})
+					err := bbsClient.StartActualLRP(logger, "", &lrpKey, &instanceKey, &netInfo, []*models.ActualLRPInternalRoute{}, map[string]string{})
 					Expect(err).NotTo(HaveOccurred())
 				})
 
@@ -1372,7 +1372,7 @@ var _ = Describe("Route Emitter", func() {
 						sqlRunner.Reset()
 
 						// Only start actual LRP, do not repopulate Desired
-						err := bbsClient.StartActualLRP(logger, &lrpKey, &instanceKey, &netInfo, []*models.ActualLRPInternalRoute{}, map[string]string{})
+						err := bbsClient.StartActualLRP(logger, "", &lrpKey, &instanceKey, &netInfo, []*models.ActualLRPInternalRoute{}, map[string]string{})
 						Expect(err).NotTo(HaveOccurred())
 					})
 
@@ -1615,7 +1615,7 @@ var _ = Describe("Route Emitter", func() {
 						ProcessGuid: processGuid,
 						Index:       index,
 					}
-					err := bbsClient.ClaimActualLRP(logger, &key, &instanceKey)
+					err := bbsClient.ClaimActualLRP(logger, "", &key, &instanceKey)
 					Expect(err).NotTo(HaveOccurred())
 				})
 
@@ -1628,10 +1628,10 @@ var _ = Describe("Route Emitter", func() {
 		Context("an actual lrp starts without a routed desired lrp", func() {
 			BeforeEach(func() {
 				desiredLRP.Routes = nil
-				err := bbsClient.DesireLRP(logger, desiredLRP)
+				err := bbsClient.DesireLRP(logger, "", desiredLRP)
 				Expect(err).NotTo(HaveOccurred())
 
-				err = bbsClient.StartActualLRP(logger, &lrpKey, &instanceKey, &netInfo, []*models.ActualLRPInternalRoute{}, map[string]string{})
+				err = bbsClient.StartActualLRP(logger, "", &lrpKey, &instanceKey, &netInfo, []*models.ActualLRPInternalRoute{}, map[string]string{})
 				Expect(err).NotTo(HaveOccurred())
 			})
 
@@ -1640,7 +1640,7 @@ var _ = Describe("Route Emitter", func() {
 					update := &models.DesiredLRPUpdate{
 						Routes: routes,
 					}
-					err := bbsClient.UpdateDesiredLRP(logger, desiredLRP.ProcessGuid, update)
+					err := bbsClient.UpdateDesiredLRP(logger, "", desiredLRP.ProcessGuid, update)
 					Expect(err).NotTo(HaveOccurred())
 				})
 
@@ -1789,10 +1789,10 @@ var _ = Describe("Route Emitter", func() {
 		Context("when an lrp with internal routes is desired and an instance starts", func() {
 			BeforeEach(func() {
 				desiredLRP.Routes = newInternalRoutes([]string{"foo1.bar", "foo2.bar"})
-				err := bbsClient.DesireLRP(logger, desiredLRP)
+				err := bbsClient.DesireLRP(logger, "", desiredLRP)
 				Expect(err).NotTo(HaveOccurred())
 
-				err = bbsClient.StartActualLRP(logger, &lrpKey, &instanceKey, &netInfo, []*models.ActualLRPInternalRoute{}, map[string]string{})
+				err = bbsClient.StartActualLRP(logger, "", &lrpKey, &instanceKey, &netInfo, []*models.ActualLRPInternalRoute{}, map[string]string{})
 				Expect(err).NotTo(HaveOccurred())
 			})
 			It("does not emit any internal routes", func() {
@@ -1834,13 +1834,13 @@ var _ = Describe("Route Emitter", func() {
 
 		Context("and an lrp with routes is desired", func() {
 			BeforeEach(func() {
-				err := bbsClient.DesireLRP(logger, desiredLRP)
+				err := bbsClient.DesireLRP(logger, "", desiredLRP)
 				Expect(err).NotTo(HaveOccurred())
 			})
 
 			Context("and an instance starts", func() {
 				JustBeforeEach(func() {
-					err := bbsClient.StartActualLRP(logger, &lrpKey, &instanceKey, &netInfo, []*models.ActualLRPInternalRoute{}, map[string]string{})
+					err := bbsClient.StartActualLRP(logger, "", &lrpKey, &instanceKey, &netInfo, []*models.ActualLRPInternalRoute{}, map[string]string{})
 					Expect(err).NotTo(HaveOccurred())
 				})
 
@@ -1878,7 +1878,7 @@ var _ = Describe("Route Emitter", func() {
 						Eventually(runner).Should(gbytes.Say("succeeded-getting-desired-lrps"))
 
 						// Only start actual LRP, do not repopulate Desired
-						err := bbsClient.StartActualLRP(logger, &lrpKey, &instanceKey, &netInfo, []*models.ActualLRPInternalRoute{}, map[string]string{})
+						err := bbsClient.StartActualLRP(logger, "", &lrpKey, &instanceKey, &netInfo, []*models.ActualLRPInternalRoute{}, map[string]string{})
 						Expect(err).NotTo(HaveOccurred())
 					})
 
@@ -1949,7 +1949,7 @@ var _ = Describe("Route Emitter", func() {
 						ProcessGuid: processGuid,
 						Index:       index,
 					}
-					err := bbsClient.ClaimActualLRP(logger, &key, &instanceKey)
+					err := bbsClient.ClaimActualLRP(logger, "", &key, &instanceKey)
 					Expect(err).NotTo(HaveOccurred())
 				})
 
@@ -1962,10 +1962,10 @@ var _ = Describe("Route Emitter", func() {
 		Context("an actual lrp starts without a routed desired lrp", func() {
 			BeforeEach(func() {
 				desiredLRP.Routes = nil
-				err := bbsClient.DesireLRP(logger, desiredLRP)
+				err := bbsClient.DesireLRP(logger, "", desiredLRP)
 				Expect(err).NotTo(HaveOccurred())
 
-				err = bbsClient.StartActualLRP(logger, &lrpKey, &instanceKey, &netInfo, []*models.ActualLRPInternalRoute{}, map[string]string{})
+				err = bbsClient.StartActualLRP(logger, "", &lrpKey, &instanceKey, &netInfo, []*models.ActualLRPInternalRoute{}, map[string]string{})
 				Expect(err).NotTo(HaveOccurred())
 			})
 
@@ -1974,7 +1974,7 @@ var _ = Describe("Route Emitter", func() {
 					update := &models.DesiredLRPUpdate{
 						Routes: routes,
 					}
-					err := bbsClient.UpdateDesiredLRP(logger, desiredLRP.ProcessGuid, update)
+					err := bbsClient.UpdateDesiredLRP(logger, "", desiredLRP.ProcessGuid, update)
 					Expect(err).NotTo(HaveOccurred())
 				})
 
@@ -2065,10 +2065,10 @@ var _ = Describe("Route Emitter", func() {
 		var emitter ifrit.Process
 
 		BeforeEach(func() {
-			err := bbsClient.DesireLRP(logger, desiredLRP)
+			err := bbsClient.DesireLRP(logger, "", desiredLRP)
 			Expect(err).NotTo(HaveOccurred())
 
-			err = bbsClient.StartActualLRP(logger, &lrpKey, &instanceKey, &netInfo, []*models.ActualLRPInternalRoute{}, map[string]string{})
+			err = bbsClient.StartActualLRP(logger, "", &lrpKey, &instanceKey, &netInfo, []*models.ActualLRPInternalRoute{}, map[string]string{})
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -2131,7 +2131,7 @@ var _ = Describe("Route Emitter", func() {
 					updateRequest.SetInstances(desiredLRP.Instances)
 					updateRequest.SetAnnotation(desiredLRP.Annotation)
 
-					err := bbsClient.UpdateDesiredLRP(logger, processGuid, updateRequest)
+					err := bbsClient.UpdateDesiredLRP(logger, "", processGuid, updateRequest)
 					Expect(err).NotTo(HaveOccurred())
 				})
 
@@ -2205,12 +2205,12 @@ var _ = Describe("Route Emitter", func() {
 					}
 					updateRequest.SetInstances(desiredLRP.Instances)
 					updateRequest.SetAnnotation(desiredLRP.Annotation)
-					err := bbsClient.UpdateDesiredLRP(logger, processGuid, updateRequest)
+					err := bbsClient.UpdateDesiredLRP(logger, "", processGuid, updateRequest)
 					Expect(err).NotTo(HaveOccurred())
 				})
 
 				It("immediately emits router.unregister when domain is fresh", func() {
-					bbsClient.UpsertDomain(logger, domain, 2*time.Second)
+					bbsClient.UpsertDomain(logger, "", domain, 2*time.Second)
 					Eventually(unregisteredRoutes, msgReceiveTimeout).Should(Receive(
 						MatchRegistryMessage(expectedUnregistrationForRoute1),
 					))
@@ -2220,7 +2220,7 @@ var _ = Describe("Route Emitter", func() {
 				})
 
 				It("repeatedly sends unregistration messages specified in UnregistrationSendCount number of times", func() {
-					bbsClient.UpsertDomain(logger, domain, 2*time.Second)
+					bbsClient.UpsertDomain(logger, "", domain, 2*time.Second)
 					for i := 0; i < unregistrationSendCount+1; i++ {
 						Eventually(unregisteredRoutes, msgReceiveTimeout).Should(Receive(
 							MatchRegistryMessage(expectedUnregistrationForRoute1),
@@ -2266,7 +2266,7 @@ var _ = Describe("Route Emitter", func() {
 					}
 					updateRequest.SetInstances(desiredLRP.Instances)
 					updateRequest.SetAnnotation(desiredLRP.Annotation)
-					err := bbsClient.UpdateDesiredLRP(logger, processGuid, updateRequest)
+					err := bbsClient.UpdateDesiredLRP(logger, "", processGuid, updateRequest)
 					Expect(err).NotTo(HaveOccurred())
 
 					newDesiredLRP = &models.DesiredLRP{}
@@ -2277,7 +2277,7 @@ var _ = Describe("Route Emitter", func() {
 				})
 
 				It("sends unregistration messages unless there is re-registration", func() {
-					bbsClient.UpsertDomain(logger, domain, 2*time.Second)
+					bbsClient.UpsertDomain(logger, "", domain, 2*time.Second)
 
 					var receivedMessage routingtable.RegistryMessage
 					unregisteredRouteMessage := func() routingtable.RegistryMessage {
@@ -2289,12 +2289,12 @@ var _ = Describe("Route Emitter", func() {
 						MatchRegistryMessage(expectedUnregistrationForRoute1),
 						fmt.Sprintf("Failed to receive expected message, received: %#v, expected: %#v", receivedMessage, expectedUnregistrationForRoute1))
 					// this will re-register route-1 and route-2
-					err := bbsClient.DesireLRP(logger, newDesiredLRP)
+					err := bbsClient.DesireLRP(logger, "", newDesiredLRP)
 					Expect(err).NotTo(HaveOccurred())
 					lrpKey := models.NewActualLRPKey("some-other-guid", 0, domain)
 					instanceKey := models.NewActualLRPInstanceKey("instance-guid", "cell-id")
 					netInfo := models.NewActualLRPNetInfo("1.2.3.4", "container-ip", models.ActualLRPNetInfo_PreferredAddressHost, models.NewPortMapping(65100, 8080))
-					Expect(bbsClient.StartActualLRP(logger, &lrpKey, &instanceKey, &netInfo, []*models.ActualLRPInternalRoute{}, map[string]string{})).To(Succeed())
+					Expect(bbsClient.StartActualLRP(logger, "", &lrpKey, &instanceKey, &netInfo, []*models.ActualLRPInternalRoute{}, map[string]string{})).To(Succeed())
 
 					// keep reading unregistration messages until route-1 is re-registered
 					done := make(chan struct{})
@@ -2359,8 +2359,8 @@ var _ = Describe("Route Emitter", func() {
 
 		JustBeforeEach(func() {
 			runner = createEmitterRunner("route-emitter", "cell-id", cfgs...)
-			Expect(bbsClient.UpsertDomain(logger, domain, time.Hour)).To(Succeed())
-			Expect(bbsClient.DesireLRP(logger, desiredLRP)).To(Succeed())
+			Expect(bbsClient.UpsertDomain(logger, "", domain, time.Hour)).To(Succeed())
+			Expect(bbsClient.DesireLRP(logger, "", desiredLRP)).To(Succeed())
 		})
 
 		It("should refresh the desired lrp and emit a route registration", func() {
@@ -2368,7 +2368,7 @@ var _ = Describe("Route Emitter", func() {
 			runner.StartCheck = "succeeded-getting-actual-lrps"
 			emitter = ginkgomon.Invoke(runner)
 
-			Expect(bbsClient.StartActualLRP(logger, &lrpKey, &instanceKey, &netInfo, []*models.ActualLRPInternalRoute{}, map[string]string{})).To(Succeed())
+			Expect(bbsClient.StartActualLRP(logger, "", &lrpKey, &instanceKey, &netInfo, []*models.ActualLRPInternalRoute{}, map[string]string{})).To(Succeed())
 			Eventually(runner).Should(gbytes.Say("caching-event"))
 
 			By("unblocking the sync loop")
