@@ -841,7 +841,7 @@ var _ = Describe("Watcher", func() {
 					Context("when an invalid actual lrp created event is received", func() {
 						BeforeEach(func() {
 							sendEvent = func() {
-								Eventually(eventCh).Should(BeSent(EventHolder{models.NewActualLRPInstanceCreatedEvent(nil, "")}))
+								Eventually(eventCh).Should(BeSent(EventHolder{models.NewActualLRPInstanceCreatedEvent(nil, "some-trace-id")}))
 							}
 						})
 
@@ -853,7 +853,7 @@ var _ = Describe("Watcher", func() {
 					Context("when an invalid actual lrp change event is received", func() {
 						BeforeEach(func() {
 							sendEvent = func() {
-								Eventually(eventCh).Should(BeSent(EventHolder{models.NewActualLRPInstanceChangedEvent(nil, nil, "")}))
+								Eventually(eventCh).Should(BeSent(EventHolder{models.NewActualLRPInstanceChangedEvent(nil, nil, "some-trace-id")}))
 							}
 						})
 
