@@ -356,9 +356,13 @@ func (w *Watcher) checkForEvents(resubscribeChannel chan error, eventChan chan m
 
 func getDesiredLRPs(logger lager.Logger, bbsClient bbs.Client, guids []string) ([]*models.DesiredLRP, error) {
 	logger.Debug("getting-desired-lrps-routing-info", lager.Data{"guids-length": len(guids)})
-	desiredLRPs, err := bbsClient.DesiredLRPRoutingInfos(logger, models.DesiredLRPFilter{
-		ProcessGuids: guids,
-	})
+	filter := models.DesiredLRPFilter{ProcessGuids: guids}
+
+	desiredLRPs, err := bbsClient.DesiredLRPRoutingInfos(logger, filter)
+	if err == bbs.EndpointNotFoundErr {
+		desiredLRPs, err = bbsClient.DesiredLRPs(logger, filter)
+	}
+
 	if err != nil {
 		logger.Error("failed-getting-desired-lrps-routing-info", err)
 		return nil, err
