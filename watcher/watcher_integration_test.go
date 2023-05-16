@@ -177,7 +177,7 @@ var _ = Describe("Watcher Integration", func() {
 				}, nil
 			}
 
-			bbsClient.DesiredLRPsStub = func(logger lager.Logger, f models.DesiredLRPFilter) ([]*models.DesiredLRP, error) {
+			bbsClient.DesiredLRPRoutingInfosStub = func(logger lager.Logger, f models.DesiredLRPFilter) ([]*models.DesiredLRP, error) {
 				defer GinkgoRecover()
 				return []*models.DesiredLRP{desiredLRP1}, nil
 			}
