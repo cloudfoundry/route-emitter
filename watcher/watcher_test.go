@@ -5,6 +5,7 @@ import (
 	"os"
 	"time"
 
+	"code.cloudfoundry.org/bbs"
 	"code.cloudfoundry.org/bbs/events"
 	"code.cloudfoundry.org/bbs/events/eventfakes"
 	"code.cloudfoundry.org/bbs/fake_bbs"
@@ -575,13 +576,13 @@ var _ = Describe("Watcher", func() {
 				errCh = make(chan error, 1)
 				errCh <- errors.New("bam")
 
-				bbsClient.DesiredLRPsStub = func(lager.Logger, models.DesiredLRPFilter) ([]*models.DesiredLRP, error) {
+				bbsClient.DesiredLRPRoutingInfosStub = func(lager.Logger, models.DesiredLRPFilter) ([]*models.DesiredLRP, error) {
 					return []*models.DesiredLRP{}, <-errCh
 				}
 			})
 
 			It("should not call sync until the error resolves", func() {
-				Eventually(bbsClient.DesiredLRPsCallCount).Should(Equal(1))
+				Eventually(bbsClient.DesiredLRPRoutingInfosCallCount).Should(Equal(1))
 				Consistently(routeHandler.SyncCallCount).Should(Equal(0))
 
 				// return no errors
@@ -589,7 +590,7 @@ var _ = Describe("Watcher", func() {
 				syncCh <- struct{}{}
 
 				Eventually(routeHandler.SyncCallCount).Should(Equal(1))
-				Expect(bbsClient.DesiredLRPsCallCount()).To(Equal(2))
+				Expect(bbsClient.DesiredLRPRoutingInfosCallCount()).To(Equal(2))
 			})
 		})
 
@@ -624,6 +625,68 @@ var _ = Describe("Watcher", func() {
 			})
 		})
 
+		Context("when the routing_info BBS endpoint is not there", func() {
+			BeforeEach(func() {
+				bbsClient.ActualLRPsStub = func(logger lager.Logger, f models.ActualLRPFilter) ([]*models.ActualLRP, error) {
+					clock.IncrementBySeconds(1)
+
+					return []*models.ActualLRP{
+						actualLRP1,
+						actualLRP2,
+						actualLRP3,
+					}, nil
+				}
+
+				bbsClient.DesiredLRPRoutingInfosStub = func(logger lager.Logger, f models.DesiredLRPFilter) ([]*models.DesiredLRP, error) {
+					return []*models.DesiredLRP{}, bbs.EndpointNotFoundErr
+				}
+
+				bbsClient.DesiredLRPsStub = func(logger lager.Logger, f models.DesiredLRPFilter) ([]*models.DesiredLRP, error) {
+					return []*models.DesiredLRP{desiredLRP1, desiredLRP2}, nil
+				}
+			})
+
+			It("calls RouteHandler Sync with correct arguments", func() {
+				expectedDesired := []*models.DesiredLRP{
+					desiredLRP1,
+					desiredLRP2,
+				}
+
+				expectedActuals := []*models.ActualLRP{
+					actualLRP1,
+					actualLRP2,
+					actualLRP3,
+				}
+
+				expectedDomains := models.DomainSet{}
+				Eventually(routeHandler.SyncCallCount).Should(Equal(1))
+				_, desired, actuals, domains, _ := routeHandler.SyncArgsForCall(0)
+
+				Expect(domains).To(Equal(expectedDomains))
+				Expect(desired).To(Equal(expectedDesired))
+				Expect(actuals).To(Equal(expectedActuals))
+			})
+
+			It("should emit the sync duration, and allow event processing", func() {
+				Eventually(fakeMetronClient.SendDurationCallCount).Should(Equal(1))
+				metric, value, _ := fakeMetronClient.SendDurationArgsForCall(0)
+				Expect(metric).To(Equal("RouteEmitterSyncDuration"))
+				Expect(value).To(BeNumerically(">=", 100*time.Millisecond))
+
+				By("completing, events are no longer cached")
+				sendEvent()
+
+				Eventually(routeHandler.HandleEventCallCount).Should(Equal(1))
+			})
+
+			It("gets all the desired lrps", func() {
+				Eventually(bbsClient.DesiredLRPRoutingInfosCallCount).Should(Equal(1))
+				Eventually(bbsClient.DesiredLRPsCallCount).Should(Equal(1))
+				_, filter := bbsClient.DesiredLRPRoutingInfosArgsForCall(0)
+				Expect(filter.ProcessGuids).To(BeEmpty())
+			})
+		})
+
 		Context("when desired lrps are retrieved", func() {
 			BeforeEach(func() {
 				bbsClient.ActualLRPsStub = func(logger lager.Logger, f models.ActualLRPFilter) ([]*models.ActualLRP, error) {
@@ -636,7 +699,7 @@ var _ = Describe("Watcher", func() {
 					}, nil
 				}
 
-				bbsClient.DesiredLRPsStub = func(logger lager.Logger, f models.DesiredLRPFilter) ([]*models.DesiredLRP, error) {
+				bbsClient.DesiredLRPRoutingInfosStub = func(logger lager.Logger, f models.DesiredLRPFilter) ([]*models.DesiredLRP, error) {
 					defer GinkgoRecover()
 
 					return []*models.DesiredLRP{desiredLRP1, desiredLRP2}, nil
@@ -677,8 +740,9 @@ var _ = Describe("Watcher", func() {
 			})
 
 			It("gets all the desired lrps", func() {
-				Eventually(bbsClient.DesiredLRPsCallCount).Should(Equal(1))
-				_, filter := bbsClient.DesiredLRPsArgsForCall(0)
+				Eventually(bbsClient.DesiredLRPsCallCount).Should(Equal(0))
+				Eventually(bbsClient.DesiredLRPRoutingInfosCallCount).Should(Equal(1))
+				_, filter := bbsClient.DesiredLRPRoutingInfosArgsForCall(0)
 				Expect(filter.ProcessGuids).To(BeEmpty())
 			})
 		})
@@ -699,7 +763,7 @@ var _ = Describe("Watcher", func() {
 						}, nil
 					}
 
-					bbsClient.DesiredLRPsStub = func(lager.Logger, models.DesiredLRPFilter) ([]*models.DesiredLRP, error) {
+					bbsClient.DesiredLRPRoutingInfosStub = func(lager.Logger, models.DesiredLRPFilter) ([]*models.DesiredLRP, error) {
 						return []*models.DesiredLRP{desiredLRP2}, nil
 					}
 				})
@@ -708,7 +772,7 @@ var _ = Describe("Watcher", func() {
 					Eventually(routeHandler.SyncCallCount).Should(Equal(1))
 					_, desired, _, _, _ := routeHandler.SyncArgsForCall(0)
 					Expect(desired).To(ContainElement(desiredLRP2))
-					Eventually(bbsClient.DesiredLRPsCallCount).Should(Equal(1))
+					Eventually(bbsClient.DesiredLRPRoutingInfosCallCount).Should(Equal(1))
 				})
 
 				It("registers endpoints for lrps on this cell", func() {
@@ -724,8 +788,8 @@ var _ = Describe("Watcher", func() {
 				})
 
 				It("fetches desired lrp scheduling info that match the cell id", func() {
-					Eventually(bbsClient.DesiredLRPsCallCount).Should(Equal(1))
-					_, filter := bbsClient.DesiredLRPsArgsForCall(0)
+					Eventually(bbsClient.DesiredLRPRoutingInfosCallCount).Should(Equal(1))
+					_, filter := bbsClient.DesiredLRPRoutingInfosArgsForCall(0)
 					Expect(filter.ProcessGuids).To(ConsistOf(actualLRP2.ProcessGuid))
 				})
 			})
@@ -795,9 +859,10 @@ var _ = Describe("Watcher", func() {
 					})
 
 					It("fetches the desired lrp and passes it to the route handler", func() {
-						Eventually(bbsClient.DesiredLRPsCallCount).Should(Equal(2))
+						Eventually(bbsClient.DesiredLRPRoutingInfosCallCount).Should(Equal(1))
+						Eventually(bbsClient.DesiredLRPsCallCount).Should(Equal(1))
 
-						_, filter := bbsClient.DesiredLRPsArgsForCall(1)
+						_, filter := bbsClient.DesiredLRPsArgsForCall(0)
 
 						Expect(filter.ProcessGuids).To(HaveLen(1))
 						Expect(filter.ProcessGuids).To(ConsistOf(actualLRP3.ProcessGuid))
@@ -823,9 +888,10 @@ var _ = Describe("Watcher", func() {
 					})
 
 					It("fetches the desired lrp and refreshes the handler", func() {
-						Eventually(bbsClient.DesiredLRPsCallCount).Should(Equal(2))
+						Eventually(bbsClient.DesiredLRPRoutingInfosCallCount).Should(Equal(1))
+						Eventually(bbsClient.DesiredLRPsCallCount).Should(Equal(1))
 
-						_, filter := bbsClient.DesiredLRPsArgsForCall(1)
+						_, filter := bbsClient.DesiredLRPsArgsForCall(0)
 
 						Expect(filter.ProcessGuids).To(HaveLen(1))
 						Expect(filter.ProcessGuids).To(ConsistOf(actualLRP3.ProcessGuid))
@@ -838,7 +904,7 @@ var _ = Describe("Watcher", func() {
 
 					Context("and fetching desired scheduling info fails", func() {
 						BeforeEach(func() {
-							bbsClient.DesiredLRPsStub = func(l lager.Logger, f models.DesiredLRPFilter) ([]*models.DesiredLRP, error) {
+							bbsClient.DesiredLRPRoutingInfosStub = func(l lager.Logger, f models.DesiredLRPFilter) ([]*models.DesiredLRP, error) {
 								defer GinkgoRecover()
 								if len(f.ProcessGuids) == 1 && f.ProcessGuids[0] == "pg-3" {
 									return nil, errors.New("boom!")
@@ -849,7 +915,8 @@ var _ = Describe("Watcher", func() {
 
 						It("does not refresh the desired state", func() {
 							Eventually(routeHandler.ShouldRefreshDesiredCallCount).Should(Equal(1))
-							Eventually(bbsClient.DesiredLRPsCallCount).Should(Equal(2))
+							Eventually(bbsClient.DesiredLRPRoutingInfosCallCount).Should(Equal(1))
+							Eventually(bbsClient.DesiredLRPsCallCount).Should(Equal(1))
 							Consistently(routeHandler.RefreshDesiredCallCount).Should(Equal(0))
 						})
 					})
@@ -863,7 +930,7 @@ var _ = Describe("Watcher", func() {
 							Eventually(logger).Should(gbytes.Say("caching-event"))
 							return []*models.ActualLRP{actualLRP1}, nil
 						}
-						bbsClient.DesiredLRPsStub = func(l lager.Logger, f models.DesiredLRPFilter) ([]*models.DesiredLRP, error) {
+						bbsClient.DesiredLRPRoutingInfosStub = func(l lager.Logger, f models.DesiredLRPFilter) ([]*models.DesiredLRP, error) {
 							defer GinkgoRecover()
 							if len(f.ProcessGuids) == 1 && f.ProcessGuids[0] == "pg-3" {
 								return nil, errors.New("boom!")
@@ -874,7 +941,8 @@ var _ = Describe("Watcher", func() {
 
 					It("does not refresh the desired state", func() {
 						Eventually(routeHandler.ShouldRefreshDesiredCallCount).Should(Equal(1))
-						Eventually(bbsClient.DesiredLRPsCallCount).Should(Equal(2))
+						Eventually(bbsClient.DesiredLRPRoutingInfosCallCount).Should(Equal(1))
+						Eventually(bbsClient.DesiredLRPsCallCount).Should(Equal(1))
 						Consistently(routeHandler.RefreshDesiredCallCount).Should(Equal(0))
 					})
 				})
@@ -888,7 +956,7 @@ var _ = Describe("Watcher", func() {
 				})
 
 				It("does not fetch any desired lrp scheduling info", func() {
-					Consistently(bbsClient.DesiredLRPsCallCount).Should(Equal(0))
+					Consistently(bbsClient.DesiredLRPRoutingInfosCallCount).Should(Equal(0))
 				})
 			})
 		})
