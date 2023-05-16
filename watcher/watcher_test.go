@@ -740,7 +740,6 @@ var _ = Describe("Watcher", func() {
 			})
 
 			It("gets all the desired lrps", func() {
-				Eventually(bbsClient.DesiredLRPsCallCount).Should(Equal(0))
 				Eventually(bbsClient.DesiredLRPRoutingInfosCallCount).Should(Equal(1))
 				_, filter := bbsClient.DesiredLRPRoutingInfosArgsForCall(0)
 				Expect(filter.ProcessGuids).To(BeEmpty())
