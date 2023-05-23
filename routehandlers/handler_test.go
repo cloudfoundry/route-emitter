@@ -24,7 +24,10 @@ import (
 	"github.com/onsi/gomega/gbytes"
 )
 
-const logGuid = "some-log-guid"
+const (
+	logGuid = "some-log-guid"
+	traceId = "7f461654-74d1-1ee5-8367-77d85df2cdab"
+)
 
 type randomEvent struct {
 	proto.Message
@@ -154,7 +157,7 @@ var _ = Describe("Handler", func() {
 			})
 
 			JustBeforeEach(func() {
-				routeHandler.HandleEvent(logger, models.NewDesiredLRPCreatedEvent(desiredLRP))
+				routeHandler.HandleEvent(logger, models.NewDesiredLRPCreatedEvent(desiredLRP, traceId))
 			})
 
 			It("should set the routes on the table", func() {
@@ -247,7 +250,7 @@ var _ = Describe("Handler", func() {
 			})
 
 			JustBeforeEach(func() {
-				routeHandler.HandleEvent(logger, models.NewDesiredLRPChangedEvent(originalDesiredLRP, changedDesiredLRP))
+				routeHandler.HandleEvent(logger, models.NewDesiredLRPChangedEvent(originalDesiredLRP, changedDesiredLRP, traceId))
 			})
 
 			It("should set the routes on the table", func() {
@@ -346,7 +349,7 @@ var _ = Describe("Handler", func() {
 			})
 
 			JustBeforeEach(func() {
-				routeHandler.HandleEvent(logger, models.NewDesiredLRPRemovedEvent(desiredLRP))
+				routeHandler.HandleEvent(logger, models.NewDesiredLRPRemovedEvent(desiredLRP, "some-trace-id"))
 			})
 
 			It("should remove the routes from the table", func() {
@@ -392,11 +395,11 @@ var _ = Describe("Handler", func() {
 				})
 
 				JustBeforeEach(func() {
-					routeHandler.HandleEvent(logger, models.NewActualLRPInstanceCreatedEvent(actualLRP))
+					routeHandler.HandleEvent(logger, models.NewActualLRPInstanceCreatedEvent(actualLRP, traceId))
 				})
 
 				It("logs an error", func() {
-					routeHandler.HandleEvent(logger, models.NewActualLRPInstanceCreatedEvent(actualLRP))
+					routeHandler.HandleEvent(logger, models.NewActualLRPInstanceCreatedEvent(actualLRP, traceId))
 					Expect(logger).To(gbytes.Say("nil-actual-lrp"))
 				})
 			})
@@ -420,7 +423,7 @@ var _ = Describe("Handler", func() {
 				})
 
 				JustBeforeEach(func() {
-					routeHandler.HandleEvent(logger, models.NewActualLRPInstanceCreatedEvent(actualLRP))
+					routeHandler.HandleEvent(logger, models.NewActualLRPInstanceCreatedEvent(actualLRP, "some-trace-id"))
 				})
 
 				It("should add/update the endpoints on the table", func() {
@@ -519,7 +522,7 @@ var _ = Describe("Handler", func() {
 				})
 
 				JustBeforeEach(func() {
-					routeHandler.HandleEvent(logger, models.NewActualLRPInstanceChangedEvent(beforeActualLRP, afterActualLRP))
+					routeHandler.HandleEvent(logger, models.NewActualLRPInstanceChangedEvent(beforeActualLRP, afterActualLRP, "some-trace-id"))
 				})
 
 				It("should add/update the endpoint on the table", func() {
@@ -556,7 +559,7 @@ var _ = Describe("Handler", func() {
 							beforeActualLRP = nil
 						})
 						It("logs an error", func() {
-							routeHandler.HandleEvent(logger, models.NewActualLRPInstanceChangedEvent(beforeActualLRP, afterActualLRP))
+							routeHandler.HandleEvent(logger, models.NewActualLRPInstanceChangedEvent(beforeActualLRP, afterActualLRP, "some-trace-id"))
 							Expect(logger).To(gbytes.Say("nil-actual-lrp"))
 						})
 					})
@@ -566,7 +569,7 @@ var _ = Describe("Handler", func() {
 							afterActualLRP = nil
 						})
 						It("logs an error", func() {
-							routeHandler.HandleEvent(logger, models.NewActualLRPInstanceChangedEvent(beforeActualLRP, afterActualLRP))
+							routeHandler.HandleEvent(logger, models.NewActualLRPInstanceChangedEvent(beforeActualLRP, afterActualLRP, "some-trace-id"))
 							Expect(logger).To(gbytes.Say("nil-actual-lrp"))
 						})
 					})
@@ -613,7 +616,7 @@ var _ = Describe("Handler", func() {
 				})
 
 				JustBeforeEach(func() {
-					routeHandler.HandleEvent(logger, models.NewActualLRPInstanceChangedEvent(beforeActualLRP, afterActualLRP))
+					routeHandler.HandleEvent(logger, models.NewActualLRPInstanceChangedEvent(beforeActualLRP, afterActualLRP, "some-trace-id"))
 				})
 
 				It("should remove the endpoint from the table", func() {
@@ -685,7 +688,7 @@ var _ = Describe("Handler", func() {
 				})
 
 				JustBeforeEach(func() {
-					routeHandler.HandleEvent(logger, models.NewActualLRPInstanceChangedEvent(beforeActualLRP, afterActualLRP))
+					routeHandler.HandleEvent(logger, models.NewActualLRPInstanceChangedEvent(beforeActualLRP, afterActualLRP, "some-trace-id"))
 				})
 
 				Context("when the resulting LRP presence does not change", func() {
@@ -781,7 +784,7 @@ var _ = Describe("Handler", func() {
 						),
 						State: models.ActualLRPStateClaimed,
 					}
-					routeHandler.HandleEvent(logger, models.NewActualLRPInstanceChangedEvent(beforeActualLRP, afterActualLRP))
+					routeHandler.HandleEvent(logger, models.NewActualLRPInstanceChangedEvent(beforeActualLRP, afterActualLRP, "some-trace-id"))
 				})
 
 				It("should NOT log the net info", func() {
@@ -833,7 +836,7 @@ var _ = Describe("Handler", func() {
 				})
 
 				JustBeforeEach(func() {
-					routeHandler.HandleEvent(logger, models.NewActualLRPInstanceRemovedEvent(actualLRP))
+					routeHandler.HandleEvent(logger, models.NewActualLRPInstanceRemovedEvent(actualLRP, "some-trace-id"))
 				})
 
 				It("should remove the endpoint from the table", func() {
@@ -865,7 +868,7 @@ var _ = Describe("Handler", func() {
 						State: models.ActualLRPStateCrashed,
 					}
 
-					routeHandler.HandleEvent(logger, models.NewActualLRPInstanceRemovedEvent(actualLRP))
+					routeHandler.HandleEvent(logger, models.NewActualLRPInstanceRemovedEvent(actualLRP, "some-trace-id"))
 				})
 
 				It("should NOT log the net info", func() {
@@ -896,7 +899,7 @@ var _ = Describe("Handler", func() {
 				})
 
 				It("logs an error", func() {
-					routeHandler.HandleEvent(logger, models.NewActualLRPInstanceRemovedEvent(actualLRP))
+					routeHandler.HandleEvent(logger, models.NewActualLRPInstanceRemovedEvent(actualLRP, "some-trace-id"))
 					Expect(logger).To(gbytes.Say("nil-actual-lrp"))
 				})
 			})
@@ -1163,7 +1166,7 @@ var _ = Describe("Handler", func() {
 						ProcessGuid: "pg-4",
 						Routes:      &routes,
 						Instances:   1,
-					})
+					}, "some-trace-id")
 
 					endpoint4 = routingtable.Endpoint{
 						InstanceGUID:    "ig-4",
@@ -1180,7 +1183,7 @@ var _ = Describe("Handler", func() {
 						ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint4.InstanceGUID, "cell-id"),
 						ActualLRPNetInfo:     models.NewActualLRPNetInfo(endpoint4.Host, "container-ip-4", models.ActualLRPNetInfo_PreferredAddressHost, models.NewPortMapping(endpoint4.Port, endpoint4.ContainerPort)),
 						State:                models.ActualLRPStateRunning,
-					})
+					}, "some-trace-id")
 
 					cachedEvents := map[string]models.Event{
 						desiredLRPEvent.Key(): desiredLRPEvent,

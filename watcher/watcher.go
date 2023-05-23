@@ -187,11 +187,14 @@ func (watcher *Watcher) Run(signals <-chan os.Signal, ready chan<- struct{}) err
 func (w *Watcher) retrieveDesiredInternal(logger lager.Logger, event models.Event, currentDesireds []*models.DesiredLRP, syncing bool) []*models.DesiredLRP {
 	var err error
 	var actualLRP *models.ActualLRP
+	var traceId string
 	switch event := event.(type) {
 	case *models.ActualLRPInstanceCreatedEvent:
 		actualLRP = event.ActualLrp
+		traceId = event.TraceId
 	case *models.ActualLRPInstanceChangedEvent:
 		actualLRP = event.After.ToActualLRP(event.ActualLRPKey, event.ActualLRPInstanceKey)
+		traceId = event.TraceId
 	default:
 		return nil
 	}
@@ -205,7 +208,7 @@ func (w *Watcher) retrieveDesiredInternal(logger lager.Logger, event models.Even
 	}
 	if w.routeHandler.ShouldRefreshDesired(actualLRP) || (syncing && !foundInCurrentDesireds(actualLRP.ProcessGuid, currentDesireds)) {
 		logger.Info("refreshing-desired-lrp-info", lager.Data{"process-guid": actualLRP.ProcessGuid})
-		desiredLRPs, err = w.bbsClient.DesiredLRPs(logger, models.DesiredLRPFilter{
+		desiredLRPs, err = w.bbsClient.DesiredLRPs(logger, traceId, models.DesiredLRPFilter{
 			ProcessGuids: []string{actualLRP.ProcessGuid},
 		})
 		if err != nil {
@@ -257,7 +260,7 @@ func (w *Watcher) sync(logger lager.Logger, ch chan<- *syncEventResult) {
 		defer wg.Done()
 		logger.Debug("getting-actual-lrps")
 		var actualLRPs []*models.ActualLRP
-		actualLRPs, actualErr = w.bbsClient.ActualLRPs(logger, models.ActualLRPFilter{CellID: w.cellID})
+		actualLRPs, actualErr = w.bbsClient.ActualLRPs(logger, "", models.ActualLRPFilter{CellID: w.cellID})
 		if actualErr != nil {
 			logger.Error("failed-getting-actual-lrps", actualErr)
 			return
@@ -295,7 +298,7 @@ func (w *Watcher) sync(logger lager.Logger, ch chan<- *syncEventResult) {
 		defer wg.Done()
 		var domainArray []string
 		logger.Debug("getting-domains")
-		domainArray, domainsErr = w.bbsClient.Domains(logger)
+		domainArray, domainsErr = w.bbsClient.Domains(logger, "")
 		if domainsErr != nil {
 			logger.Error("failed-getting-domains", domainsErr)
 			return
@@ -358,9 +361,9 @@ func getDesiredLRPs(logger lager.Logger, bbsClient bbs.Client, guids []string) (
 	logger.Debug("getting-desired-lrps-routing-info", lager.Data{"guids-length": len(guids)})
 	filter := models.DesiredLRPFilter{ProcessGuids: guids}
 
-	desiredLRPs, err := bbsClient.DesiredLRPRoutingInfos(logger, filter)
+	desiredLRPs, err := bbsClient.DesiredLRPRoutingInfos(logger, "", filter)
 	if err == bbs.EndpointNotFoundErr {
-		desiredLRPs, err = bbsClient.DesiredLRPs(logger, filter)
+		desiredLRPs, err = bbsClient.DesiredLRPs(logger, "", filter)
 	}
 
 	if err != nil {

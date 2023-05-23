@@ -103,7 +103,7 @@ var _ = Describe("Watcher Integration", func() {
 		)
 
 		sendEvent := func() {
-			Eventually(eventCh).Should(BeSent(EventHolder{models.NewActualLRPInstanceRemovedEvent(removedActualLRP)}))
+			Eventually(eventCh).Should(BeSent(EventHolder{models.NewActualLRPInstanceRemovedEvent(removedActualLRP, "some-trace-id")}))
 			Eventually(logger).Should(gbytes.Say("caching-event"))
 		}
 
@@ -167,7 +167,7 @@ var _ = Describe("Watcher Integration", func() {
 				}
 			}
 
-			bbsClient.ActualLRPsStub = func(logger lager.Logger, filter models.ActualLRPFilter) ([]*models.ActualLRP, error) {
+			bbsClient.ActualLRPsStub = func(logger lager.Logger, traceId string, filter models.ActualLRPFilter) ([]*models.ActualLRP, error) {
 				defer GinkgoRecover()
 
 				sendEvent()
@@ -177,7 +177,7 @@ var _ = Describe("Watcher Integration", func() {
 				}, nil
 			}
 
-			bbsClient.DesiredLRPRoutingInfosStub = func(logger lager.Logger, f models.DesiredLRPFilter) ([]*models.DesiredLRP, error) {
+			bbsClient.DesiredLRPRoutingInfosStub = func(logger lager.Logger, traceId string, f models.DesiredLRPFilter) ([]*models.DesiredLRP, error) {
 				defer GinkgoRecover()
 				return []*models.DesiredLRP{desiredLRP1}, nil
 			}

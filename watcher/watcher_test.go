@@ -153,7 +153,7 @@ var _ = Describe("Watcher", func() {
 
 		BeforeEach(func() {
 			desiredLRP := getDesiredLRP("process-guid-1", "log-guid-1", 5222, 61000)
-			event = models.NewDesiredLRPCreatedEvent(desiredLRP)
+			event = models.NewDesiredLRPCreatedEvent(desiredLRP, "some-trace-id")
 			eventSource.NextReturns(event, nil)
 		})
 
@@ -172,7 +172,7 @@ var _ = Describe("Watcher", func() {
 		BeforeEach(func() {
 			beforeLRP := getDesiredLRP("process-guid-1", "log-guid-1", 5222, 61000)
 			afterLRP := getDesiredLRP("process-guid-1", "log-guid-1", 5222, 61001)
-			event = models.NewDesiredLRPChangedEvent(beforeLRP, afterLRP)
+			event = models.NewDesiredLRPChangedEvent(beforeLRP, afterLRP, "some-trace-id")
 			eventSource.NextReturns(event, nil)
 		})
 
@@ -190,7 +190,7 @@ var _ = Describe("Watcher", func() {
 
 		BeforeEach(func() {
 			desiredLRP := getDesiredLRP("process-guid-1", "log-guid-1", 5222, 61000)
-			event = models.NewDesiredLRPRemovedEvent(desiredLRP)
+			event = models.NewDesiredLRPRemovedEvent(desiredLRP, "some-trace-id")
 			eventSource.NextReturns(event, nil)
 		})
 
@@ -208,7 +208,7 @@ var _ = Describe("Watcher", func() {
 
 		BeforeEach(func() {
 			actualLRP := getActualLRP("process-guid-1", "instance-guid-1", "some-ip", "container-ip", 61000, 5222, false)
-			event = models.NewActualLRPInstanceRemovedEvent(actualLRP)
+			event = models.NewActualLRPInstanceRemovedEvent(actualLRP, "some-trace-id")
 			eventSource.NextReturns(event, nil)
 		})
 
@@ -226,7 +226,7 @@ var _ = Describe("Watcher", func() {
 
 		BeforeEach(func() {
 			actualLRP := getActualLRP("process-guid-1", "instance-guid-1", "some-ip", "container-ip", 61000, 5222, false)
-			event = models.NewActualLRPInstanceCreatedEvent(actualLRP)
+			event = models.NewActualLRPInstanceCreatedEvent(actualLRP, "some-trace-id")
 			eventSource.NextReturns(event, nil)
 		})
 
@@ -245,7 +245,7 @@ var _ = Describe("Watcher", func() {
 		BeforeEach(func() {
 			beforeLRP := getActualLRP("process-guid-1", "instance-guid-1", "some-ip", "container-ip", 61000, 5222, false)
 			afterLRP := getActualLRP("process-guid-1", "instance-guid-1", "some-ip", "container-ip", 61001, 5222, false)
-			event = models.NewActualLRPInstanceChangedEvent(beforeLRP, afterLRP)
+			event = models.NewActualLRPInstanceChangedEvent(beforeLRP, afterLRP, "some-trace-id")
 			eventSource.NextReturns(event, nil)
 		})
 
@@ -445,7 +445,7 @@ var _ = Describe("Watcher", func() {
 		var sendEvent func()
 		BeforeEach(func() {
 			sendEvent = func() {
-				Eventually(eventCh).Should(BeSent(EventHolder{models.NewActualLRPInstanceRemovedEvent(actualLRP1)}))
+				Eventually(eventCh).Should(BeSent(EventHolder{models.NewActualLRPInstanceRemovedEvent(actualLRP1, "some-trace-id")}))
 			}
 		})
 
@@ -455,7 +455,7 @@ var _ = Describe("Watcher", func() {
 
 		Describe("bbs events", func() {
 			BeforeEach(func() {
-				bbsClient.ActualLRPsStub = func(lager.Logger, models.ActualLRPFilter) ([]*models.ActualLRP, error) {
+				bbsClient.ActualLRPsStub = func(lager.Logger, string, models.ActualLRPFilter) ([]*models.ActualLRP, error) {
 					defer GinkgoRecover()
 					sendEvent()
 					Eventually(logger).Should(gbytes.Say("caching-event"))
@@ -471,14 +471,14 @@ var _ = Describe("Watcher", func() {
 				Eventually(routeHandler.SyncCallCount).Should(Equal(1))
 				_, _, _, _, event := routeHandler.SyncArgsForCall(0)
 
-				expectedEvent := models.NewActualLRPInstanceRemovedEvent(actualLRP1)
+				expectedEvent := models.NewActualLRPInstanceRemovedEvent(actualLRP1, "some-trace-id")
 				Expect(event[actualLRP1.InstanceGuid]).To(Equal(expectedEvent))
 			})
 
 			Context("when an invalid actual lrp created event is cached", func() {
 				BeforeEach(func() {
 					sendEvent = func() {
-						Eventually(eventCh).Should(BeSent(EventHolder{models.NewActualLRPInstanceCreatedEvent(nil)}))
+						Eventually(eventCh).Should(BeSent(EventHolder{models.NewActualLRPInstanceCreatedEvent(nil, "some-trace-id")}))
 					}
 				})
 
@@ -490,7 +490,7 @@ var _ = Describe("Watcher", func() {
 			Context("when an invalid actual lrp change event is cached", func() {
 				BeforeEach(func() {
 					sendEvent = func() {
-						Eventually(eventCh).Should(BeSent(EventHolder{models.NewActualLRPInstanceChangedEvent(nil, nil)}))
+						Eventually(eventCh).Should(BeSent(EventHolder{models.NewActualLRPInstanceChangedEvent(nil, nil, "some-trace-id")}))
 					}
 				})
 
@@ -507,7 +507,7 @@ var _ = Describe("Watcher", func() {
 
 			BeforeEach(func() {
 				unblock = make(chan struct{})
-				bbsClient.ActualLRPsStub = func(lager.Logger, models.ActualLRPFilter) ([]*models.ActualLRP, error) {
+				bbsClient.ActualLRPsStub = func(lager.Logger, string, models.ActualLRPFilter) ([]*models.ActualLRP, error) {
 					<-unblock
 					return nil, nil
 				}
@@ -535,7 +535,7 @@ var _ = Describe("Watcher", func() {
 			BeforeEach(func() {
 				errCh = make(chan error, 1)
 				errCh <- errors.New("bam")
-				bbsClient.ActualLRPsStub = func(lager.Logger, models.ActualLRPFilter) ([]*models.ActualLRP, error) {
+				bbsClient.ActualLRPsStub = func(lager.Logger, string, models.ActualLRPFilter) ([]*models.ActualLRP, error) {
 					return []*models.ActualLRP{}, <-errCh
 				}
 			})
@@ -555,7 +555,7 @@ var _ = Describe("Watcher", func() {
 
 		Context("when one of the actual lrps is invalid", func() {
 			BeforeEach(func() {
-				bbsClient.ActualLRPsStub = func(lager.Logger, models.ActualLRPFilter) ([]*models.ActualLRP, error) {
+				bbsClient.ActualLRPsStub = func(lager.Logger, string, models.ActualLRPFilter) ([]*models.ActualLRP, error) {
 					return []*models.ActualLRP{actualLRP1, &models.ActualLRP{}, actualLRP2}, nil
 				}
 			})
@@ -576,7 +576,7 @@ var _ = Describe("Watcher", func() {
 				errCh = make(chan error, 1)
 				errCh <- errors.New("bam")
 
-				bbsClient.DesiredLRPRoutingInfosStub = func(lager.Logger, models.DesiredLRPFilter) ([]*models.DesiredLRP, error) {
+				bbsClient.DesiredLRPRoutingInfosStub = func(lager.Logger, string, models.DesiredLRPFilter) ([]*models.DesiredLRP, error) {
 					return []*models.DesiredLRP{}, <-errCh
 				}
 			})
@@ -603,7 +603,7 @@ var _ = Describe("Watcher", func() {
 				errCh = make(chan error, 1)
 				errCh <- errors.New("bam")
 
-				bbsClient.DomainsStub = func(lager.Logger) ([]string, error) {
+				bbsClient.DomainsStub = func(lager.Logger, string) ([]string, error) {
 					return []string{}, <-errCh
 				}
 			})
@@ -627,7 +627,7 @@ var _ = Describe("Watcher", func() {
 
 		Context("when the routing_info BBS endpoint is not there", func() {
 			BeforeEach(func() {
-				bbsClient.ActualLRPsStub = func(logger lager.Logger, f models.ActualLRPFilter) ([]*models.ActualLRP, error) {
+				bbsClient.ActualLRPsStub = func(logger lager.Logger, traceId string, f models.ActualLRPFilter) ([]*models.ActualLRP, error) {
 					clock.IncrementBySeconds(1)
 
 					return []*models.ActualLRP{
@@ -637,11 +637,11 @@ var _ = Describe("Watcher", func() {
 					}, nil
 				}
 
-				bbsClient.DesiredLRPRoutingInfosStub = func(logger lager.Logger, f models.DesiredLRPFilter) ([]*models.DesiredLRP, error) {
+				bbsClient.DesiredLRPRoutingInfosStub = func(logger lager.Logger, traceId string, f models.DesiredLRPFilter) ([]*models.DesiredLRP, error) {
 					return []*models.DesiredLRP{}, bbs.EndpointNotFoundErr
 				}
 
-				bbsClient.DesiredLRPsStub = func(logger lager.Logger, f models.DesiredLRPFilter) ([]*models.DesiredLRP, error) {
+				bbsClient.DesiredLRPsStub = func(logger lager.Logger, traceId string, f models.DesiredLRPFilter) ([]*models.DesiredLRP, error) {
 					return []*models.DesiredLRP{desiredLRP1, desiredLRP2}, nil
 				}
 			})
@@ -682,14 +682,15 @@ var _ = Describe("Watcher", func() {
 			It("gets all the desired lrps", func() {
 				Eventually(bbsClient.DesiredLRPRoutingInfosCallCount).Should(Equal(1))
 				Eventually(bbsClient.DesiredLRPsCallCount).Should(Equal(1))
-				_, filter := bbsClient.DesiredLRPRoutingInfosArgsForCall(0)
+				_, traceId, filter := bbsClient.DesiredLRPRoutingInfosArgsForCall(0)
+				Expect(traceId).To(BeEmpty())
 				Expect(filter.ProcessGuids).To(BeEmpty())
 			})
 		})
 
 		Context("when desired lrps are retrieved", func() {
 			BeforeEach(func() {
-				bbsClient.ActualLRPsStub = func(logger lager.Logger, f models.ActualLRPFilter) ([]*models.ActualLRP, error) {
+				bbsClient.ActualLRPsStub = func(logger lager.Logger, traceId string, f models.ActualLRPFilter) ([]*models.ActualLRP, error) {
 					clock.IncrementBySeconds(1)
 
 					return []*models.ActualLRP{
@@ -699,7 +700,7 @@ var _ = Describe("Watcher", func() {
 					}, nil
 				}
 
-				bbsClient.DesiredLRPRoutingInfosStub = func(logger lager.Logger, f models.DesiredLRPFilter) ([]*models.DesiredLRP, error) {
+				bbsClient.DesiredLRPRoutingInfosStub = func(logger lager.Logger, traceID string, f models.DesiredLRPFilter) ([]*models.DesiredLRP, error) {
 					defer GinkgoRecover()
 
 					return []*models.DesiredLRP{desiredLRP1, desiredLRP2}, nil
@@ -741,7 +742,8 @@ var _ = Describe("Watcher", func() {
 
 			It("gets all the desired lrps", func() {
 				Eventually(bbsClient.DesiredLRPRoutingInfosCallCount).Should(Equal(1))
-				_, filter := bbsClient.DesiredLRPRoutingInfosArgsForCall(0)
+				_, traceId, filter := bbsClient.DesiredLRPRoutingInfosArgsForCall(0)
+				Expect(traceId).To(BeEmpty())
 				Expect(filter.ProcessGuids).To(BeEmpty())
 			})
 		})
@@ -754,7 +756,7 @@ var _ = Describe("Watcher", func() {
 
 			Context("when the cell has actual lrps running", func() {
 				BeforeEach(func() {
-					bbsClient.ActualLRPsStub = func(lager.Logger, models.ActualLRPFilter) ([]*models.ActualLRP, error) {
+					bbsClient.ActualLRPsStub = func(lager.Logger, string, models.ActualLRPFilter) ([]*models.ActualLRP, error) {
 						clock.IncrementBySeconds(1)
 
 						return []*models.ActualLRP{
@@ -762,7 +764,7 @@ var _ = Describe("Watcher", func() {
 						}, nil
 					}
 
-					bbsClient.DesiredLRPRoutingInfosStub = func(lager.Logger, models.DesiredLRPFilter) ([]*models.DesiredLRP, error) {
+					bbsClient.DesiredLRPRoutingInfosStub = func(lager.Logger, string, models.DesiredLRPFilter) ([]*models.DesiredLRP, error) {
 						return []*models.DesiredLRP{desiredLRP2}, nil
 					}
 				})
@@ -782,13 +784,15 @@ var _ = Describe("Watcher", func() {
 
 				It("fetches actual lrps that match the cell id", func() {
 					Eventually(bbsClient.ActualLRPsCallCount).Should(Equal(1))
-					_, filter := bbsClient.ActualLRPsArgsForCall(0)
+					_, traceId, filter := bbsClient.ActualLRPsArgsForCall(0)
+					Expect(traceId).To(BeEmpty())
 					Expect(filter.CellID).To(Equal(cellID))
 				})
 
 				It("fetches desired lrp scheduling info that match the cell id", func() {
 					Eventually(bbsClient.DesiredLRPRoutingInfosCallCount).Should(Equal(1))
-					_, filter := bbsClient.DesiredLRPRoutingInfosArgsForCall(0)
+					_, traceId, filter := bbsClient.DesiredLRPRoutingInfosArgsForCall(0)
+					Expect(traceId).To(BeEmpty())
 					Expect(filter.ProcessGuids).To(ConsistOf(actualLRP2.ProcessGuid))
 				})
 			})
@@ -804,10 +808,11 @@ var _ = Describe("Watcher", func() {
 						Eventually(eventCh).Should(BeSent(EventHolder{models.NewActualLRPInstanceChangedEvent(
 							beforeActualLRP3,
 							actualLRP3,
+							"some-trace-id",
 						)}))
 					}
 
-					bbsClient.DesiredLRPsStub = func(_ lager.Logger, f models.DesiredLRPFilter) ([]*models.DesiredLRP, error) {
+					bbsClient.DesiredLRPsStub = func(_ lager.Logger, _ string, f models.DesiredLRPFilter) ([]*models.DesiredLRP, error) {
 						defer GinkgoRecover()
 						if len(f.ProcessGuids) == 1 && f.ProcessGuids[0] == "pg-3" {
 							return []*models.DesiredLRP{desiredLRP3}, nil
@@ -822,7 +827,7 @@ var _ = Describe("Watcher", func() {
 					BeforeEach(func() {
 						cellID = "cell-id"
 
-						bbsClient.ActualLRPsStub = func(logger lager.Logger, f models.ActualLRPFilter) ([]*models.ActualLRP, error) {
+						bbsClient.ActualLRPsStub = func(logger lager.Logger, _ string, f models.ActualLRPFilter) ([]*models.ActualLRP, error) {
 							clock.IncrementBySeconds(1)
 							return []*models.ActualLRP{actualLRP1}, nil
 						}
@@ -836,7 +841,7 @@ var _ = Describe("Watcher", func() {
 					Context("when an invalid actual lrp created event is received", func() {
 						BeforeEach(func() {
 							sendEvent = func() {
-								Eventually(eventCh).Should(BeSent(EventHolder{models.NewActualLRPInstanceCreatedEvent(nil)}))
+								Eventually(eventCh).Should(BeSent(EventHolder{models.NewActualLRPInstanceCreatedEvent(nil, "some-trace-id")}))
 							}
 						})
 
@@ -848,7 +853,7 @@ var _ = Describe("Watcher", func() {
 					Context("when an invalid actual lrp change event is received", func() {
 						BeforeEach(func() {
 							sendEvent = func() {
-								Eventually(eventCh).Should(BeSent(EventHolder{models.NewActualLRPInstanceChangedEvent(nil, nil)}))
+								Eventually(eventCh).Should(BeSent(EventHolder{models.NewActualLRPInstanceChangedEvent(nil, nil, "some-trace-id")}))
 							}
 						})
 
@@ -861,7 +866,8 @@ var _ = Describe("Watcher", func() {
 						Eventually(bbsClient.DesiredLRPRoutingInfosCallCount).Should(Equal(1))
 						Eventually(bbsClient.DesiredLRPsCallCount).Should(Equal(1))
 
-						_, filter := bbsClient.DesiredLRPsArgsForCall(0)
+						_, traceId, filter := bbsClient.DesiredLRPsArgsForCall(0)
+						Expect(traceId).To(Equal("some-trace-id"))
 
 						Expect(filter.ProcessGuids).To(HaveLen(1))
 						Expect(filter.ProcessGuids).To(ConsistOf(actualLRP3.ProcessGuid))
@@ -877,7 +883,7 @@ var _ = Describe("Watcher", func() {
 
 				Context("and the event is cached", func() {
 					BeforeEach(func() {
-						bbsClient.ActualLRPsStub = func(lager.Logger, models.ActualLRPFilter) ([]*models.ActualLRP, error) {
+						bbsClient.ActualLRPsStub = func(lager.Logger, string, models.ActualLRPFilter) ([]*models.ActualLRP, error) {
 							clock.IncrementBySeconds(1)
 							defer GinkgoRecover()
 							sendEvent()
@@ -890,7 +896,8 @@ var _ = Describe("Watcher", func() {
 						Eventually(bbsClient.DesiredLRPRoutingInfosCallCount).Should(Equal(1))
 						Eventually(bbsClient.DesiredLRPsCallCount).Should(Equal(1))
 
-						_, filter := bbsClient.DesiredLRPsArgsForCall(0)
+						_, traceId, filter := bbsClient.DesiredLRPsArgsForCall(0)
+						Expect(traceId).To(Equal("some-trace-id"))
 
 						Expect(filter.ProcessGuids).To(HaveLen(1))
 						Expect(filter.ProcessGuids).To(ConsistOf(actualLRP3.ProcessGuid))
@@ -903,7 +910,7 @@ var _ = Describe("Watcher", func() {
 
 					Context("and fetching desired scheduling info fails", func() {
 						BeforeEach(func() {
-							bbsClient.DesiredLRPRoutingInfosStub = func(l lager.Logger, f models.DesiredLRPFilter) ([]*models.DesiredLRP, error) {
+							bbsClient.DesiredLRPRoutingInfosStub = func(l lager.Logger, _ string, f models.DesiredLRPFilter) ([]*models.DesiredLRP, error) {
 								defer GinkgoRecover()
 								if len(f.ProcessGuids) == 1 && f.ProcessGuids[0] == "pg-3" {
 									return nil, errors.New("boom!")
@@ -923,13 +930,13 @@ var _ = Describe("Watcher", func() {
 
 				Context("when fetching desired scheduling info fails", func() {
 					BeforeEach(func() {
-						bbsClient.ActualLRPsStub = func(lager.Logger, models.ActualLRPFilter) ([]*models.ActualLRP, error) {
+						bbsClient.ActualLRPsStub = func(lager.Logger, string, models.ActualLRPFilter) ([]*models.ActualLRP, error) {
 							defer GinkgoRecover()
 							sendEvent()
 							Eventually(logger).Should(gbytes.Say("caching-event"))
 							return []*models.ActualLRP{actualLRP1}, nil
 						}
-						bbsClient.DesiredLRPRoutingInfosStub = func(l lager.Logger, f models.DesiredLRPFilter) ([]*models.DesiredLRP, error) {
+						bbsClient.DesiredLRPRoutingInfosStub = func(l lager.Logger, _ string, f models.DesiredLRPFilter) ([]*models.DesiredLRP, error) {
 							defer GinkgoRecover()
 							if len(f.ProcessGuids) == 1 && f.ProcessGuids[0] == "pg-3" {
 								return nil, errors.New("boom!")
@@ -949,7 +956,7 @@ var _ = Describe("Watcher", func() {
 
 			Context("when there are no running actual lrps on the cell", func() {
 				BeforeEach(func() {
-					bbsClient.ActualLRPsStub = func(logger lager.Logger, f models.ActualLRPFilter) ([]*models.ActualLRP, error) {
+					bbsClient.ActualLRPsStub = func(logger lager.Logger, _ string, f models.ActualLRPFilter) ([]*models.ActualLRP, error) {
 						return []*models.ActualLRP{}, nil
 					}
 				})
@@ -970,6 +977,7 @@ var _ = Describe("Watcher", func() {
 
 				Eventually(eventCh).Should(BeSent(EventHolder{models.NewActualLRPInstanceCreatedEvent(
 					actualLRP4,
+					"some-trace-id",
 				)}))
 			})
 

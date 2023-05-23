@@ -4,6 +4,7 @@ import (
 	"errors"
 
 	"code.cloudfoundry.org/bbs/models"
+	"code.cloudfoundry.org/bbs/trace"
 	loggingclient "code.cloudfoundry.org/diego-logging-client"
 	"code.cloudfoundry.org/lager/v3"
 	"code.cloudfoundry.org/route-emitter/emitter"
@@ -54,21 +55,26 @@ func (handler *Handler) HandleEvent(logger lager.Logger, event models.Event) {
 
 	switch event := event.(type) {
 	case *models.DesiredLRPCreatedEvent:
+		logger = trace.LoggerWithTraceInfo(logger, event.TraceId)
 		handler.handleDesiredCreate(logger, event.DesiredLrp)
 	case *models.DesiredLRPChangedEvent:
+		logger = trace.LoggerWithTraceInfo(logger, event.TraceId)
 		err := handler.handleDesiredUpdate(logger, event.Before, event.After)
 		if err != nil {
 			logger.Error("failed-to-handle-desired-update", err)
 		}
 	case *models.DesiredLRPRemovedEvent:
+		logger = trace.LoggerWithTraceInfo(logger, event.TraceId)
 		handler.handleDesiredDelete(logger, event.DesiredLrp)
 	case *models.ActualLRPInstanceCreatedEvent:
+		logger = trace.LoggerWithTraceInfo(logger, event.TraceId)
 		if event.ActualLrp == nil {
 			logger.Error("nil-actual-lrp", nil, lager.Data{"event-type": event.EventType()})
 			return
 		}
 		handler.handleActualCreate(logger, event.ActualLrp)
 	case *models.ActualLRPInstanceChangedEvent:
+		logger = trace.LoggerWithTraceInfo(logger, event.TraceId)
 		before := event.Before.ToActualLRP(event.ActualLRPKey, event.ActualLRPInstanceKey)
 		after := event.After.ToActualLRP(event.ActualLRPKey, event.ActualLRPInstanceKey)
 		logger.Debug("received-actual-lrp-changed-event", lager.Data{"before": before, "after": after})
@@ -81,6 +87,7 @@ func (handler *Handler) HandleEvent(logger lager.Logger, event models.Event) {
 			logger.Error("failed-to-handle-actual-update", err)
 		}
 	case *models.ActualLRPInstanceRemovedEvent:
+		logger = trace.LoggerWithTraceInfo(logger, event.TraceId)
 		logger.Debug("received-actual-lrp-instance-removed-event", lager.Data{"lrp": event.ActualLrp})
 		if event.ActualLrp == nil {
 			logger.Error("nil-actual-lrp", nil, lager.Data{"event-type": event.EventType()})

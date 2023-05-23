@@ -67,7 +67,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 
 		Describe("HandleDesiredCreate", func() {
 			JustBeforeEach(func() {
-				routeHandler.HandleEvent(logger, models.NewDesiredLRPCreatedEvent(desiredLRP))
+				routeHandler.HandleEvent(logger, models.NewDesiredLRPCreatedEvent(desiredLRP, "some-trace-id"))
 			})
 
 			It("invokes AddRoutes on RoutingTable", func() {
@@ -111,7 +111,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 			})
 
 			JustBeforeEach(func() {
-				routeHandler.HandleEvent(logger, models.NewDesiredLRPChangedEvent(desiredLRP, after))
+				routeHandler.HandleEvent(logger, models.NewDesiredLRPChangedEvent(desiredLRP, after, "some-trace-id"))
 			})
 
 			It("invokes UpdateRoutes on RoutingTable", func() {
@@ -142,7 +142,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 				fakeRoutingTable.RemoveRoutesReturns(unregistrationEvent, emptyNatsMessages)
 			})
 			JustBeforeEach(func() {
-				routeHandler.HandleEvent(logger, models.NewDesiredLRPRemovedEvent(desiredLRP))
+				routeHandler.HandleEvent(logger, models.NewDesiredLRPRemovedEvent(desiredLRP, "some-trace-id"))
 			})
 
 			It("does not invoke AddRoutes on RoutingTable", func() {
@@ -168,7 +168,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 
 		Describe("HandleActualCreate", func() {
 			JustBeforeEach(func() {
-				routeHandler.HandleEvent(logger, models.NewActualLRPInstanceCreatedEvent(actualLRP))
+				routeHandler.HandleEvent(logger, models.NewActualLRPInstanceCreatedEvent(actualLRP, "some-trace-id"))
 			})
 
 			Context("when state is Running", func() {
@@ -236,7 +236,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 			)
 
 			JustBeforeEach(func() {
-				routeHandler.HandleEvent(logger, models.NewActualLRPInstanceChangedEvent(actualLRP, afterLRP))
+				routeHandler.HandleEvent(logger, models.NewActualLRPInstanceChangedEvent(actualLRP, afterLRP, "some-trace-id"))
 			})
 
 			Context("when after state is Running", func() {
@@ -366,7 +366,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 
 		Describe("HandleActualDelete", func() {
 			JustBeforeEach(func() {
-				routeHandler.HandleEvent(logger, models.NewActualLRPInstanceRemovedEvent(actualLRP))
+				routeHandler.HandleEvent(logger, models.NewActualLRPInstanceRemovedEvent(actualLRP, "some-trace-id"))
 			})
 
 			Context("when state is Running", func() {
@@ -615,7 +615,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 						ProcessGuid: "process-guid-2",
 						Routes:      tcpRoutes.RoutingInfo(),
 						Instances:   1,
-					})
+					}, "some-trace-id")
 
 					actualLRPEvent := models.NewActualLRPInstanceCreatedEvent(&models.ActualLRP{
 						ActualLRPKey:         models.NewActualLRPKey("process-guid-2", 0, "domain"),
@@ -628,7 +628,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 						),
 						State:           models.ActualLRPStateRunning,
 						ModificationTag: modificationTag,
-					})
+					}, "some-trace-id")
 
 					cachedEvents := map[string]models.Event{
 						desiredLRPEvent.Key(): desiredLRPEvent,
