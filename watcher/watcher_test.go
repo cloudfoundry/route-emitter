@@ -812,7 +812,7 @@ var _ = Describe("Watcher", func() {
 						)}))
 					}
 
-					bbsClient.DesiredLRPsStub = func(_ lager.Logger, _ string, f models.DesiredLRPFilter) ([]*models.DesiredLRP, error) {
+					bbsClient.DesiredLRPRoutingInfosStub = func(_ lager.Logger, _ string, f models.DesiredLRPFilter) ([]*models.DesiredLRP, error) {
 						defer GinkgoRecover()
 						if len(f.ProcessGuids) == 1 && f.ProcessGuids[0] == "pg-3" {
 							return []*models.DesiredLRP{desiredLRP3}, nil
@@ -863,10 +863,9 @@ var _ = Describe("Watcher", func() {
 					})
 
 					It("fetches the desired lrp and passes it to the route handler", func() {
-						Eventually(bbsClient.DesiredLRPRoutingInfosCallCount).Should(Equal(1))
-						Eventually(bbsClient.DesiredLRPsCallCount).Should(Equal(1))
+						Eventually(bbsClient.DesiredLRPRoutingInfosCallCount).Should(Equal(2))
 
-						_, traceId, filter := bbsClient.DesiredLRPsArgsForCall(0)
+						_, traceId, filter := bbsClient.DesiredLRPRoutingInfosArgsForCall(1)
 						Expect(traceId).To(Equal("some-trace-id"))
 
 						Expect(filter.ProcessGuids).To(HaveLen(1))
@@ -893,10 +892,9 @@ var _ = Describe("Watcher", func() {
 					})
 
 					It("fetches the desired lrp and refreshes the handler", func() {
-						Eventually(bbsClient.DesiredLRPRoutingInfosCallCount).Should(Equal(1))
-						Eventually(bbsClient.DesiredLRPsCallCount).Should(Equal(1))
+						Eventually(bbsClient.DesiredLRPRoutingInfosCallCount).Should(Equal(2))
 
-						_, traceId, filter := bbsClient.DesiredLRPsArgsForCall(0)
+						_, traceId, filter := bbsClient.DesiredLRPRoutingInfosArgsForCall(1)
 						Expect(traceId).To(Equal("some-trace-id"))
 
 						Expect(filter.ProcessGuids).To(HaveLen(1))
@@ -921,8 +919,7 @@ var _ = Describe("Watcher", func() {
 
 						It("does not refresh the desired state", func() {
 							Eventually(routeHandler.ShouldRefreshDesiredCallCount).Should(Equal(1))
-							Eventually(bbsClient.DesiredLRPRoutingInfosCallCount).Should(Equal(1))
-							Eventually(bbsClient.DesiredLRPsCallCount).Should(Equal(1))
+							Eventually(bbsClient.DesiredLRPRoutingInfosCallCount).Should(Equal(2))
 							Consistently(routeHandler.RefreshDesiredCallCount).Should(Equal(0))
 						})
 					})
@@ -947,8 +944,7 @@ var _ = Describe("Watcher", func() {
 
 					It("does not refresh the desired state", func() {
 						Eventually(routeHandler.ShouldRefreshDesiredCallCount).Should(Equal(1))
-						Eventually(bbsClient.DesiredLRPRoutingInfosCallCount).Should(Equal(1))
-						Eventually(bbsClient.DesiredLRPsCallCount).Should(Equal(1))
+						Eventually(bbsClient.DesiredLRPRoutingInfosCallCount).Should(Equal(2))
 						Consistently(routeHandler.RefreshDesiredCallCount).Should(Equal(0))
 					})
 				})

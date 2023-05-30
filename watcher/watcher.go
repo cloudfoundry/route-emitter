@@ -207,12 +207,11 @@ func (w *Watcher) retrieveDesiredInternal(logger lager.Logger, event models.Even
 		return nil
 	}
 	if w.routeHandler.ShouldRefreshDesired(actualLRP) || (syncing && !foundInCurrentDesireds(actualLRP.ProcessGuid, currentDesireds)) {
-		logger.Info("refreshing-desired-lrp-info", lager.Data{"process-guid": actualLRP.ProcessGuid})
-		desiredLRPs, err = w.bbsClient.DesiredLRPs(logger, traceId, models.DesiredLRPFilter{
-			ProcessGuids: []string{actualLRP.ProcessGuid},
-		})
+		logger.Info("refreshing-desired-lrp-routing-info", lager.Data{"process-guid": actualLRP.ProcessGuid})
+		desiredLRPs, err = getDesiredLRPs(logger, w.bbsClient, traceId, []string{actualLRP.ProcessGuid})
+
 		if err != nil {
-			logger.Error("failed-getting-desired-lrps-for-missing-actual-lrp", err)
+			logger.Error("failed-getting-desired-lrps-routing-info-for-missing-actual-lrp", err)
 		}
 	}
 
@@ -280,7 +279,7 @@ func (w *Watcher) sync(logger lager.Logger, ch chan<- *syncEventResult) {
 				guids = append(guids, actualLRP.ProcessGuid)
 			}
 			if len(guids) > 0 {
-				desiredLRPs, desiredErr = getDesiredLRPs(logger, w.bbsClient, guids)
+				desiredLRPs, desiredErr = getDesiredLRPs(logger, w.bbsClient, "", guids)
 			}
 		}
 	}()
@@ -289,7 +288,7 @@ func (w *Watcher) sync(logger lager.Logger, ch chan<- *syncEventResult) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			desiredLRPs, desiredErr = getDesiredLRPs(logger, w.bbsClient, nil)
+			desiredLRPs, desiredErr = getDesiredLRPs(logger, w.bbsClient, "", nil)
 		}()
 	}
 
@@ -357,13 +356,13 @@ func (w *Watcher) checkForEvents(resubscribeChannel chan error, eventChan chan m
 	}
 }
 
-func getDesiredLRPs(logger lager.Logger, bbsClient bbs.Client, guids []string) ([]*models.DesiredLRP, error) {
+func getDesiredLRPs(logger lager.Logger, bbsClient bbs.Client, traceId string, guids []string) ([]*models.DesiredLRP, error) {
 	logger.Debug("getting-desired-lrps-routing-info", lager.Data{"guids-length": len(guids)})
 	filter := models.DesiredLRPFilter{ProcessGuids: guids}
 
-	desiredLRPs, err := bbsClient.DesiredLRPRoutingInfos(logger, "", filter)
+	desiredLRPs, err := bbsClient.DesiredLRPRoutingInfos(logger, traceId, filter)
 	if err == bbs.EndpointNotFoundErr {
-		desiredLRPs, err = bbsClient.DesiredLRPs(logger, "", filter)
+		desiredLRPs, err = bbsClient.DesiredLRPs(logger, traceId, filter)
 	}
 
 	if err != nil {
