@@ -865,7 +865,10 @@ var _ = Describe("Watcher", func() {
 					It("fetches the desired lrp and passes it to the route handler", func() {
 						Eventually(bbsClient.DesiredLRPRoutingInfosCallCount).Should(Equal(2))
 
-						_, traceId, filter := bbsClient.DesiredLRPRoutingInfosArgsForCall(1)
+						_, traceId, filter := bbsClient.DesiredLRPRoutingInfosArgsForCall(0)
+						Expect(traceId).To(BeEmpty())
+
+						_, traceId, filter = bbsClient.DesiredLRPRoutingInfosArgsForCall(1)
 						Expect(traceId).To(Equal("some-trace-id"))
 
 						Expect(filter.ProcessGuids).To(HaveLen(1))
@@ -894,7 +897,10 @@ var _ = Describe("Watcher", func() {
 					It("fetches the desired lrp and refreshes the handler", func() {
 						Eventually(bbsClient.DesiredLRPRoutingInfosCallCount).Should(Equal(2))
 
-						_, traceId, filter := bbsClient.DesiredLRPRoutingInfosArgsForCall(1)
+						_, traceId, filter := bbsClient.DesiredLRPRoutingInfosArgsForCall(0)
+						Expect(traceId).To(BeEmpty())
+
+						_, traceId, filter = bbsClient.DesiredLRPRoutingInfosArgsForCall(1)
 						Expect(traceId).To(Equal("some-trace-id"))
 
 						Expect(filter.ProcessGuids).To(HaveLen(1))
