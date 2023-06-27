@@ -501,6 +501,7 @@ var _ = Describe("Handler", func() {
 
 				BeforeEach(func() {
 					fakeTable.AddEndpointReturns(emptyTCPRouteMappings, dummyMessagesToEmit)
+					fakeTable.RemoveEndpointReturns(emptyTCPRouteMappings, dummyMessagesToEmit)
 
 					beforeActualLRP = &models.ActualLRP{
 						ActualLRPKey:         models.NewActualLRPKey(expectedProcessGuid, expectedIndex, "domain"),
@@ -517,40 +518,13 @@ var _ = Describe("Handler", func() {
 							models.NewPortMapping(expectedExternalPort, expectedContainerPort),
 							models.NewPortMapping(expectedAdditionalExternalPort, expectedAdditionalContainerPort),
 						),
-						State: models.ActualLRPStateRunning,
+						State:    models.ActualLRPStateRunning,
+						Routable: true,
 					}
 				})
 
 				JustBeforeEach(func() {
 					routeHandler.HandleEvent(logger, models.NewActualLRPInstanceChangedEvent(beforeActualLRP, afterActualLRP, "some-trace-id"))
-				})
-
-				It("should add/update the endpoint on the table", func() {
-					Expect(fakeTable.AddEndpointCallCount()).To(Equal(1))
-
-					_, actualLRP := fakeTable.AddEndpointArgsForCall(0)
-					Expect(actualLRP).To(Equal(afterActualLRP))
-				})
-
-				It("should emit whatever the table tells it to emit", func() {
-					Expect(natsEmitter.EmitCallCount()).Should(Equal(1))
-
-					messagesToEmit := natsEmitter.EmitArgsForCall(0)
-					Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
-				})
-
-				It("sends a 'routes registered' metric", func() {
-					Eventually(counterChan).Should(Receive(Equal(counter{
-						name:  "RoutesRegistered",
-						delta: 2,
-					})))
-				})
-
-				It("sends a 'routes unregistered' metric", func() {
-					Eventually(counterChan).Should(Receive(Equal(counter{
-						name:  "RoutesUnregistered",
-						delta: 0,
-					})))
 				})
 
 				Context("when one or all the LRP are nil", func() {
@@ -568,10 +542,92 @@ var _ = Describe("Handler", func() {
 						JustBeforeEach(func() {
 							afterActualLRP = nil
 						})
+
 						It("logs an error", func() {
 							routeHandler.HandleEvent(logger, models.NewActualLRPInstanceChangedEvent(beforeActualLRP, afterActualLRP, "some-trace-id"))
 							Expect(logger).To(gbytes.Say("nil-actual-lrp"))
 						})
+					})
+				})
+
+				Context("when after state Routable is true", func() {
+					BeforeEach(func() {
+						afterActualLRP.Routable = true
+					})
+
+					It("should add/update the endpoint on the table", func() {
+						Expect(fakeTable.AddEndpointCallCount()).To(Equal(1))
+
+						_, actualLRP := fakeTable.AddEndpointArgsForCall(0)
+						Expect(actualLRP).To(Equal(afterActualLRP))
+					})
+
+					It("should emit whatever the table tells it to emit", func() {
+						Expect(natsEmitter.EmitCallCount()).Should(Equal(1))
+
+						messagesToEmit := natsEmitter.EmitArgsForCall(0)
+						Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
+					})
+
+					It("sends a 'routes registered' metric", func() {
+						Eventually(counterChan).Should(Receive(Equal(counter{
+							name:  "RoutesRegistered",
+							delta: 2,
+						})))
+					})
+
+					It("sends a 'routes unregistered' metric", func() {
+						Eventually(counterChan).Should(Receive(Equal(counter{
+							name:  "RoutesUnregistered",
+							delta: 0,
+						})))
+					})
+				})
+
+				Context("when after state Routable is false and before state Routable is true", func() {
+					BeforeEach(func() {
+						beforeActualLRP.Routable = true
+						afterActualLRP.Routable = false
+					})
+
+					It("should not add/update the endpoint on the table", func() {
+						Expect(fakeTable.AddEndpointCallCount()).To(Equal(0))
+					})
+
+					It("should remove the endpoint from the table", func() {
+						Expect(fakeTable.RemoveEndpointCallCount()).To(Equal(1))
+
+						_, actualLRP := fakeTable.RemoveEndpointArgsForCall(0)
+						Expect(actualLRP).To(Equal(afterActualLRP))
+					})
+
+					It("should emit whatever the table tells it to emit", func() {
+						Expect(natsEmitter.EmitCallCount()).To(Equal(1))
+
+						messagesToEmit := natsEmitter.EmitArgsForCall(0)
+						Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
+					})
+				})
+
+				Context("when after state Routable is false and before state Routable is false", func() {
+					BeforeEach(func() {
+						beforeActualLRP.Routable = false
+						afterActualLRP.Routable = false
+					})
+
+					It("should not add/update the endpoint on the table", func() {
+						Expect(fakeTable.AddEndpointCallCount()).To(Equal(0))
+					})
+
+					It("should not remove the endpoint from the table", func() {
+						Expect(fakeTable.RemoveEndpointCallCount()).To(Equal(0))
+					})
+
+					It("should call emit with empty messages", func() {
+						Expect(natsEmitter.EmitCallCount()).To(Equal(1))
+
+						messagesToEmit := natsEmitter.EmitArgsForCall(0)
+						Expect(messagesToEmit).To(Equal(routingtable.MessagesToEmit{RegistrationMessages: nil}))
 					})
 				})
 
@@ -679,11 +735,13 @@ var _ = Describe("Handler", func() {
 						ActualLRPInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGUID, "cell-id"),
 						State:                models.ActualLRPStateRunning,
 						Presence:             models.ActualLRP_Ordinary,
+						Routable:             true,
 					}
 					afterActualLRP = &models.ActualLRP{
 						ActualLRPKey:         models.NewActualLRPKey(expectedProcessGuid, expectedIndex, "domain"),
 						ActualLRPInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGUID, "cell-id"),
 						State:                models.ActualLRPStateRunning,
+						Routable:             true,
 					}
 				})
 

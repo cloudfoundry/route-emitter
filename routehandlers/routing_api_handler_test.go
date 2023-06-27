@@ -265,21 +265,27 @@ var _ = Describe("RoutingAPIHandler", func() {
 					}
 				})
 
-				It("invokes AddEndpoint on RoutingTable", func() {
-					Expect(fakeRoutingTable.AddEndpointCallCount()).Should(Equal(1))
-					_, lrp := fakeRoutingTable.AddEndpointArgsForCall(0)
-					Expect(lrp).Should(Equal(afterLRP))
-				})
-
-				Context("when there are routing events", func() {
+				Context("when Routable is true", func() {
 					BeforeEach(func() {
-						fakeRoutingTable.AddEndpointReturns(routingEvents, emptyNatsMessages)
+						afterLRP.Routable = true
 					})
 
-					It("invokes Emit on Emitter", func() {
-						Expect(fakeRoutingAPIEmitter.EmitCallCount()).Should(Equal(1))
-						events := fakeRoutingAPIEmitter.EmitArgsForCall(0)
-						Expect(events).Should(Equal(routingEvents))
+					It("invokes AddEndpoint on RoutingTable", func() {
+						Expect(fakeRoutingTable.AddEndpointCallCount()).Should(Equal(1))
+						_, lrp := fakeRoutingTable.AddEndpointArgsForCall(0)
+						Expect(lrp).Should(Equal(afterLRP))
+					})
+
+					Context("when there are routing events", func() {
+						BeforeEach(func() {
+							fakeRoutingTable.AddEndpointReturns(routingEvents, emptyNatsMessages)
+						})
+
+						It("invokes Emit on Emitter", func() {
+							Expect(fakeRoutingAPIEmitter.EmitCallCount()).Should(Equal(1))
+							events := fakeRoutingAPIEmitter.EmitArgsForCall(0)
+							Expect(events).Should(Equal(routingEvents))
+						})
 					})
 				})
 			})
