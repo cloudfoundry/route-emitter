@@ -607,6 +607,20 @@ var _ = Describe("Handler", func() {
 						messagesToEmit := natsEmitter.EmitArgsForCall(0)
 						Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
 					})
+
+					It("sends a 'routes registered' metric", func() {
+						Eventually(counterChan).Should(Receive(Equal(counter{
+							name:  "RoutesRegistered",
+							delta: 2,
+						})))
+					})
+
+					It("sends a 'routes unregistered' metric", func() {
+						Eventually(counterChan).Should(Receive(Equal(counter{
+							name:  "RoutesUnregistered",
+							delta: 0,
+						})))
+					})
 				})
 
 				Context("when after state Routable is false and before state Routable is false", func() {
@@ -628,6 +642,20 @@ var _ = Describe("Handler", func() {
 
 						messagesToEmit := natsEmitter.EmitArgsForCall(0)
 						Expect(messagesToEmit).To(Equal(routingtable.MessagesToEmit{RegistrationMessages: nil}))
+					})
+
+					It("sends a 'routes registered' metric", func() {
+						Eventually(counterChan).Should(Receive(Equal(counter{
+							name:  "RoutesRegistered",
+							delta: 0,
+						})))
+					})
+
+					It("sends a 'routes unregistered' metric", func() {
+						Eventually(counterChan).Should(Receive(Equal(counter{
+							name:  "RoutesUnregistered",
+							delta: 0,
+						})))
 					})
 				})
 
