@@ -518,8 +518,7 @@ var _ = Describe("Handler", func() {
 							models.NewPortMapping(expectedExternalPort, expectedContainerPort),
 							models.NewPortMapping(expectedAdditionalExternalPort, expectedAdditionalContainerPort),
 						),
-						State:    models.ActualLRPStateRunning,
-						Routable: true,
+						State: models.ActualLRPStateRunning,
 					}
 				})
 
@@ -550,9 +549,39 @@ var _ = Describe("Handler", func() {
 					})
 				})
 
+				Context("when after state Routable is not provided (old BBS)", func() {
+					It("should add/update the endpoint on the table", func() {
+						Expect(fakeTable.AddEndpointCallCount()).To(Equal(1))
+
+						_, actualLRP := fakeTable.AddEndpointArgsForCall(0)
+						Expect(actualLRP).To(Equal(afterActualLRP))
+					})
+
+					It("should emit whatever the table tells it to emit", func() {
+						Expect(natsEmitter.EmitCallCount()).Should(Equal(1))
+
+						messagesToEmit := natsEmitter.EmitArgsForCall(0)
+						Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
+					})
+
+					It("sends a 'routes registered' metric", func() {
+						Eventually(counterChan).Should(Receive(Equal(counter{
+							name:  "RoutesRegistered",
+							delta: 2,
+						})))
+					})
+
+					It("sends a 'routes unregistered' metric", func() {
+						Eventually(counterChan).Should(Receive(Equal(counter{
+							name:  "RoutesUnregistered",
+							delta: 0,
+						})))
+					})
+				})
+
 				Context("when after state Routable is true", func() {
 					BeforeEach(func() {
-						afterActualLRP.Routable = true
+						afterActualLRP.SetRoutable(true)
 					})
 
 					It("should add/update the endpoint on the table", func() {
@@ -586,8 +615,8 @@ var _ = Describe("Handler", func() {
 
 				Context("when after state Routable is false and before state Routable is true", func() {
 					BeforeEach(func() {
-						beforeActualLRP.Routable = true
-						afterActualLRP.Routable = false
+						beforeActualLRP.SetRoutable(true)
+						afterActualLRP.SetRoutable(false)
 					})
 
 					It("should not add/update the endpoint on the table", func() {
@@ -625,8 +654,8 @@ var _ = Describe("Handler", func() {
 
 				Context("when after state Routable is false and before state Routable is false", func() {
 					BeforeEach(func() {
-						beforeActualLRP.Routable = false
-						afterActualLRP.Routable = false
+						beforeActualLRP.SetRoutable(false)
+						afterActualLRP.SetRoutable(false)
 					})
 
 					It("should not add/update the endpoint on the table", func() {
@@ -763,14 +792,14 @@ var _ = Describe("Handler", func() {
 						ActualLRPInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGUID, "cell-id"),
 						State:                models.ActualLRPStateRunning,
 						Presence:             models.ActualLRP_Ordinary,
-						Routable:             true,
 					}
+					beforeActualLRP.SetRoutable(true)
 					afterActualLRP = &models.ActualLRP{
 						ActualLRPKey:         models.NewActualLRPKey(expectedProcessGuid, expectedIndex, "domain"),
 						ActualLRPInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGUID, "cell-id"),
 						State:                models.ActualLRPStateRunning,
-						Routable:             true,
 					}
+					afterActualLRP.SetRoutable(true)
 				})
 
 				JustBeforeEach(func() {

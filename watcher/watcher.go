@@ -267,7 +267,7 @@ func (w *Watcher) sync(logger lager.Logger, ch chan<- *syncEventResult) {
 		logger.Debug("succeeded-getting-actual-lrps", lager.Data{"num-actual-responses": len(actualLRPs)})
 
 		for _, actualLRP := range actualLRPs {
-			if actualLRP.State == models.ActualLRPStateRunning {
+			if actualLRP.State == models.ActualLRPStateRunning && (!actualLRP.RoutableExists() || actualLRP.GetRoutable() == true) {
 				runningActualLRPs = append(runningActualLRPs, actualLRP)
 			}
 		}

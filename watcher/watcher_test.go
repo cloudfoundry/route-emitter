@@ -434,6 +434,7 @@ var _ = Describe("Watcher", func() {
 			ActualLRPNetInfo:     models.NewActualLRPNetInfo(endpoint2.Host, "container-ip", models.ActualLRPNetInfo_PreferredAddressHost, models.NewPortMapping(endpoint2.Port, endpoint2.ContainerPort)),
 			State:                models.ActualLRPStateRunning,
 		}
+		SetRoutable(true)
 
 		actualLRP3 := &models.ActualLRP{
 			ActualLRPKey:         models.NewActualLRPKey("pg-3", 1, "domain"),
@@ -441,6 +442,7 @@ var _ = Describe("Watcher", func() {
 			ActualLRPNetInfo:     models.NewActualLRPNetInfo(endpoint3.Host, "container-ip", models.ActualLRPNetInfo_PreferredAddressHost, models.NewPortMapping(endpoint3.Port, endpoint3.ContainerPort)),
 			State:                models.ActualLRPStateRunning,
 		}
+		SetRoutable(true)
 
 		var sendEvent func()
 		BeforeEach(func() {
@@ -564,6 +566,21 @@ var _ = Describe("Watcher", func() {
 				Eventually(routeHandler.SyncCallCount).Should(Equal(1))
 				_, _, runningActuals, _, _ := routeHandler.SyncArgsForCall(0)
 				Expect(runningActuals).To(ConsistOf(actualLRP1, actualLRP2))
+			})
+		})
+
+		Context("when one of the actual lrps is not routable", func() {
+			BeforeEach(func() {
+				actualLRP2.SetRoutable(false)
+				bbsClient.ActualLRPsStub = func(lager.Logger, string, models.ActualLRPFilter) ([]*models.ActualLRP, error) {
+					return []*models.ActualLRP{actualLRP1, actualLRP2, actualLRP3}, nil
+				}
+			})
+
+			It("syncs all actual LRPs with routable set as true or not set", func() {
+				Eventually(routeHandler.SyncCallCount).Should(Equal(1))
+				_, _, runningActuals, _, _ := routeHandler.SyncArgsForCall(0)
+				Expect(runningActuals).To(ConsistOf(actualLRP1, actualLRP3))
 			})
 		})
 

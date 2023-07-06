@@ -267,7 +267,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 
 				Context("when Routable is true", func() {
 					BeforeEach(func() {
-						afterLRP.Routable = true
+						afterLRP.SetRoutable(true)
 					})
 
 					It("invokes AddEndpoint on RoutingTable", func() {

@@ -263,9 +263,9 @@ func (handler *Handler) handleActualUpdate(logger lager.Logger, before, after *m
 	)
 	switch {
 	case after.State == models.ActualLRPStateRunning:
-		if after.Routable == true {
+		if !after.RoutableExists() || after.GetRoutable() == true {
 			routeMappings, messagesToEmit = handler.routingTable.AddEndpoint(logger, after)
-		} else if before.Routable == true {
+		} else if before.GetRoutable() == true {
 			routeMappings, messagesToEmit = handler.routingTable.RemoveEndpoint(logger, after)
 		}
 
