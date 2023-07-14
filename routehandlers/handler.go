@@ -278,7 +278,13 @@ func (handler *Handler) handleActualUpdate(logger lager.Logger, before, after *m
 	case before.State == models.ActualLRPStateRunning && after.State != models.ActualLRPStateRunning:
 		routeMappings, messagesToEmit = handler.routingTable.RemoveEndpoint(logger, before)
 	}
-	err := handler.unregistrationCache.Remove(messagesToEmit.RegistrationMessages)
+
+	err := handler.unregistrationCache.Add(messagesToEmit.UnregistrationMessages)
+	if err != nil {
+		return err
+	}
+
+	err = handler.unregistrationCache.Remove(messagesToEmit.RegistrationMessages)
 	if err != nil {
 		return err
 	}

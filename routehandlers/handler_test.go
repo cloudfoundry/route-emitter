@@ -86,7 +86,7 @@ var _ = Describe("Handler", func() {
 		counterChan chan counter
 		metricChan  chan metric
 
-		dummyMessageFoo, dummyMessageBar routingtable.RegistryMessage
+		dummyMessageFoo, dummyMessageBar, dummyMessageBaz routingtable.RegistryMessage
 	)
 
 	BeforeEach(func() {
@@ -103,8 +103,10 @@ var _ = Describe("Handler", func() {
 		}
 		dummyMessageFoo = routingtable.RegistryMessageFor(dummyEndpoint, routingtable.Route{Hostname: "foo.com", LogGUID: logGuid}, true)
 		dummyMessageBar = routingtable.RegistryMessageFor(dummyEndpoint, routingtable.Route{Hostname: "bar.com", LogGUID: logGuid}, true)
+		dummyMessageBaz = routingtable.RegistryMessageFor(dummyEndpoint, routingtable.Route{Hostname: "baz.com", LogGUID: logGuid}, true)
 		dummyMessagesToEmit = routingtable.MessagesToEmit{
-			RegistrationMessages: []routingtable.RegistryMessage{dummyMessageFoo, dummyMessageBar},
+			RegistrationMessages:   []routingtable.RegistryMessage{dummyMessageFoo, dummyMessageBar},
+			UnregistrationMessages: []routingtable.RegistryMessage{dummyMessageBaz},
 		}
 
 		expectedRoutes = []string{"route-1", "route-2"}
@@ -177,7 +179,7 @@ var _ = Describe("Handler", func() {
 			It("sends a 'routes unregistered' metric", func() {
 				Eventually(counterChan).Should(Receive(Equal(counter{
 					name:  "RoutesUnregistered",
-					delta: 0,
+					delta: 1,
 				})))
 			})
 
@@ -270,7 +272,7 @@ var _ = Describe("Handler", func() {
 			It("sends a 'routes unregistered' metric", func() {
 				Eventually(metricChan).Should(Receive(Equal(metric{
 					name:  "RoutesUnregistered",
-					delta: 0,
+					delta: 1,
 				})))
 			})
 
@@ -280,7 +282,7 @@ var _ = Describe("Handler", func() {
 				Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
 			})
 
-			Context("when messages to emit contain unregistraions", func() {
+			Context("when messages to emit contain unregistrations", func() {
 				BeforeEach(func() {
 					messagesToEmit := routingtable.MessagesToEmit{
 						UnregistrationMessages: []routingtable.RegistryMessage{dummyMessageFoo, dummyMessageBar},
@@ -294,7 +296,7 @@ var _ = Describe("Handler", func() {
 				})
 			})
 
-			Context("when messages to emit contain unregistraions and registrations", func() {
+			Context("when messages to emit contain unregistrations and registrations", func() {
 				BeforeEach(func() {
 					messagesToEmit := routingtable.MessagesToEmit{
 						UnregistrationMessages: []routingtable.RegistryMessage{dummyMessageFoo, dummyMessageBar},
@@ -449,7 +451,7 @@ var _ = Describe("Handler", func() {
 				It("sends a 'routes unregistered' metric", func() {
 					Eventually(counterChan).Should(Receive(Equal(counter{
 						name:  "RoutesUnregistered",
-						delta: 0,
+						delta: 1,
 					})))
 				})
 			})
@@ -574,7 +576,7 @@ var _ = Describe("Handler", func() {
 					It("sends a 'routes unregistered' metric", func() {
 						Eventually(counterChan).Should(Receive(Equal(counter{
 							name:  "RoutesUnregistered",
-							delta: 0,
+							delta: 1,
 						})))
 					})
 				})
@@ -608,7 +610,7 @@ var _ = Describe("Handler", func() {
 					It("sends a 'routes unregistered' metric", func() {
 						Eventually(counterChan).Should(Receive(Equal(counter{
 							name:  "RoutesUnregistered",
-							delta: 0,
+							delta: 1,
 						})))
 					})
 				})
@@ -637,6 +639,11 @@ var _ = Describe("Handler", func() {
 						Expect(messagesToEmit).To(Equal(dummyMessagesToEmit))
 					})
 
+					It("should add the messages to the unregistration cache", func() {
+						Eventually(fakeUnregistrationCache.AddCallCount).Should(Equal(1))
+						Expect(fakeUnregistrationCache.AddArgsForCall(0)).Should(ConsistOf([]routingtable.RegistryMessage{dummyMessageBaz}))
+					})
+
 					It("sends a 'routes registered' metric", func() {
 						Eventually(counterChan).Should(Receive(Equal(counter{
 							name:  "RoutesRegistered",
@@ -647,7 +654,7 @@ var _ = Describe("Handler", func() {
 					It("sends a 'routes unregistered' metric", func() {
 						Eventually(counterChan).Should(Receive(Equal(counter{
 							name:  "RoutesUnregistered",
-							delta: 0,
+							delta: 1,
 						})))
 					})
 				})
