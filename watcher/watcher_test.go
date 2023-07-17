@@ -341,8 +341,13 @@ var _ = Describe("Watcher", func() {
 
 	Describe("Sync Events", func() {
 		var (
-			errCh   chan error
-			eventCh chan EventHolder
+			errCh                                 chan error
+			eventCh                               chan EventHolder
+			desiredLRP1, desiredLRP2, desiredLRP3 *models.DesiredLRP
+			actualLRP1, actualLRP2, actualLRP3    *models.ActualLRP
+			currentTag                            *models.ModificationTag
+			endpoint1, endpoint2, endpoint3       routingtable.Endpoint
+			sendEvent                             func()
 		)
 
 		BeforeEach(func() {
@@ -368,84 +373,81 @@ var _ = Describe("Watcher", func() {
 					return nil, nil
 				}
 			}
-		})
 
-		currentTag := &models.ModificationTag{Epoch: "abc", Index: 1}
-		hostname1 := "foo.example.com"
-		hostname2 := "bar.example.com"
-		hostname3 := "baz.example.com"
-		endpoint1 := routingtable.Endpoint{InstanceGUID: "ig-1", Host: "1.1.1.1", Index: 0, Port: 11, ContainerPort: 8080, Presence: models.ActualLRP_Ordinary, ModificationTag: currentTag}
-		endpoint2 := routingtable.Endpoint{InstanceGUID: "ig-2", Host: "2.2.2.2", Index: 0, Port: 22, ContainerPort: 8080, Presence: models.ActualLRP_Ordinary, ModificationTag: currentTag}
-		endpoint3 := routingtable.Endpoint{InstanceGUID: "ig-3", Host: "2.2.2.2", Index: 1, Port: 23, ContainerPort: 8080, Presence: models.ActualLRP_Ordinary, ModificationTag: currentTag}
+			currentTag = &models.ModificationTag{Epoch: "abc", Index: 1}
+			hostname1 := "foo.example.com"
+			hostname2 := "bar.example.com"
+			hostname3 := "baz.example.com"
+			endpoint1 = routingtable.Endpoint{InstanceGUID: "ig-1", Host: "1.1.1.1", Index: 0, Port: 11, ContainerPort: 8080, Presence: models.ActualLRP_Ordinary, ModificationTag: currentTag}
+			endpoint2 = routingtable.Endpoint{InstanceGUID: "ig-2", Host: "2.2.2.2", Index: 0, Port: 22, ContainerPort: 8080, Presence: models.ActualLRP_Ordinary, ModificationTag: currentTag}
+			endpoint3 = routingtable.Endpoint{InstanceGUID: "ig-3", Host: "2.2.2.2", Index: 1, Port: 23, ContainerPort: 8080, Presence: models.ActualLRP_Ordinary, ModificationTag: currentTag}
 
-		routingInfo1 := cfroutes.CFRoutes{
-			cfroutes.CFRoute{
-				Hostnames:       []string{hostname1},
-				Port:            8080,
-				RouteServiceUrl: "https://rs.example.com",
-			},
-		}.RoutingInfo()
-		desiredLRP1 := &models.DesiredLRP{
-			ProcessGuid: "pg-1",
-			Domain:      "tests",
-			LogGuid:     "lg1",
-			Routes:      &routingInfo1,
-			Instances:   1,
-		}
+			routingInfo1 := cfroutes.CFRoutes{
+				cfroutes.CFRoute{
+					Hostnames:       []string{hostname1},
+					Port:            8080,
+					RouteServiceUrl: "https://rs.example.com",
+				},
+			}.RoutingInfo()
+			desiredLRP1 = &models.DesiredLRP{
+				ProcessGuid: "pg-1",
+				Domain:      "tests",
+				LogGuid:     "lg1",
+				Routes:      &routingInfo1,
+				Instances:   1,
+			}
 
-		routingInfo2 := cfroutes.CFRoutes{
-			cfroutes.CFRoute{
-				Hostnames: []string{hostname2},
-				Port:      8080,
-			},
-		}.RoutingInfo()
-		desiredLRP2 := &models.DesiredLRP{
-			ProcessGuid: "pg-2",
-			Domain:      "tests",
-			LogGuid:     "lg2",
-			Routes:      &routingInfo2,
-			Instances:   1,
-		}
+			routingInfo2 := cfroutes.CFRoutes{
+				cfroutes.CFRoute{
+					Hostnames: []string{hostname2},
+					Port:      8080,
+				},
+			}.RoutingInfo()
+			desiredLRP2 = &models.DesiredLRP{
+				ProcessGuid: "pg-2",
+				Domain:      "tests",
+				LogGuid:     "lg2",
+				Routes:      &routingInfo2,
+				Instances:   1,
+			}
 
-		routingInfo3 := cfroutes.CFRoutes{
-			cfroutes.CFRoute{
-				Hostnames: []string{hostname3},
-				Port:      8080,
-			},
-		}.RoutingInfo()
-		desiredLRP3 := &models.DesiredLRP{
-			ProcessGuid: "pg-3",
-			Domain:      "tests",
-			LogGuid:     "lg3",
-			Routes:      &routingInfo3,
-			Instances:   1,
-		}
+			routingInfo3 := cfroutes.CFRoutes{
+				cfroutes.CFRoute{
+					Hostnames: []string{hostname3},
+					Port:      8080,
+				},
+			}.RoutingInfo()
+			desiredLRP3 = &models.DesiredLRP{
+				ProcessGuid: "pg-3",
+				Domain:      "tests",
+				LogGuid:     "lg3",
+				Routes:      &routingInfo3,
+				Instances:   1,
+			}
 
-		actualLRP1 := &models.ActualLRP{
-			ActualLRPKey:         models.NewActualLRPKey("pg-1", 0, "domain"),
-			ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint1.InstanceGUID, "cell-id"),
-			ActualLRPNetInfo:     models.NewActualLRPNetInfo(endpoint1.Host, "container-ip", models.ActualLRPNetInfo_PreferredAddressHost, models.NewPortMapping(endpoint1.Port, endpoint1.ContainerPort)),
-			State:                models.ActualLRPStateRunning,
-		}
+			actualLRP1 = &models.ActualLRP{
+				ActualLRPKey:         models.NewActualLRPKey("pg-1", 0, "domain"),
+				ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint1.InstanceGUID, "cell-id"),
+				ActualLRPNetInfo:     models.NewActualLRPNetInfo(endpoint1.Host, "container-ip", models.ActualLRPNetInfo_PreferredAddressHost, models.NewPortMapping(endpoint1.Port, endpoint1.ContainerPort)),
+				State:                models.ActualLRPStateRunning,
+			}
 
-		actualLRP2 := &models.ActualLRP{
-			ActualLRPKey:         models.NewActualLRPKey("pg-2", 0, "domain"),
-			ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint2.InstanceGUID, "cell-id"),
-			ActualLRPNetInfo:     models.NewActualLRPNetInfo(endpoint2.Host, "container-ip", models.ActualLRPNetInfo_PreferredAddressHost, models.NewPortMapping(endpoint2.Port, endpoint2.ContainerPort)),
-			State:                models.ActualLRPStateRunning,
-		}
-		SetRoutable(true)
+			actualLRP2 = &models.ActualLRP{
+				ActualLRPKey:         models.NewActualLRPKey("pg-2", 0, "domain"),
+				ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint2.InstanceGUID, "cell-id"),
+				ActualLRPNetInfo:     models.NewActualLRPNetInfo(endpoint2.Host, "container-ip", models.ActualLRPNetInfo_PreferredAddressHost, models.NewPortMapping(endpoint2.Port, endpoint2.ContainerPort)),
+				State:                models.ActualLRPStateRunning,
+			}
+			actualLRP2.SetRoutable(true)
 
-		actualLRP3 := &models.ActualLRP{
-			ActualLRPKey:         models.NewActualLRPKey("pg-3", 1, "domain"),
-			ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint3.InstanceGUID, "cell-id"),
-			ActualLRPNetInfo:     models.NewActualLRPNetInfo(endpoint3.Host, "container-ip", models.ActualLRPNetInfo_PreferredAddressHost, models.NewPortMapping(endpoint3.Port, endpoint3.ContainerPort)),
-			State:                models.ActualLRPStateRunning,
-		}
-		SetRoutable(true)
+			actualLRP3 = &models.ActualLRP{
+				ActualLRPKey:         models.NewActualLRPKey("pg-3", 1, "domain"),
+				ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint3.InstanceGUID, "cell-id"),
+				ActualLRPNetInfo:     models.NewActualLRPNetInfo(endpoint3.Host, "container-ip", models.ActualLRPNetInfo_PreferredAddressHost, models.NewPortMapping(endpoint3.Port, endpoint3.ContainerPort)),
+				State:                models.ActualLRPStateRunning,
+			}
+			actualLRP3.SetRoutable(true)
 
-		var sendEvent func()
-		BeforeEach(func() {
 			sendEvent = func() {
 				Eventually(eventCh).Should(BeSent(EventHolder{models.NewActualLRPInstanceRemovedEvent(actualLRP1, "some-trace-id")}))
 			}
