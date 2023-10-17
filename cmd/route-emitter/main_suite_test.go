@@ -109,7 +109,7 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 
 	emitterPath = string(binaries["emitter"])
 
-	dbName := fmt.Sprintf("diego_%d", GinkgoParallelProcess())
+	dbName := fmt.Sprintf("diego_route_emitter_%d", GinkgoParallelProcess())
 	sqlRunner = test_helpers.NewSQLRunner(dbName)
 
 	node := GinkgoParallelProcess()
