@@ -44,6 +44,7 @@ type Endpoint struct {
 	Since                 int64
 	ModificationTag       *models.ModificationTag
 	PreferredAddress      models.ActualLRPNetInfo_PreferredAddress
+	AvailabilityZone      string
 }
 
 func (e Endpoint) key() EndpointKey {
@@ -70,6 +71,7 @@ func NewEndpoint(
 	port, containerPort uint32,
 	preferredAddress models.ActualLRPNetInfo_PreferredAddress,
 	modificationTag *models.ModificationTag,
+	availabiltiyZone string,
 ) Endpoint {
 	return Endpoint{
 		InstanceGUID:     instanceGUID,
@@ -80,6 +82,7 @@ func NewEndpoint(
 		ContainerPort:    containerPort,
 		PreferredAddress: preferredAddress,
 		ModificationTag:  modificationTag,
+		AvailabilityZone: availabiltiyZone,
 	}
 }
 
@@ -226,6 +229,7 @@ func NewEndpointsFromActual(actualLRP *models.ActualLRP) []Endpoint {
 				ContainerTlsProxyPort: portMapping.ContainerTlsProxyPort,
 				Since:                 actualLRP.Since,
 				PreferredAddress:      actualLRP.PreferredAddress,
+				AvailabilityZone:      actualLRP.AvailabilityZone,
 			}
 			endpoints = append(endpoints, endpoint)
 		}

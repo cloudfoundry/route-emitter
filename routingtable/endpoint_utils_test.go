@@ -64,16 +64,17 @@ var _ = Describe("LRP Utils", func() {
 						models.NewPortMapping(11, 44),
 						models.NewPortMapping(66, 99),
 					),
-					Presence:        models.ActualLRP_Ordinary,
-					State:           models.ActualLRPStateRunning,
-					ModificationTag: tag,
+					Presence:         models.ActualLRP_Ordinary,
+					State:            models.ActualLRPStateRunning,
+					ModificationTag:  tag,
+					AvailabilityZone: "some-zone",
 				}
 
 				endpoints := routingtable.NewEndpointsFromActual(actualInfo)
 
 				Expect(endpoints).To(ConsistOf([]routingtable.Endpoint{
-					routingtable.NewEndpoint("instance-guid", models.ActualLRP_Ordinary, "1.1.1.1", "2.2.2.2", 11, 44, models.ActualLRPNetInfo_PreferredAddressHost, &tag),
-					routingtable.NewEndpoint("instance-guid", models.ActualLRP_Ordinary, "1.1.1.1", "2.2.2.2", 66, 99, models.ActualLRPNetInfo_PreferredAddressHost, &tag),
+					routingtable.NewEndpoint("instance-guid", models.ActualLRP_Ordinary, "1.1.1.1", "2.2.2.2", 11, 44, models.ActualLRPNetInfo_PreferredAddressHost, &tag, "some-zone"),
+					routingtable.NewEndpoint("instance-guid", models.ActualLRP_Ordinary, "1.1.1.1", "2.2.2.2", 66, 99, models.ActualLRPNetInfo_PreferredAddressHost, &tag, "some-zone"),
 				}))
 			})
 
@@ -90,16 +91,17 @@ var _ = Describe("LRP Utils", func() {
 							models.NewPortMappingWithTLSProxy(11, 44, 61004, 61005),
 							models.NewPortMappingWithTLSProxy(66, 99, 61006, 61007),
 						),
-						Presence:        models.ActualLRP_Ordinary,
-						State:           models.ActualLRPStateRunning,
-						ModificationTag: tag,
+						Presence:         models.ActualLRP_Ordinary,
+						State:            models.ActualLRPStateRunning,
+						ModificationTag:  tag,
+						AvailabilityZone: "some-zone",
 					}
 
 					endpoints := routingtable.NewEndpointsFromActual(actualInfo)
 
 					Expect(endpoints).To(ConsistOf([]routingtable.Endpoint{
-						newEndpointWithTlsProxyPort("instance-guid", models.ActualLRP_Ordinary, "1.1.1.1", "2.2.2.2", 11, 44, 61004, 61005, models.ActualLRPNetInfo_PreferredAddressInstance, &tag),
-						newEndpointWithTlsProxyPort("instance-guid", models.ActualLRP_Ordinary, "1.1.1.1", "2.2.2.2", 66, 99, 61006, 61007, models.ActualLRPNetInfo_PreferredAddressInstance, &tag),
+						newEndpointWithTlsProxyPort("instance-guid", models.ActualLRP_Ordinary, "1.1.1.1", "2.2.2.2", 11, 44, 61004, 61005, models.ActualLRPNetInfo_PreferredAddressInstance, &tag, "some-zone"),
+						newEndpointWithTlsProxyPort("instance-guid", models.ActualLRP_Ordinary, "1.1.1.1", "2.2.2.2", 66, 99, 61006, 61007, models.ActualLRPNetInfo_PreferredAddressInstance, &tag, "some-zone"),
 					}))
 				})
 			})
@@ -119,16 +121,17 @@ var _ = Describe("LRP Utils", func() {
 						models.NewPortMapping(11, 44),
 						models.NewPortMapping(66, 99),
 					),
-					Presence:        models.ActualLRP_Evacuating,
-					State:           models.ActualLRPStateRunning,
-					ModificationTag: tag,
+					Presence:         models.ActualLRP_Evacuating,
+					State:            models.ActualLRPStateRunning,
+					ModificationTag:  tag,
+					AvailabilityZone: "some-zone",
 				}
 
 				endpoints := routingtable.NewEndpointsFromActual(actualInfo)
 
 				Expect(endpoints).To(ConsistOf([]routingtable.Endpoint{
-					routingtable.NewEndpoint("instance-guid", models.ActualLRP_Evacuating, "1.1.1.1", "2.2.2.2", 11, 44, models.ActualLRPNetInfo_PreferredAddressHost, &tag),
-					routingtable.NewEndpoint("instance-guid", models.ActualLRP_Evacuating, "1.1.1.1", "2.2.2.2", 66, 99, models.ActualLRPNetInfo_PreferredAddressHost, &tag),
+					routingtable.NewEndpoint("instance-guid", models.ActualLRP_Evacuating, "1.1.1.1", "2.2.2.2", 11, 44, models.ActualLRPNetInfo_PreferredAddressHost, &tag, "some-zone"),
+					routingtable.NewEndpoint("instance-guid", models.ActualLRP_Evacuating, "1.1.1.1", "2.2.2.2", 66, 99, models.ActualLRPNetInfo_PreferredAddressHost, &tag, "some-zone"),
 				}))
 			})
 		})
@@ -241,6 +244,7 @@ func newEndpointWithTlsProxyPort(
 	port, containerPort, tlsProxyPort, containerTlsProxyPort uint32,
 	preferredAddress models.ActualLRPNetInfo_PreferredAddress,
 	modificationTag *models.ModificationTag,
+	availabiltiyZone string,
 ) routingtable.Endpoint {
 	return routingtable.Endpoint{
 		InstanceGUID:          instanceGUID,
@@ -253,5 +257,6 @@ func newEndpointWithTlsProxyPort(
 		ContainerTlsProxyPort: containerTlsProxyPort,
 		PreferredAddress:      preferredAddress,
 		ModificationTag:       modificationTag,
+		AvailabilityZone:      availabiltiyZone,
 	}
 }

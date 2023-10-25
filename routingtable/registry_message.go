@@ -21,6 +21,7 @@ type RegistryMessage struct {
 	IsolationSegment     string            `json:"isolation_segment,omitempty" hash:"ignore"`
 	EndpointUpdatedAtNs  int64             `json:"endpoint_updated_at_ns,omitempty" hash:"ignore"`
 	Tags                 map[string]string `json:"tags,omitempty" hash:"ignore"`
+	AvailabilityZone     string            `json:"availability_zone,omitempty" hash:"ignore"`
 }
 
 func RegistryMessageFor(endpoint Endpoint, route Route, emitEndpointUpdatedAt bool) RegistryMessage {
@@ -42,6 +43,7 @@ func RegistryMessageFor(endpoint Endpoint, route Route, emitEndpointUpdatedAt bo
 		App:                 route.LogGUID,
 		IsolationSegment:    route.IsolationSegment,
 		Tags:                populateMetricTags(route.MetricTags, endpoint),
+		AvailabilityZone:    endpoint.AvailabilityZone,
 		EndpointUpdatedAtNs: since,
 
 		PrivateInstanceId:    endpoint.InstanceGUID,
@@ -70,6 +72,7 @@ func InternalAddressRegistryMessageFor(endpoint Endpoint, route Route, emitEndpo
 		App:              route.LogGUID,
 		IsolationSegment: route.IsolationSegment,
 		Tags:             populateMetricTags(route.MetricTags, endpoint),
+		AvailabilityZone: endpoint.AvailabilityZone,
 
 		ServerCertDomainSAN:  endpoint.InstanceGUID,
 		PrivateInstanceId:    endpoint.InstanceGUID,
@@ -94,6 +97,7 @@ func InternalEndpointRegistryMessageFor(endpoint Endpoint, route InternalRoute, 
 		Host:                endpoint.ContainerIP,
 		App:                 route.LogGUID,
 		Tags:                map[string]string{"component": "route-emitter"},
+		AvailabilityZone:    endpoint.AvailabilityZone,
 		EndpointUpdatedAtNs: since,
 
 		PrivateInstanceIndex: index,
