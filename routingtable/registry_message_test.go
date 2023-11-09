@@ -25,6 +25,7 @@ var _ = Describe("RegistryMessage", func() {
 			RouteServiceUrl:      "https://hello.com",
 			EndpointUpdatedAtNs:  1000,
 			Tags:                 map[string]string{"component": "route-emitter", "foo": "bar", "doo": "0", "goo": "instance-guid"},
+			AvailabilityZone:     "some-zone",
 		}
 	})
 
@@ -42,7 +43,8 @@ var _ = Describe("RegistryMessage", func() {
 				"private_instance_index": "0",
 				"route_service_url": "https://hello.com",
 				"endpoint_updated_at_ns": 1000,
-				"tags": {"component":"route-emitter", "doo": "0", "foo": "bar", "goo": "instance-guid"}
+				"tags": {"component":"route-emitter", "doo": "0", "foo": "bar", "goo": "instance-guid"},
+				"availability_zone": "some-zone"
 			}`
 		})
 
@@ -76,7 +78,8 @@ var _ = Describe("RegistryMessage", func() {
 				"server_cert_domain_san": "instance-guid",
 				"route_service_url": "https://hello.com",
 				"endpoint_updated_at_ns": 1000,
-				"tags": {"component":"route-emitter", "doo": "0", "foo": "bar", "goo": "instance-guid"}
+				"tags": {"component":"route-emitter", "doo": "0", "foo": "bar", "goo": "instance-guid"},
+				"availability_zone": "some-zone"
 			}`
 			})
 
@@ -104,7 +107,8 @@ var _ = Describe("RegistryMessage", func() {
 				"server_cert_domain_san": "instance-guid",
 				"route_service_url": "https://hello.com",
 				"endpoint_updated_at_ns": 1000,
-				"tags": {"component":"route-emitter", "doo": "0", "foo": "bar", "goo": "instance-guid"}
+				"tags": {"component":"route-emitter", "doo": "0", "foo": "bar", "goo": "instance-guid"},
+				"availability_zone": "some-zone"
 			}`
 			})
 
@@ -124,12 +128,13 @@ var _ = Describe("RegistryMessage", func() {
 
 		BeforeEach(func() {
 			endpoint = routingtable.Endpoint{
-				InstanceGUID:  "instance-guid",
-				Index:         0,
-				Host:          "1.1.1.1",
-				Port:          61001,
-				ContainerPort: 11,
-				Since:         2000,
+				InstanceGUID:     "instance-guid",
+				Index:            0,
+				Host:             "1.1.1.1",
+				Port:             61001,
+				ContainerPort:    11,
+				Since:            2000,
+				AvailabilityZone: "some-zone",
 			}
 
 			route = routingtable.Route{
@@ -195,16 +200,18 @@ var _ = Describe("RegistryMessage", func() {
 				RouteServiceUrl:      "https://hello.com",
 				EndpointUpdatedAtNs:  2000,
 				Tags:                 map[string]string{"component": "route-emitter", "foo": "bar", "doo": "0"},
+				AvailabilityZone:     "some-zone",
 			}
 
 			endpoint = routingtable.Endpoint{
-				InstanceGUID:  "instance-guid",
-				Index:         0,
-				Host:          "1.1.1.1",
-				ContainerIP:   "1.2.3.4",
-				Port:          61001,
-				ContainerPort: 11,
-				Since:         2000,
+				InstanceGUID:     "instance-guid",
+				Index:            0,
+				Host:             "1.1.1.1",
+				ContainerIP:      "1.2.3.4",
+				Port:             61001,
+				ContainerPort:    11,
+				Since:            2000,
+				AvailabilityZone: "some-zone",
 			}
 			route = routingtable.Route{
 				Hostname:        "host-1.example.com",
@@ -259,16 +266,18 @@ var _ = Describe("RegistryMessage", func() {
 				Tags:                 map[string]string{"component": "route-emitter"},
 				EndpointUpdatedAtNs:  2000,
 				PrivateInstanceIndex: "0",
+				AvailabilityZone:     "some-zone",
 			}
 
 			endpoint = routingtable.Endpoint{
-				InstanceGUID:  "instance-guid",
-				Index:         0,
-				Host:          "1.1.1.1",
-				ContainerIP:   "1.2.3.4",
-				Port:          61001,
-				ContainerPort: 11,
-				Since:         2000,
+				InstanceGUID:     "instance-guid",
+				Index:            0,
+				Host:             "1.1.1.1",
+				ContainerIP:      "1.2.3.4",
+				Port:             61001,
+				ContainerPort:    11,
+				Since:            2000,
+				AvailabilityZone: "some-zone",
 			}
 
 			route = routingtable.InternalRoute{
