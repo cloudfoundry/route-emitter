@@ -109,7 +109,7 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 
 	emitterPath = string(binaries["emitter"])
 
-	dbName := fmt.Sprintf("diego_%d", GinkgoParallelProcess())
+	dbName := fmt.Sprintf("diego_route_emitter_%d", GinkgoParallelProcess())
 	sqlRunner = test_helpers.NewSQLRunner(dbName)
 
 	node := GinkgoParallelProcess()
@@ -143,7 +143,7 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 		Host:   bbsAddress,
 	}
 
-	basePath := path.Join(os.Getenv("DIEGO_RELEASE_DIR"), "src/code.cloudfoundry.org/route-emitter/cmd/route-emitter/fixtures")
+	basePath := "fixtures"
 
 	bbsConfig = bbsconfig.BBSConfig{
 		UUID:                        "bbs",

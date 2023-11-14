@@ -2,6 +2,7 @@ package natsserverrunner
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 	"strconv"
 	"time"
@@ -27,9 +28,11 @@ func StartNatsServer(natsPort int) (ifrit.Process, diegonats.NATSClient) {
 }
 
 func NewNatsServerTestRunner(natsPort int) *ginkgomon.Runner {
-	natsServerPath, err := exec.LookPath("nats-server")
-	Expect(err).NotTo(HaveOccurred(), "You need nats-server installed!")
-
+	natsServerPath, exists := os.LookupEnv("NATS_SERVER_BINARY")
+	if !exists {
+		fmt.Println("You need nats-server install set NATS_SERVER_BINARY env variable")
+		os.Exit(1)
+	}
 	return ginkgomon.New(ginkgomon.Config{
 		Name:              "nats-server",
 		AnsiColorCode:     "99m",
@@ -63,8 +66,11 @@ func StartNatsServerWithTLS(natsPort int, caFile, certFile, keyFile string) (ifr
 }
 
 func NewNatsServerWithTLSTestRunner(natsPort int, caFile, certFile, keyFile string) *ginkgomon.Runner {
-	natsServerPath, err := exec.LookPath("nats-server")
-	Expect(err).NotTo(HaveOccurred(), "You need nats-server installed!")
+	natsServerPath, exists := os.LookupEnv("NATS_SERVER_BINARY")
+	if !exists {
+		fmt.Println("You need nats-server install set NATS_SERVER_BINARY env variable")
+		os.Exit(1)
+	}
 
 	return ginkgomon.New(ginkgomon.Config{
 		Name:              "nats-server",

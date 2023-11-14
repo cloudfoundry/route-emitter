@@ -217,7 +217,7 @@ var _ = Describe("Route Emitter", func() {
 	}
 
 	BeforeEach(func() {
-		basePath := path.Join(os.Getenv("DIEGO_RELEASE_DIR"), "src/code.cloudfoundry.org/route-emitter/cmd/route-emitter/fixtures")
+		basePath := "fixtures"
 
 		caFile = path.Join(basePath, "green-certs", "server-ca.crt")
 		clientCertFile = path.Join(basePath, "green-certs", "client.crt")
