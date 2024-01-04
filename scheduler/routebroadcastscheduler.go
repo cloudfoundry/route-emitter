@@ -9,6 +9,7 @@ import (
 
 	"code.cloudfoundry.org/clock"
 	"code.cloudfoundry.org/lager/v3"
+	"code.cloudfoundry.org/route-emitter/cmd/route-emitter/config"
 	"code.cloudfoundry.org/route-emitter/diegonats"
 	"code.cloudfoundry.org/route-emitter/routingtable"
 	"github.com/nats-io/nats.go"
@@ -21,8 +22,8 @@ type RouteBroadcastScheduler struct {
 	clock                clock.Clock
 	emitCh               chan struct{}
 	externalServiceStart chan time.Duration
-
-	logger lager.Logger
+	cfg                  *config.RouteEmitterConfig
+	logger               lager.Logger
 }
 
 func NewRouteBroadcastScheduler(
@@ -30,6 +31,7 @@ func NewRouteBroadcastScheduler(
 	natsClient diegonats.NATSClient,
 	logger lager.Logger,
 	externalServiceName string,
+	cfg *config.RouteEmitterConfig,
 	emitCh chan struct{},
 ) *RouteBroadcastScheduler {
 	return &RouteBroadcastScheduler{
@@ -40,6 +42,7 @@ func NewRouteBroadcastScheduler(
 		emitCh: emitCh,
 
 		externalServiceStart: make(chan time.Duration),
+		cfg:                  cfg,
 
 		logger: logger.Session("route-broadcast-scheduler", lager.Data{"name": externalServiceName}),
 	}
@@ -95,7 +98,7 @@ GREET_LOOP:
 		select {
 		case registerInterval = <-s.externalServiceStart:
 			s.logger.Info("received-new-external-service-prune-interval", lager.Data{"interval": registerInterval.String()})
-			jitterInterval := randSource.Int63n(int64(0.2 * float64(registerInterval)))
+			jitterInterval := randSource.Int63n(int64(s.cfg.JitterFactor * float64(registerInterval)))
 			s.clock.Sleep(time.Duration(jitterInterval))
 			emitTicker.Stop()
 			emitTicker = s.clock.NewTicker(registerInterval)

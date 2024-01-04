@@ -41,6 +41,7 @@ type RouteEmitterConfig struct {
 	RegisterDirectInstanceRoutes bool                  `json:"register_direct_instance_routes,omitempty"`
 	CommunicationTimeout         durationjson.Duration `json:"communication_timeout,omitempty"`
 	HealthCheckAddress           string                `json:"healthcheck_address,omitempty"`
+	JitterFactor                 float64               `json:"jitter_factor,omitempty"`
 	LockRetryInterval            durationjson.Duration `json:"lock_retry_interval,omitempty"`
 	LockTTL                      durationjson.Duration `json:"lock_ttl,omitempty"`
 	NATSAddresses                string                `json:"nats_addresses,omitempty"`

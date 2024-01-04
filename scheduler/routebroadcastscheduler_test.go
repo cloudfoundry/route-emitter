@@ -7,6 +7,7 @@ import (
 
 	"code.cloudfoundry.org/clock/fakeclock"
 	"code.cloudfoundry.org/lager/v3/lagertest"
+	"code.cloudfoundry.org/route-emitter/cmd/route-emitter/config"
 	"code.cloudfoundry.org/route-emitter/diegonats"
 	"code.cloudfoundry.org/route-emitter/scheduler"
 	"github.com/nats-io/nats.go"
@@ -21,6 +22,7 @@ var _ = Describe("RouteBroadcastScheduler", func() {
 		schedulerRunner *scheduler.RouteBroadcastScheduler
 		process         ifrit.Process
 		clock           *fakeclock.FakeClock
+		cfg             *config.RouteEmitterConfig
 		emitCh          chan struct{}
 
 		shutdown chan struct{}
@@ -32,6 +34,8 @@ var _ = Describe("RouteBroadcastScheduler", func() {
 		Context(prefix, func() {
 			BeforeEach(func() {
 				natsClient = diegonats.NewFakeClient()
+				cfg = &config.RouteEmitterConfig{}
+				cfg.JitterFactor = 0.2
 
 				clock = fakeclock.NewFakeClock(time.Now())
 
@@ -52,7 +56,7 @@ var _ = Describe("RouteBroadcastScheduler", func() {
 
 			JustBeforeEach(func() {
 				logger := lagertest.NewTestLogger("test")
-				schedulerRunner = scheduler.NewRouteBroadcastScheduler(clock, natsClient, logger, prefix, emitCh)
+				schedulerRunner = scheduler.NewRouteBroadcastScheduler(clock, natsClient, logger, prefix, cfg, emitCh)
 
 				shutdown = make(chan struct{})
 
