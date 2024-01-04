@@ -73,8 +73,8 @@ func main() {
 	externalChan := make(chan struct{}, 1)
 	internalChan := make(chan struct{}, 1)
 	syncer := syncer.NewSyncer(clock, time.Duration(cfg.SyncInterval), logger)
-	externalScheduler := scheduler.NewRouteBroadcastScheduler(clock, natsClient, logger, "router", externalChan)
-	internalScheduler := scheduler.NewRouteBroadcastScheduler(clock, natsClient, logger, "service-discovery", internalChan)
+	externalScheduler := scheduler.NewRouteBroadcastScheduler(clock, natsClient, logger, "router", &cfg, externalChan)
+	internalScheduler := scheduler.NewRouteBroadcastScheduler(clock, natsClient, logger, "service-discovery", &cfg, internalChan)
 
 	metronClient, err := initializeMetron(logger, cfg)
 	if err != nil {
