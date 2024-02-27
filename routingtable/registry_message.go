@@ -111,21 +111,19 @@ type ExternalServiceGreetingMessage struct {
 
 func populateMetricTags(input map[string]*models.MetricTagValue, endpoint Endpoint) map[string]string {
 	tags := map[string]string{}
-	if input != nil {
-		for k, v := range input {
-			var value string
-			if v.Dynamic > 0 {
-				switch v.Dynamic {
-				case models.MetricTagDynamicValueIndex:
-					value = strconv.FormatInt(int64(endpoint.Index), 10)
-				case models.MetricTagDynamicValueInstanceGuid:
-					value = endpoint.InstanceGUID
-				}
-			} else {
-				value = v.Static
+	for k, v := range input {
+		var value string
+		if v.Dynamic > 0 {
+			switch v.Dynamic {
+			case models.MetricTagDynamicValueIndex:
+				value = strconv.FormatInt(int64(endpoint.Index), 10)
+			case models.MetricTagDynamicValueInstanceGuid:
+				value = endpoint.InstanceGUID
 			}
-			tags[k] = value
+		} else {
+			value = v.Static
 		}
+		tags[k] = value
 	}
 	tags["component"] = "route-emitter"
 	return tags
