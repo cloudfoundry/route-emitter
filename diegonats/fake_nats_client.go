@@ -226,7 +226,7 @@ func (f *FakeNATSClient) Subscriptions(subject string) []*nats.Subscription {
 	f.RLock()
 
 	keys := make([]*nats.Subscription, 0)
-	for k, _ := range f.subscriptions[subject] {
+	for k := range f.subscriptions[subject] {
 		keys = append(keys, k)
 	}
 	f.RUnlock()
