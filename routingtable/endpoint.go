@@ -265,7 +265,7 @@ func NewRoutingKeysFromDesired(desired *models.DesiredLRP) RoutingKeys {
 }
 
 func (e ExternalEndpointInfos) HasNoExternalPorts(logger lager.Logger) bool {
-	if e == nil || len(e) == 0 {
+	if len(e) == 0 {
 		logger.Debug("no-external-port")
 		return true
 	}
