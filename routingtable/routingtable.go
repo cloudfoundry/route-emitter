@@ -347,10 +347,10 @@ func (t *internalRoutingTable) Swap(otherTable *internalRoutingTable, domains mo
 	var mappings TCPRouteMappings
 
 	mergedRoutingKeys := map[RoutingKey]struct{}{}
-	for key, _ := range otherTable.entries {
+	for key := range otherTable.entries {
 		mergedRoutingKeys[key] = struct{}{}
 	}
-	for key, _ := range t.entries {
+	for key := range t.entries {
 		mergedRoutingKeys[key] = struct{}{}
 	}
 
