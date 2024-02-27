@@ -304,11 +304,9 @@ var _ = Describe("Watcher", func() {
 			bbsErrorChannel = make(chan error)
 
 			bbsClient.SubscribeToInstanceEventsByCellIDStub = func(logger lager.Logger, cellID string) (events.EventSource, error) {
-				select {
-				case err := <-bbsErrorChannel:
-					if err != nil {
-						return nil, err
-					}
+				err := <-bbsErrorChannel
+				if err != nil {
+					return nil, err
 				}
 				return eventSource, nil
 			}
