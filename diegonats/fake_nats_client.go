@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/nats-io/nats.go"
-	"github.com/nu7hatch/gouuid"
+	uuid "github.com/nu7hatch/gouuid"
 )
 
 type FakeNATSClient struct {
@@ -69,8 +69,6 @@ func (f *FakeNATSClient) SetPingInterval(interval time.Duration) {
 func (f *FakeNATSClient) Close() {
 	f.Lock()
 	defer f.Unlock()
-
-	return
 }
 
 func (f *FakeNATSClient) OnPing(onPingCallback func() bool) {
