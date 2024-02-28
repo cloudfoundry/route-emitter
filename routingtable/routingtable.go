@@ -498,7 +498,7 @@ func (table *internalRoutingTable) SetRoutes(before, after *models.DesiredLRP) (
 	routeEntries := table.routesGenerator(after)
 	// logger.Info("internal-route-table", lager.Data{"numEntries": len(table.internalEntries)})
 
-	var messagesToEmit MessagesToEmit = MessagesToEmit{}
+	messagesToEmit := MessagesToEmit{}
 	var mappings TCPRouteMappings
 
 	changedDetected := false
