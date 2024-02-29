@@ -2,7 +2,6 @@ package diegonats_test
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 
 	"code.cloudfoundry.org/inigo/helpers/certauthority"
@@ -127,7 +126,7 @@ var _ = Describe("NatsClient", func() {
 
 		BeforeEach(func() {
 			var err error
-			certDepot, err = ioutil.TempDir("", "")
+			certDepot, err = os.MkdirTemp("", "")
 			Expect(err).NotTo(HaveOccurred())
 			certAuthority, err := certauthority.NewCertAuthority(certDepot, "nats")
 			Expect(err).NotTo(HaveOccurred())
