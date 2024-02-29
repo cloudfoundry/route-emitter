@@ -1,7 +1,6 @@
 package config_test
 
 import (
-	"io/ioutil"
 	"os"
 	"time"
 
@@ -87,7 +86,7 @@ var _ = Describe("Config", func() {
 	})
 
 	JustBeforeEach(func() {
-		configFile, err := ioutil.TempFile("", "route-emitter-config")
+		configFile, err := os.CreateTemp("", "route-emitter-config")
 		Expect(err).NotTo(HaveOccurred())
 
 		defer configFile.Close()

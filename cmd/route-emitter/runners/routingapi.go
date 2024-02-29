@@ -2,7 +2,6 @@ package runners
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"strconv"
@@ -10,7 +9,7 @@ import (
 
 	"gopkg.in/yaml.v2"
 
-	"code.cloudfoundry.org/routing-api"
+	routing_api "code.cloudfoundry.org/routing-api"
 	apiconfig "code.cloudfoundry.org/routing-api/config"
 	"code.cloudfoundry.org/routing-api/models"
 	"code.cloudfoundry.org/tlsconfig"
@@ -70,7 +69,7 @@ func NewRoutingAPIRunner(binPath string, adminPort int, sqlConfig SQLConfig, fs 
 		f(&cfg)
 	}
 
-	f, err := ioutil.TempFile(os.TempDir(), "routing-api-config")
+	f, err := os.CreateTemp(os.TempDir(), "routing-api-config")
 	if err != nil {
 		return nil, err
 	}

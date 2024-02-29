@@ -2,6 +2,7 @@ package emitter_test
 
 import (
 	"errors"
+
 	"golang.org/x/oauth2"
 
 	"code.cloudfoundry.org/lager/v3"

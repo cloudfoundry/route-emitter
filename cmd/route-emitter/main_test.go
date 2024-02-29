@@ -18,7 +18,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"net/http/httputil"
@@ -173,7 +172,7 @@ var _ = Describe("Route Emitter", func() {
 			f(&cfg)
 		}
 
-		configFile, err := ioutil.TempFile("", "route-emitter-test")
+		configFile, err := os.CreateTemp("", "route-emitter-test")
 		Expect(err).NotTo(HaveOccurred())
 
 		defer configFile.Close()
@@ -309,7 +308,7 @@ var _ = Describe("Route Emitter", func() {
 		port, err := portAllocator.ClaimPorts(3)
 		Expect(err).NotTo(HaveOccurred())
 
-		depotDir, err = ioutil.TempDir("", "certauthority")
+		depotDir, err = os.MkdirTemp("", "certauthority")
 		Expect(err).NotTo(HaveOccurred())
 
 		certAuthority, err := certauthority.NewCertAuthority(depotDir, "ca")
@@ -1200,7 +1199,7 @@ var _ = Describe("Route Emitter", func() {
 				natsClient.Close()
 
 				var err error
-				certDepot, err = ioutil.TempDir("", "")
+				certDepot, err = os.MkdirTemp("", "")
 				Expect(err).NotTo(HaveOccurred())
 				certAuthority, err := certauthority.NewCertAuthority(certDepot, "nats")
 				Expect(err).NotTo(HaveOccurred())
@@ -1286,11 +1285,11 @@ var _ = Describe("Route Emitter", func() {
 				BeforeEach(func() {
 					startEmitterShouldSucceed = false
 					invalidCAFile := filepath.Join(certDepot, "invalid-ca.crt")
-					Expect(ioutil.WriteFile(invalidCAFile, []byte("invalid-ca-content"), 0666)).To(Succeed())
+					Expect(os.WriteFile(invalidCAFile, []byte("invalid-ca-content"), 0666)).To(Succeed())
 					invalidCertFile := filepath.Join(certDepot, "invalid-cert.crt")
-					Expect(ioutil.WriteFile(invalidCertFile, []byte("invalid-cert-content"), 0666)).To(Succeed())
+					Expect(os.WriteFile(invalidCertFile, []byte("invalid-cert-content"), 0666)).To(Succeed())
 					invalidKeyFile := filepath.Join(certDepot, "invalid-key.crt")
-					Expect(ioutil.WriteFile(invalidKeyFile, []byte("invalid-key-content"), 0666)).To(Succeed())
+					Expect(os.WriteFile(invalidKeyFile, []byte("invalid-key-content"), 0666)).To(Succeed())
 
 					cfgs = append(cfgs, func(cfg *config.RouteEmitterConfig) {
 						cfg.NATSCACertFile = invalidCAFile
