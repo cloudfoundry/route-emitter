@@ -24,6 +24,7 @@ type RouteBroadcastScheduler struct {
 	externalServiceStart chan time.Duration
 	cfg                  *config.RouteEmitterConfig
 	logger               lager.Logger
+	MaxGreetAttempts     int
 }
 
 func NewRouteBroadcastScheduler(
@@ -44,7 +45,8 @@ func NewRouteBroadcastScheduler(
 		externalServiceStart: make(chan time.Duration),
 		cfg:                  cfg,
 
-		logger: logger.Session("route-broadcast-scheduler", lager.Data{"name": externalServiceName}),
+		logger:           logger.Session("route-broadcast-scheduler", lager.Data{"name": externalServiceName}),
+		MaxGreetAttempts: 30,
 	}
 }
 
@@ -60,19 +62,25 @@ func (s *RouteBroadcastScheduler) Run(signals <-chan os.Signal, ready chan<- str
 		return err
 	}
 
-	close(ready)
-	s.logger.Info("started")
-
 	var registerInterval time.Duration
 	retryGreetingTicker := s.clock.NewTicker(time.Second)
 
 	//keep trying to greet until we hear from the external service
+	greetAttempt := 0
 GREET_LOOP:
 	for {
+		greetAttempt += 1
 		s.logger.Info("greeting-external-service")
 		err := s.greetExternalService(replyUuid.String())
+
 		if err != nil {
 			s.logger.Error("failed-to-greet-external-service", err)
+			return err
+		}
+
+		if greetAttempt == s.MaxGreetAttempts {
+			err = fmt.Errorf("attempted to greet '%v' %d times without success", s.externalServiceName, s.MaxGreetAttempts)
+			s.logger.Error("greeting-external-service.giving-up", err)
 			return err
 		}
 
@@ -88,6 +96,9 @@ GREET_LOOP:
 		}
 	}
 	retryGreetingTicker.Stop()
+
+	close(ready)
+	s.logger.Info("started")
 
 	// now keep emitting at the desired interval
 	emitTicker := s.clock.NewTicker(registerInterval)
