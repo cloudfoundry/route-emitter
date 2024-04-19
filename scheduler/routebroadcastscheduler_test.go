@@ -3,6 +3,7 @@ package scheduler_test
 import (
 	"fmt"
 	"os"
+	"sync"
 	"time"
 
 	"code.cloudfoundry.org/clock/fakeclock"
@@ -28,6 +29,10 @@ var _ = Describe("RouteBroadcastScheduler", func() {
 		shutdown chan struct{}
 
 		natsStartMessages chan<- *nats.Msg
+
+		maxGreetAttempts                int
+		blockTestOnProcessBecomingReady bool
+		expectProcessToExitWithFailure  bool
 	)
 
 	testRouteBroadcastScheduler := func(prefix string) {
@@ -52,20 +57,28 @@ var _ = Describe("RouteBroadcastScheduler", func() {
 
 					return nil
 				})
+				maxGreetAttempts = 30
 			})
 
 			JustBeforeEach(func() {
 				logger := lagertest.NewTestLogger("test")
 				schedulerRunner = scheduler.NewRouteBroadcastScheduler(clock, natsClient, logger, prefix, cfg, emitCh)
+				schedulerRunner.MaxGreetAttempts = maxGreetAttempts
 
 				shutdown = make(chan struct{})
 
-				process = ifrit.Invoke(schedulerRunner)
+				if blockTestOnProcessBecomingReady {
+					process = ifrit.Invoke(schedulerRunner)
+				} else {
+					process = ifrit.Background(schedulerRunner)
+				}
 			})
 
 			AfterEach(func() {
 				process.Signal(os.Interrupt)
-				Eventually(process.Wait()).Should(Receive(BeNil()))
+				if !expectProcessToExitWithFailure {
+					Eventually(process.Wait()).Should(Receive(BeNil()))
+				}
 				close(shutdown)
 				close(natsStartMessages)
 			})
@@ -110,7 +123,25 @@ var _ = Describe("RouteBroadcastScheduler", func() {
 				})
 
 				Context("when the external service does not emit a *.start", func() {
+					BeforeEach(func() {
+						blockTestOnProcessBecomingReady = false
+					})
+
 					It("should keep greeting the external service until it gets an interval", func() {
+						isReady := false
+						var wg sync.WaitGroup
+						wg.Add(1)
+						go func() {
+							for {
+								select {
+								case <-process.Ready():
+									isReady = true
+									wg.Done()
+									return
+								}
+							}
+						}()
+
 						//get the first greeting
 						Eventually(greetings).Should(Receive())
 
@@ -118,10 +149,35 @@ var _ = Describe("RouteBroadcastScheduler", func() {
 						clock.WaitForWatcherAndIncrement(time.Second)
 						var msg *nats.Msg
 						Eventually(greetings).Should(Receive(&msg))
+						Expect(isReady).To(Equal(false))
+
 						go natsClient.Publish(msg.Reply, []byte(`{"minimumRegisterIntervalInSeconds":1, "pruneThresholdInSeconds": 3}`))
+						wg.Wait()
+						Eventually(isReady).Should(Equal(true))
 
 						//should no longer be greeting the external service
 						Consistently(greetings).ShouldNot(Receive())
+					})
+
+					Context("when it has been greeting for a very long time", func() {
+						BeforeEach(func() {
+							maxGreetAttempts = 3
+							expectProcessToExitWithFailure = true
+						})
+
+						It("eventually fails", func() {
+							//get the first greeting
+							Eventually(greetings).Should(Receive())
+
+							//attempt to greet 3 times
+							clock.WaitForWatcherAndIncrement(time.Second)
+							clock.WaitForWatcherAndIncrement(time.Second)
+							clock.WaitForWatcherAndIncrement(time.Second)
+
+							//should exit with an error
+							err := <-process.Wait()
+							Expect(err).To(MatchError(ContainSubstring("attempted to greet")))
+						})
 					})
 				})
 
