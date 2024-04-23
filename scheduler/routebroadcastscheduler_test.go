@@ -132,14 +132,9 @@ var _ = Describe("RouteBroadcastScheduler", func() {
 						var wg sync.WaitGroup
 						wg.Add(1)
 						go func() {
-							for {
-								select {
-								case <-process.Ready():
-									isReady = true
-									wg.Done()
-									return
-								}
-							}
+							<-process.Ready()
+							isReady = true
+							wg.Done()
 						}()
 
 						//get the first greeting
