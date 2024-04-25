@@ -19,6 +19,7 @@ import (
 	"code.cloudfoundry.org/diego-logging-client/testhelpers"
 	"code.cloudfoundry.org/durationjson"
 	"code.cloudfoundry.org/go-loggregator/v8/rpc/loggregator_v2"
+	"code.cloudfoundry.org/inigo/helpers/certauthority"
 	"code.cloudfoundry.org/inigo/helpers/portauthority"
 	"code.cloudfoundry.org/lager/v3/lagerflags"
 	"code.cloudfoundry.org/locket"
@@ -52,6 +53,7 @@ var (
 	bbsProcess ifrit.Process
 
 	routingAPIPath string
+	certDepot      string
 
 	natsServerProcess ifrit.Process
 	natsClient        diegonats.NATSClient
@@ -250,7 +252,22 @@ var _ = BeforeEach(func() {
 	bbsConfig.ClientLocketConfig.LocketAddress = locketAddress
 	startBBS()
 
-	natsServerProcess, natsClient = natsserverrunner.StartNatsServer(int(natsPort))
+	var err error
+	certDepot, err = os.MkdirTemp("", "")
+	Expect(err).NotTo(HaveOccurred())
+	certAuthority, err := certauthority.NewCertAuthority(certDepot, "nats")
+	Expect(err).NotTo(HaveOccurred())
+	_, caFile := certAuthority.CAAndKey()
+	keyFile, certFile, err := certAuthority.GenerateSelfSignedCertAndKey("nats", []string{}, false)
+	Expect(err).NotTo(HaveOccurred())
+
+	natsServerProcess, natsClient = natsserverrunner.StartNatsServerWithTLS(int(natsPort), caFile, certFile, keyFile)
+	cfgs = append(cfgs, func(cfg *config.RouteEmitterConfig) {
+		cfg.NATSTLSEnabled = true
+		cfg.NATSCACertFile = caFile
+		cfg.NATSClientCertFile = certFile
+		cfg.NATSClientKeyFile = keyFile
+	})
 
 	healthCheckPort, err := portAllocator.ClaimPorts(1)
 	Expect(err).NotTo(HaveOccurred())
@@ -293,10 +310,11 @@ var _ = AfterEach(func() {
 	close(signalMetricsChan)
 
 	ginkgomon.Kill(sqlProcess, 10*time.Second)
+	Expect(os.RemoveAll(certDepot)).To(Succeed())
+	oauthServer.Close()
 })
 
 var _ = SynchronizedAfterSuite(func() {
-	oauthServer.Close()
 }, func() {
 	gexec.CleanupBuildArtifacts()
 })
