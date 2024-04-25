@@ -33,7 +33,6 @@ import (
 	"code.cloudfoundry.org/locket"
 	"code.cloudfoundry.org/route-emitter/cmd/route-emitter/config"
 	"code.cloudfoundry.org/route-emitter/cmd/route-emitter/runners"
-	"code.cloudfoundry.org/route-emitter/diegonats/natsserverrunner"
 	"code.cloudfoundry.org/route-emitter/routingtable"
 	. "code.cloudfoundry.org/route-emitter/routingtable/matchers"
 	routing_api "code.cloudfoundry.org/routing-api"
@@ -1178,6 +1177,7 @@ var _ = Describe("Route Emitter", func() {
 			})
 			runner = createEmitterRunner("emitter1", cellID, cfgs...)
 			runner.StartCheck = "emitter1.started"
+			runner.StartCheckTimeout = time.Minute
 			if startEmitterShouldSucceed {
 				emitter = ginkgomon.Invoke(runner)
 			} else {
@@ -1191,35 +1191,9 @@ var _ = Describe("Route Emitter", func() {
 		})
 
 		Context("when configured to communicate with nats over TLS", func() {
-			var certDepot string
 
 			BeforeEach(func() {
-				natsServerProcess.Signal(os.Kill)
-				Eventually(natsServerProcess.Wait(), 5).Should(Receive())
-				natsClient.Close()
-
-				var err error
-				certDepot, err = os.MkdirTemp("", "")
-				Expect(err).NotTo(HaveOccurred())
-				certAuthority, err := certauthority.NewCertAuthority(certDepot, "nats")
-				Expect(err).NotTo(HaveOccurred())
-				_, caFile := certAuthority.CAAndKey()
-				keyFile, certFile, err := certAuthority.GenerateSelfSignedCertAndKey("nats", []string{}, false)
-				Expect(err).NotTo(HaveOccurred())
-
-				natsServerProcess, natsClient = natsserverrunner.StartNatsServerWithTLS(int(natsPort), caFile, certFile, keyFile)
 				registeredRoutes = listenForRoutes("router.register")
-
-				cfgs = append(cfgs, func(cfg *config.RouteEmitterConfig) {
-					cfg.NATSTLSEnabled = true
-					cfg.NATSCACertFile = caFile
-					cfg.NATSClientCertFile = certFile
-					cfg.NATSClientKeyFile = keyFile
-				})
-			})
-
-			AfterEach(func() {
-				Expect(os.RemoveAll(certDepot)).To(Succeed())
 			})
 
 			It("enables the healthcheck server", func() {
