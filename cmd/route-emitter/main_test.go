@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 
 	"code.cloudfoundry.org/bbs"
+	"code.cloudfoundry.org/cf-networking-helpers/certauthority"
 	"code.cloudfoundry.org/clock"
 	"code.cloudfoundry.org/diego-logging-client/testhelpers"
-	"code.cloudfoundry.org/inigo/helpers/certauthority"
 	locketconfig "code.cloudfoundry.org/locket/cmd/locket/config"
 	locketrunner "code.cloudfoundry.org/locket/cmd/locket/testrunner"
 	"code.cloudfoundry.org/locket/lock"

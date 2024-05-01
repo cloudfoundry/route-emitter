@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"code.cloudfoundry.org/inigo/helpers/certauthority"
+	"code.cloudfoundry.org/cf-networking-helpers/certauthority"
 	. "code.cloudfoundry.org/route-emitter/diegonats"
 	"code.cloudfoundry.org/tlsconfig"
 	"github.com/nats-io/nats.go"

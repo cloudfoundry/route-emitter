@@ -3,7 +3,7 @@ package diegonats_test
 import (
 	"testing"
 
-	"code.cloudfoundry.org/inigo/helpers/portauthority"
+	"code.cloudfoundry.org/cf-networking-helpers/portauthority"
 	"code.cloudfoundry.org/route-emitter/diegonats/natsserverrunner"
 
 	. "github.com/onsi/ginkgo/v2"
