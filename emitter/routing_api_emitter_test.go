@@ -38,11 +38,11 @@ var _ = Describe("RoutingAPIEmitter", func() {
 		routingAPIEmitter = emitter.NewRoutingAPIEmitter(logger, routingApiClient, uaaTokenFetcher, ttl)
 
 		routingEvents = routingtable.TCPRouteMappings{
-			Registrations: []apimodels.TcpRouteMapping{apimodels.NewTcpRouteMapping("123", 61000, "some-ip-1", 62003, 0)},
+			Registrations: []apimodels.TcpRouteMapping{apimodels.NewTcpRouteMapping("123", 61000, "some-ip-1", 62003, 0, "", nil, 0, apimodels.ModificationTag{})},
 		}
 
 		expectedRoutingEvents = routingtable.TCPRouteMappings{
-			Registrations: []apimodels.TcpRouteMapping{apimodels.NewTcpRouteMapping("123", 61000, "some-ip-1", 62003, int(ttl))},
+			Registrations: []apimodels.TcpRouteMapping{apimodels.NewTcpRouteMapping("123", 61000, "some-ip-1", 62003, 0, "", nil, int(ttl), apimodels.ModificationTag{})},
 		}
 
 		token := &oauth2.Token{
@@ -100,10 +100,10 @@ var _ = Describe("RoutingAPIEmitter", func() {
 			Context("and there are unregistration events", func() {
 				BeforeEach(func() {
 					routingEvents = routingtable.TCPRouteMappings{
-						Unregistrations: []apimodels.TcpRouteMapping{apimodels.NewTcpRouteMapping("123", 61000, "some-ip-1", 62003, 0)},
+						Unregistrations: []apimodels.TcpRouteMapping{apimodels.NewTcpRouteMapping("123", 61000, "some-ip-1", 62003, 0, "", nil, 0, apimodels.ModificationTag{})},
 					}
 					expectedRoutingEvents = routingtable.TCPRouteMappings{
-						Unregistrations: []apimodels.TcpRouteMapping{apimodels.NewTcpRouteMapping("123", 61000, "some-ip-1", 62003, 60)},
+						Unregistrations: []apimodels.TcpRouteMapping{apimodels.NewTcpRouteMapping("123", 61000, "some-ip-1", 62003, 0, "", nil, 60, apimodels.ModificationTag{})},
 					}
 				})
 
@@ -166,7 +166,7 @@ var _ = Describe("RoutingAPIEmitter", func() {
 			BeforeEach(func() {
 				routingApiClient.DeleteTcpRouteMappingsReturns(errors.New("unauthorized"))
 				routingEvents = routingtable.TCPRouteMappings{
-					Unregistrations: []apimodels.TcpRouteMapping{apimodels.NewTcpRouteMapping("123", 61000, "some-ip-1", 62003, int(ttl))},
+					Unregistrations: []apimodels.TcpRouteMapping{apimodels.NewTcpRouteMapping("123", 61000, "some-ip-1", 62003, 0, "", nil, int(ttl), apimodels.ModificationTag{})},
 				}
 			})
 
