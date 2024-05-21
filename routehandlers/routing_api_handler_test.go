@@ -3,7 +3,7 @@ package routehandlers_test
 import (
 	"code.cloudfoundry.org/bbs/models"
 	mfakes "code.cloudfoundry.org/diego-logging-client/testhelpers"
-	loggregator "code.cloudfoundry.org/go-loggregator/v8"
+	loggregator "code.cloudfoundry.org/go-loggregator/v9"
 	"code.cloudfoundry.org/lager/v3"
 	"code.cloudfoundry.org/lager/v3/lagertest"
 	emitterfakes "code.cloudfoundry.org/route-emitter/emitter/fakes"
