@@ -95,22 +95,36 @@ func (info ExternalEndpointInfo) Hash() interface{} {
 	return info
 }
 
+func pointerToInt(i int) *int { return &i }
+
 func (info ExternalEndpointInfo) MessageFor(e Endpoint, directInstanceRoute, _ bool) (*RegistryMessage, *tcpmodels.TcpRouteMapping, *RegistryMessage) {
-	mapping := tcpmodels.NewTcpRouteMapping(
-		info.RouterGroupGUID,
-		uint16(info.Port),
-		e.Host,
-		uint16(e.Port),
-		0,
-	)
+	mapping := tcpmodels.TcpRouteMapping{
+		TcpMappingEntity: tcpmodels.TcpMappingEntity{
+			RouterGroupGuid: info.RouterGroupGUID,
+			ExternalPort:    uint16(info.Port),
+			HostIP:          e.Host,
+			HostPort:        uint16(e.Port),
+			HostTLSPort:     nil,
+			InstanceId:      "",
+			SniHostname:     nil,
+			TTL:             pointerToInt(0),
+			ModificationTag: tcpmodels.ModificationTag{},
+		},
+	}
 	if e.IsDirectInstanceRoute(directInstanceRoute) {
-		mapping = tcpmodels.NewTcpRouteMapping(
-			info.RouterGroupGUID,
-			uint16(info.Port),
-			e.ContainerIP,
-			uint16(e.ContainerPort),
-			0,
-		)
+		mapping = tcpmodels.TcpRouteMapping{
+			TcpMappingEntity: tcpmodels.TcpMappingEntity{
+				RouterGroupGuid: info.RouterGroupGUID,
+				ExternalPort:    uint16(info.Port),
+				HostIP:          e.ContainerIP,
+				HostPort:        uint16(e.ContainerPort),
+				HostTLSPort:     nil,
+				InstanceId:      "",
+				SniHostname:     nil,
+				TTL:             pointerToInt(0),
+				ModificationTag: tcpmodels.ModificationTag{},
+			},
+		}
 	}
 	return nil, &mapping, nil
 }
