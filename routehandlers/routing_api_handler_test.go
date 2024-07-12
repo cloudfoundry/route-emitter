@@ -36,7 +36,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 		fakeRoutingAPIEmitter = new(emitterfakes.FakeRoutingAPIEmitter)
 		fakeMetronClient = &mfakes.FakeIngressClient{}
 		fakeUnregistrationCache = &ufakes.FakeCache{}
-		routeHandler = routehandlers.NewHandler(fakeRoutingTable, nil, fakeRoutingAPIEmitter, false, false, fakeMetronClient, fakeUnregistrationCache)
+		routeHandler = routehandlers.NewHandler(fakeRoutingTable, nil, fakeRoutingAPIEmitter, false, fakeMetronClient, fakeUnregistrationCache)
 	})
 
 	Describe("DesiredLRP Event", func() {
@@ -572,7 +572,7 @@ var _ = Describe("RoutingAPIHandler", func() {
 						}
 						return nil
 					}
-					routeHandler = routehandlers.NewHandler(fakeRoutingTable, nil, fakeRoutingAPIEmitter, true, false, fakeMetronClient, fakeUnregistrationCache)
+					routeHandler = routehandlers.NewHandler(fakeRoutingTable, nil, fakeRoutingAPIEmitter, true, fakeMetronClient, fakeUnregistrationCache)
 					fakeRoutingTable.TCPAssociationsCountReturns(1)
 				})
 
@@ -600,7 +600,6 @@ var _ = Describe("RoutingAPIHandler", func() {
 						RouterGroupGuid: "router-group-guid",
 						ExternalPort:    61000,
 						HostPort:        61006,
-						HostTLSPort:     -1,
 						HostIP:          "some-ip",
 						TTL:             &ttl,
 					},

@@ -64,7 +64,7 @@ type routingTable struct {
 	internalRoutesRoutingTable *internalRoutingTable
 }
 
-func NewRoutingTable(directInstanceRoute bool, tcpTLSEnabled bool, metronClient loggingclient.IngressClient) RoutingTable {
+func NewRoutingTable(directInstanceRoute bool, metronClient loggingclient.IngressClient) RoutingTable {
 	addressGenerator := func(endpoint Endpoint) Address {
 		if endpoint.IsDirectInstanceRoute(directInstanceRoute) {
 			return Address{Host: endpoint.ContainerIP, Port: endpoint.ContainerPort}
@@ -84,7 +84,7 @@ func NewRoutingTable(directInstanceRoute bool, tcpTLSEnabled bool, metronClient 
 	}
 	tcpRoutingTable := &internalRoutingTable{
 		endpointGenerator:        NewEndpointsFromActual,
-		routesGenerator:          tcpRoutesGenerator{tcpTLSEnabled}.RoutesFrom,
+		routesGenerator:          tcpRoutesFrom,
 		entries:                  make(map[RoutingKey]RoutableEndpoints),
 		addressEntries:           make(map[Address]EndpointKey),
 		directInstanceRoute:      directInstanceRoute,
@@ -452,11 +452,7 @@ func httpRoutesFrom(lrp *models.DesiredLRP) map[RoutingKey][]routeMapping {
 	return routeEntries
 }
 
-type tcpRoutesGenerator struct {
-	tlsEnabled bool
-}
-
-func (g tcpRoutesGenerator) RoutesFrom(lrp *models.DesiredLRP) map[RoutingKey][]routeMapping {
+func tcpRoutesFrom(lrp *models.DesiredLRP) map[RoutingKey][]routeMapping {
 	if lrp == nil {
 		return nil
 	}
@@ -470,7 +466,6 @@ func (g tcpRoutesGenerator) RoutesFrom(lrp *models.DesiredLRP) map[RoutingKey][]
 		routeEntries[key] = append(routeEntries[key], ExternalEndpointInfo{
 			RouterGroupGUID: route.RouterGroupGuid,
 			Port:            route.ExternalPort,
-			TLSEnabled:      g.tlsEnabled,
 		})
 	}
 	return routeEntries
