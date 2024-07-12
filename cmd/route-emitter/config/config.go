@@ -54,7 +54,6 @@ type RouteEmitterConfig struct {
 	RouteEmittingWorkers         int                   `json:"route_emitting_workers,omitempty"`
 	SyncInterval                 durationjson.Duration `json:"sync_interval,omitempty"`
 	TCPRouteTTL                  durationjson.Duration `json:"tcp_route_ttl,omitempty"`
-	TCPEnableTLS                 bool                  `json:"tcp_enable_tls"`
 	OAuth                        OAuthConfig           `json:"oauth"`
 	RoutingAPI                   RoutingAPIConfig      `json:"routing_api"`
 	EnableTCPEmitter             bool                  `json:"enable_tcp_emitter"`

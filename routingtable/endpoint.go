@@ -89,7 +89,6 @@ func NewEndpoint(
 type ExternalEndpointInfo struct {
 	RouterGroupGUID string
 	Port            uint32
-	TLSEnabled      bool
 }
 
 func (info ExternalEndpointInfo) Hash() interface{} {
@@ -97,24 +96,12 @@ func (info ExternalEndpointInfo) Hash() interface{} {
 }
 
 func (info ExternalEndpointInfo) MessageFor(e Endpoint, directInstanceRoute, _ bool) (*RegistryMessage, *tcpmodels.TcpRouteMapping, *RegistryMessage) {
-	tlsHostPort := -1
-	tlsContainerPort := -1
-	instanceGUID := ""
-	if info.TLSEnabled {
-		tlsHostPort = int(e.TlsProxyPort)
-		tlsContainerPort = int(e.ContainerTlsProxyPort)
-		instanceGUID = e.InstanceGUID
-	}
 	mapping := tcpmodels.NewTcpRouteMapping(
 		info.RouterGroupGUID,
 		uint16(info.Port),
 		e.Host,
 		uint16(e.Port),
-		tlsHostPort,
-		instanceGUID,
-		nil,
 		0,
-		tcpmodels.ModificationTag{},
 	)
 	if e.IsDirectInstanceRoute(directInstanceRoute) {
 		mapping = tcpmodels.NewTcpRouteMapping(
@@ -122,17 +109,20 @@ func (info ExternalEndpointInfo) MessageFor(e Endpoint, directInstanceRoute, _ b
 			uint16(info.Port),
 			e.ContainerIP,
 			uint16(e.ContainerPort),
-			tlsContainerPort,
-			instanceGUID,
-			nil,
 			0,
-			tcpmodels.ModificationTag{},
 		)
 	}
 	return nil, &mapping, nil
 }
 
 type ExternalEndpointInfos []ExternalEndpointInfo
+
+func NewExternalEndpointInfo(routerGroupGUID string, port uint32) ExternalEndpointInfo {
+	return ExternalEndpointInfo{
+		RouterGroupGUID: routerGroupGUID,
+		Port:            port,
+	}
+}
 
 type Route struct {
 	Hostname         string

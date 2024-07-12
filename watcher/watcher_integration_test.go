@@ -62,14 +62,14 @@ var _ = Describe("Watcher Integration", func() {
 		Expect(err).NotTo(HaveOccurred())
 		fakeMetronClient = &mfakes.FakeIngressClient{}
 		natsEmitter := emitter.NewNATSEmitter(natsClient, workPool, logger, fakeMetronClient, false)
-		natsTable := routingtable.NewRoutingTable(false, false, fakeMetronClient)
+		natsTable := routingtable.NewRoutingTable(false, fakeMetronClient)
 
 		clock := fakeclock.NewFakeClock(time.Now())
 		uaaTokenFetcher, err := uaaclient.NewTokenFetcher(true, uaaclient.Config{}, clock, 0, 0, 0, logger)
 		Expect(err).NotTo(HaveOccurred())
 		routingAPIEmitter := emitter.NewRoutingAPIEmitter(logger, routingApiClient, uaaTokenFetcher, 100)
 		unregistrationCache := unregistration.NewCache(logger)
-		handler := routehandlers.NewHandler(natsTable, natsEmitter, routingAPIEmitter, false, false, fakeMetronClient, unregistrationCache)
+		handler := routehandlers.NewHandler(natsTable, natsEmitter, routingAPIEmitter, false, fakeMetronClient, unregistrationCache)
 		testWatcher = watcher.NewWatcher(
 			cellID,
 			bbsClient,
