@@ -115,7 +115,7 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 	sqlRunner = test_helpers.NewSQLRunner(dbName)
 
 	node := GinkgoParallelProcess()
-	startPort := 1050 * node
+	startPort := 1050*node + 10
 	portRange := 1000
 	endPort := startPort + portRange
 
