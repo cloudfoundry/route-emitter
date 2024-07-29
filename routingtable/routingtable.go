@@ -115,10 +115,10 @@ func NewRoutingTable(directInstanceRoute bool, tcpTLSEnabled bool, metronClient 
 func internalEndpointsFromActualLRP(actualLRP *models.ActualLRP) []Endpoint {
 	return []Endpoint{
 		{
-			InstanceGUID:    actualLRP.InstanceGuid,
-			Index:           actualLRP.Index,
-			Host:            actualLRP.Address,
-			ContainerIP:     actualLRP.InstanceAddress,
+			InstanceGUID:    actualLRP.ActualLrpInstanceKey.InstanceGuid,
+			Index:           actualLRP.ActualLrpKey.Index,
+			Host:            actualLRP.ActualLrpNetInfo.Address,
+			ContainerIP:     actualLRP.ActualLrpNetInfo.InstanceAddress,
 			Presence:        actualLRP.Presence,
 			Since:           actualLRP.Since,
 			ModificationTag: &actualLRP.ModificationTag,
@@ -257,7 +257,7 @@ func (table *internalRoutingTable) AddEndpoint(logger lager.Logger, actualLRP *m
 
 	for _, routingEndpoint := range endpoints {
 		key := RoutingKey{
-			ProcessGUID:   actualLRP.ProcessGuid,
+			ProcessGUID:   actualLRP.ActualLrpKey.ProcessGuid,
 			ContainerPort: routingEndpoint.ContainerPort,
 		}
 		currentEntry := table.entries[key]
@@ -311,7 +311,7 @@ func (table *internalRoutingTable) RemoveEndpoint(logger lager.Logger, actualLRP
 	var mappings TCPRouteMappings
 	for _, routingEndpoint := range endpoints {
 		key := RoutingKey{
-			ProcessGUID:   actualLRP.ProcessGuid,
+			ProcessGUID:   actualLRP.ActualLrpKey.ProcessGuid,
 			ContainerPort: routingEndpoint.ContainerPort,
 		}
 

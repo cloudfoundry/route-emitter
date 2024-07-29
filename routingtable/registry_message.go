@@ -118,9 +118,9 @@ func populateMetricTags(input map[string]*models.MetricTagValue, endpoint Endpoi
 		var value string
 		if v.Dynamic > 0 {
 			switch v.Dynamic {
-			case models.MetricTagDynamicValueIndex:
+			case models.MetricTagValue_MetricTagDynamicValueIndex:
 				value = strconv.FormatInt(int64(endpoint.Index), 10)
-			case models.MetricTagDynamicValueInstanceGuid:
+			case models.MetricTagValue_MetricTagDynamicValueInstanceGuid:
 				value = endpoint.InstanceGUID
 			}
 		} else {

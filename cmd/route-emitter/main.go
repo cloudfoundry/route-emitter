@@ -162,7 +162,7 @@ func main() {
 		lockIdentifier := &locketmodels.Resource{
 			Key:      routeEmitterLockKey,
 			Owner:    cfg.UUID,
-			TypeCode: locketmodels.LOCK,
+			TypeCode: locketmodels.TypeCode_LOCK,
 			Type:     locketmodels.LockType,
 		}
 

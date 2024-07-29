@@ -70,9 +70,9 @@ var _ = Describe("TCPRoutingTable", func() {
 		modificationTag *models.ModificationTag,
 	) *models.ActualLRP {
 		return &models.ActualLRP{
-			ActualLRPKey:         models.NewActualLRPKey(processGuid, 0, "domain"),
-			ActualLRPInstanceKey: models.NewActualLRPInstanceKey(instanceGuid, "cell-id-1"),
-			ActualLRPNetInfo: models.NewActualLRPNetInfo(
+			ActualLrpKey:         models.NewActualLRPKey(processGuid, 0, "domain"),
+			ActualLrpInstanceKey: models.NewActualLRPInstanceKey(instanceGuid, "cell-id-1"),
+			ActualLrpNetInfo: models.NewActualLRPNetInfo(
 				hostAddress,
 				instanceAddress,
 				models.ActualLRPNetInfo_PreferredAddressUnknown,
@@ -239,7 +239,7 @@ var _ = Describe("TCPRoutingTable", func() {
 						beforeLRP := getDesiredLRP("process-guid-1", logGuid, tcpRoutes, modificationTag)
 						tempRoutingTable.SetRoutes(logger, nil, beforeLRP)
 						actualLRP := getActualLRP("process-guid-1", "instance-guid-1", "some-ip-1", "container-ip-1", 62004, 5222, 61443, 5443, modificationTag)
-						actualLRP.PreferredAddress = models.ActualLRPNetInfo_PreferredAddressHost
+						actualLRP.ActualLrpNetInfo.PreferredAddress = models.ActualLRPNetInfo_PreferredAddressHost
 						tempRoutingTable.AddEndpoint(logger, actualLRP)
 						Expect(tempRoutingTable.TCPAssociationsCount()).Should(Equal(1))
 						Expect(routingTable.TCPAssociationsCount()).Should(Equal(0))
@@ -769,7 +769,7 @@ var _ = Describe("TCPRoutingTable", func() {
 								oldActualLRP := getActualLRP("process-guid-1", "instance-guid-1", "some-ip-1", "container-ip-1", 62004, 5222, 61443, 5443, modificationTag)
 								routingTable.RemoveEndpoint(logger, oldActualLRP)
 								newActualLRP := oldActualLRP
-								newActualLRP.ActualLRPNetInfo = models.NewActualLRPNetInfo(
+								newActualLRP.ActualLrpNetInfo = models.NewActualLRPNetInfo(
 									"some-ip-1",
 									"container-ip-1",
 									models.ActualLRPNetInfo_PreferredAddressHost,

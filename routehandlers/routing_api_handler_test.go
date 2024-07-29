@@ -174,9 +174,9 @@ var _ = Describe("RoutingAPIHandler", func() {
 			Context("when state is Running", func() {
 				BeforeEach(func() {
 					actualLRP = &models.ActualLRP{
-						ActualLRPKey:         models.NewActualLRPKey("process-guid", 0, "domain"),
-						ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
-						ActualLRPNetInfo: models.NewActualLRPNetInfo(
+						ActualLrpKey:         models.NewActualLRPKey("process-guid", 0, "domain"),
+						ActualLrpInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
+						ActualLrpNetInfo: models.NewActualLRPNetInfo(
 							"some-ip",
 							"container-ip",
 							models.ActualLRPNetInfo_PreferredAddressHost,
@@ -208,9 +208,9 @@ var _ = Describe("RoutingAPIHandler", func() {
 			Context("when state is not in Running", func() {
 				BeforeEach(func() {
 					actualLRP = &models.ActualLRP{
-						ActualLRPKey:         models.NewActualLRPKey("process-guid", 0, "domain"),
-						ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
-						ActualLRPNetInfo: models.NewActualLRPNetInfo(
+						ActualLrpKey:         models.NewActualLRPKey("process-guid", 0, "domain"),
+						ActualLrpInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
+						ActualLrpNetInfo: models.NewActualLRPNetInfo(
 							"some-ip",
 							"container-ip",
 							models.ActualLRPNetInfo_PreferredAddressHost,
@@ -242,9 +242,9 @@ var _ = Describe("RoutingAPIHandler", func() {
 			Context("when after state is Running", func() {
 				BeforeEach(func() {
 					actualLRP = &models.ActualLRP{
-						ActualLRPKey:         models.NewActualLRPKey("process-guid", 0, "domain"),
-						ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
-						ActualLRPNetInfo: models.NewActualLRPNetInfo(
+						ActualLrpKey:         models.NewActualLRPKey("process-guid", 0, "domain"),
+						ActualLrpInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
+						ActualLrpNetInfo: models.NewActualLRPNetInfo(
 							"",
 							"",
 							models.ActualLRPNetInfo_PreferredAddressHost,
@@ -253,9 +253,9 @@ var _ = Describe("RoutingAPIHandler", func() {
 					}
 
 					afterLRP = &models.ActualLRP{
-						ActualLRPKey:         models.NewActualLRPKey("process-guid", 0, "domain"),
-						ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
-						ActualLRPNetInfo: models.NewActualLRPNetInfo(
+						ActualLrpKey:         models.NewActualLRPKey("process-guid", 0, "domain"),
+						ActualLrpInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
+						ActualLrpNetInfo: models.NewActualLRPNetInfo(
 							"some-ip",
 							"container-ip",
 							models.ActualLRPNetInfo_PreferredAddressHost,
@@ -267,7 +267,8 @@ var _ = Describe("RoutingAPIHandler", func() {
 
 				Context("when Routable is true", func() {
 					BeforeEach(func() {
-						afterLRP.SetRoutable(true)
+						routableTrue := true
+						afterLRP.SetRoutable(&routableTrue)
 					})
 
 					It("invokes AddEndpoint on RoutingTable", func() {
@@ -293,9 +294,9 @@ var _ = Describe("RoutingAPIHandler", func() {
 			Context("when after state is not Running and before state is Running", func() {
 				BeforeEach(func() {
 					actualLRP = &models.ActualLRP{
-						ActualLRPKey:         models.NewActualLRPKey("process-guid", 0, "domain"),
-						ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
-						ActualLRPNetInfo: models.NewActualLRPNetInfo(
+						ActualLrpKey:         models.NewActualLRPKey("process-guid", 0, "domain"),
+						ActualLrpInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
+						ActualLrpNetInfo: models.NewActualLRPNetInfo(
 							"some-ip",
 							"container-ip",
 							models.ActualLRPNetInfo_PreferredAddressHost,
@@ -305,9 +306,9 @@ var _ = Describe("RoutingAPIHandler", func() {
 					}
 
 					afterLRP = &models.ActualLRP{
-						ActualLRPKey:         models.NewActualLRPKey("process-guid", 0, "domain"),
-						ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
-						ActualLRPNetInfo: models.NewActualLRPNetInfo(
+						ActualLrpKey:         models.NewActualLRPKey("process-guid", 0, "domain"),
+						ActualLrpInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
+						ActualLrpNetInfo: models.NewActualLRPNetInfo(
 							"",
 							"",
 							models.ActualLRPNetInfo_PreferredAddressHost,
@@ -338,9 +339,9 @@ var _ = Describe("RoutingAPIHandler", func() {
 			Context("when both after and before state is not Running", func() {
 				BeforeEach(func() {
 					actualLRP = &models.ActualLRP{
-						ActualLRPKey:         models.NewActualLRPKey("process-guid", 0, "domain"),
-						ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", ""),
-						ActualLRPNetInfo: models.NewActualLRPNetInfo(
+						ActualLrpKey:         models.NewActualLRPKey("process-guid", 0, "domain"),
+						ActualLrpInstanceKey: models.NewActualLRPInstanceKey("instance-guid", ""),
+						ActualLrpNetInfo: models.NewActualLRPNetInfo(
 							"",
 							"",
 							models.ActualLRPNetInfo_PreferredAddressHost,
@@ -349,9 +350,9 @@ var _ = Describe("RoutingAPIHandler", func() {
 					}
 
 					afterLRP = &models.ActualLRP{
-						ActualLRPKey:         models.NewActualLRPKey("process-guid", 0, "domain"),
-						ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
-						ActualLRPNetInfo: models.NewActualLRPNetInfo(
+						ActualLrpKey:         models.NewActualLRPKey("process-guid", 0, "domain"),
+						ActualLrpInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
+						ActualLrpNetInfo: models.NewActualLRPNetInfo(
 							"",
 							"",
 							models.ActualLRPNetInfo_PreferredAddressHost,
@@ -378,9 +379,9 @@ var _ = Describe("RoutingAPIHandler", func() {
 			Context("when state is Running", func() {
 				BeforeEach(func() {
 					actualLRP = &models.ActualLRP{
-						ActualLRPKey:         models.NewActualLRPKey("process-guid", 0, "domain"),
-						ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
-						ActualLRPNetInfo: models.NewActualLRPNetInfo(
+						ActualLrpKey:         models.NewActualLRPKey("process-guid", 0, "domain"),
+						ActualLrpInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
+						ActualLrpNetInfo: models.NewActualLRPNetInfo(
 							"some-ip",
 							"container-ip",
 							models.ActualLRPNetInfo_PreferredAddressHost,
@@ -412,9 +413,9 @@ var _ = Describe("RoutingAPIHandler", func() {
 			Context("when state is not in Running", func() {
 				BeforeEach(func() {
 					actualLRP = &models.ActualLRP{
-						ActualLRPKey:         models.NewActualLRPKey("process-guid", 0, "domain"),
-						ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
-						ActualLRPNetInfo: models.NewActualLRPNetInfo(
+						ActualLrpKey:         models.NewActualLRPKey("process-guid", 0, "domain"),
+						ActualLrpInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
+						ActualLrpNetInfo: models.NewActualLRPNetInfo(
 							"",
 							"",
 							models.ActualLRPNetInfo_PreferredAddressHost,
@@ -438,9 +439,9 @@ var _ = Describe("RoutingAPIHandler", func() {
 		var actualLRP *models.ActualLRP
 		BeforeEach(func() {
 			actualLRP = &models.ActualLRP{
-				ActualLRPKey:         models.NewActualLRPKey("process-guid-1", 0, "domain"),
-				ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
-				ActualLRPNetInfo: models.NewActualLRPNetInfo(
+				ActualLrpKey:         models.NewActualLRPKey("process-guid-1", 0, "domain"),
+				ActualLrpInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
+				ActualLrpNetInfo: models.NewActualLRPNetInfo(
 					"some-ip",
 					"container-ip",
 					models.ActualLRPNetInfo_PreferredAddressHost,
@@ -535,9 +536,9 @@ var _ = Describe("RoutingAPIHandler", func() {
 
 				actualLRPs = []*models.ActualLRP{
 					&models.ActualLRP{
-						ActualLRPKey:         models.NewActualLRPKey("process-guid-1", 0, "domain"),
-						ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
-						ActualLRPNetInfo: models.NewActualLRPNetInfo(
+						ActualLrpKey:         models.NewActualLRPKey("process-guid-1", 0, "domain"),
+						ActualLrpInstanceKey: models.NewActualLRPInstanceKey("instance-guid", "cell-id"),
+						ActualLrpNetInfo: models.NewActualLRPNetInfo(
 							"some-ip",
 							"container-ip",
 							models.ActualLRPNetInfo_PreferredAddressHost,
@@ -625,9 +626,9 @@ var _ = Describe("RoutingAPIHandler", func() {
 					}, "some-trace-id")
 
 					actualLRPEvent := models.NewActualLRPInstanceCreatedEvent(&models.ActualLRP{
-						ActualLRPKey:         models.NewActualLRPKey("process-guid-2", 0, "domain"),
-						ActualLRPInstanceKey: models.NewActualLRPInstanceKey("instance-guid-1", "cell-id"),
-						ActualLRPNetInfo: models.NewActualLRPNetInfo(
+						ActualLrpKey:         models.NewActualLRPKey("process-guid-2", 0, "domain"),
+						ActualLrpInstanceKey: models.NewActualLRPInstanceKey("instance-guid-1", "cell-id"),
+						ActualLrpNetInfo: models.NewActualLRPNetInfo(
 							"some-ip-2",
 							"container-ip-2",
 							models.ActualLRPNetInfo_PreferredAddressHost,

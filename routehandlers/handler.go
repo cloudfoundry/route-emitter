@@ -78,8 +78,8 @@ func (handler *Handler) HandleEvent(logger lager.Logger, event models.Event) {
 		handler.handleActualCreate(logger, event.ActualLrp)
 	case *models.ActualLRPInstanceChangedEvent:
 		logger = trace.LoggerWithTraceInfo(logger, event.TraceId)
-		before := event.Before.ToActualLRP(event.ActualLRPKey, event.ActualLRPInstanceKey)
-		after := event.After.ToActualLRP(event.ActualLRPKey, event.ActualLRPInstanceKey)
+		before := event.Before.ToActualLRP(event.ActualLrpKey, event.ActualLrpInstanceKey)
+		after := event.After.ToActualLRP(event.ActualLrpKey, event.ActualLrpInstanceKey)
 		logger.Debug("received-actual-lrp-changed-event", lager.Data{"before": before, "after": after})
 		if before == nil || after == nil {
 			logger.Error("nil-actual-lrp", nil, lager.Data{"event-type": event.EventType()})
@@ -268,9 +268,9 @@ func (handler *Handler) handleActualUpdate(logger lager.Logger, before, after *m
 	)
 	switch {
 	case after.State == models.ActualLRPStateRunning:
-		if !after.RoutableExists() || after.GetRoutable() {
+		if !after.RoutableExists() || *after.GetRoutable() {
 			routeMappings, messagesToEmit = handler.routingTable.AddEndpoint(logger, after)
-		} else if before.GetRoutable() {
+		} else if *before.GetRoutable() {
 			routeMappings, messagesToEmit = handler.routingTable.RemoveEndpoint(logger, after)
 		}
 
