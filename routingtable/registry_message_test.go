@@ -143,8 +143,8 @@ var _ = Describe("RegistryMessage", func() {
 				RouteServiceUrl: "https://hello.com",
 				MetricTags: map[string]*models.MetricTagValue{
 					"foo": &models.MetricTagValue{Static: "bar"},
-					"doo": &models.MetricTagValue{Dynamic: models.MetricTagDynamicValueIndex},
-					"goo": &models.MetricTagValue{Dynamic: models.MetricTagDynamicValueInstanceGuid},
+					"doo": &models.MetricTagValue{Dynamic: models.MetricTagValue_MetricTagDynamicValueIndex},
+					"goo": &models.MetricTagValue{Dynamic: models.MetricTagValue_MetricTagDynamicValueInstanceGuid},
 				},
 			}
 
@@ -219,7 +219,7 @@ var _ = Describe("RegistryMessage", func() {
 				RouteServiceUrl: "https://hello.com",
 				MetricTags: map[string]*models.MetricTagValue{
 					"foo": &models.MetricTagValue{Static: "bar"},
-					"doo": &models.MetricTagValue{Dynamic: models.MetricTagDynamicValueIndex},
+					"doo": &models.MetricTagValue{Dynamic: models.MetricTagValue_MetricTagDynamicValueIndex},
 				},
 			}
 

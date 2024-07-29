@@ -135,17 +135,17 @@ var _ = Describe("Watcher Integration", func() {
 			}
 
 			actualLRP1 = &models.ActualLRP{
-				ActualLRPKey:         models.NewActualLRPKey("pg-1", 0, "domain"),
-				ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint1.InstanceGUID, "cell-id"),
-				ActualLRPNetInfo:     models.NewActualLRPNetInfo(endpoint1.Host, "container-ip", models.ActualLRPNetInfo_PreferredAddressHost, models.NewPortMapping(endpoint1.Port, endpoint1.ContainerPort)),
+				ActualLrpKey:         models.NewActualLRPKey("pg-1", 0, "domain"),
+				ActualLrpInstanceKey: models.NewActualLRPInstanceKey(endpoint1.InstanceGUID, "cell-id"),
+				ActualLrpNetInfo:     models.NewActualLRPNetInfo(endpoint1.Host, "container-ip", models.ActualLRPNetInfo_PreferredAddressHost, models.NewPortMapping(endpoint1.Port, endpoint1.ContainerPort)),
 				State:                models.ActualLRPStateRunning,
 				ModificationTag:      *modTag,
 			}
 
 			removedActualLRP = &models.ActualLRP{
-				ActualLRPKey:         models.NewActualLRPKey("pg-1", 0, "domain"),
-				ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint1.InstanceGUID, "cell-id"),
-				ActualLRPNetInfo:     models.NewActualLRPNetInfo(endpoint1.Host, "container-ip", models.ActualLRPNetInfo_PreferredAddressHost, models.NewPortMapping(endpoint1.Port, endpoint1.ContainerPort)),
+				ActualLrpKey:         models.NewActualLRPKey("pg-1", 0, "domain"),
+				ActualLrpInstanceKey: models.NewActualLRPInstanceKey(endpoint1.InstanceGUID, "cell-id"),
+				ActualLrpNetInfo:     models.NewActualLRPNetInfo(endpoint1.Host, "container-ip", models.ActualLRPNetInfo_PreferredAddressHost, models.NewPortMapping(endpoint1.Port, endpoint1.ContainerPort)),
 				State:                models.ActualLRPStateRunning,
 				ModificationTag:      *modTag,
 			}
