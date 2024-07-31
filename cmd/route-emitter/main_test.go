@@ -872,8 +872,10 @@ var _ = Describe("Route Emitter", func() {
 							Eventually(routingAPIClient.TcpRouteMappings, 5*time.Second).Should(
 								ContainElement(matchTCPRouteMapping(expectedTcpRouteMapping)),
 							)
+							instances := int32(0)
 							update := &models.DesiredLRPUpdate{
-								Routes: &models.Routes{},
+								Instances: &instances,
+								Routes:    &models.Routes{},
 							}
 							err := bbsClient.UpdateDesiredLRP(logger, "", desiredLRP.ProcessGuid, update)
 							Expect(err).NotTo(HaveOccurred())
