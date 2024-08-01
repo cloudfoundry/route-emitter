@@ -27,6 +27,7 @@ type Handler struct {
 	natsEmitter         emitter.NATSEmitter
 	routingAPIEmitter   emitter.RoutingAPIEmitter
 	localMode           bool
+	tcpTLSEnabled       bool
 	metronClient        loggingclient.IngressClient
 	unregistrationCache unregistration.Cache
 }
@@ -38,6 +39,7 @@ func NewHandler(
 	natsEmitter emitter.NATSEmitter,
 	routingAPIEmitter emitter.RoutingAPIEmitter,
 	localMode bool,
+	tcpTLSEnabled bool,
 	metronClient loggingclient.IngressClient,
 	unregistrationCache unregistration.Cache,
 ) *Handler {
@@ -46,6 +48,7 @@ func NewHandler(
 		natsEmitter:         natsEmitter,
 		routingAPIEmitter:   routingAPIEmitter,
 		localMode:           localMode,
+		tcpTLSEnabled:       tcpTLSEnabled,
 		metronClient:        metronClient,
 		unregistrationCache: unregistrationCache,
 	}
@@ -152,7 +155,9 @@ func (handler *Handler) Sync(
 	defer logger.Debug("completed")
 
 	nullLogger := lager.NewLogger("null-logger") // ignore log messsages from the routing table
-	newTable := routingtable.NewRoutingTable(false, handler.metronClient)
+	// The newTable is only used for Swap call which only replaces table entries and does not
+	// update config parameters
+	newTable := routingtable.NewRoutingTable(false, handler.tcpTLSEnabled, handler.metronClient)
 
 	for _, lrp := range desired {
 		newTable.SetRoutes(nullLogger, nil, lrp)
