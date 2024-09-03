@@ -116,7 +116,7 @@ var _ = Describe("Handler", func() {
 
 		fakeUnregistrationCache = &ufakes.FakeCache{}
 
-		routeHandler = routehandlers.NewHandler(fakeTable, natsEmitter, fakeRoutingAPIEmitter, false, fakeMetronClient, fakeUnregistrationCache)
+		routeHandler = routehandlers.NewHandler(fakeTable, natsEmitter, fakeRoutingAPIEmitter, false, false, fakeMetronClient, fakeUnregistrationCache)
 		routableTrue = true
 		routableFalse = false
 	})
@@ -1255,7 +1255,7 @@ var _ = Describe("Handler", func() {
 
 			Context("when emitting metrics in localMode", func() {
 				BeforeEach(func() {
-					routeHandler = routehandlers.NewHandler(fakeTable, natsEmitter, nil, true, fakeMetronClient, fakeUnregistrationCache)
+					routeHandler = routehandlers.NewHandler(fakeTable, natsEmitter, nil, true, false, fakeMetronClient, fakeUnregistrationCache)
 					fakeTable.HTTPAssociationsCountReturns(5)
 				})
 

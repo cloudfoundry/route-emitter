@@ -87,7 +87,7 @@ func main() {
 	bbsClient := initializeBBSClient(logger, cfg)
 
 	localMode := cfg.CellID != ""
-	table := routingtable.NewRoutingTable(cfg.RegisterDirectInstanceRoutes, metronClient)
+	table := routingtable.NewRoutingTable(cfg.RegisterDirectInstanceRoutes, cfg.TCPEnableTLS, metronClient)
 	natsEmitter := initializeNatsEmitter(logger, natsClient, cfg.RouteEmittingWorkers, metronClient, cfg.EnableInternalEmitter)
 
 	routeTTL := time.Duration(cfg.TCPRouteTTL)
@@ -124,7 +124,7 @@ func main() {
 
 	unregistrationCache := unregistration.NewCache(logger)
 
-	handler := routehandlers.NewHandler(table, natsEmitter, routingAPIEmitter, localMode, metronClient, unregistrationCache)
+	handler := routehandlers.NewHandler(table, natsEmitter, routingAPIEmitter, localMode, cfg.TCPEnableTLS, metronClient, unregistrationCache)
 
 	watcher := watcher.NewWatcher(
 		cfg.CellID,

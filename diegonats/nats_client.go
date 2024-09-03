@@ -46,7 +46,7 @@ func (nc *natsClient) SetPingInterval(interval time.Duration) {
 }
 
 func (nc *natsClient) Connect(urls []string) (chan struct{}, error) {
-	options := nats.DefaultOptions
+	options := nats.GetDefaultOptions()
 	options.Servers = urls
 	options.ReconnectWait = 500 * time.Millisecond
 	options.MaxReconnect = -1

@@ -186,31 +186,35 @@ var _ = Describe("RoutingTable", func() {
 	BeforeEach(func() {
 		logger = lagertest.NewTestLogger("test-route-emitter")
 		fakeMetronClient = &mfakes.FakeIngressClient{}
-		table = routingtable.NewRoutingTable(false, fakeMetronClient)
+		table = routingtable.NewRoutingTable(false, true, fakeMetronClient)
 
 		endpoint1 = routingtable.Endpoint{
-			InstanceGUID:     "ig-1",
-			Host:             "1.1.1.1",
-			ContainerIP:      "1.2.3.4",
-			Index:            0,
-			Port:             11,
-			ContainerPort:    8080,
-			Presence:         models.ActualLRP_Ordinary,
-			PreferredAddress: models.ActualLRPNetInfo_PreferredAddressInstance,
-			Since:            1,
-			ModificationTag:  currentTag,
+			InstanceGUID:          "ig-1",
+			Host:                  "1.1.1.1",
+			ContainerIP:           "1.2.3.4",
+			Index:                 0,
+			Port:                  11,
+			ContainerPort:         8080,
+			TlsProxyPort:          61443,
+			ContainerTlsProxyPort: 5443,
+			Presence:              models.ActualLRP_Ordinary,
+			PreferredAddress:      models.ActualLRPNetInfo_PreferredAddressInstance,
+			Since:                 1,
+			ModificationTag:       currentTag,
 		}
 		endpoint2 = routingtable.Endpoint{
-			InstanceGUID:     "ig-2",
-			Host:             "2.2.2.2",
-			ContainerIP:      "2.3.4.5",
-			Index:            1,
-			Port:             22,
-			ContainerPort:    8080,
-			Presence:         models.ActualLRP_Ordinary,
-			PreferredAddress: models.ActualLRPNetInfo_PreferredAddressHost,
-			Since:            2,
-			ModificationTag:  currentTag,
+			InstanceGUID:          "ig-2",
+			Host:                  "2.2.2.2",
+			ContainerIP:           "2.3.4.5",
+			Index:                 1,
+			Port:                  22,
+			ContainerPort:         8080,
+			TlsProxyPort:          61443,
+			ContainerTlsProxyPort: 5443,
+			Presence:              models.ActualLRP_Ordinary,
+			PreferredAddress:      models.ActualLRPNetInfo_PreferredAddressHost,
+			Since:                 2,
+			ModificationTag:       currentTag,
 		}
 		endpoint3 = routingtable.Endpoint{
 			InstanceGUID:     "ig-3",
@@ -540,13 +544,13 @@ var _ = Describe("RoutingTable", func() {
 			table.AddEndpoint(logger, actualLRP)
 
 			By("removing the route and making the domains unfresh")
-			tempTable := routingtable.NewRoutingTable(false, fakeMetronClient)
+			tempTable := routingtable.NewRoutingTable(false, true, fakeMetronClient)
 			actualLRP = createActualLRP(key, endpoint1, domain)
 			tempTable.AddEndpoint(logger, actualLRP)
 			table.Swap(logger, tempTable, noFreshDomains)
 
 			By("making the domain fresh again")
-			tempTable = routingtable.NewRoutingTable(false, fakeMetronClient)
+			tempTable = routingtable.NewRoutingTable(false, true, fakeMetronClient)
 			actualLRP = createActualLRP(key, endpoint1, domain)
 			tempTable.AddEndpoint(logger, actualLRP)
 			tcpRouteMappings, messagesToEmit = table.Swap(logger, tempTable, freshDomains)
@@ -558,17 +562,9 @@ var _ = Describe("RoutingTable", func() {
 			}
 			Expect(messagesToEmit).To(MatchMessagesToEmit(expectedHTTP))
 
-			ttl := 0
-			expectedTCP := tcpmodels.TcpRouteMapping{
-				TcpMappingEntity: tcpmodels.TcpMappingEntity{
-					RouterGroupGuid: "router-group-guid",
-					HostPort:        uint16(endpoint1.ContainerPort),
-					HostIP:          endpoint1.ContainerIP,
-					ExternalPort:    5222,
-					TTL:             &ttl,
-				},
-			}
-			Expect(tcpRouteMappings.Unregistrations).To(ConsistOf(expectedTCP))
+			Expect(tcpRouteMappings.Unregistrations).Should(ConsistOf(
+				tcpmodels.NewTcpRouteMapping("router-group-guid", 5222, endpoint1.ContainerIP, uint16(endpoint1.ContainerPort), int(endpoint1.ContainerTlsProxyPort), "ig-1", nil, 0, tcpmodels.ModificationTag{}),
+			))
 		})
 
 		Context("when there is internal routable endpoint", func() {
@@ -584,7 +580,7 @@ var _ = Describe("RoutingTable", func() {
 			Context("and the domain is not fresh", func() {
 				It("saves the previous tables routes and emits them when an endpoint is added", func() {
 					actualLRP := createActualLRP(key, endpoint1, domain)
-					tempTable := routingtable.NewRoutingTable(false, fakeMetronClient)
+					tempTable := routingtable.NewRoutingTable(false, false, fakeMetronClient)
 					tempTable.AddEndpoint(logger, actualLRP)
 					_, messagesToEmit := table.Swap(logger, tempTable, noFreshDomains)
 					Expect(messagesToEmit.InternalUnregistrationMessages).To(BeEmpty())
@@ -617,7 +613,7 @@ var _ = Describe("RoutingTable", func() {
 			Context("when the domain is not fresh", func() {
 				Context("and the new table has nothing in it", func() {
 					BeforeEach(func() {
-						tempTable := routingtable.NewRoutingTable(false, fakeMetronClient)
+						tempTable := routingtable.NewRoutingTable(false, false, fakeMetronClient)
 						tcpRouteMappings, messagesToEmit = table.Swap(logger, tempTable, noFreshDomains)
 					})
 
@@ -629,22 +625,14 @@ var _ = Describe("RoutingTable", func() {
 						}
 						Expect(messagesToEmit).To(MatchMessagesToEmit(expectedHTTP))
 
-						ttl := 0
-						expectedTCP := tcpmodels.TcpRouteMapping{
-							TcpMappingEntity: tcpmodels.TcpMappingEntity{
-								RouterGroupGuid: "router-group-guid",
-								HostPort:        uint16(endpoint1.ContainerPort),
-								HostIP:          endpoint1.ContainerIP,
-								ExternalPort:    5222,
-								TTL:             &ttl,
-							},
-						}
-						Expect(tcpRouteMappings.Unregistrations).To(ConsistOf(expectedTCP))
+						Expect(tcpRouteMappings.Unregistrations).Should(ConsistOf(
+							tcpmodels.NewTcpRouteMapping("router-group-guid", 5222, endpoint1.ContainerIP, uint16(endpoint1.ContainerPort), int(endpoint1.ContainerTlsProxyPort), "ig-1", nil, 0, tcpmodels.ModificationTag{}),
+						))
 					})
 
 					It("saves the previous tables routes and emits them when an endpoint is added", func() {
 						actualLRP := createActualLRP(key, endpoint1, domain)
-						tempTable := routingtable.NewRoutingTable(false, fakeMetronClient)
+						tempTable := routingtable.NewRoutingTable(false, true, fakeMetronClient)
 						tempTable.AddEndpoint(logger, actualLRP)
 						tcpRouteMappings, messagesToEmit = table.Swap(logger, tempTable, noFreshDomains)
 
@@ -655,17 +643,9 @@ var _ = Describe("RoutingTable", func() {
 						}
 						Expect(messagesToEmit).To(MatchMessagesToEmit(expectedHTTP))
 
-						ttl := 0
-						expectedTCP := tcpmodels.TcpRouteMapping{
-							TcpMappingEntity: tcpmodels.TcpMappingEntity{
-								RouterGroupGuid: "router-group-guid",
-								HostPort:        uint16(endpoint1.ContainerPort),
-								HostIP:          endpoint1.ContainerIP,
-								ExternalPort:    5222,
-								TTL:             &ttl,
-							},
-						}
-						Expect(tcpRouteMappings.Registrations).To(ConsistOf(expectedTCP))
+						Expect(tcpRouteMappings.Registrations).Should(ConsistOf(
+							tcpmodels.NewTcpRouteMapping("router-group-guid", 5222, endpoint1.ContainerIP, uint16(endpoint1.ContainerPort), int(endpoint1.ContainerTlsProxyPort), "ig-1", nil, 0, tcpmodels.ModificationTag{}),
+						))
 					})
 				})
 			})
@@ -732,7 +712,7 @@ var _ = Describe("RoutingTable", func() {
 
 		Context("when the table is swaped and the lrp is deleted", func() {
 			BeforeEach(func() {
-				tempTable := routingtable.NewRoutingTable(false, fakeMetronClient)
+				tempTable := routingtable.NewRoutingTable(false, false, fakeMetronClient)
 				table.Swap(logger, tempTable, freshDomains)
 			})
 
@@ -780,7 +760,7 @@ var _ = Describe("RoutingTable", func() {
 
 		Context("when the routing table is configured to use direct instance route", func() {
 			BeforeEach(func() {
-				table = routingtable.NewRoutingTable(true, fakeMetronClient)
+				table = routingtable.NewRoutingTable(true, true, fakeMetronClient)
 				routes := createRoutingInfo(key.ContainerPort, []string{hostname1}, []string{internalHostname}, "", []uint32{9999}, "")
 				afterDesiredLRP := createDesiredLRPWithRoutes(key.ProcessGUID, 3, routes, logGuid, *currentTag, runInfo)
 				table.SetRoutes(logger, nil, afterDesiredLRP)
@@ -795,9 +775,11 @@ var _ = Describe("RoutingTable", func() {
 					Expect(tcpRouteMappings.Registrations).To(HaveLen(1))
 					Expect(tcpRouteMappings.Registrations[0].HostIP).To(Equal(endpoint1.ContainerIP))
 					Expect(tcpRouteMappings.Registrations[0].HostPort).To(Equal(uint16(endpoint1.ContainerPort)))
+					Expect(tcpRouteMappings.Registrations[0].HostTLSPort).To(Equal(int(endpoint1.ContainerTlsProxyPort)))
 					Expect(messagesToEmit.RegistrationMessages).To(HaveLen(1))
 					Expect(messagesToEmit.RegistrationMessages[0].Host).To(Equal(endpoint1.ContainerIP))
 					Expect(messagesToEmit.RegistrationMessages[0].Port).To(Equal(endpoint1.ContainerPort))
+					Expect(messagesToEmit.RegistrationMessages[0].TlsPort).To(Equal(endpoint1.ContainerTlsProxyPort))
 				})
 
 				It("is using container IP in internal registration message", func() {
@@ -815,9 +797,11 @@ var _ = Describe("RoutingTable", func() {
 					Expect(tcpRouteMappings.Registrations).To(HaveLen(1))
 					Expect(tcpRouteMappings.Registrations[0].HostIP).To(Equal(endpoint2.Host))
 					Expect(tcpRouteMappings.Registrations[0].HostPort).To(Equal(uint16(endpoint2.Port)))
+					Expect(tcpRouteMappings.Registrations[0].HostTLSPort).To(Equal(int(endpoint2.TlsProxyPort)))
 					Expect(messagesToEmit.RegistrationMessages).To(HaveLen(1))
 					Expect(messagesToEmit.RegistrationMessages[0].Host).To(Equal(endpoint2.Host))
 					Expect(messagesToEmit.RegistrationMessages[0].Port).To(Equal(endpoint2.Port))
+					Expect(messagesToEmit.RegistrationMessages[0].TlsPort).To(Equal(endpoint2.TlsProxyPort))
 				})
 
 				It("is using container IP in internal registration message", func() {
@@ -835,9 +819,11 @@ var _ = Describe("RoutingTable", func() {
 					Expect(tcpRouteMappings.Registrations).To(HaveLen(1))
 					Expect(tcpRouteMappings.Registrations[0].HostIP).To(Equal(endpoint3.ContainerIP))
 					Expect(tcpRouteMappings.Registrations[0].HostPort).To(Equal(uint16(endpoint3.ContainerPort)))
+					Expect(tcpRouteMappings.Registrations[0].HostTLSPort).To(Equal(int(endpoint3.ContainerTlsProxyPort)))
 					Expect(messagesToEmit.RegistrationMessages).To(HaveLen(1))
 					Expect(messagesToEmit.RegistrationMessages[0].Host).To(Equal(endpoint3.ContainerIP))
 					Expect(messagesToEmit.RegistrationMessages[0].Port).To(Equal(endpoint3.ContainerPort))
+					Expect(messagesToEmit.RegistrationMessages[0].TlsPort).To(Equal(endpoint3.ContainerTlsProxyPort))
 				})
 
 				It("is using container IP in internal registration message", func() {
@@ -849,7 +835,7 @@ var _ = Describe("RoutingTable", func() {
 
 		Context("when the routing table is configured not to use direct instance route", func() {
 			BeforeEach(func() {
-				table = routingtable.NewRoutingTable(false, fakeMetronClient)
+				table = routingtable.NewRoutingTable(false, true, fakeMetronClient)
 				routes := createRoutingInfo(key.ContainerPort, []string{hostname1}, []string{internalHostname}, "", []uint32{9999}, "")
 				afterDesiredLRP := createDesiredLRPWithRoutes(key.ProcessGUID, 3, routes, logGuid, *currentTag, runInfo)
 				table.SetRoutes(logger, nil, afterDesiredLRP)
@@ -864,8 +850,11 @@ var _ = Describe("RoutingTable", func() {
 					Expect(tcpRouteMappings.Registrations).To(HaveLen(1))
 					Expect(tcpRouteMappings.Registrations[0].HostIP).To(Equal(endpoint1.ContainerIP))
 					Expect(tcpRouteMappings.Registrations[0].HostPort).To(Equal(uint16(endpoint1.ContainerPort)))
+					Expect(tcpRouteMappings.Registrations[0].HostTLSPort).To(Equal(int(endpoint1.ContainerTlsProxyPort)))
 					Expect(messagesToEmit.RegistrationMessages).To(HaveLen(1))
 					Expect(messagesToEmit.RegistrationMessages[0].Host).To(Equal(endpoint1.ContainerIP))
+					Expect(messagesToEmit.RegistrationMessages[0].Port).To(Equal(endpoint1.ContainerPort))
+					Expect(messagesToEmit.RegistrationMessages[0].TlsPort).To(Equal(endpoint1.ContainerTlsProxyPort))
 				})
 
 				It("is using container IP in internal registration message", func() {
@@ -883,9 +872,11 @@ var _ = Describe("RoutingTable", func() {
 					Expect(tcpRouteMappings.Registrations).To(HaveLen(1))
 					Expect(tcpRouteMappings.Registrations[0].HostIP).To(Equal(endpoint2.Host))
 					Expect(tcpRouteMappings.Registrations[0].HostPort).To(Equal(uint16(endpoint2.Port)))
+					Expect(tcpRouteMappings.Registrations[0].HostTLSPort).To(Equal(int(endpoint2.TlsProxyPort)))
 					Expect(messagesToEmit.RegistrationMessages).To(HaveLen(1))
 					Expect(messagesToEmit.RegistrationMessages[0].Host).To(Equal(endpoint2.Host))
 					Expect(messagesToEmit.RegistrationMessages[0].Port).To(Equal(endpoint2.Port))
+					Expect(messagesToEmit.RegistrationMessages[0].TlsPort).To(Equal(endpoint2.TlsProxyPort))
 				})
 
 				It("is using container IP in internal registration message", func() {
@@ -903,9 +894,11 @@ var _ = Describe("RoutingTable", func() {
 					Expect(tcpRouteMappings.Registrations).To(HaveLen(1))
 					Expect(tcpRouteMappings.Registrations[0].HostIP).To(Equal(endpoint3.Host))
 					Expect(tcpRouteMappings.Registrations[0].HostPort).To(Equal(uint16(endpoint3.Port)))
+					Expect(tcpRouteMappings.Registrations[0].HostTLSPort).To(Equal(int(endpoint3.TlsProxyPort)))
 					Expect(messagesToEmit.RegistrationMessages).To(HaveLen(1))
 					Expect(messagesToEmit.RegistrationMessages[0].Host).To(Equal(endpoint3.Host))
 					Expect(messagesToEmit.RegistrationMessages[0].Port).To(Equal(endpoint3.Port))
+					Expect(messagesToEmit.RegistrationMessages[0].TlsPort).To(Equal(endpoint3.TlsProxyPort))
 				})
 
 				It("is using container IP in internal registration message", func() {
@@ -1173,28 +1166,10 @@ var _ = Describe("RoutingTable", func() {
 
 			It("returns only the external messages to emit", func() {
 				tcpRouteMappings, messagesToEmit = table.GetExternalRoutingEvents()
-				ttl := 0
-				expectedTCP := []tcpmodels.TcpRouteMapping{
-					{
-						TcpMappingEntity: tcpmodels.TcpMappingEntity{
-							RouterGroupGuid: logGuid,
-							HostPort:        uint16(endpoint1.ContainerPort),
-							HostIP:          endpoint1.ContainerIP,
-							ExternalPort:    9999,
-							TTL:             &ttl,
-						},
-					},
-					{
-						TcpMappingEntity: tcpmodels.TcpMappingEntity{
-							RouterGroupGuid: logGuid,
-							HostPort:        uint16(endpoint2.Port),
-							HostIP:          endpoint2.Host,
-							ExternalPort:    9999,
-							TTL:             &ttl,
-						},
-					},
-				}
-				Expect(tcpRouteMappings.Registrations).To(ConsistOf(expectedTCP))
+				Expect(tcpRouteMappings.Registrations).Should(ConsistOf(
+					tcpmodels.NewTcpRouteMapping(logGuid, 9999, endpoint1.ContainerIP, uint16(endpoint1.ContainerPort), int(endpoint1.ContainerTlsProxyPort), "ig-1", nil, 0, tcpmodels.ModificationTag{}),
+					tcpmodels.NewTcpRouteMapping(logGuid, 9999, endpoint2.Host, uint16(endpoint2.Port), int(endpoint2.TlsProxyPort), "ig-2", nil, 0, tcpmodels.ModificationTag{}),
+				))
 
 				expected := routingtable.MessagesToEmit{
 					RegistrationMessages: []routingtable.RegistryMessage{
