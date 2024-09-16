@@ -1119,7 +1119,7 @@ var _ = Describe("Route Emitter", func() {
 					Key:      "route_emitter",
 					Owner:    "Your worst enemy.",
 					Value:    "Something",
-					TypeCode: locketmodels.LOCK,
+					TypeCode: locketmodels.TypeCode_LOCK,
 				}
 
 				clock := clock.NewClock()
