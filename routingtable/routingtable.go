@@ -234,7 +234,10 @@ func (table *internalRoutingTable) AddEndpoint(logger lager.Logger, actualLRP *m
 			address := table.addressGenerator(endpoint)
 			// if the address exists and the instance guid doesn't match then we have a collision
 			if existingEndpointKey, ok := table.addressEntries[address]; ok && existingEndpointKey.InstanceGUID != endpoint.InstanceGUID {
-				table.metronClient.IncrementCounter(addressCollisionsCounter)
+				metricErr := table.metronClient.IncrementCounter(addressCollisionsCounter)
+				if metricErr != nil {
+					logger.Debug("error-emitting-address-collision-metric", lager.Data{"error": metricErr})
+				}
 				existingInstanceGuid := existingEndpointKey.InstanceGUID
 				logger.Info("collision-detected-with-endpoint", lager.Data{
 					"instance_guid_a": existingInstanceGuid,
