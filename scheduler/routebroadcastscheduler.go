@@ -143,8 +143,10 @@ func (s *RouteBroadcastScheduler) listenForExternalService(replyUUID string) err
 	if err != nil {
 		return err
 	}
-	sub.AutoUnsubscribe(1)
-
+	err = sub.AutoUnsubscribe(1)
+	if err != nil {
+		s.logger.Debug("error-auto-unsubscribing", lager.Data{"error": err})
+	}
 	return nil
 }
 

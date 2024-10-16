@@ -140,11 +140,17 @@ func (f *FakeNATSClient) Request(subj string, data []byte, timeout time.Duration
 		return nil, err
 	}
 	respChan := make(chan *nats.Msg, 1)
-	f.Subscribe(guid.String(), func(msg *nats.Msg) {
+	_, err = f.Subscribe(guid.String(), func(msg *nats.Msg) {
 		respChan <- msg
 	})
+	if err != nil {
+		return nil, err
+	}
 
-	f.PublishRequest(subj, guid.String(), data)
+	err = f.PublishRequest(subj, guid.String(), data)
+	if err != nil {
+		return nil, err
+	}
 
 	select {
 	case msg := <-respChan:

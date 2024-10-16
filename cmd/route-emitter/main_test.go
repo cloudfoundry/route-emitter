@@ -893,7 +893,7 @@ var _ = Describe("Route Emitter", func() {
 								}
 
 								return nil
-							}).Should(Succeed())
+							}, "3s", ".1s").Should(Succeed())
 						})
 
 					})

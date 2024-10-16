@@ -57,12 +57,18 @@ func (s Sender) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
 				s.logger.Debug("messages", lager.Data{"cache": messages})
 			}
 			for _, message := range messages {
-				s.natsEmitter.Emit(routingtable.MessagesToEmit{
+				err := s.natsEmitter.Emit(routingtable.MessagesToEmit{
 					UnregistrationMessages: []routingtable.RegistryMessage{message.RegistryMessage},
 				})
+				if err != nil {
+					s.logger.Error("error-emitting-route-unregistration-messages", err)
+				}
 				message.SentCount++
 				if message.SentCount == s.sendCount {
-					s.cache.Remove([]routingtable.RegistryMessage{message.RegistryMessage})
+					err := s.cache.Remove([]routingtable.RegistryMessage{message.RegistryMessage})
+					if err != nil {
+						s.logger.Error("error-removing-unregister-messages-from-cache", err)
+					}
 				}
 			}
 		}
