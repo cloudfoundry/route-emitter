@@ -1,6 +1,7 @@
 package routingtable
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"code.cloudfoundry.org/bbs/models"
@@ -141,6 +142,7 @@ type Route struct {
 	LogGUID          string
 	Protocol         string
 	MetricTags       map[string]*models.MetricTagValue
+	Options          json.RawMessage
 }
 
 type routeHash struct {

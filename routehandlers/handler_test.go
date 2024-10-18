@@ -1076,6 +1076,7 @@ var _ = Describe("Handler", func() {
 						Hostnames:       []string{hostname1},
 						Port:            8080,
 						RouteServiceUrl: "https://rs.example.com",
+						Options:         json.RawMessage(`{"lb_algo":"least-connection"}`),
 					},
 				}.RoutingInfo()
 

@@ -120,6 +120,34 @@ var _ = Describe("RegistryMessage", func() {
 				Expect(message).To(Equal(expectedMessage))
 			})
 		})
+
+		Context("when a route option is provided", func() {
+			BeforeEach(func() {
+				expectedMessage.Options = json.RawMessage(`{"lb_algo":"least-connection"}`)
+				expectedJSON = `{
+				"host": "1.1.1.1",
+				"port": 61001,
+				"uris": ["host-1.example.com"],
+				"app" : "app-guid",
+				"private_instance_id": "instance-guid",
+				"server_cert_domain_san": "instance-guid",
+				"private_instance_index": "0",
+				"route_service_url": "https://hello.com",
+				"endpoint_updated_at_ns": 1000,
+				"tags": {"component":"route-emitter", "doo": "0", "foo": "bar", "goo": "instance-guid"},
+				"availability_zone": "some-zone",
+				"options": {"lb_algo":"least-connection"}
+			}`
+			})
+
+			It("correctly marshals the route option", func() {
+				message := routingtable.RegistryMessage{}
+
+				err := json.Unmarshal([]byte(expectedJSON), &message)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(message).To(Equal(expectedMessage))
+			})
+		})
 	})
 
 	Describe("RegistryMessageFor", func() {
@@ -178,6 +206,18 @@ var _ = Describe("RegistryMessage", func() {
 			})
 
 			It("creates a valid message when instance index is greater than 0", func() {
+				message := routingtable.RegistryMessageFor(endpoint, route, true)
+				Expect(message).To(Equal(expectedMessage))
+			})
+		})
+
+		Context("when route options are provided", func() {
+			BeforeEach(func() {
+				route.Options = json.RawMessage(`{"lb_algo":"least-connection"}`)
+				expectedMessage.Options = json.RawMessage(`{"lb_algo":"least-connection"}`)
+			})
+
+			It("creates a valid message when route options are provided", func() {
 				message := routingtable.RegistryMessageFor(endpoint, route, true)
 				Expect(message).To(Equal(expectedMessage))
 			})

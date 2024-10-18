@@ -1,6 +1,7 @@
 package routingtable
 
 import (
+	"encoding/json"
 	"fmt"
 	"strconv"
 
@@ -22,6 +23,7 @@ type RegistryMessage struct {
 	EndpointUpdatedAtNs  int64             `json:"endpoint_updated_at_ns,omitempty" hash:"ignore"`
 	Tags                 map[string]string `json:"tags,omitempty" hash:"ignore"`
 	AvailabilityZone     string            `json:"availability_zone,omitempty" hash:"ignore"`
+	Options              json.RawMessage   `json:"options,omitempty" hash:"ignore"`
 }
 
 func RegistryMessageFor(endpoint Endpoint, route Route, emitEndpointUpdatedAt bool) RegistryMessage {
@@ -50,6 +52,7 @@ func RegistryMessageFor(endpoint Endpoint, route Route, emitEndpointUpdatedAt bo
 		PrivateInstanceIndex: index,
 		ServerCertDomainSAN:  endpoint.InstanceGUID,
 		RouteServiceUrl:      route.RouteServiceUrl,
+		Options:              route.Options,
 	}
 }
 

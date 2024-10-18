@@ -444,6 +444,7 @@ func httpRoutesFrom(lrp *models.DesiredLRP) map[RoutingKey][]routeMapping {
 				IsolationSegment: route.IsolationSegment,
 				MetricTags:       lrp.MetricTags,
 				Protocol:         route.Protocol,
+				Options:          route.Options,
 			}
 			routes = append(routes, route)
 		}
