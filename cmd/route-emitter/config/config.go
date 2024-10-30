@@ -13,7 +13,7 @@ import (
 
 type RoutingAPIConfig struct {
 	URL            string `json:"url"`
-	Port           int    `json:"port"`
+	Port           uint16 `json:"port"`
 	CACertFile     string `json:"ca_cert_file"`
 	ClientCertFile string `json:"client_cert_file"`
 	ClientKeyFile  string `json:"client_key_file"`

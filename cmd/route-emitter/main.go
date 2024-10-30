@@ -239,7 +239,7 @@ func newUaaTokenFetcher(logger lager.Logger, c *config.RouteEmitterConfig, klok 
 		if err != nil {
 			logger.Fatal("failed-parsing-uaa-port", err)
 		}
-		cfg.Port = portI
+		cfg.Port = uint16(portI)
 		cfg.SkipSSLValidation = c.OAuth.SkipCertVerify
 		cfg.ClientName = c.OAuth.ClientName
 		cfg.ClientSecret = c.OAuth.ClientSecret
