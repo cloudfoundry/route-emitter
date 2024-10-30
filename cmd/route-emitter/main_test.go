@@ -297,7 +297,7 @@ var _ = Describe("Route Emitter", func() {
 		})
 
 		sqlConfig := runners.SQLConfig{
-			Port:       sqlRunner.Port(),
+			Port:       uint16(sqlRunner.Port()),
 			DBName:     sqlRunner.DBName(),
 			DriverName: sqlRunner.DriverName(),
 			Username:   sqlRunner.Username(),
@@ -330,7 +330,7 @@ var _ = Describe("Route Emitter", func() {
 		})
 		routingAPILocketProcess = ginkgomon.Invoke(routingAPILocketRunner)
 		routingAPIPort := port + 2
-		routingAPIRunner, err = runners.NewRoutingAPIRunner(routingAPIPath, int(port+1), sqlConfig, func(cfg *runners.Config) {
+		routingAPIRunner, err = runners.NewRoutingAPIRunner(routingAPIPath, uint16(port+1), sqlConfig, func(cfg *runners.Config) {
 			cfg.API = routinapiconfig.APIConfig{
 				ListenPort:         port,
 				HTTPEnabled:        false,
