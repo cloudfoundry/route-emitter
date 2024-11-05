@@ -39,7 +39,7 @@ func NewRoutingAPIRunner(binPath string, adminPort int, sqlConfig SQLConfig, fs 
 	cfg := Config{
 		DevMode: true,
 		Config: apiconfig.Config{
-			AdminPort: adminPort,
+			AdminPort: uint16(adminPort),
 			// required fields
 			MetricsReportingIntervalString:  "500ms",
 			StatsdClientFlushIntervalString: "10ms",
@@ -55,7 +55,7 @@ func NewRoutingAPIRunner(binPath string, adminPort int, sqlConfig SQLConfig, fs 
 			// end of required fields
 			SqlDB: apiconfig.SqlDB{
 				Host:     "localhost",
-				Port:     sqlConfig.Port,
+				Port:     uint16(sqlConfig.Port),
 				Schema:   sqlConfig.DBName,
 				Type:     sqlConfig.DriverName,
 				Username: sqlConfig.Username,
