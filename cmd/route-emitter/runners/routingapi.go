@@ -110,7 +110,7 @@ func (runner *RoutingAPIRunner) Run(signals <-chan os.Signal, ready chan<- struc
 }
 
 type RoutingAPIClientConfig struct {
-	Port           int
+	Port           uint16
 	CACertFile     string
 	ClientCertFile string
 	ClientKeyFile  string

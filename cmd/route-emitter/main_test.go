@@ -329,10 +329,10 @@ var _ = Describe("Route Emitter", func() {
 			cfg.ListenAddress = routingAPILocketAddress
 		})
 		routingAPILocketProcess = ginkgomon.Invoke(routingAPILocketRunner)
-		routingAPIPort := int(port + 2)
+		routingAPIPort := port + 2
 		routingAPIRunner, err = runners.NewRoutingAPIRunner(routingAPIPath, int(port+1), sqlConfig, func(cfg *runners.Config) {
 			cfg.API = routinapiconfig.APIConfig{
-				ListenPort:         int(port),
+				ListenPort:         port,
 				HTTPEnabled:        false,
 				MTLSListenPort:     routingAPIPort,
 				MTLSClientCAPath:   caCert,
@@ -542,7 +542,7 @@ var _ = Describe("Route Emitter", func() {
 				BeforeEach(func() {
 					cfgs = append(cfgs, func(cfg *config.RouteEmitterConfig) {
 						cfg.OAuth = config.OAuthConfig{
-							UaaURL: "http://localhost:0",
+							UaaURL: "http://localhost:1",
 						}
 					})
 				})
