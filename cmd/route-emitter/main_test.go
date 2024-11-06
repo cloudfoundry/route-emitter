@@ -542,7 +542,7 @@ var _ = Describe("Route Emitter", func() {
 				BeforeEach(func() {
 					cfgs = append(cfgs, func(cfg *config.RouteEmitterConfig) {
 						cfg.OAuth = config.OAuthConfig{
-							UaaURL: "http://localhost:0",
+							UaaURL: "http://localhost:1",
 						}
 					})
 				})
