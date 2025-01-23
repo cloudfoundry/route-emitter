@@ -485,7 +485,7 @@ func internalRoutesFrom(lrp *models.DesiredLRP) map[RoutingKey][]routeMapping {
 		return nil
 	}
 
-	routes, _ := internalroutes.InternalRoutesFromRoutingInfo(*lrp.Routes)
+	routes, _ := internalroutes.InternalRoutesFromRoutingInfo(lrp.Routes)
 
 	routeEntries := make(map[RoutingKey][]routeMapping)
 	for _, route := range routes {
