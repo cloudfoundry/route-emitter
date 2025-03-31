@@ -226,13 +226,13 @@ type InternalRoutableEndpoints struct {
 
 func NewEndpointsFromActual(actualLRP *models.ActualLRP) []Endpoint {
 	endpoints := []Endpoint{}
-	for _, portMapping := range actualLRP.Ports {
+	for _, portMapping := range actualLRP.ActualLrpNetInfo.Ports {
 		if portMapping != nil {
 			endpoint := Endpoint{
-				InstanceGUID:          actualLRP.InstanceGuid,
-				Index:                 actualLRP.Index,
-				Host:                  actualLRP.Address,
-				ContainerIP:           actualLRP.InstanceAddress,
+				InstanceGUID:          actualLRP.ActualLrpInstanceKey.InstanceGuid,
+				Index:                 actualLRP.ActualLrpKey.Index,
+				Host:                  actualLRP.ActualLrpNetInfo.Address,
+				ContainerIP:           actualLRP.ActualLrpNetInfo.InstanceAddress,
 				Port:                  portMapping.HostPort,
 				ContainerPort:         portMapping.ContainerPort,
 				Presence:              actualLRP.Presence,
@@ -240,7 +240,7 @@ func NewEndpointsFromActual(actualLRP *models.ActualLRP) []Endpoint {
 				TlsProxyPort:          portMapping.HostTlsProxyPort,
 				ContainerTlsProxyPort: portMapping.ContainerTlsProxyPort,
 				Since:                 actualLRP.Since,
-				PreferredAddress:      actualLRP.PreferredAddress,
+				PreferredAddress:      actualLRP.ActualLrpNetInfo.PreferredAddress,
 				AvailabilityZone:      actualLRP.AvailabilityZone,
 			}
 			endpoints = append(endpoints, endpoint)
@@ -252,11 +252,11 @@ func NewEndpointsFromActual(actualLRP *models.ActualLRP) []Endpoint {
 
 func NewRoutingKeysFromActual(actualLRP *models.ActualLRP) RoutingKeys {
 	keys := RoutingKeys{}
-	for _, portMapping := range actualLRP.Ports {
-		keys = append(keys, NewRoutingKey(actualLRP.ProcessGuid, portMapping.ContainerPort))
+	for _, portMapping := range actualLRP.ActualLrpNetInfo.Ports {
+		keys = append(keys, NewRoutingKey(actualLRP.ActualLrpKey.ProcessGuid, portMapping.ContainerPort))
 
 		if portMapping.HostTlsProxyPort != 0 && portMapping.ContainerTlsProxyPort != 0 {
-			keys = append(keys, NewRoutingKey(actualLRP.ProcessGuid, portMapping.ContainerTlsProxyPort))
+			keys = append(keys, NewRoutingKey(actualLRP.ActualLrpKey.ProcessGuid, portMapping.ContainerTlsProxyPort))
 		}
 	}
 

@@ -28,14 +28,14 @@ type RoutingAPIRunner struct {
 }
 
 type SQLConfig struct {
-	Port       int
+	Port       uint16
 	DBName     string
 	DriverName string
 	Username   string
 	Password   string
 }
 
-func NewRoutingAPIRunner(binPath string, adminPort int, sqlConfig SQLConfig, fs ...func(*Config)) (*RoutingAPIRunner, error) {
+func NewRoutingAPIRunner(binPath string, adminPort uint16, sqlConfig SQLConfig, fs ...func(*Config)) (*RoutingAPIRunner, error) {
 	cfg := Config{
 		DevMode: true,
 		Config: apiconfig.Config{

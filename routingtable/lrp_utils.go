@@ -28,13 +28,13 @@ func DesiredLRPData(lrp *models.DesiredLRP) lager.Data {
 
 func ActualLRPData(actualLRP *models.ActualLRP) lager.Data {
 	return lager.Data{
-		"process-guid":  actualLRP.ProcessGuid,
-		"index":         actualLRP.Index,
-		"domain":        actualLRP.Domain,
-		"instance-guid": actualLRP.InstanceGuid,
-		"cell-id":       actualLRP.CellId,
-		"address":       actualLRP.Address,
-		"ports":         actualLRP.Ports,
+		"process-guid":  actualLRP.ActualLrpKey.ProcessGuid,
+		"index":         actualLRP.ActualLrpKey.Index,
+		"domain":        actualLRP.ActualLrpKey.Domain,
+		"instance-guid": actualLRP.ActualLrpInstanceKey.InstanceGuid,
+		"cell-id":       actualLRP.ActualLrpInstanceKey.CellId,
+		"address":       actualLRP.ActualLrpNetInfo.Address,
+		"ports":         actualLRP.ActualLrpNetInfo.Ports,
 		"evacuating":    actualLRP.Presence == models.ActualLRP_Evacuating,
 		"state":         actualLRP.State,
 	}
