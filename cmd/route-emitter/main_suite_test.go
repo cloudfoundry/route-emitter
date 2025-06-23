@@ -167,7 +167,6 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 		MaxIdleDatabaseConnections:  200,
 		AuctioneerRequireTLS:        false,
 		RepClientSessionCacheSize:   0,
-		RepRequireTLS:               false,
 		LagerConfig: lagerflags.LagerConfig{
 			LogLevel:            string(lagerflags.DEBUG),
 			RedactSecrets:       false,
