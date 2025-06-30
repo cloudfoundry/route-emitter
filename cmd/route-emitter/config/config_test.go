@@ -57,7 +57,6 @@ var _ = Describe("Config", func() {
 				"client_cert_file": "/tmp/routing_api_client_cert_file",
 				"client_key_file": "/tmp/routing_api_client_key_file"
 			},
-			"locket_enabled": true,
 			"locket_address": "127.0.0.1:18018",
 			"locket_ca_cert_file": "locket-ca-cert",
 			"report_interval": "1m",
@@ -137,7 +136,6 @@ var _ = Describe("Config", func() {
 			EnableTCPEmitter:             true,
 			EnableInternalEmitter:        true,
 			RegisterDirectInstanceRoutes: true,
-			LocketEnabled:                true,
 			RoutingAPI: config.RoutingAPIConfig{
 				URL:            "https://routing-api.cf.service.internal",
 				Port:           443,
