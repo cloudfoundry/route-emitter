@@ -1074,7 +1074,6 @@ var _ = Describe("Route Emitter", func() {
 			locketProcess = ginkgomon.Invoke(locketRunner)
 			cfgs = append(cfgs, func(cfg *config.RouteEmitterConfig) {
 				cfg.ClientLocketConfig = locketrunner.ClientLocketConfig()
-				cfg.LocketEnabled = true
 				cfg.LocketAddress = locketAddress
 			})
 		})

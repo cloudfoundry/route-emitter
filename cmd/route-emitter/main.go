@@ -149,7 +149,7 @@ func main() {
 		{Name: "unregistration", Runner: unregistrationSender},
 	}
 
-	if cfg.CellID == "" && cfg.LocketEnabled {
+	if cfg.CellID == "" {
 		locketClient, err := locket.NewClient(logger, cfg.ClientLocketConfig)
 		if err != nil {
 			logger.Fatal("failed-to-create-locket-client", err)
