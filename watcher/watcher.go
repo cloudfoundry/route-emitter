@@ -193,7 +193,7 @@ func (w *Watcher) retrieveDesiredInternal(logger lager.Logger, event models.Even
 		actualLRP = event.ActualLrp
 		traceId = event.TraceId
 	case *models.ActualLRPInstanceChangedEvent:
-		actualLRP = event.After.ToActualLRP(event.ActualLRPKey, event.ActualLRPInstanceKey)
+		actualLRP = event.After.ToActualLRP(event.ActualLrpKey, event.ActualLrpInstanceKey)
 		traceId = event.TraceId
 	default:
 		return nil
@@ -206,9 +206,9 @@ func (w *Watcher) retrieveDesiredInternal(logger lager.Logger, event models.Even
 	if actualLRP.State != models.ActualLRPStateRunning {
 		return nil
 	}
-	if w.routeHandler.ShouldRefreshDesired(actualLRP) || (syncing && !foundInCurrentDesireds(actualLRP.ProcessGuid, currentDesireds)) {
-		logger.Info("refreshing-desired-lrp-routing-info", lager.Data{"process-guid": actualLRP.ProcessGuid})
-		desiredLRPs, err = getDesiredLRPs(logger, w.bbsClient, traceId, []string{actualLRP.ProcessGuid})
+	if w.routeHandler.ShouldRefreshDesired(actualLRP) || (syncing && !foundInCurrentDesireds(actualLRP.ActualLrpKey.ProcessGuid, currentDesireds)) {
+		logger.Info("refreshing-desired-lrp-routing-info", lager.Data{"process-guid": actualLRP.ActualLrpKey.ProcessGuid})
+		desiredLRPs, err = getDesiredLRPs(logger, w.bbsClient, traceId, []string{actualLRP.ActualLrpKey.ProcessGuid})
 
 		if err != nil {
 			logger.Error("failed-getting-desired-lrps-routing-info-for-missing-actual-lrp", err)
@@ -267,7 +267,7 @@ func (w *Watcher) sync(logger lager.Logger, ch chan<- *syncEventResult) {
 		logger.Debug("succeeded-getting-actual-lrps", lager.Data{"num-actual-responses": len(actualLRPs)})
 
 		for _, actualLRP := range actualLRPs {
-			if actualLRP.State == models.ActualLRPStateRunning && (!actualLRP.RoutableExists() || actualLRP.GetRoutable()) {
+			if actualLRP.State == models.ActualLRPStateRunning && (!actualLRP.RoutableExists() || *actualLRP.GetRoutable()) {
 				runningActualLRPs = append(runningActualLRPs, actualLRP)
 			}
 		}
@@ -276,7 +276,7 @@ func (w *Watcher) sync(logger lager.Logger, ch chan<- *syncEventResult) {
 			guids := make([]string, 0, len(actualLRPs))
 			// filter the desired lrp scheduling info by process guids
 			for _, actualLRP := range actualLRPs {
-				guids = append(guids, actualLRP.ProcessGuid)
+				guids = append(guids, actualLRP.ActualLrpKey.ProcessGuid)
 			}
 			if len(guids) > 0 {
 				desiredLRPs, desiredErr = getDesiredLRPs(logger, w.bbsClient, "", guids)
