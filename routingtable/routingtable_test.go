@@ -121,9 +121,9 @@ func createActualLRP(
 	}
 
 	return &models.ActualLRP{
-		ActualLRPKey:         models.NewActualLRPKey(key.ProcessGUID, instance.Index, domain),
-		ActualLRPInstanceKey: models.NewActualLRPInstanceKey(instance.InstanceGUID, "cell-id"),
-		ActualLRPNetInfo: models.NewActualLRPNetInfo(
+		ActualLrpKey:         models.NewActualLRPKey(key.ProcessGUID, instance.Index, domain),
+		ActualLrpInstanceKey: models.NewActualLRPInstanceKey(instance.InstanceGUID, "cell-id"),
+		ActualLrpNetInfo: models.NewActualLRPNetInfo(
 			instance.Host,
 			instance.ContainerIP,
 			instance.PreferredAddress,
@@ -144,9 +144,9 @@ func createActualLRPWithPortMappings(
 ) *models.ActualLRP {
 
 	return &models.ActualLRP{
-		ActualLRPKey:         models.NewActualLRPKey(key.ProcessGUID, instance.Index, domain),
-		ActualLRPInstanceKey: models.NewActualLRPInstanceKey(instance.InstanceGUID, "cell-id"),
-		ActualLRPNetInfo: models.NewActualLRPNetInfo(
+		ActualLrpKey:         models.NewActualLRPKey(key.ProcessGUID, instance.Index, domain),
+		ActualLrpInstanceKey: models.NewActualLRPInstanceKey(instance.InstanceGUID, "cell-id"),
+		ActualLrpNetInfo: models.NewActualLRPNetInfo(
 			instance.Host,
 			instance.ContainerIP,
 			models.ActualLRPNetInfo_PreferredAddressHost,
@@ -374,7 +374,7 @@ var _ = Describe("RoutingTable", func() {
 					}
 					Expect(messagesToEmit).To(Equal(expected))
 
-					afterDesiredLRP.MetricTags = map[string]*models.MetricTagValue{"foo": &models.MetricTagValue{Static: "bar"}, "doo": &models.MetricTagValue{Dynamic: models.MetricTagDynamicValueIndex}}
+					afterDesiredLRP.MetricTags = map[string]*models.MetricTagValue{"foo": &models.MetricTagValue{Static: "bar"}, "doo": &models.MetricTagValue{Dynamic: models.MetricTagValue_MetricTagDynamicValueIndex}}
 					afterDesiredLRP.ModificationTag = &models.ModificationTag{Epoch: "lmn", Index: 0}
 					table.SetRoutes(logger, beforeDesiredLRP, afterDesiredLRP)
 
@@ -960,7 +960,7 @@ var _ = Describe("RoutingTable", func() {
 			BeforeEach(func() {
 				routes := createRoutingInfo(key.ContainerPort, []string{hostname1}, []string{}, "", []uint32{}, "")
 				desiredLRP := createDesiredLRPWithRoutes(key.ProcessGUID, 1, routes, logGuid, *currentTag, runInfo)
-				desiredLRP.MetricTags = map[string]*models.MetricTagValue{"foo": &models.MetricTagValue{Static: "bar"}, "doo": &models.MetricTagValue{Dynamic: models.MetricTagDynamicValueIndex}}
+				desiredLRP.MetricTags = map[string]*models.MetricTagValue{"foo": &models.MetricTagValue{Static: "bar"}, "doo": &models.MetricTagValue{Dynamic: models.MetricTagValue_MetricTagDynamicValueIndex}}
 				table.SetRoutes(logger, nil, desiredLRP)
 			})
 
@@ -976,7 +976,7 @@ var _ = Describe("RoutingTable", func() {
 								LogGUID:  logGuid,
 								MetricTags: map[string]*models.MetricTagValue{
 									"foo": &models.MetricTagValue{Static: "bar"},
-									"doo": &models.MetricTagValue{Dynamic: models.MetricTagDynamicValueIndex},
+									"doo": &models.MetricTagValue{Dynamic: models.MetricTagValue_MetricTagDynamicValueIndex},
 								},
 							},
 							true,

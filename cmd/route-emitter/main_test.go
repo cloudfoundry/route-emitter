@@ -297,7 +297,7 @@ var _ = Describe("Route Emitter", func() {
 		})
 
 		sqlConfig := runners.SQLConfig{
-			Port:       sqlRunner.Port(),
+			Port:       uint16(sqlRunner.Port()),
 			DBName:     sqlRunner.DBName(),
 			DriverName: sqlRunner.DriverName(),
 			Username:   sqlRunner.Username(),
@@ -330,7 +330,7 @@ var _ = Describe("Route Emitter", func() {
 		})
 		routingAPILocketProcess = ginkgomon.Invoke(routingAPILocketRunner)
 		routingAPIPort := port + 2
-		routingAPIRunner, err = runners.NewRoutingAPIRunner(routingAPIPath, int(port+1), sqlConfig, func(cfg *runners.Config) {
+		routingAPIRunner, err = runners.NewRoutingAPIRunner(routingAPIPath, uint16(port+1), sqlConfig, func(cfg *runners.Config) {
 			cfg.API = routinapiconfig.APIConfig{
 				ListenPort:         port,
 				HTTPEnabled:        false,
@@ -872,8 +872,10 @@ var _ = Describe("Route Emitter", func() {
 							Eventually(routingAPIClient.TcpRouteMappings, 5*time.Second).Should(
 								ContainElement(matchTCPRouteMapping(expectedTcpRouteMapping)),
 							)
+							instances := int32(0)
 							update := &models.DesiredLRPUpdate{
-								Routes: &models.Routes{},
+								Instances: &instances,
+								Routes:    &models.Routes{},
 							}
 							err := bbsClient.UpdateDesiredLRP(logger, "", desiredLRP.ProcessGuid, update)
 							Expect(err).NotTo(HaveOccurred())
@@ -2119,8 +2121,8 @@ var _ = Describe("Route Emitter", func() {
 					updateRequest := &models.DesiredLRPUpdate{
 						Routes: newRoutes(hostnames, containerPort, ""),
 					}
-					updateRequest.SetInstances(desiredLRP.Instances)
-					updateRequest.SetAnnotation(desiredLRP.Annotation)
+					updateRequest.SetInstances(&desiredLRP.Instances)
+					updateRequest.SetAnnotation(&desiredLRP.Annotation)
 
 					err := bbsClient.UpdateDesiredLRP(logger, "", processGuid, updateRequest)
 					Expect(err).NotTo(HaveOccurred())
@@ -2194,8 +2196,8 @@ var _ = Describe("Route Emitter", func() {
 					updateRequest := &models.DesiredLRPUpdate{
 						Routes: newRoutes([]string{"route-2"}, containerPort, ""),
 					}
-					updateRequest.SetInstances(desiredLRP.Instances)
-					updateRequest.SetAnnotation(desiredLRP.Annotation)
+					updateRequest.SetInstances(&desiredLRP.Instances)
+					updateRequest.SetAnnotation(&desiredLRP.Annotation)
 					err := bbsClient.UpdateDesiredLRP(logger, "", processGuid, updateRequest)
 					Expect(err).NotTo(HaveOccurred())
 				})
@@ -2255,8 +2257,8 @@ var _ = Describe("Route Emitter", func() {
 					updateRequest := &models.DesiredLRPUpdate{
 						Routes: newRoutes([]string{"route-2"}, containerPort, "https://awesome.com"),
 					}
-					updateRequest.SetInstances(desiredLRP.Instances)
-					updateRequest.SetAnnotation(desiredLRP.Annotation)
+					updateRequest.SetInstances(&desiredLRP.Instances)
+					updateRequest.SetAnnotation(&desiredLRP.Annotation)
 					err := bbsClient.UpdateDesiredLRP(logger, "", processGuid, updateRequest)
 					Expect(err).NotTo(HaveOccurred())
 

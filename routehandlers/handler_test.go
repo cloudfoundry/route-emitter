@@ -17,7 +17,6 @@ import (
 	"code.cloudfoundry.org/route-emitter/routingtable/fakeroutingtable"
 	tcpmodels "code.cloudfoundry.org/routing-api/models"
 	"code.cloudfoundry.org/routing-info/cfroutes"
-	"github.com/gogo/protobuf/proto"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -28,17 +27,6 @@ const (
 	logGuid = "some-log-guid"
 	traceId = "7f461654-74d1-1ee5-8367-77d85df2cdab"
 )
-
-type randomEvent struct {
-	proto.Message
-}
-
-func (e randomEvent) EventType() string {
-	return "random"
-}
-func (e randomEvent) Key() string {
-	return "random"
-}
 
 var _ = Describe("Handler", func() {
 	type counter struct {
@@ -87,6 +75,8 @@ var _ = Describe("Handler", func() {
 		metricChan  chan metric
 
 		dummyMessageFoo, dummyMessageBar, dummyMessageBaz routingtable.RegistryMessage
+
+		routableTrue, routableFalse bool
 	)
 
 	BeforeEach(func() {
@@ -127,11 +117,13 @@ var _ = Describe("Handler", func() {
 		fakeUnregistrationCache = &ufakes.FakeCache{}
 
 		routeHandler = routehandlers.NewHandler(fakeTable, natsEmitter, fakeRoutingAPIEmitter, false, false, fakeMetronClient, fakeUnregistrationCache)
+		routableTrue = true
+		routableFalse = false
 	})
 
 	Context("when an unrecognized event is received", func() {
 		It("logs an error", func() {
-			routeHandler.HandleEvent(logger, randomEvent{})
+			routeHandler.HandleEvent(logger, &models.FakeEvent{})
 			Expect(logger).To(gbytes.Say("did-not-handle-unrecognizable-event"))
 		})
 	})
@@ -409,9 +401,9 @@ var _ = Describe("Handler", func() {
 			Context("when the resulting LRP is in the RUNNING state", func() {
 				BeforeEach(func() {
 					actualLRP = &models.ActualLRP{
-						ActualLRPKey:         models.NewActualLRPKey(expectedProcessGuid, expectedIndex, "domain"),
-						ActualLRPInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGUID, "cell-id"),
-						ActualLRPNetInfo: models.NewActualLRPNetInfo(
+						ActualLrpKey:         models.NewActualLRPKey(expectedProcessGuid, expectedIndex, "domain"),
+						ActualLrpInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGUID, "cell-id"),
+						ActualLrpNetInfo: models.NewActualLRPNetInfo(
 							expectedHost,
 							expectedInstanceAddress,
 							models.ActualLRPNetInfo_PreferredAddressHost,
@@ -459,9 +451,9 @@ var _ = Describe("Handler", func() {
 			Context("when the resulting LRP is not in the RUNNING state", func() {
 				JustBeforeEach(func() {
 					actualLRP = &models.ActualLRP{
-						ActualLRPKey:         models.NewActualLRPKey(expectedProcessGuid, expectedIndex, "domain"),
-						ActualLRPInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGUID, "cell-id"),
-						ActualLRPNetInfo: models.NewActualLRPNetInfo(
+						ActualLrpKey:         models.NewActualLRPKey(expectedProcessGuid, expectedIndex, "domain"),
+						ActualLrpInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGUID, "cell-id"),
+						ActualLrpNetInfo: models.NewActualLRPNetInfo(
 							expectedHost,
 							expectedInstanceAddress,
 							models.ActualLRPNetInfo_PreferredAddressHost,
@@ -506,14 +498,14 @@ var _ = Describe("Handler", func() {
 					fakeTable.RemoveEndpointReturns(emptyTCPRouteMappings, dummyMessagesToEmit)
 
 					beforeActualLRP = &models.ActualLRP{
-						ActualLRPKey:         models.NewActualLRPKey(expectedProcessGuid, expectedIndex, "domain"),
-						ActualLRPInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGUID, "cell-id"),
+						ActualLrpKey:         models.NewActualLRPKey(expectedProcessGuid, expectedIndex, "domain"),
+						ActualLrpInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGUID, "cell-id"),
 						State:                models.ActualLRPStateClaimed,
 					}
 					afterActualLRP = &models.ActualLRP{
-						ActualLRPKey:         models.NewActualLRPKey(expectedProcessGuid, expectedIndex, "domain"),
-						ActualLRPInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGUID, "cell-id"),
-						ActualLRPNetInfo: models.NewActualLRPNetInfo(
+						ActualLrpKey:         models.NewActualLRPKey(expectedProcessGuid, expectedIndex, "domain"),
+						ActualLrpInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGUID, "cell-id"),
+						ActualLrpNetInfo: models.NewActualLRPNetInfo(
 							expectedHost,
 							expectedInstanceAddress,
 							models.ActualLRPNetInfo_PreferredAddressHost,
@@ -583,7 +575,7 @@ var _ = Describe("Handler", func() {
 
 				Context("when after state Routable is true", func() {
 					BeforeEach(func() {
-						afterActualLRP.SetRoutable(true)
+						afterActualLRP.SetRoutable(&routableTrue)
 					})
 
 					It("should add/update the endpoint on the table", func() {
@@ -617,8 +609,8 @@ var _ = Describe("Handler", func() {
 
 				Context("when after state Routable is false and before state Routable is true", func() {
 					BeforeEach(func() {
-						beforeActualLRP.SetRoutable(true)
-						afterActualLRP.SetRoutable(false)
+						beforeActualLRP.SetRoutable(&routableTrue)
+						afterActualLRP.SetRoutable(&routableFalse)
 					})
 
 					It("should not add/update the endpoint on the table", func() {
@@ -661,8 +653,8 @@ var _ = Describe("Handler", func() {
 
 				Context("when after state Routable is false and before state Routable is false", func() {
 					BeforeEach(func() {
-						beforeActualLRP.SetRoutable(false)
-						afterActualLRP.SetRoutable(false)
+						beforeActualLRP.SetRoutable(&routableFalse)
+						afterActualLRP.SetRoutable(&routableFalse)
 					})
 
 					It("should not add/update the endpoint on the table", func() {
@@ -717,9 +709,9 @@ var _ = Describe("Handler", func() {
 
 				BeforeEach(func() {
 					beforeActualLRP = &models.ActualLRP{
-						ActualLRPKey:         models.NewActualLRPKey(expectedProcessGuid, expectedIndex, "domain"),
-						ActualLRPInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGUID, "cell-id"),
-						ActualLRPNetInfo: models.NewActualLRPNetInfo(
+						ActualLrpKey:         models.NewActualLRPKey(expectedProcessGuid, expectedIndex, "domain"),
+						ActualLrpInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGUID, "cell-id"),
+						ActualLrpNetInfo: models.NewActualLRPNetInfo(
 							expectedHost,
 							expectedInstanceAddress,
 							models.ActualLRPNetInfo_PreferredAddressHost,
@@ -729,7 +721,7 @@ var _ = Describe("Handler", func() {
 						State: models.ActualLRPStateRunning,
 					}
 					afterActualLRP = &models.ActualLRP{
-						ActualLRPKey: models.NewActualLRPKey(expectedProcessGuid, expectedIndex, "domain"),
+						ActualLrpKey: models.NewActualLRPKey(expectedProcessGuid, expectedIndex, "domain"),
 						State:        models.ActualLRPStateUnclaimed,
 					}
 					fakeTable.RemoveEndpointReturns(emptyTCPRouteMappings, dummyMessagesToEmit)
@@ -795,18 +787,18 @@ var _ = Describe("Handler", func() {
 					fakeTable.RemoveEndpointReturns(removeRouteMapping, removeMessagesToEmit)
 
 					beforeActualLRP = &models.ActualLRP{
-						ActualLRPKey:         models.NewActualLRPKey(expectedProcessGuid, expectedIndex, "domain"),
-						ActualLRPInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGUID, "cell-id"),
+						ActualLrpKey:         models.NewActualLRPKey(expectedProcessGuid, expectedIndex, "domain"),
+						ActualLrpInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGUID, "cell-id"),
 						State:                models.ActualLRPStateRunning,
 						Presence:             models.ActualLRP_Ordinary,
 					}
-					beforeActualLRP.SetRoutable(true)
+					beforeActualLRP.SetRoutable(&routableTrue)
 					afterActualLRP = &models.ActualLRP{
-						ActualLRPKey:         models.NewActualLRPKey(expectedProcessGuid, expectedIndex, "domain"),
-						ActualLRPInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGUID, "cell-id"),
+						ActualLrpKey:         models.NewActualLRPKey(expectedProcessGuid, expectedIndex, "domain"),
+						ActualLrpInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGUID, "cell-id"),
 						State:                models.ActualLRPStateRunning,
 					}
-					afterActualLRP.SetRoutable(true)
+					afterActualLRP.SetRoutable(&routableTrue)
 				})
 
 				JustBeforeEach(func() {
@@ -891,13 +883,13 @@ var _ = Describe("Handler", func() {
 			Context("when the endpoint neither starts nor ends in the RUNNING state", func() {
 				JustBeforeEach(func() {
 					beforeActualLRP := &models.ActualLRP{
-						ActualLRPKey: models.NewActualLRPKey(expectedProcessGuid, expectedIndex, "domain"),
+						ActualLrpKey: models.NewActualLRPKey(expectedProcessGuid, expectedIndex, "domain"),
 						State:        models.ActualLRPStateUnclaimed,
 					}
 					afterActualLRP := &models.ActualLRP{
-						ActualLRPKey:         models.NewActualLRPKey(expectedProcessGuid, expectedIndex, "domain"),
-						ActualLRPInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGUID, "cell-id"),
-						ActualLRPNetInfo: models.NewActualLRPNetInfo(
+						ActualLrpKey:         models.NewActualLRPKey(expectedProcessGuid, expectedIndex, "domain"),
+						ActualLrpInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGUID, "cell-id"),
+						ActualLrpNetInfo: models.NewActualLRPNetInfo(
 							expectedHost,
 							expectedInstanceAddress,
 							models.ActualLRPNetInfo_PreferredAddressHost,
@@ -944,9 +936,9 @@ var _ = Describe("Handler", func() {
 					fakeTable.RemoveEndpointReturns(emptyTCPRouteMappings, dummyMessagesToEmit)
 
 					actualLRP = &models.ActualLRP{
-						ActualLRPKey:         models.NewActualLRPKey(expectedProcessGuid, expectedIndex, "domain"),
-						ActualLRPInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGUID, "cell-id"),
-						ActualLRPNetInfo: models.NewActualLRPNetInfo(
+						ActualLrpKey:         models.NewActualLRPKey(expectedProcessGuid, expectedIndex, "domain"),
+						ActualLrpInstanceKey: models.NewActualLRPInstanceKey(expectedInstanceGUID, "cell-id"),
+						ActualLrpNetInfo: models.NewActualLRPNetInfo(
 							expectedHost,
 							expectedInstanceAddress,
 							models.ActualLRPNetInfo_PreferredAddressHost,
@@ -979,8 +971,8 @@ var _ = Describe("Handler", func() {
 			Context("when the actual is not in the RUNNING state", func() {
 				JustBeforeEach(func() {
 					actualLRP := &models.ActualLRP{
-						ActualLRPKey: models.NewActualLRPKey(expectedProcessGuid, expectedIndex, "domain"),
-						ActualLRPNetInfo: models.NewActualLRPNetInfo(
+						ActualLrpKey: models.NewActualLRPKey(expectedProcessGuid, expectedIndex, "domain"),
+						ActualLrpNetInfo: models.NewActualLRPNetInfo(
 							expectedHost,
 							expectedInstanceAddress,
 							models.ActualLRPNetInfo_PreferredAddressHost,
@@ -1117,23 +1109,23 @@ var _ = Describe("Handler", func() {
 				}
 
 				actualLRP1 := &models.ActualLRP{
-					ActualLRPKey:         models.NewActualLRPKey("pg-1", 0, "domain"),
-					ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint1.InstanceGUID, "cell-id"),
-					ActualLRPNetInfo:     models.NewActualLRPNetInfo(endpoint1.Host, "container-ip-1", models.ActualLRPNetInfo_PreferredAddressHost, models.NewPortMapping(endpoint1.Port, endpoint1.ContainerPort)),
+					ActualLrpKey:         models.NewActualLRPKey("pg-1", 0, "domain"),
+					ActualLrpInstanceKey: models.NewActualLRPInstanceKey(endpoint1.InstanceGUID, "cell-id"),
+					ActualLrpNetInfo:     models.NewActualLRPNetInfo(endpoint1.Host, "container-ip-1", models.ActualLRPNetInfo_PreferredAddressHost, models.NewPortMapping(endpoint1.Port, endpoint1.ContainerPort)),
 					State:                models.ActualLRPStateRunning,
 				}
 
 				actualLRP2 := &models.ActualLRP{
-					ActualLRPKey:         models.NewActualLRPKey("pg-2", 0, "domain"),
-					ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint2.InstanceGUID, "cell-id"),
-					ActualLRPNetInfo:     models.NewActualLRPNetInfo(endpoint2.Host, "container-ip-2", models.ActualLRPNetInfo_PreferredAddressHost, models.NewPortMapping(endpoint2.Port, endpoint2.ContainerPort)),
+					ActualLrpKey:         models.NewActualLRPKey("pg-2", 0, "domain"),
+					ActualLrpInstanceKey: models.NewActualLRPInstanceKey(endpoint2.InstanceGUID, "cell-id"),
+					ActualLrpNetInfo:     models.NewActualLRPNetInfo(endpoint2.Host, "container-ip-2", models.ActualLRPNetInfo_PreferredAddressHost, models.NewPortMapping(endpoint2.Port, endpoint2.ContainerPort)),
 					State:                models.ActualLRPStateRunning,
 				}
 
 				actualLRP3 := &models.ActualLRP{
-					ActualLRPKey:         models.NewActualLRPKey("pg-3", 1, "domain"),
-					ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint3.InstanceGUID, "cell-id"),
-					ActualLRPNetInfo:     models.NewActualLRPNetInfo(endpoint3.Host, "container-ip-3", models.ActualLRPNetInfo_PreferredAddressHost, models.NewPortMapping(endpoint3.Port, endpoint3.ContainerPort)),
+					ActualLrpKey:         models.NewActualLRPKey("pg-3", 1, "domain"),
+					ActualLrpInstanceKey: models.NewActualLRPInstanceKey(endpoint3.InstanceGUID, "cell-id"),
+					ActualLrpNetInfo:     models.NewActualLRPNetInfo(endpoint3.Host, "container-ip-3", models.ActualLRPNetInfo_PreferredAddressHost, models.NewPortMapping(endpoint3.Port, endpoint3.ContainerPort)),
 					State:                models.ActualLRPStateRunning,
 				}
 
@@ -1302,9 +1294,9 @@ var _ = Describe("Handler", func() {
 					}
 
 					actualLRPEvent := models.NewActualLRPInstanceCreatedEvent(&models.ActualLRP{
-						ActualLRPKey:         models.NewActualLRPKey("pg-4", 0, "domain"),
-						ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint4.InstanceGUID, "cell-id"),
-						ActualLRPNetInfo:     models.NewActualLRPNetInfo(endpoint4.Host, "container-ip-4", models.ActualLRPNetInfo_PreferredAddressHost, models.NewPortMapping(endpoint4.Port, endpoint4.ContainerPort)),
+						ActualLrpKey:         models.NewActualLRPKey("pg-4", 0, "domain"),
+						ActualLrpInstanceKey: models.NewActualLRPInstanceKey(endpoint4.InstanceGUID, "cell-id"),
+						ActualLrpNetInfo:     models.NewActualLRPNetInfo(endpoint4.Host, "container-ip-4", models.ActualLRPNetInfo_PreferredAddressHost, models.NewPortMapping(endpoint4.Port, endpoint4.ContainerPort)),
 						State:                models.ActualLRPStateRunning,
 					}, "some-trace-id")
 
@@ -1501,9 +1493,9 @@ var _ = Describe("Handler", func() {
 			}
 
 			actualLRP = &models.ActualLRP{
-				ActualLRPKey:         models.NewActualLRPKey("pg-1", 0, "domain"),
-				ActualLRPInstanceKey: models.NewActualLRPInstanceKey(endpoint1.InstanceGUID, "cell-id"),
-				ActualLRPNetInfo: models.NewActualLRPNetInfo(
+				ActualLrpKey:         models.NewActualLRPKey("pg-1", 0, "domain"),
+				ActualLrpInstanceKey: models.NewActualLRPInstanceKey(endpoint1.InstanceGUID, "cell-id"),
+				ActualLrpNetInfo: models.NewActualLRPNetInfo(
 					endpoint1.Host,
 					"container-ip-1",
 					models.ActualLRPNetInfo_PreferredAddressHost,

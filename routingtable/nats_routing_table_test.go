@@ -195,7 +195,7 @@ var _ = Describe("RoutingTable", func() {
 		BeforeEach(func() {
 			table = routingtable.NewRoutingTable(true, false, fakeMetronClient)
 			desiredLRP := createDesiredLRP(key.ProcessGUID, int32(3), key.ContainerPort, logGuid, "", *currentTag, models.DesiredLRPRunInfo{}, hostname1)
-			desiredLRP.MetricTags = map[string]*models.MetricTagValue{"foo": &models.MetricTagValue{Static: "bar"}, "doo": &models.MetricTagValue{Dynamic: models.MetricTagDynamicValueIndex}}
+			desiredLRP.MetricTags = map[string]*models.MetricTagValue{"foo": &models.MetricTagValue{Static: "bar"}, "doo": &models.MetricTagValue{Dynamic: models.MetricTagValue_MetricTagDynamicValueIndex}}
 			table.SetRoutes(logger, nil, desiredLRP)
 		})
 
